@@ -4,6 +4,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import org.apache.commons.codec.digest.DigestUtils;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import java.nio.charset.StandardCharsets;
+import java.net.URLEncoder;
 import java.util.Map;
 import java.util.TreeMap;
 
@@ -84,9 +85,9 @@ public class PayFastService {
             value = value.trim();
             if (value.isBlank()) continue;
             if (sb.length() > 0) sb.append('&');
-            // Encode spaces as '+' per requirement, leave other characters unchanged
-            String valueWithPlus = value.replace(" ", "+");
-            sb.append(key).append('=').append(valueWithPlus);
+            // URL-encode value ensuring percent-encodings use uppercase hex digits (Java URLEncoder already does this)
+            String encoded = URLEncoder.encode(value, StandardCharsets.UTF_8);
+            sb.append(key).append('=').append(encoded);
         }
 
         String finalString = sb.toString();
