@@ -14,6 +14,10 @@ public class PayFastService {
     @ConfigProperty(name = "payfast.merchant-key") String merchantKey;
     @ConfigProperty(name = "payfast.passphrase") String passphrase;
 
+    @ConfigProperty(name = "payfast.notify-url") String notifyUrl;
+    @ConfigProperty(name = "payfast.return-url") String returnUrl;
+    @ConfigProperty(name = "payfast.cancel-url") String cancelUrl;
+
     // Holds the exact string used to compute the signature, preserving key order
     // Note: ApplicationScoped bean; concurrent requests may overwrite this value.
     // Callers should read it immediately after calling generateSignature.
@@ -42,6 +46,11 @@ public class PayFastService {
         TreeMap<String, String> input = new TreeMap<>(data);
         input.put("merchant_id", merchantId);
         input.put("merchant_key", merchantKey);
+
+        input.put("return_url", returnUrl);
+        input.put("cancel_url", cancelUrl);
+        input.put("notify_url", notifyUrl);
+
         if (passphrase != null && !passphrase.isBlank()) {
             input.put("passphrase", passphrase.trim());
         }
