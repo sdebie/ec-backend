@@ -141,6 +141,8 @@ public class PayFastResource {
     @Consumes(MediaType.APPLICATION_FORM_URLENCODED)
     @Transactional
     public Response handleITN(MultivaluedMap<String, String> formParams) {
+        System.out.println("DEBUG: ITN callback received");
+
         // Convert to standard Map
         Map<String, String> params = formParams.entrySet().stream()
                 .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().get(0)));
