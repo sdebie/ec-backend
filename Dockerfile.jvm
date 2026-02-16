@@ -20,7 +20,7 @@ WORKDIR /deployments
 
 # Copy everything from inside the quarkus-app folder directly into /deployments
 # This ensures /deployments contains: quarkus-run.jar, lib/, app/, and quarkus/
-COPY --from=build --chown=185 /home/app/target/ecommerce-app/ .
+COPY --from=build --chown=185 /home/app/target/quarkus-app/ .
 
 EXPOSE 8080
 USER 185
