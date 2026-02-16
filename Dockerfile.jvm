@@ -26,7 +26,8 @@ EXPOSE 8080
 USER 185
 
 # We set the JAR location explicitly for the run script
-ENV JAVA_APP_JAR="/deployments/ecommerce-app.jar"
+# Set the correct JAR name for the Quarkus fast-jar structure
+ENV JAVA_APP_JAR="quarkus-run.jar"
 ENV JAVA_OPTS="-Dquarkus.http.host=0.0.0.0 -Djava.util.logging.manager=org.jboss.logmanager.LogManager"
 
 ENTRYPOINT [ "/opt/jboss/container/java/run/run-java.sh" ]
