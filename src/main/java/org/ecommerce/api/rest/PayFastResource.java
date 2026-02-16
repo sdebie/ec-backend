@@ -88,6 +88,8 @@ public class PayFastResource {
         // 3. Request the UUID from PayFast Onsite API using preserved order
         String uuid = fetchPayFastUuid(base, signature);
 
+        System.out.println("DEBUG: Response: " + uuid);
+
         // 4. Return to React
         Map<String, String> response = new HashMap<>();
         response.put("uuid", uuid);
@@ -115,6 +117,8 @@ public class PayFastResource {
             HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
 
             int status = response.statusCode();
+            System.out.println("DEBUG: Response status : " + status);
+
             String respBody = response.body() != null ? response.body().trim() : "";
             if (status < 200 || status >= 300) {
                 throw new WebApplicationException("PayFast onsite/process HTTP " + status + " - " + respBody, status);
