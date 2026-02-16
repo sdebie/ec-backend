@@ -1,11 +1,11 @@
-package org.kw.api.rest;
+package org.ecommerce.api.rest;
 
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
-import org.kw.entity.TestEntity;
+import org.ecommerce.entity.TestEntity;
 
 import java.util.HashMap;
 import java.util.Map;

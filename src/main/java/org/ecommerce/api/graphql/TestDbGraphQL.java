@@ -1,4 +1,4 @@
-package org.kw.api.graphql;
+package org.ecommerce.api.graphql;
 
 import org.eclipse.microprofile.graphql.Description;
 import org.eclipse.microprofile.graphql.GraphQLApi;

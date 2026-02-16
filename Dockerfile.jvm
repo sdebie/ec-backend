@@ -1,0 +1,32 @@
+# --- STAGE 1: BUILD ---
+# Use the JDK 21 Maven image to match your successful manual build
+FROM maven:3.9.6-eclipse-temurin-21-alpine AS build
+WORKDIR /home/app
+
+# Copy the pom.xml and source code
+COPY pom.xml .
+COPY src ./src
+
+# Run the build inside the container
+# This will recreate the target/quarkus-app structure you just verified
+RUN mvn clean package -DskipTests
+
+# --- STAGE 2: RUNTIME ---
+FROM registry.access.redhat.com/ubi8/openjdk-21:1.23
+
+ENV LANGUAGE='en_US:en'
+# Use /deployments as the home for the fast-jar
+WORKDIR /deployments
+
+# Copy everything from inside the quarkus-app folder directly into /deployments
+# This ensures /deployments contains: quarkus-run.jar, lib/, app/, and quarkus/
+COPY --from=build --chown=185 /home/app/target/ecommerce-app/ .
+
+EXPOSE 8080
+USER 185
+
+# We set the JAR location explicitly for the run script
+ENV JAVA_APP_JAR="/deployments/ecommerce-app.jar"
+ENV JAVA_OPTS="-Dquarkus.http.host=0.0.0.0 -Djava.util.logging.manager=org.jboss.logmanager.LogManager"
+
+ENTRYPOINT [ "/opt/jboss/container/java/run/run-java.sh" ]

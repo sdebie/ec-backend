@@ -1,4 +1,4 @@
-package org.kw.entity;
+package org.ecommerce.entity;
 
 import io.quarkus.hibernate.orm.panache.PanacheEntityBase;
 import io.quarkus.hibernate.orm.panache.Panache;

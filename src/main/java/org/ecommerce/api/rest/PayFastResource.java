@@ -1,4 +1,4 @@
-package org.kw.api.rest;
+package org.ecommerce.api.rest;
 
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
@@ -6,10 +6,10 @@ import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.MultivaluedMap;
 import jakarta.ws.rs.core.Response;
-import org.kw.entity.CustomerEntity;
-import org.kw.entity.QuotationEntity;
-import org.kw.entity.PaymentLogEntity;
-import org.kw.service.PayFastService;
+import org.ecommerce.entity.CustomerEntity;
+import org.ecommerce.entity.QuotationEntity;
+import org.ecommerce.entity.PaymentLogEntity;
+import org.ecommerce.service.PayFastService;
 
 import java.math.BigDecimal;
 import java.net.URI;

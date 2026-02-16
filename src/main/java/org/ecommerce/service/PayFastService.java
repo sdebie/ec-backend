@@ -1,4 +1,4 @@
-package org.kw.service;
+package org.ecommerce.service;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import org.apache.commons.codec.digest.DigestUtils;
