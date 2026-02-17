@@ -6,19 +6,13 @@ import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.MultivaluedMap;
 import jakarta.ws.rs.core.Response;
-import org.ecommerce.entity.CustomerEntity;
-import org.ecommerce.entity.QuotationEntity;
-import org.ecommerce.entity.PaymentLogEntity;
-import org.ecommerce.service.PayFastService;
+import org.ecommerce.common.HtmlFormField;
+import org.ecommerce.persistance.entity.QuotationEntity;
+import org.ecommerce.persistance.entity.PaymentLogEntity;
+import org.ecommerce.service.payfast.PayFastService;
 
 import java.math.BigDecimal;
-import java.net.URI;
-import java.net.URLEncoder;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.nio.charset.StandardCharsets;
-import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -32,7 +26,7 @@ public class PayFastResource {
 
     /**
      * Called by React to get the secure signed data for the Onsite Modal.
-     */
+
     @POST
     @Path("/request")
     @Transactional
@@ -132,6 +126,17 @@ public class PayFastResource {
             throw new RuntimeException("Could not fetch PayFast UUID", e);
         }
     }
+*/
+    @POST
+    @Path("/checkout")
+    @Consumes(MediaType.APPLICATION_FORM_URLENCODED)
+    @Transactional
+    public Response checkout(QuotationEntity quote) {
+        //Get Quote Data from DB
+        List<HtmlFormField> hiddenHTMLFormFields = payFastService.generateHiddenHTMLForm(quote);
+
+        return Response.accepted().entity(hiddenHTMLFormFields).build();
+    }
 
     /**
      * The Webhook (ITN) listener for PayFast to update order status.
@@ -148,9 +153,9 @@ public class PayFastResource {
                 .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().get(0)));
 
         // 1. Security Check
-        if (!payFastService.verifySignature(params)) {
-            return Response.status(Response.Status.UNAUTHORIZED).build();
-        }
+//        if (!payFastService.verifySignature(params)) {
+//            return Response.status(Response.Status.UNAUTHORIZED).build();
+//        }
 
         // 2. Generic Logging
         PaymentLogEntity log = new PaymentLogEntity();

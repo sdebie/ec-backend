@@ -1,4 +1,4 @@
-package org.ecommerce.entity;
+package org.ecommerce.persistance.entity;
 
 import io.quarkus.hibernate.orm.panache.PanacheEntity;
 import jakarta.persistence.*;

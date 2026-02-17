@@ -5,7 +5,7 @@ import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
-import org.ecommerce.entity.TestEntity;
+import org.ecommerce.persistance.entity.TestEntity;
 
 import java.util.HashMap;
 import java.util.Map;
