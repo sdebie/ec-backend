@@ -152,6 +152,8 @@ public class PayFastResource {
         Map<String, String> params = formParams.entrySet().stream()
                 .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().get(0)));
 
+        System.out.println("DEBUG: Received Signature: " + params.get("signature"));
+        
         // 1. Security Check
 //        if (!payFastService.verifySignature(params)) {
 //            return Response.status(Response.Status.UNAUTHORIZED).build();
@@ -170,7 +172,7 @@ public class PayFastResource {
 
         // 3. Logic: If payment is complete, update Quotation
         if ("COMPLETE".equalsIgnoreCase(log.status)) {
-            QuotationEntity.update("status = 'PAID' where id = ?", Long.parseLong(log.internalReference));
+//            QuotationEntity.update("status = 'PAID' where id = ?", Long.parseLong(log.internalReference));
         }
 
         return Response.ok().build();
