@@ -153,7 +153,7 @@ public class PayFastResource {
                 .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().get(0)));
 
         System.out.println("DEBUG: Received Signature: " + params.get("signature"));
-        
+
         // 1. Security Check
 //        if (!payFastService.verifySignature(params)) {
 //            return Response.status(Response.Status.UNAUTHORIZED).build();

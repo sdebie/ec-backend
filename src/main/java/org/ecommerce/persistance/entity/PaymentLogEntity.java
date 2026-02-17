@@ -34,10 +34,13 @@ public class PaymentLogEntity extends PanacheEntity {
 
     public String status; // COMPLETE, FAILED, PENDING
 
-    @Column(columnDefinition = "TEXT")
+    @Column(name = "raw_response", columnDefinition = "TEXT")
     public String rawResponse; // The full POST body for auditing
 
+    @Column(name = "created_at")
     public LocalDateTime createdAt = LocalDateTime.now();
+
+    @Column(name = "updated_at")
     public LocalDateTime updatedAt = LocalDateTime.now();
 
     @PreUpdate
