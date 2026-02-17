@@ -35,7 +35,7 @@ public class PaymentLogEntity extends PanacheEntity {
     public BigDecimal amountNet;
 
     public String status; // COMPLETE, FAILED, PENDING
-    
+
     @Column(name = "raw_response")
     public String rawResponse; // The full POST body for auditing
 

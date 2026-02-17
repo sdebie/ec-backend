@@ -131,6 +131,7 @@ public class PayFastResource {
     @Consumes(MediaType.APPLICATION_FORM_URLENCODED)
     @Transactional
     public Response checkout(MultivaluedMap<String, String> formParams) {
+        System.out.println("DEBUG: Checkout received: " + formParams);
         // Parse form data if needed to construct a QuotationEntity; for now, pass null to avoid 415 errors.
         QuotationEntity quote = null;
         List<HtmlFormField> hiddenHTMLFormFields = payFastService.generateHiddenHTMLForm(quote);
@@ -150,7 +151,7 @@ public class PayFastResource {
 
         // Convert to standard Map
         Map<String, String> params = formParams.entrySet().stream()
-                .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().get(0)));
+                .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().getFirst()));
 
         System.out.println("DEBUG: Received Signature: " + params.get("signature"));
 
