@@ -37,7 +37,7 @@ public class PaymentLogEntity extends PanacheEntity {
     public String status; // COMPLETE, FAILED, PENDING
 
     @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "raw_response", columnDefinition = "jsonb")
+    @Column(name = "raw_response")
     public String rawResponse; // The full POST body for auditing
 
     @Column(name = "created_at")
