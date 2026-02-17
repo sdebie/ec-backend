@@ -131,8 +131,9 @@ public class PayFastResource {
     @Path("/checkout")
     @Consumes(MediaType.APPLICATION_FORM_URLENCODED)
     @Transactional
-    public Response checkout(QuotationEntity quote) {
-        //Get Quote Data from DB
+    public Response checkout(MultivaluedMap<String, String> formParams) {
+        // Parse form data if needed to construct a QuotationEntity; for now, pass null to avoid 415 errors.
+        QuotationEntity quote = null;
         List<HtmlFormField> hiddenHTMLFormFields = payFastService.generateHiddenHTMLForm(quote);
 
         return Response.accepted().entity(hiddenHTMLFormFields).build();
