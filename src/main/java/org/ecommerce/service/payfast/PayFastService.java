@@ -114,7 +114,7 @@ public class PayFastService {
 
         // 0. Try to enrich from DB (to fetch customer email/name)
         QuotationEntity persisted = null;
-        if (quote != null && quote.id != null) {
+        if (quote == null) {
             //persisted = QuotationEntity.findById(quote.id);
             quote = new QuotationEntity();
             quote.id = 1L;
@@ -126,6 +126,11 @@ public class PayFastService {
             quote.customerEntity = customer;
             persisted = quote;
         }
+
+        data.put("amount", quote.totalAmount.setScale(2, java.math.RoundingMode.HALF_UP).toPlainString());
+        data.put("item_name", "Test Product");
+        String email = "anything123456@gmail.com";
+        data.put("email_address", email);
 
         TreeMap<String, String> input = new TreeMap<>(data);
         input.put("merchant_id", merchantId);
