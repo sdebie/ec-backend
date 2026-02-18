@@ -12,13 +12,14 @@ public class OrderGraphQlResource {
     @Query("createOrder")
     @Description("Create a order and return")
     @Transactional
-    public OrderEntity createOrder(@Name("order") OrderDto orderDto) {
-        System.out.println("DEBUG Received OrderDto: " + orderDto);
-        OrderEntity order = new OrderEntity();
-        if (orderDto != null) {
-            order.setTotalAmount(orderDto.getTotalAmount());
-            order.items = orderDto.getItems();
+    public OrderEntity createOrder(@Name("order") OrderDto orderDto) throws GraphQLException {
+        if (orderDto == null){
+            throw new GraphQLException("Invalid Order info");
         }
+        System.out.println("DEBUG Received OrderDto: " + orderDto.getTotalAmount() + " " + orderDto.getItems().size());
+        OrderEntity order = new OrderEntity();
+        order.setTotalAmount(orderDto.getTotalAmount());
+        order.items = orderDto.getItems();
         order.status = "CREATED";
         OrderEntity.persist(order);
         return order;
