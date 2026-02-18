@@ -16,7 +16,7 @@ public class OrderGraphQlResource {
         if (orderDto == null){
             throw new GraphQLException("Invalid Order info");
         }
-        System.out.println("DEBUG Received OrderDto: " + orderDto.getTotalAmount() + " " + orderDto.getItems().size());
+        System.out.println("DEBUG Received OrderDto: " + orderDto.getTotalAmount() + " " + (orderDto.getItems() == null ? 0 : orderDto.getItems().size()));
         OrderEntity order = new OrderEntity();
         order.setTotalAmount(orderDto.getTotalAmount());
         order.items = orderDto.getItems();
