@@ -41,4 +41,10 @@ public class OrderGraphQlResource {
     public OrderEntity updateOrder(@Name("order") OrderDto orderDto) throws GraphQLException {
         return orderService.updateOrder(orderDto);
     }
+
+    @Mutation("orderById")
+    @Description("Update an order and return")
+    public OrderEntity getOrderById(@Name("id") Long id) {
+        return orderService.getOrderById(id);
+    }
 }
