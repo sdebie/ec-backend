@@ -15,10 +15,11 @@ public class OrderGraphQlResource {
     public OrderEntity createOrder(@Name("order") OrderDto orderDto) {
         System.out.println("DEBUG Received OrderDto: " + orderDto);
         OrderEntity order = new OrderEntity();
-        // Use field access to avoid reliance on Lombok-generated setters
-        order.setTotalAmount(orderDto.getTotal_amount());
+        if (orderDto != null) {
+            order.setTotalAmount(orderDto.getTotalAmount());
+            order.items = orderDto.getItems();
+        }
         order.status = "CREATED";
-        order.items = orderDto.getItems();
         OrderEntity.persist(order);
         return order;
     }
