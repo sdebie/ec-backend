@@ -140,6 +140,7 @@ public class PayFastResource {
             return Response.status(Response.Status.EXPECTATION_FAILED)
                     .entity("{\"Error\": \"Request could not be processed. Please contact Admin\"}").build();
         }
+        System.out.println("DEBUG: Got Order from DB with ID: " + quote.id);
 
         List<HtmlFormField> hiddenHTMLFormFields = payFastService.generateHiddenHTMLForm(quote);
 
