@@ -5,12 +5,12 @@ import jakarta.persistence.*;
 import java.math.BigDecimal;
 
 @Entity
-@Table(name = "quotation_items")
-public class QuotationItemEntity extends PanacheEntity {
+@Table(name = "order_items")
+public class OrderItemEntity extends PanacheEntity {
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "quotation_id", nullable = false)
-    public QuotationEntity quotationEntity;
+    @JoinColumn(name = "order_id", nullable = false)
+    public OrderEntity orderEntity;
 
     @Column(name = "variant_id", nullable = false)
     public Long variantId; // Links to your product_variants (size, color, etc.)

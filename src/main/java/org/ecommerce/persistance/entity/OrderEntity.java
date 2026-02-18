@@ -2,13 +2,20 @@ package org.ecommerce.persistance.entity;
 
 import io.quarkus.hibernate.orm.panache.PanacheEntity;
 import jakarta.persistence.*;
+import lombok.Getter;
+import lombok.Setter;
+import org.hibernate.annotations.CreationTimestamp;
+
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 
+@Getter
+@Setter
 @Entity
-@Table(name = "quotations")
-public class QuotationEntity extends PanacheEntity {
+@Table(name = "orders")
+public class OrderEntity extends PanacheEntity {
+
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "customer_id")
@@ -20,16 +27,24 @@ public class QuotationEntity extends PanacheEntity {
     @Column(length = 50)
     public String status = "PENDING"; // PENDING, PAID, CANCELLED
 
-    // Delivery Details
+    // Delivery Details (not yet persisted in DB schema)
+    @Transient
     public String shippingPhone;
+    @Transient
     public String shippingAddressLine1;
+    @Transient
     public String shippingAddressLine2;
+    @Transient
     public String shippingCity;
+    @Transient
     public String shippingProvince;
+    @Transient
     public String shippingPostalCode;
 
-    @OneToMany(mappedBy = "quotationEntity", cascade = CascadeType.ALL, orphanRemoval = true)
-    public List<QuotationItemEntity> items;
+    @OneToMany(mappedBy = "orderEntity", cascade = CascadeType.ALL, orphanRemoval = true)
+    public List<OrderItemEntity> items;
 
-    public LocalDateTime createdAt = LocalDateTime.now();
+    @CreationTimestamp
+    @Column(name = "created_at", updatable = false)
+    public LocalDateTime createdAt;
 }

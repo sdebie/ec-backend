@@ -2,8 +2,6 @@ package org.ecommerce.persistance.entity;
 
 import io.quarkus.hibernate.orm.panache.PanacheEntity;
 import jakarta.persistence.*;
-import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.type.SqlTypes;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -13,8 +11,8 @@ import java.time.LocalDateTime;
 public class PaymentLogEntity extends PanacheEntity {
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "quotation_id")
-    public QuotationEntity quotationEntity;
+    @JoinColumn(name = "order_id")
+    public OrderEntity orderEntity;
 
     @Column(name = "gateway_name")
     public String gatewayName = "PAYFAST"; // Default for now

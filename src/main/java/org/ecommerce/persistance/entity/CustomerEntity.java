@@ -29,7 +29,7 @@ public class CustomerEntity extends PanacheEntity {
     public String postal_code;
 
     @OneToMany(mappedBy = "customerEntity", cascade = CascadeType.ALL)
-    public List<QuotationEntity> quotationEntities;
+    public List<OrderEntity> orderEntities;
 
     public LocalDateTime createdAt = LocalDateTime.now();
 

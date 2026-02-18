@@ -3,10 +3,8 @@ package org.ecommerce.service.payfast;
 import jakarta.enterprise.context.ApplicationScoped;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.ecommerce.common.HtmlFormField;
-import org.ecommerce.persistance.entity.CustomerEntity;
-import org.ecommerce.persistance.entity.QuotationEntity;
+import org.ecommerce.persistance.entity.OrderEntity;
 
-import java.math.BigDecimal;
 import java.security.NoSuchAlgorithmException;
 import java.util.*;
 
@@ -108,44 +106,11 @@ public class PayFastService {
     }
      */
 
-    public List<HtmlFormField> generateHiddenHTMLForm(QuotationEntity quote) {
-
-        Map<String, String> data = new HashMap<>();
-
-        // 0. Try to enrich from DB (to fetch customer email/name)
-        QuotationEntity persisted = null;
-        if (quote == null) {
-            //persisted = QuotationEntity.findById(quote.id);
-            quote = new QuotationEntity();
-            quote.id = 1L;
-            quote.totalAmount = new BigDecimal("100.00");
-            CustomerEntity customer = new CustomerEntity();
-            customer.email = "anything123456%40gmail.com";
-            customer.firstName = "John";
-            customer.lastName = "Doe";
-            quote.customerEntity = customer;
-            persisted = quote;
-        }
-
-        data.put("amount", quote.totalAmount.setScale(2, java.math.RoundingMode.HALF_UP).toPlainString());
-        data.put("item_name", "Test Product");
-        String email = "anything123456@gmail.com";
-        data.put("email_address", email);
-
-        TreeMap<String, String> input = new TreeMap<>(data);
-        input.put("merchant_id", merchantId);
-        input.put("merchant_key", merchantKey);
-
-        input.put("return_url", returnUrl);
-        input.put("cancel_url", cancelUrl);
-        input.put("notify_url", notifyUrl);
-
-        if (passphrase != null && !passphrase.isBlank()) {
-            input.put("passphrase", passphrase.trim());
-        }
+    public List<HtmlFormField> generateHiddenHTMLForm(OrderEntity quote) {
 
         try {
-            Map<String, String> sortedData = PayFastUtils.sortByPredefinedOrder(input);
+            TreeMap<String, String> stringTreeMap = getStringTreeMap(quote);
+            Map<String, String> sortedData = PayFastUtils.sortByPredefinedOrder(stringTreeMap);
             String joinedNameValuePair = PayFastUtils.concatenateNonEmptyNameValuePairs(sortedData);
             String signature = PayFastUtils.generateSecuritySignature(joinedNameValuePair);
             return buildFormElements(sortedData, signature);
@@ -154,6 +119,27 @@ public class PayFastService {
         }
 
         return Collections.emptyList();
+    }
+
+    private TreeMap<String, String> getStringTreeMap(OrderEntity quote) {
+
+        TreeMap<String, String> input = new TreeMap<>();
+        input.put("merchant_id", merchantId);
+        input.put("merchant_key", merchantKey);
+
+        input.put("return_url", returnUrl);
+        input.put("cancel_url", cancelUrl);
+        input.put("notify_url", notifyUrl);
+
+        input.put("amount", quote.totalAmount.setScale(2, java.math.RoundingMode.HALF_UP).toPlainString());
+        input.put("m_payment_id", quote.id.toString());
+        input.put("item_name", quote.id.toString());
+        input.put("email_address", quote.customerEntity.email);
+
+        if (passphrase != null && !passphrase.isBlank()) {
+            input.put("passphrase", passphrase.trim());
+        }
+        return input;
     }
 
     private List<HtmlFormField> buildFormElements(Map<String, String> sortedData, String signature) {

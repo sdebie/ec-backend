@@ -7,7 +7,7 @@ import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.MultivaluedMap;
 import jakarta.ws.rs.core.Response;
 import org.ecommerce.common.HtmlFormField;
-import org.ecommerce.persistance.entity.QuotationEntity;
+import org.ecommerce.persistance.entity.OrderEntity;
 import org.ecommerce.persistance.entity.PaymentLogEntity;
 import org.ecommerce.service.payfast.PayFastService;
 
@@ -132,8 +132,14 @@ public class PayFastResource {
     @Transactional
     public Response checkout(MultivaluedMap<String, String> formParams) {
         System.out.println("DEBUG: Checkout received: " + formParams);
-        // Parse form data if needed to construct a QuotationEntity; for now, pass null to avoid 415 errors.
-        QuotationEntity quote = null;
+
+        List<String> orderId = formParams.get("id");
+        OrderEntity quote = OrderEntity.findById(Long.parseLong(orderId.getFirst()));
+        if (quote == null) {
+            return Response.status(Response.Status.EXPECTATION_FAILED)
+                    .entity("{\"Error\": \"Request could not be processed. Please contact Admin\"}").build();
+        }
+
         List<HtmlFormField> hiddenHTMLFormFields = payFastService.generateHiddenHTMLForm(quote);
 
         return Response.accepted().entity(hiddenHTMLFormFields).build();
@@ -171,9 +177,9 @@ public class PayFastResource {
         log.rawResponse = params.toString();
         log.persist();
 
-        // 3. Logic: If payment is complete, update Quotation
+        // 3. Logic: If payment is complete, update Order
         if ("COMPLETE".equalsIgnoreCase(log.status)) {
-//            QuotationEntity.update("status = 'PAID' where id = ?", Long.parseLong(log.internalReference));
+            OrderEntity.update("status = 'PAID' where id = ?", Long.parseLong(log.internalReference));
         }
 
         return Response.ok().build();
