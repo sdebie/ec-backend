@@ -13,6 +13,7 @@ public class OrderGraphQlResource {
     @Description("Create a order and return")
     @Transactional
     public OrderEntity createOrder(@Name("order") OrderDto orderDto) {
+        System.out.println("DEBUG Received OrderDto: " + orderDto);
         OrderEntity order = new OrderEntity();
         // Use field access to avoid reliance on Lombok-generated setters
         order.setTotalAmount(orderDto.getTotal_amount());
