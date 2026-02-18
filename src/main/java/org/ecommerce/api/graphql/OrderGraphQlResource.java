@@ -42,7 +42,7 @@ public class OrderGraphQlResource {
         return orderService.updateOrder(orderDto);
     }
 
-    @Mutation("orderById")
+    @Query("orderById")
     @Description("Update an order and return")
     public OrderEntity getOrderById(@Name("id") Long id) {
         return orderService.getOrderById(id);
