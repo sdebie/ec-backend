@@ -47,4 +47,6 @@ public class OrderEntity extends PanacheEntity {
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     public LocalDateTime createdAt;
+
+
 }

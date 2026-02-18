@@ -2,7 +2,6 @@ package org.ecommerce.persistance.dto;
 
 import org.eclipse.microprofile.graphql.Description;
 import org.eclipse.microprofile.graphql.Input;
-import org.eclipse.microprofile.graphql.Name;
 import org.ecommerce.persistance.entity.OrderItemEntity;
 
 import java.math.BigDecimal;

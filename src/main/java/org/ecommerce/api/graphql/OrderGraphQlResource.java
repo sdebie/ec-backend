@@ -1,13 +1,18 @@
 package org.ecommerce.api.graphql;
 
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
 import org.eclipse.microprofile.graphql.*;
 import org.ecommerce.persistance.dto.OrderDto;
 import org.ecommerce.persistance.entity.OrderEntity;
+import org.ecommerce.service.OrderService;
 
 @ApplicationScoped
 @GraphQLApi
 public class OrderGraphQlResource {
+    @Inject
+    OrderService orderService;
+
     @Mutation("createOrder")
     @Description("Create a order and return")
     public OrderEntity createOrder(@Name("order") OrderDto orderDto) throws GraphQLException {
@@ -15,12 +20,7 @@ public class OrderGraphQlResource {
             throw new GraphQLException("Invalid Order info");
         }
         System.out.println("DEBUG Received OrderDto: " + orderDto.getTotalAmount() + " " + (orderDto.getItems() == null ? 0 : orderDto.getItems().size()));
-        OrderEntity order = new OrderEntity();
-        order.setTotalAmount(orderDto.getTotalAmount());
-        order.items = orderDto.getItems();
-        order.status = "CREATED";
-        OrderEntity.persist(order);
-        return order;
+        return orderService.createOrderFromDto(orderDto);
     }
 
     @Mutation("updateOrder")
