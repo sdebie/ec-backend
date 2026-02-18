@@ -1,7 +1,6 @@
 package org.ecommerce.api.graphql;
 
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.transaction.Transactional;
 import org.eclipse.microprofile.graphql.*;
 import org.ecommerce.persistance.dto.OrderDto;
 import org.ecommerce.persistance.entity.OrderEntity;
@@ -9,9 +8,8 @@ import org.ecommerce.persistance.entity.OrderEntity;
 @ApplicationScoped
 @GraphQLApi
 public class OrderGraphQlResource {
-    @Query("createOrder")
+    @Mutation("createOrder")
     @Description("Create a order and return")
-    @Transactional
     public OrderEntity createOrder(@Name("order") OrderDto orderDto) throws GraphQLException {
         if (orderDto == null){
             throw new GraphQLException("Invalid Order info");
@@ -25,9 +23,8 @@ public class OrderGraphQlResource {
         return order;
     }
 
-    @Query("updateOrder")
+    @Mutation("updateOrder")
     @Description("Update an order and return")
-    @Transactional
     public OrderEntity updateOrder(@Name("order") OrderDto orderDto) throws GraphQLException {
         OrderEntity order = OrderEntity.findById(orderDto.getOrderId());
         if (order == null){
