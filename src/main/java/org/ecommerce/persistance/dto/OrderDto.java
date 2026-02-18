@@ -15,7 +15,6 @@ public class OrderDto {
     private Long orderId;
 
     // Prefer camelCase for GraphQL schema; also accept legacy 'total_amount' via @Name
-    @Name("totalAmount")
     private BigDecimal totalAmount;
 
     private List<OrderItemEntity> items;
