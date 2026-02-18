@@ -13,23 +13,32 @@ public class OrderGraphQlResource {
     @Inject
     OrderService orderService;
 
-    @Mutation("createOrder")
-    @Description("Create a order and return")
-    public OrderEntity createOrder(@Name("order") OrderDto orderDto) throws GraphQLException {
+    @Mutation("addToCart")
+    @Description("Add item to cart/ will update or create an order")
+    public OrderEntity addToCart(@Name("order") OrderDto orderDto) throws GraphQLException {
+        OrderEntity updatedEntity;
         if (orderDto == null){
             throw new GraphQLException("Invalid Order info");
         }
-        System.out.println("DEBUG Received OrderDto: " + orderDto.getTotalAmount() + " " + (orderDto.getItems() == null ? 0 : orderDto.getItems().size()));
-        return orderService.createOrderFromDto(orderDto);
+        if (orderDto.getOrderId() != null){
+            OrderEntity existingOrder = orderService.getOrderById(orderDto.getOrderId());
+            if (existingOrder != null){
+                updatedEntity = orderService.updateOrder(orderDto);
+            }
+            else{
+                throw new GraphQLException("Invalid Order info");
+            }
+        }
+        else {
+            System.out.println("DEBUG Received OrderDto: " + orderDto.getTotalAmount() + " " + (orderDto.getItems() == null ? 0 : orderDto.getItems().size()));
+            updatedEntity = orderService.createOrderFromDto(orderDto);
+        }
+        return updatedEntity;
     }
 
     @Mutation("updateOrder")
     @Description("Update an order and return")
     public OrderEntity updateOrder(@Name("order") OrderDto orderDto) throws GraphQLException {
-        OrderEntity order = OrderEntity.findById(orderDto.getOrderId());
-        if (order == null){
-            throw new GraphQLException("Invalid Order info");
-        }
-        return order;
+        return orderService.updateOrder(orderDto);
     }
 }
