@@ -5,6 +5,7 @@ import jakarta.transaction.Transactional;
 import org.eclipse.microprofile.graphql.GraphQLException;
 import org.ecommerce.persistance.dto.CustomerDto;
 import org.ecommerce.persistance.dto.OrderDto;
+import org.ecommerce.persistance.dto.OrderItemDto;
 import org.ecommerce.persistance.entity.CustomerEntity;
 import org.ecommerce.persistance.entity.OrderEntity;
 import org.ecommerce.persistance.entity.OrderItemEntity;
@@ -36,22 +37,25 @@ public class OrderService {
 
         // Map and attach items (will be persisted via cascade from OrderEntity)
         if (orderDto != null) {
-            List<OrderItemEntity> items = orderDto.getItems();
-            if (items != null && !items.isEmpty()) {
+            List<OrderItemDto> dtoItems = orderDto.getItems();
+            if (dtoItems != null && !dtoItems.isEmpty()) {
                 BigDecimal computedTotal = BigDecimal.ZERO;
-                for (OrderItemEntity item : items) {
-                    if (item == null)
-                        continue;
-                    // Ensure insert of new items
+                java.util.ArrayList<OrderItemEntity> entities = new java.util.ArrayList<>();
+                for (OrderItemDto dtoItem : dtoItems) {
+                    if (dtoItem == null) continue;
+                    OrderItemEntity item = new OrderItemEntity();
                     item.id = null; // PanacheEntity id
-                    // Set back-reference for JPA
                     item.orderEntity = order;
+                    item.unitPrice = dtoItem.getUnitPrice();
+                    item.quantity = dtoItem.getQuantity();
+                    // Name is informational only for now; entity has no field; can be added later if needed
                     // Update running total defensively
                     BigDecimal unit = item.unitPrice != null ? item.unitPrice : BigDecimal.ZERO;
                     int qty = item.quantity != null ? item.quantity : 0;
                     computedTotal = computedTotal.add(unit.multiply(BigDecimal.valueOf(qty)));
+                    entities.add(item);
                 }
-                order.items = items;
+                order.items = entities;
                 // If total not provided, use computed
                 order.totalAmount = dtoTotal != null ? dtoTotal : computedTotal;
             } else {
@@ -95,7 +99,7 @@ public class OrderService {
         }
 
         // Overwrite items
-        List<OrderItemEntity> incomingItems = orderDto.getItems();
+        List<OrderItemDto> incomingItems = orderDto.getItems();
 
         // Prepare managed collection for update (do not replace the collection reference)
         if (existingOrder.items == null) {
@@ -108,19 +112,23 @@ public class OrderService {
         BigDecimal computedTotal = BigDecimal.ZERO;
 
         if (incomingItems != null && !incomingItems.isEmpty()) {
-            for (OrderItemEntity item : incomingItems) {
-                if (item == null) continue;
+            for (OrderItemDto dtoItem : incomingItems) {
+                if (dtoItem == null) continue;
+                OrderItemEntity item = new OrderItemEntity();
                 // Ensure these are treated as new rows
                 item.id = null;
                 // Set back-reference for FK integrity
                 item.orderEntity = existingOrder;
+                item.unitPrice = dtoItem.getUnitPrice();
+                item.quantity = dtoItem.getQuantity();
 
                 BigDecimal unit = item.unitPrice != null ? item.unitPrice : BigDecimal.ZERO;
                 int qty = item.quantity != null ? item.quantity : 0;
                 computedTotal = computedTotal.add(unit.multiply(BigDecimal.valueOf(qty)));
+
+                // Add new item to managed collection
+                existingOrder.items.add(item);
             }
-            // Add new items into managed collection (do not replace reference)
-            existingOrder.items.addAll(incomingItems);
         } else {
             // No items provided -> overwrite to empty
             // Keep items as cleared (empty) collection if it exists; otherwise leave null
@@ -133,7 +141,7 @@ public class OrderService {
     }
 
     @Transactional
-    public OrderEntity updateCustomerInformation(String sessionId, CustomerDto customerDto) throws GraphQLException {
+    public CustomerDto updateCustomerInformation(String sessionId, CustomerDto customerDto) throws GraphQLException {
         if (sessionId == null || sessionId.isBlank()) {
             throw new GraphQLException("sessionId is required");
         }
@@ -160,6 +168,10 @@ public class OrderService {
         order.customerEntity = customer;
         System.out.println("DEBUG: Updating Order with customer info=" + order.customerEntity.id);
         order.persist();
-        return order;
+
+        // Return only customer information (currently email)
+        CustomerDto result = new CustomerDto();
+        result.setEmail(customer.email);
+        return result;
     }
 }

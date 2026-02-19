@@ -12,8 +12,14 @@ public class OrderItemEntity extends PanacheEntity {
     @JoinColumn(name = "order_id", referencedColumnName = "id", nullable = false)
     public OrderEntity orderEntity;
 
-    @Column(name = "variant_id", nullable = false)
-    public Long variantId; // Links to your product_variants (size, color, etc.)
+    // Link to product variant via JPA relation
+    @ManyToOne(fetch = FetchType.LAZY, optional = true)
+    @JoinColumn(name = "variant_id", referencedColumnName = "id", nullable = true)
+    public ProductVariantEntity variant;
+
+    // Backward-compatible transient field for serialization input/output
+    @Transient
+    public Long variantId;
 
     @Column(nullable = false)
     public Integer quantity;

@@ -50,7 +50,7 @@ public class OrderGraphQlResource {
 
     @Mutation("updateCustomerInformation")
     @Description("Update customer information for the latest order in a session. For now only email is supported.")
-    public OrderEntity updateCustomerInformation(
+    public CustomerDto updateCustomerInformation(
             @Name("sessionId") String sessionId,
             @Name("customer") CustomerDto customerDto
     ) throws GraphQLException {
