@@ -13,55 +13,58 @@ import org.ecommerce.persistance.entity.ProductVariantEntity;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.UUID;
 
 @ApplicationScoped
 public class OrderService {
 
     @Transactional
-    public OrderEntity createOrderFromDto(OrderDto orderDto) {
-        OrderEntity order = new OrderEntity();
+    public OrderEntity createOrderFromDto(OrderDto orderDto) throws GraphQLException {
+
+        if (orderDto == null || orderDto.getSessionId() == null) {
+            throw new GraphQLException("Invalid Order Session info");
+        }
+        UUID session = UUID.fromString(orderDto.getSessionId());
+        OrderEntity order = OrderEntity.findLatestOrderInfoBySessionId(session);
+        if (order == null) {
+            order = new OrderEntity();
+        }
+
         // Map minimal fields from DTO
-        BigDecimal dtoTotal = orderDto != null ? orderDto.getTotalAmount() : null;
+        BigDecimal dtoTotal = orderDto.getTotalAmount();
         order.status = "CREATED";
-        //Get Session ID
-        String sid = orderDto != null ? orderDto.getSessionId() : null;
-        order.sessionId = java.util.UUID.fromString(sid);
 
         // Map and attach items (will be persisted via cascade from OrderEntity)
-        if (orderDto != null) {
-            List<OrderItemDto> dtoItems = orderDto.getItems();
-            if (dtoItems != null && !dtoItems.isEmpty()) {
-                BigDecimal computedTotal = BigDecimal.ZERO;
-                java.util.ArrayList<OrderItemEntity> entities = new java.util.ArrayList<>();
-                for (OrderItemDto dtoItem : dtoItems) {
-                    if (dtoItem == null)
-                        continue;
-                    OrderItemEntity item = new OrderItemEntity();
-                    item.id = null; // PanacheEntity id
-                    item.orderEntity = order;
-                    item.unitPrice = dtoItem.getUnitPrice();
-                    item.quantity = dtoItem.getQuantity();
+        List<OrderItemDto> dtoItems = orderDto.getItems();
+        if (dtoItems != null && !dtoItems.isEmpty()) {
+            BigDecimal computedTotal = BigDecimal.ZERO;
+            java.util.ArrayList<OrderItemEntity> entities = new java.util.ArrayList<>();
+            for (OrderItemDto dtoItem : dtoItems) {
+                if (dtoItem == null)
+                    continue;
+                OrderItemEntity item = new OrderItemEntity();
+                item.id = null; // PanacheEntity id
+                item.orderEntity = order;
+                item.unitPrice = dtoItem.getUnitPrice();
+                item.quantity = dtoItem.getQuantity();
 
-                    // Map variant by id if provided
-                    if (dtoItem.getVariant() != null) {
-                        ProductVariantEntity variant = ProductVariantEntity.findByIdWithProduct(dtoItem.getVariant());
-                        if (variant != null) {
-                            item.variant = variant;
-                        }
+                // Map variant by id if provided
+                if (dtoItem.getVariant() != null) {
+                    ProductVariantEntity variant = ProductVariantEntity.findByIdWithProduct(dtoItem.getVariant());
+                    if (variant != null) {
+                        item.variant = variant;
                     }
-
-                    // Update running total defensively
-                    BigDecimal unit = item.unitPrice != null ? item.unitPrice : BigDecimal.ZERO;
-                    int qty = item.quantity != null ? item.quantity : 0;
-                    computedTotal = computedTotal.add(unit.multiply(BigDecimal.valueOf(qty)));
-                    entities.add(item);
                 }
-                order.items = entities;
-                // If total not provided, use computed
-                order.totalAmount = dtoTotal != null ? dtoTotal : computedTotal;
-            } else {
-                order.totalAmount = dtoTotal != null ? dtoTotal : BigDecimal.ZERO;
+
+                // Update running total defensively
+                BigDecimal unit = item.unitPrice != null ? item.unitPrice : BigDecimal.ZERO;
+                int qty = item.quantity != null ? item.quantity : 0;
+                computedTotal = computedTotal.add(unit.multiply(BigDecimal.valueOf(qty)));
+                entities.add(item);
             }
+            order.items = entities;
+            // If total not provided, use computed
+            order.totalAmount = dtoTotal != null ? dtoTotal : computedTotal;
         } else {
             order.totalAmount = BigDecimal.ZERO;
         }

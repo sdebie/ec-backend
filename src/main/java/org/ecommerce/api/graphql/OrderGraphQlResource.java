@@ -28,13 +28,6 @@ public class OrderGraphQlResource {
             throw new GraphQLException("Invalid Order Session info");
         }
 
-        if (orderDto.getOrderId() != null) {
-            OrderEntity existingOrder = orderService.getOrderById(orderDto.getOrderId());
-            if (existingOrder == null)
-                throw new GraphQLException("Invalid Order info");
-            return existingOrder;
-        }
-
         System.out.println("DEBUG:: Received OrderDto: " + orderDto.getTotalAmount() + " " + (orderDto.getItems() == null ? 0 : orderDto.getItems().size()));
         return orderService.createOrderFromDto(orderDto);
     }
