@@ -28,6 +28,7 @@ public class OrderService {
         OrderEntity order = OrderEntity.findLatestOrderInfoBySessionId(session);
         if (order == null) {
             order = new OrderEntity();
+            order.sessionId = session;
         }
 
         // Map minimal fields from DTO
