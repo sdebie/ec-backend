@@ -23,18 +23,9 @@ public class OrderService {
         // Map minimal fields from DTO
         BigDecimal dtoTotal = orderDto != null ? orderDto.getTotalAmount() : null;
         order.status = "CREATED";
-        // Ensure session id is set (from DTO or generate new)
-        try {
-            String sid = orderDto != null ? orderDto.getSessionId() : null;
-            if (sid != null && !sid.isBlank()) {
-                order.sessionId = java.util.UUID.fromString(sid);
-            } else {
-                order.sessionId = java.util.UUID.randomUUID();
-            }
-        } catch (Exception e) {
-            // If provided value is invalid, generate a new UUID
-            order.sessionId = java.util.UUID.randomUUID();
-        }
+        //Get Session ID
+        String sid = orderDto != null ? orderDto.getSessionId() : null;
+        order.sessionId = java.util.UUID.fromString(sid);
 
         // Map and attach items (will be persisted via cascade from OrderEntity)
         if (orderDto != null) {
@@ -43,7 +34,8 @@ public class OrderService {
                 BigDecimal computedTotal = BigDecimal.ZERO;
                 java.util.ArrayList<OrderItemEntity> entities = new java.util.ArrayList<>();
                 for (OrderItemDto dtoItem : dtoItems) {
-                    if (dtoItem == null) continue;
+                    if (dtoItem == null)
+                        continue;
                     OrderItemEntity item = new OrderItemEntity();
                     item.id = null; // PanacheEntity id
                     item.orderEntity = order;
@@ -78,11 +70,6 @@ public class OrderService {
         return order;
     }
 
-    public OrderEntity getLatestOrderBySessionId(Long orderId) {
-        // Deprecated name kept for backward compatibility; returns fully-hydrated order
-        return OrderEntity.findOrderInfoById(orderId);
-    }
-
     public OrderEntity getOrderById(Long orderId) {
         return OrderEntity.findOrderInfoById(orderId);
     }
@@ -96,66 +83,67 @@ public class OrderService {
             return null;
         }
     }
-
-    @Transactional
-    public OrderEntity updateOrder(OrderDto orderDto) throws GraphQLException {
-        if (orderDto == null || orderDto.getOrderId() == null) {
-            throw new GraphQLException("Invalid Order info");
-        }
-        OrderEntity existingOrder = OrderEntity.findOrderInfoById(orderDto.getOrderId());
-        if (existingOrder == null){
-            throw new GraphQLException("Invalid Order info");
-        }
-
-        // Overwrite items
-        List<OrderItemDto> incomingItems = orderDto.getItems();
-
-        // Prepare managed collection for update (do not replace the collection reference)
-        if (existingOrder.items == null) {
-            existingOrder.items = new java.util.ArrayList<>();
-        } else {
-            existingOrder.items.clear();
-        }
-
-        BigDecimal dtoTotal = orderDto.getTotalAmount();
-        BigDecimal computedTotal = BigDecimal.ZERO;
-
-        if (incomingItems != null && !incomingItems.isEmpty()) {
-            for (OrderItemDto dtoItem : incomingItems) {
-                if (dtoItem == null) continue;
-                OrderItemEntity item = new OrderItemEntity();
-                // Ensure these are treated as new rows
-                item.id = null;
-                // Set back-reference for FK integrity
-                item.orderEntity = existingOrder;
-                item.unitPrice = dtoItem.getUnitPrice();
-                item.quantity = dtoItem.getQuantity();
-
-                // Map variant by id if provided
-                if (dtoItem.getVariant() != null) {
-                    ProductVariantEntity variant = ProductVariantEntity.findByIdWithProduct(dtoItem.getVariant());
-                    if (variant != null) {
-                        item.variant = variant;
-                    }
-                }
-
-                BigDecimal unit = item.unitPrice != null ? item.unitPrice : BigDecimal.ZERO;
-                int qty = item.quantity != null ? item.quantity : 0;
-                computedTotal = computedTotal.add(unit.multiply(BigDecimal.valueOf(qty)));
-
-                // Add new item to managed collection
-                existingOrder.items.add(item);
-            }
-        } else {
-            // No items provided -> overwrite to empty
-            // Keep items as cleared (empty) collection if it exists; otherwise leave null
-        }
-
-        // Update total: prefer provided total, otherwise computed
-        existingOrder.totalAmount = dtoTotal != null ? dtoTotal : computedTotal;
-
-        return existingOrder;
-    }
+//
+//    @Transactional
+//    public OrderEntity updateOrder(OrderDto orderDto) throws GraphQLException {
+//        if (orderDto == null || orderDto.getOrderId() == null) {
+//            throw new GraphQLException("Invalid Order info");
+//        }
+//        OrderEntity existingOrder = OrderEntity.findOrderInfoById(orderDto.getOrderId());
+//        if (existingOrder == null){
+//            throw new GraphQLException("Invalid Order info");
+//        }
+//
+//        // Overwrite items
+//        List<OrderItemDto> incomingItems = orderDto.getItems();
+//
+//        // Prepare managed collection for update (do not replace the collection reference)
+//        if (existingOrder.items == null) {
+//            existingOrder.items = new java.util.ArrayList<>();
+//        } else {
+//            existingOrder.items.clear();
+//        }
+//
+//        BigDecimal dtoTotal = orderDto.getTotalAmount();
+//        BigDecimal computedTotal = BigDecimal.ZERO;
+//
+//        if (incomingItems != null && !incomingItems.isEmpty()) {
+//            for (OrderItemDto dtoItem : incomingItems) {
+//                if (dtoItem == null)
+//                    continue;
+//                OrderItemEntity item = new OrderItemEntity();
+//                // Ensure these are treated as new rows
+//                item.id = null;
+//                // Set back-reference for FK integrity
+//                item.orderEntity = existingOrder;
+//                item.unitPrice = dtoItem.getUnitPrice();
+//                item.quantity = dtoItem.getQuantity();
+//
+//                // Map variant by id if provided
+//                if (dtoItem.getVariant() != null) {
+//                    ProductVariantEntity variant = ProductVariantEntity.findByIdWithProduct(dtoItem.getVariant());
+//                    if (variant != null) {
+//                        item.variant = variant;
+//                    }
+//                }
+//
+//                BigDecimal unit = item.unitPrice != null ? item.unitPrice : BigDecimal.ZERO;
+//                int qty = item.quantity != null ? item.quantity : 0;
+//                computedTotal = computedTotal.add(unit.multiply(BigDecimal.valueOf(qty)));
+//
+//                // Add new item to managed collection
+//                existingOrder.items.add(item);
+//            }
+//        } else {
+//            // No items provided -> overwrite to empty
+//            // Keep items as cleared (empty) collection if it exists; otherwise leave null
+//        }
+//
+//        // Update total: prefer provided total, otherwise computed
+//        existingOrder.totalAmount = dtoTotal != null ? dtoTotal : computedTotal;
+//
+//        return existingOrder;
+//    }
 
     @Transactional
     public CustomerDto updateCustomerInformation(String sessionId, CustomerDto customerDto) throws GraphQLException {
