@@ -65,16 +65,20 @@ public class OrderService {
         return order;
     }
 
+    public OrderEntity getLatestOrderBySessionId(Long orderId) {
+        // Deprecated name kept for backward compatibility; returns fully-hydrated order
+        return OrderEntity.findOrderInfoById(orderId);
+    }
+
     public OrderEntity getOrderById(Long orderId) {
-        return OrderEntity.findById(orderId);
+        return OrderEntity.findOrderInfoById(orderId);
     }
 
     public OrderEntity getLatestOrderBySessionId(String sessionId) {
         if (sessionId == null || sessionId.isBlank()) return null;
         try {
             java.util.UUID sid = java.util.UUID.fromString(sessionId);
-            // Eagerly load items to ensure the collection reflects DB rows in the same request
-            return OrderEntity.find("select distinct o from OrderEntity o left join fetch o.items where o.sessionId = ?1 order by o.id desc", sid).firstResult();
+            return OrderEntity.findLatestOrderInfoBySessionId(sid);
         } catch (Exception e) {
             return null;
         }
