@@ -16,6 +16,8 @@ public class OrderGraphQlResource {
     @Mutation("addToCart")
     @Description("Add item to cart/ will update or create an order")
     public OrderEntity addToCart(@Name("order") OrderDto orderDto) throws GraphQLException {
+        System.out.println("DEBUG:: Received addToCart request");
+
         if (orderDto == null) {
             throw new GraphQLException("Invalid Order info");
         }
@@ -41,18 +43,21 @@ public class OrderGraphQlResource {
     @Mutation("updateOrder")
     @Description("Update an order and return")
     public OrderEntity updateOrder(@Name("order") OrderDto orderDto) throws GraphQLException {
+        System.out.println("DEBUG:: Received updateOrder request");
         return orderService.updateOrder(orderDto);
     }
 
     @Query("orderById")
     @Description("Update an order and return")
     public OrderEntity getOrderById(@Name("id") Long id) {
+        System.out.println("DEBUG:: Received getOrderById request");
         return orderService.getOrderById(id);
     }
 
     @Query("orderBySessionId")
     @Description("Get the latest order for a given sessionId")
     public OrderEntity getOrderBySessionId(@Name("sessionId") String sessionId) {
+        System.out.println("DEBUG:: Received getOrderBySessionId request");
         return orderService.getLatestOrderBySessionId(sessionId);
     }
 }
