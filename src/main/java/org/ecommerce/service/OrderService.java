@@ -97,8 +97,10 @@ public class OrderService {
         // Overwrite items
         List<OrderItemEntity> incomingItems = orderDto.getItems();
 
-        // Clear existing items to trigger orphan removal
-        if (existingOrder.items != null) {
+        // Prepare managed collection for update (do not replace the collection reference)
+        if (existingOrder.items == null) {
+            existingOrder.items = new java.util.ArrayList<>();
+        } else {
             existingOrder.items.clear();
         }
 
@@ -117,8 +119,8 @@ public class OrderService {
                 int qty = item.quantity != null ? item.quantity : 0;
                 computedTotal = computedTotal.add(unit.multiply(BigDecimal.valueOf(qty)));
             }
-            // Attach new items list
-            existingOrder.items = incomingItems;
+            // Add new items into managed collection (do not replace reference)
+            existingOrder.items.addAll(incomingItems);
         } else {
             // No items provided -> overwrite to empty
             // Keep items as cleared (empty) collection if it exists; otherwise leave null
