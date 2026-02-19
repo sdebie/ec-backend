@@ -6,13 +6,26 @@ import org.eclipse.microprofile.graphql.*;
 import org.ecommerce.persistance.dto.CustomerDto;
 import org.ecommerce.persistance.dto.OrderDto;
 import org.ecommerce.persistance.entity.OrderEntity;
+import org.ecommerce.persistance.entity.OrderItemEntity;
 import org.ecommerce.service.OrderService;
+
+import java.util.List;
 
 @ApplicationScoped
 @GraphQLApi
 public class OrderGraphQlResource {
     @Inject
     OrderService orderService;
+
+    private void populateVariantIds(OrderEntity order) {
+        if (order == null || order.items == null) return;
+        for (OrderItemEntity it : order.items) {
+            if (it == null) continue;
+            if (it.variantId == null && it.variant != null) {
+                it.variantId = it.variant.id;
+            }
+        }
+    }
 
     @Mutation("addToCart")
     @Description("Add item to cart/ will update or create an order")
@@ -26,26 +39,34 @@ public class OrderGraphQlResource {
         if (orderDto.getOrderId() != null) {
             OrderEntity existingOrder = orderService.getOrderById(orderDto.getOrderId());
             if (existingOrder == null) throw new GraphQLException("Invalid Order info");
-            return orderService.updateOrder(orderDto);
+            OrderEntity updated = orderService.updateOrder(orderDto);
+            populateVariantIds(updated);
+            return updated;
         }
         // 2) Otherwise, if a sessionId is provided, try to update the latest order for that session
         if (orderDto.getSessionId() != null) {
             OrderEntity latest = orderService.getLatestOrderBySessionId(orderDto.getSessionId());
             if (latest != null) {
                 orderDto.setOrderId(latest.id);
-                return orderService.updateOrder(orderDto);
+                OrderEntity updated = orderService.updateOrder(orderDto);
+                populateVariantIds(updated);
+                return updated;
             }
         }
         // 3) Fallback: create a new order (sessionId will be set/generated in service)
-        System.out.println("DEBUG Received OrderDto: " + orderDto.getTotalAmount() + " " + (orderDto.getItems() == null ? 0 : orderDto.getItems().size()));
-        return orderService.createOrderFromDto(orderDto);
+        System.out.println("DEBUG:: Received OrderDto: " + orderDto.getTotalAmount() + " " + (orderDto.getItems() == null ? 0 : orderDto.getItems().size()));
+        OrderEntity created = orderService.createOrderFromDto(orderDto);
+        populateVariantIds(created);
+        return created;
     }
 
     @Mutation("updateOrder")
     @Description("Update an order and return")
     public OrderEntity updateOrder(@Name("order") OrderDto orderDto) throws GraphQLException {
         System.out.println("DEBUG:: Received updateOrder request");
-        return orderService.updateOrder(orderDto);
+        OrderEntity updated = orderService.updateOrder(orderDto);
+        populateVariantIds(updated);
+        return updated;
     }
 
     @Mutation("updateCustomerInformation")
@@ -62,14 +83,18 @@ public class OrderGraphQlResource {
     @Description("Update an order and return")
     public OrderEntity getOrderById(@Name("id") Long id) {
         System.out.println("DEBUG:: Received getOrderById request");
-        return orderService.getOrderById(id);
+        OrderEntity order = orderService.getOrderById(id);
+        populateVariantIds(order);
+        return order;
     }
 
     @Query("orderBySessionId")
     @Description("Get the latest order for a given sessionId")
     public OrderEntity getOrderBySessionId(@Name("sessionId") String sessionId) {
         System.out.println("DEBUG:: Received getOrderBySessionId request");
-        return orderService.getLatestOrderBySessionId(sessionId);
+        OrderEntity order = orderService.getLatestOrderBySessionId(sessionId);
+        populateVariantIds(order);
+        return order;
     }
     
     

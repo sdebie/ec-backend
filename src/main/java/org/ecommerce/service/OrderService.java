@@ -9,6 +9,7 @@ import org.ecommerce.persistance.dto.OrderItemDto;
 import org.ecommerce.persistance.entity.CustomerEntity;
 import org.ecommerce.persistance.entity.OrderEntity;
 import org.ecommerce.persistance.entity.OrderItemEntity;
+import org.ecommerce.persistance.entity.ProductVariantEntity;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -48,7 +49,19 @@ public class OrderService {
                     item.orderEntity = order;
                     item.unitPrice = dtoItem.getUnitPrice();
                     item.quantity = dtoItem.getQuantity();
-                    // Name is informational only for now; entity has no field; can be added later if needed
+
+                    // Map variant by id if provided
+                    if (dtoItem.getVariantId() != null) {
+                        ProductVariantEntity variant = ProductVariantEntity.findById(dtoItem.getVariantId());
+                        if (variant != null) {
+                            item.variant = variant;
+                            item.variantId = variant.id;
+                        } else {
+                            // still set transient for echoing back
+                            item.variantId = dtoItem.getVariantId();
+                        }
+                    }
+
                     // Update running total defensively
                     BigDecimal unit = item.unitPrice != null ? item.unitPrice : BigDecimal.ZERO;
                     int qty = item.quantity != null ? item.quantity : 0;
@@ -121,6 +134,17 @@ public class OrderService {
                 item.orderEntity = existingOrder;
                 item.unitPrice = dtoItem.getUnitPrice();
                 item.quantity = dtoItem.getQuantity();
+
+                // Map variant by id if provided
+                if (dtoItem.getVariantId() != null) {
+                    ProductVariantEntity variant = ProductVariantEntity.findById(dtoItem.getVariantId());
+                    if (variant != null) {
+                        item.variant = variant;
+                        item.variantId = variant.id;
+                    } else {
+                        item.variantId = dtoItem.getVariantId();
+                    }
+                }
 
                 BigDecimal unit = item.unitPrice != null ? item.unitPrice : BigDecimal.ZERO;
                 int qty = item.quantity != null ? item.quantity : 0;

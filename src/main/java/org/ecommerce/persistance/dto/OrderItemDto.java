@@ -12,6 +12,9 @@ public class OrderItemDto {
     private Integer quantity;     // quantity of units
     private String name;          // product name (informational)
 
+    @Description("Selected product variant ID")
+    private Long variantId;
+
     public BigDecimal getUnitPrice() { return unitPrice; }
     public void setUnitPrice(BigDecimal unitPrice) { this.unitPrice = unitPrice; }
 
@@ -20,4 +23,7 @@ public class OrderItemDto {
 
     public String getName() { return name; }
     public void setName(String name) { this.name = name; }
+
+    public Long getVariantId() { return variantId; }
+    public void setVariantId(Long variantId) { this.variantId = variantId; }
 }
