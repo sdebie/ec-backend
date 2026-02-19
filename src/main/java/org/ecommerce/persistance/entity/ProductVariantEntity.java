@@ -27,4 +27,10 @@ public class ProductVariantEntity extends PanacheEntity {
 
     @Column(name = "weight_kg", precision = 5, scale = 2)
     public BigDecimal weightKg;
+
+    // Helper method to fetch a variant together with its Product entity
+    public static ProductVariantEntity findByIdWithProduct(Long id) {
+        if (id == null) return null;
+        return find("select v from ProductVariantEntity v left join fetch v.product where v.id = ?1", id).firstResult();
+    }
 }

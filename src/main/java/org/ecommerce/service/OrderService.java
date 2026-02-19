@@ -52,7 +52,7 @@ public class OrderService {
 
                     // Map variant by id if provided
                     if (dtoItem.getVariant() != null) {
-                        ProductVariantEntity variant = ProductVariantEntity.findById(dtoItem.getVariant());
+                        ProductVariantEntity variant = ProductVariantEntity.findByIdWithProduct(dtoItem.getVariant());
                         if (variant != null) {
                             item.variant = variant;
                         }
@@ -133,7 +133,7 @@ public class OrderService {
 
                 // Map variant by id if provided
                 if (dtoItem.getVariant() != null) {
-                    ProductVariantEntity variant = ProductVariantEntity.findById(dtoItem.getVariant());
+                    ProductVariantEntity variant = ProductVariantEntity.findByIdWithProduct(dtoItem.getVariant());
                     if (variant != null) {
                         item.variant = variant;
                     }
