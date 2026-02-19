@@ -168,20 +168,26 @@ public class PayFastResource {
 //            return Response.status(Response.Status.UNAUTHORIZED).build();
 //        }
 
-        // 2. Generic Logging
-        PaymentLogEntity log = new PaymentLogEntity();
-        log.gatewayName = "PAYFAST";
-        log.internalReference = params.get("m_payment_id");
-        log.externalReference = params.get("pf_payment_id");
-        log.amountGross = new BigDecimal(params.get("amount_gross"));
-        log.status = params.get("payment_status");
-        // Store raw JSON for auditing
-        log.rawResponse = params.toString();
-        log.persist();
+        try{
+            // 2. Generic Logging
+            PaymentLogEntity log = new PaymentLogEntity();
+            log.gatewayName = "PAYFAST";
+            log.internalReference = params.get("m_payment_id");
+            log.externalReference = params.get("pf_payment_id");
+            log.amountGross = new BigDecimal(params.get("amount_gross"));
+            log.status = params.get("payment_status");
+            // Store raw JSON for auditing
+            log.rawResponse = params.toString();
+            log.persist();
+        }
+        catch (Exception e){
+            System.out.println("DEBUG: Error logging payment: " + e.getMessage());
+        }
 
         // 3. Logic: If payment is complete, update Order
-        if ("COMPLETE".equalsIgnoreCase(log.status)) {
-            OrderEntity.update("status = 'PAID' where id = ?", Long.parseLong(log.internalReference));
+        if ("COMPLETE".equalsIgnoreCase(params.get("payment_status"))) {
+            OrderEntity.update("status = 'PAID' where id = ?", params.get("m_payment_id"));
+            System.out.println("DEBUG: Updated Order " + params.get("m_payment_id") + " to PAID");
         }
 
         return Response.ok().build();
