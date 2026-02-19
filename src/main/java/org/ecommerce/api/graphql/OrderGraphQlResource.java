@@ -28,7 +28,7 @@ public class OrderGraphQlResource {
             throw new GraphQLException("Invalid Order Session info");
         }
 
-        System.out.println("DEBUG:: Received OrderDto: " + orderDto.getTotalAmount() + " " + (orderDto.getItems() == null ? 0 : orderDto.getItems().size()));
+        System.out.println("DEBUG:: Received OrderDto: " + orderDto.getSessionId() + " " + (orderDto.getItems() == null ? 0 : orderDto.getItems().size()));
         return orderService.createOrderFromDto(orderDto);
     }
 

@@ -27,6 +27,7 @@ public class OrderService {
         UUID session = UUID.fromString(orderDto.getSessionId());
         OrderEntity order = OrderEntity.findLatestOrderInfoBySessionId(session);
         if (order == null) {
+            System.out.println("DEBUG: Creating new Order for sessionId=" + session);
             order = new OrderEntity();
             order.sessionId = session;
         }

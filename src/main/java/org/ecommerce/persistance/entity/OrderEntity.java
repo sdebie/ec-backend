@@ -52,13 +52,15 @@ public class OrderEntity extends PanacheEntity {
 
     // Finder methods to return fully-hydrated orders (customer + order_items)
     public static OrderEntity findOrderInfoById(Long id) {
-        if (id == null) return null;
+        if (id == null)
+            throw new IllegalArgumentException("sessionId must not be null");
         return find("select distinct o from OrderEntity o left join fetch o.customerEntity left join fetch o.items where o.id = ?1", id)
                 .firstResult();
     }
 
     public static OrderEntity findLatestOrderInfoBySessionId(UUID sessionId) {
-        if (sessionId == null) return null;
+        if (sessionId == null)
+            throw new IllegalArgumentException("sessionId must not be null");
         return find("select distinct o from OrderEntity o left join fetch o.customerEntity left join fetch o.items where o.sessionId = ?1 order by o.id desc", sessionId)
                 .firstResult();
     }
