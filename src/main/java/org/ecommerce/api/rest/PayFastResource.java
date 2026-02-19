@@ -186,7 +186,7 @@ public class PayFastResource {
 
         // 3. Logic: If payment is complete, update Order
         if ("COMPLETE".equalsIgnoreCase(params.get("payment_status"))) {
-            OrderEntity.update("status = 'PAID' where id = ?", params.get("m_payment_id"));
+            OrderEntity.update("status = 'PAID', session_id = null  where id = ?", params.get("m_payment_id"));
             System.out.println("DEBUG: Updated Order " + params.get("m_payment_id") + " to PAID");
         }
 

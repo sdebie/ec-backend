@@ -89,7 +89,7 @@ public class OrderService {
         if (orderDto == null || orderDto.getOrderId() == null) {
             throw new GraphQLException("Invalid Order info");
         }
-        OrderEntity existingOrder = OrderEntity.findById(orderDto.getOrderId());
+        OrderEntity existingOrder = OrderEntity.findOrderInfoById(orderDto.getOrderId());
         if (existingOrder == null){
             throw new GraphQLException("Invalid Order info");
         }

@@ -23,7 +23,7 @@ public class OrderEntity extends PanacheEntity {
     @Column(name = "total_amount", nullable = false)
     public BigDecimal totalAmount;
 
-    @Column(name = "session_id", nullable = false)
+    @Column(name = "session_id")
     public UUID sessionId;
 
     @Column(length = 50)
