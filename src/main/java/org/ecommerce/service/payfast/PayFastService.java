@@ -136,6 +136,8 @@ public class PayFastService {
         input.put("item_name", quote.id.toString());
         input.put("email_address", quote.customerEntity.email);
 
+        input.put("payment_method", "dc");
+
         if (passphrase != null && !passphrase.isBlank()) {
             input.put("passphrase", passphrase.trim());
         }
