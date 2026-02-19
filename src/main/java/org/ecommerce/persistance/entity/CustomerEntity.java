@@ -22,15 +22,23 @@ public class CustomerEntity extends PanacheEntity {
     public String phone;
 
     // --- Default Shipping / Billing Address ---
+    @Column(name = "address_line_1")
     public String addressLine1;
+
+    @Column(name = "address_line_2")
     public String addressLine2;
+
     public String city;
     public String province;
-    public String postal_code;
+
+    @Column(name = "postal_code")
+    public String postalCode;
 
     @OneToMany(mappedBy = "customerEntity", cascade = CascadeType.ALL)
     public List<OrderEntity> orderEntities;
 
+
+    @Column(name = "created_at")
     public LocalDateTime createdAt = LocalDateTime.now();
 
     /**
