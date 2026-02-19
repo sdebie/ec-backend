@@ -134,6 +134,7 @@ public class OrderService {
             throw new GraphQLException("customer email is required");
         }
 
+        System.out.println("DEBUG: Updating customer info for sessionId=" + sessionId + " email=" + customerDto.getEmail());
         OrderEntity order = getLatestOrderBySessionId(sessionId);
         if (order == null) {
             throw new GraphQLException("Order not found for sessionId");
