@@ -149,6 +149,8 @@ public class OrderService {
         }
 
         order.customerEntity = customer;
+        System.out.println("DEBUG: Updating Order with customer info=" + order.customerEntity.id);
+        order.persist();
         return order;
     }
 }
