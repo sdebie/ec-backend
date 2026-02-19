@@ -13,32 +13,23 @@ public class OrderDto {
     // Use wrapper type Long so GraphQL input can be nullable during create
     private Long orderId;
 
-    // Prefer camelCase for GraphQL schema; also accept legacy 'total_amount' via @Name
+    // Frontend cart session identifier (UUID string)
+    private String sessionId;
+
+    // Prefer camelCase for GraphQL schema
     private BigDecimal totalAmount;
 
     private List<OrderItemEntity> items;
 
-    public Long getOrderId() {
-        return orderId;
-    }
+    public Long getOrderId() { return orderId; }
+    public void setOrderId(Long orderId) { this.orderId = orderId; }
 
-    public void setOrderId(Long orderId) {
-        this.orderId = orderId;
-    }
+    public String getSessionId() { return sessionId; }
+    public void setSessionId(String sessionId) { this.sessionId = sessionId; }
 
-    public BigDecimal getTotalAmount() {
-        return totalAmount;
-    }
+    public BigDecimal getTotalAmount() { return totalAmount; }
+    public void setTotalAmount(BigDecimal totalAmount) { this.totalAmount = totalAmount; }
 
-    public void setTotalAmount(BigDecimal totalAmount) {
-        this.totalAmount = totalAmount;
-    }
-
-    public List<OrderItemEntity> getItems() {
-        return items;
-    }
-
-    public void setItems(List<OrderItemEntity> items) {
-        this.items = items;
-    }
+    public List<OrderItemEntity> getItems() { return items; }
+    public void setItems(List<OrderItemEntity> items) { this.items = items; }
 }

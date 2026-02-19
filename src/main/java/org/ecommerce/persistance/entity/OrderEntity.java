@@ -2,20 +2,18 @@ package org.ecommerce.persistance.entity;
 
 import io.quarkus.hibernate.orm.panache.PanacheEntity;
 import jakarta.persistence.*;
-import lombok.Getter;
-import lombok.Setter;
+import lombok.Data;
 import org.hibernate.annotations.CreationTimestamp;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.UUID;
 
-@Getter
-@Setter
+@Data
 @Entity
 @Table(name = "orders")
 public class OrderEntity extends PanacheEntity {
-
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "customer_id")
@@ -23,6 +21,9 @@ public class OrderEntity extends PanacheEntity {
 
     @Column(name = "total_amount", nullable = false)
     public BigDecimal totalAmount;
+
+    @Column(name = "session_id", nullable = false)
+    public UUID sessionId;
 
     @Column(length = 50)
     public String status = "PENDING"; // PENDING, PAID, CANCELLED

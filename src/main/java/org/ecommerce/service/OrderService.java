@@ -19,6 +19,18 @@ public class OrderService {
         // Map minimal fields from DTO
         BigDecimal dtoTotal = orderDto != null ? orderDto.getTotalAmount() : null;
         order.status = "CREATED";
+        // Ensure session id is set (from DTO or generate new)
+        try {
+            String sid = orderDto != null ? orderDto.getSessionId() : null;
+            if (sid != null && !sid.isBlank()) {
+                order.sessionId = java.util.UUID.fromString(sid);
+            } else {
+                order.sessionId = java.util.UUID.randomUUID();
+            }
+        } catch (Exception e) {
+            // If provided value is invalid, generate a new UUID
+            order.sessionId = java.util.UUID.randomUUID();
+        }
 
         // Map and attach items (will be persisted via cascade from OrderEntity)
         if (orderDto != null) {
@@ -53,6 +65,16 @@ public class OrderService {
 
     public OrderEntity getOrderById(Long orderId) {
         return OrderEntity.findById(orderId);
+    }
+
+    public OrderEntity getLatestOrderBySessionId(String sessionId) {
+        if (sessionId == null || sessionId.isBlank()) return null;
+        try {
+            java.util.UUID sid = java.util.UUID.fromString(sessionId);
+            return OrderEntity.find("sessionId = ?1 order by id desc", sid).firstResult();
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     @Transactional
