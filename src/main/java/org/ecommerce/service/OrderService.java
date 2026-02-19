@@ -78,9 +78,9 @@ public class OrderService {
     }
 
     public OrderEntity getLatestOrderBySessionId(String sessionId) {
-        if (sessionId == null || sessionId.isBlank()) return null;
         try {
-            java.util.UUID sid = java.util.UUID.fromString(sessionId);
+            UUID sid = UUID.fromString(sessionId);
+            System.out.println("DEBUG: getLatestOrderBySessionId for sessionId=" + sid);
             return OrderEntity.findLatestOrderInfoBySessionId(sid);
         } catch (Exception e) {
             return null;

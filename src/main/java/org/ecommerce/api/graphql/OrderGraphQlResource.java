@@ -84,16 +84,17 @@ public class OrderGraphQlResource {
     @Description("Update an order and return")
     public OrderEntity getOrderById(@Name("id") Long id) {
         System.out.println("DEBUG:: Received getOrderById request");
-        OrderEntity order = orderService.getOrderById(id);
-        return order;
+        return  orderService.getOrderById(id);
     }
 
     @Query("orderBySessionId")
     @Description("Get the latest order for a given sessionId")
-    public OrderEntity getOrderBySessionId(@Name("sessionId") String sessionId) {
-        System.out.println("DEBUG:: Received getOrderBySessionId request");
-        OrderEntity order = orderService.getLatestOrderBySessionId(sessionId);
-        return order;
+    public OrderEntity getOrderBySessionId(@Name("sessionId") String sessionId) throws GraphQLException {
+        System.out.println("DEBUG:: Received getOrderBySessionId request: " + sessionId);
+        if (sessionId == null || sessionId.isBlank()) {
+            throw new GraphQLException("Invalid Order Session info");
+        }
+        return orderService.getLatestOrderBySessionId(sessionId);
     }
     
     
