@@ -17,9 +17,6 @@ public class OrderItemEntity extends PanacheEntity {
     @JoinColumn(name = "variant_id", referencedColumnName = "id", nullable = true)
     public ProductVariantEntity variant;
 
-    // Backward-compatible transient field for serialization input/output
-    @Transient
-    public Long variantId;
 
     @Column(nullable = false)
     public Integer quantity;

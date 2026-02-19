@@ -17,15 +17,6 @@ public class OrderGraphQlResource {
     @Inject
     OrderService orderService;
 
-    private void populateVariantIds(OrderEntity order) {
-        if (order == null || order.items == null) return;
-        for (OrderItemEntity it : order.items) {
-            if (it == null) continue;
-            if (it.variantId == null && it.variant != null) {
-                it.variantId = it.variant.id;
-            }
-        }
-    }
 
     @Mutation("addToCart")
     @Description("Add item to cart/ will update or create an order")
@@ -40,7 +31,6 @@ public class OrderGraphQlResource {
             OrderEntity existingOrder = orderService.getOrderById(orderDto.getOrderId());
             if (existingOrder == null) throw new GraphQLException("Invalid Order info");
             OrderEntity updated = orderService.updateOrder(orderDto);
-            populateVariantIds(updated);
             return updated;
         }
         // 2) Otherwise, if a sessionId is provided, try to update the latest order for that session
@@ -49,14 +39,12 @@ public class OrderGraphQlResource {
             if (latest != null) {
                 orderDto.setOrderId(latest.id);
                 OrderEntity updated = orderService.updateOrder(orderDto);
-                populateVariantIds(updated);
                 return updated;
             }
         }
         // 3) Fallback: create a new order (sessionId will be set/generated in service)
         System.out.println("DEBUG:: Received OrderDto: " + orderDto.getTotalAmount() + " " + (orderDto.getItems() == null ? 0 : orderDto.getItems().size()));
         OrderEntity created = orderService.createOrderFromDto(orderDto);
-        populateVariantIds(created);
         return created;
     }
 
@@ -65,7 +53,6 @@ public class OrderGraphQlResource {
     public OrderEntity updateOrder(@Name("order") OrderDto orderDto) throws GraphQLException {
         System.out.println("DEBUG:: Received updateOrder request");
         OrderEntity updated = orderService.updateOrder(orderDto);
-        populateVariantIds(updated);
         return updated;
     }
 
@@ -84,7 +71,6 @@ public class OrderGraphQlResource {
     public OrderEntity getOrderById(@Name("id") Long id) {
         System.out.println("DEBUG:: Received getOrderById request");
         OrderEntity order = orderService.getOrderById(id);
-        populateVariantIds(order);
         return order;
     }
 
@@ -93,7 +79,6 @@ public class OrderGraphQlResource {
     public OrderEntity getOrderBySessionId(@Name("sessionId") String sessionId) {
         System.out.println("DEBUG:: Received getOrderBySessionId request");
         OrderEntity order = orderService.getLatestOrderBySessionId(sessionId);
-        populateVariantIds(order);
         return order;
     }
     

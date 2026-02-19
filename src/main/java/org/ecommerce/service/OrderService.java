@@ -51,14 +51,10 @@ public class OrderService {
                     item.quantity = dtoItem.getQuantity();
 
                     // Map variant by id if provided
-                    if (dtoItem.getVariantId() != null) {
-                        ProductVariantEntity variant = ProductVariantEntity.findById(dtoItem.getVariantId());
+                    if (dtoItem.getVariant() != null) {
+                        ProductVariantEntity variant = ProductVariantEntity.findById(dtoItem.getVariant());
                         if (variant != null) {
                             item.variant = variant;
-                            item.variantId = variant.id;
-                        } else {
-                            // still set transient for echoing back
-                            item.variantId = dtoItem.getVariantId();
                         }
                     }
 
@@ -136,13 +132,10 @@ public class OrderService {
                 item.quantity = dtoItem.getQuantity();
 
                 // Map variant by id if provided
-                if (dtoItem.getVariantId() != null) {
-                    ProductVariantEntity variant = ProductVariantEntity.findById(dtoItem.getVariantId());
+                if (dtoItem.getVariant() != null) {
+                    ProductVariantEntity variant = ProductVariantEntity.findById(dtoItem.getVariant());
                     if (variant != null) {
                         item.variant = variant;
-                        item.variantId = variant.id;
-                    } else {
-                        item.variantId = dtoItem.getVariantId();
                     }
                 }
 
