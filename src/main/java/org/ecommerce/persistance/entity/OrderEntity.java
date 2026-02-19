@@ -9,6 +9,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
+import java.util.ArrayList;
 
 @Data
 @Entity
@@ -43,7 +44,7 @@ public class OrderEntity extends PanacheEntity {
     public String shippingPostalCode;
 
     @OneToMany(mappedBy = "orderEntity", cascade = CascadeType.ALL, orphanRemoval = true)
-    public List<OrderItemEntity> items;
+    public List<OrderItemEntity> items = new ArrayList<>();
 
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)

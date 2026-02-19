@@ -73,7 +73,8 @@ public class OrderService {
         if (sessionId == null || sessionId.isBlank()) return null;
         try {
             java.util.UUID sid = java.util.UUID.fromString(sessionId);
-            return OrderEntity.find("sessionId = ?1 order by id desc", sid).firstResult();
+            // Eagerly load items to ensure the collection reflects DB rows in the same request
+            return OrderEntity.find("select distinct o from OrderEntity o left join fetch o.items where o.sessionId = ?1 order by o.id desc", sid).firstResult();
         } catch (Exception e) {
             return null;
         }
@@ -139,6 +140,8 @@ public class OrderService {
         if (order == null) {
             throw new GraphQLException("Order not found for sessionId");
         }
+
+        System.out.println("DEBUG: Found Order with Items=" + order.items);
 
         String email = customerDto.getEmail().trim();
         CustomerEntity customer = CustomerEntity.findByEmail(email);
