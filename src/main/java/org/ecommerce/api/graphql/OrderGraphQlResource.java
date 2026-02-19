@@ -3,6 +3,7 @@ package org.ecommerce.api.graphql;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import org.eclipse.microprofile.graphql.*;
+import org.ecommerce.persistance.dto.CustomerDto;
 import org.ecommerce.persistance.dto.OrderDto;
 import org.ecommerce.persistance.entity.OrderEntity;
 import org.ecommerce.service.OrderService;
@@ -47,6 +48,16 @@ public class OrderGraphQlResource {
         return orderService.updateOrder(orderDto);
     }
 
+    @Mutation("updateCustomerInformation")
+    @Description("Update customer information for the latest order in a session. For now only email is supported.")
+    public OrderEntity updateCustomerInformation(
+            @Name("sessionId") String sessionId,
+            @Name("customer") CustomerDto customerDto
+    ) throws GraphQLException {
+        System.out.println("DEBUG:: Received updateCustomerInformation request for sessionId=" + sessionId);
+        return orderService.updateCustomerInformation(sessionId, customerDto);
+    }
+
     @Query("orderById")
     @Description("Update an order and return")
     public OrderEntity getOrderById(@Name("id") Long id) {
@@ -60,4 +71,6 @@ public class OrderGraphQlResource {
         System.out.println("DEBUG:: Received getOrderBySessionId request");
         return orderService.getLatestOrderBySessionId(sessionId);
     }
+    
+    
 }

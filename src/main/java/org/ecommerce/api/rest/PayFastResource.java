@@ -135,8 +135,8 @@ public class PayFastResource {
 
         List<String> orderId = formParams.get("id");
         OrderEntity quote = OrderEntity.findById(Long.parseLong(orderId.getFirst()));
-        if (quote == null) {
-            System.out.println("DEBUG: Invalid Order Number");
+        if (quote == null || quote.customerEntity == null || quote.customerEntity.email == null || quote.customerEntity.email.isBlank()) {
+            System.out.println("DEBUG: Invalid Order information");
             return Response.status(Response.Status.EXPECTATION_FAILED)
                     .entity("{\"Error\": \"Request could not be processed. Please contact Admin\"}").build();
         }

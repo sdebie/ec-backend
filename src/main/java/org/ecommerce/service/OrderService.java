@@ -3,7 +3,9 @@ package org.ecommerce.service;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.transaction.Transactional;
 import org.eclipse.microprofile.graphql.GraphQLException;
+import org.ecommerce.persistance.dto.CustomerDto;
 import org.ecommerce.persistance.dto.OrderDto;
+import org.ecommerce.persistance.entity.CustomerEntity;
 import org.ecommerce.persistance.entity.OrderEntity;
 import org.ecommerce.persistance.entity.OrderItemEntity;
 
@@ -121,5 +123,31 @@ public class OrderService {
         existingOrder.totalAmount = dtoTotal != null ? dtoTotal : computedTotal;
 
         return existingOrder;
+    }
+
+    @Transactional
+    public OrderEntity updateCustomerInformation(String sessionId, CustomerDto customerDto) throws GraphQLException {
+        if (sessionId == null || sessionId.isBlank()) {
+            throw new GraphQLException("sessionId is required");
+        }
+        if (customerDto == null || customerDto.getEmail() == null || customerDto.getEmail().isBlank()) {
+            throw new GraphQLException("customer email is required");
+        }
+
+        OrderEntity order = getLatestOrderBySessionId(sessionId);
+        if (order == null) {
+            throw new GraphQLException("Order not found for sessionId");
+        }
+
+        String email = customerDto.getEmail().trim();
+        CustomerEntity customer = CustomerEntity.findByEmail(email);
+        if (customer == null) {
+            customer = new CustomerEntity();
+            customer.email = email;
+            CustomerEntity.persist(customer);
+        }
+
+        order.customerEntity = customer;
+        return order;
     }
 }
