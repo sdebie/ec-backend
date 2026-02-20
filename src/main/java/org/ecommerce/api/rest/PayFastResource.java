@@ -186,8 +186,23 @@ public class PayFastResource {
 
         // 3. Logic: If payment is complete, update Order
         if ("COMPLETE".equalsIgnoreCase(params.get("payment_status"))) {
-            OrderEntity.update("status = 'PAID' where id = ?1", Long.parseLong(params.get("m_payment_id")));
-            System.out.println("DEBUG: Updated Order " + params.get("m_payment_id") + " to PAID");
+            String orderIdStr = params.get("m_payment_id");
+            try {
+                Long orderId = Long.parseLong(orderIdStr);
+                OrderEntity order = OrderEntity.findById(orderId);
+                if (order != null) {
+                    order.status = "PAID";
+                    // Panache will auto-dirty-check within @Transactional, but call persist() to be explicit
+                    order.persist();
+                    System.out.println("DEBUG: Updated Order " + orderId + " to PAID (entity update)");
+                } else {
+                    System.out.println("DEBUG: Order not found for m_payment_id=" + orderId + "; no update performed");
+                }
+            } catch (NumberFormatException nfe) {
+                System.out.println("DEBUG: Invalid m_payment_id received: '" + orderIdStr + "'" );
+            } catch (Exception ex) {
+                System.out.println("DEBUG: Failed to update Order status to PAID due to: " + ex.getMessage());
+            }
         }
 
         return Response.ok().build();
