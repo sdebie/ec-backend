@@ -2,10 +2,9 @@ package org.ecommerce.api.graphql;
 
 import io.quarkus.hibernate.orm.panache.Panache;
 import jakarta.enterprise.context.ApplicationScoped;
-import org.eclipse.microprofile.graphql.Description;
-import org.eclipse.microprofile.graphql.GraphQLApi;
-import org.eclipse.microprofile.graphql.Query;
+import org.eclipse.microprofile.graphql.*;
 import org.ecommerce.persistance.dto.ProductListItem;
+import org.ecommerce.persistance.entity.ProductVariantEntity;
 
 import jakarta.transaction.Transactional;
 import jakarta.transaction.Transactional.TxType;
@@ -98,5 +97,12 @@ public class ProductGraphQlResource {
             list.add(new ProductListItem(id, name, description, price, imageUrl, variantIds));
         }
         return list;
+    }
+
+    @Query("variantsByIds")
+    @Description("Fetch product variants by a list of ids, including product relation")
+    @Transactional(value = TxType.SUPPORTS)
+    public List<ProductVariantEntity> variantsByIds(@Name("ids") List<Long> ids) {
+        return ProductVariantEntity.listByIdsWithProduct(ids);
     }
 }
