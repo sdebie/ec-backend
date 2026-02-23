@@ -10,6 +10,9 @@ import java.util.List;
 @Table(name = "customers")
 public class CustomerEntity extends PanacheEntity {
 
+    @Column(name = "shopper_type")
+    public String shopperType;
+
     @Column(unique = true, nullable = false)
     public String email;
 
@@ -37,6 +40,11 @@ public class CustomerEntity extends PanacheEntity {
     @OneToMany(mappedBy = "customerEntity", cascade = CascadeType.ALL)
     public List<OrderEntity> orderEntities;
 
+    @Column(name = "password_hash")
+    public String passwordHash;
+
+    @Column(name = "last_login")
+    public LocalDateTime passwordUpdateddAt;
 
     @Column(name = "created_at")
     public LocalDateTime createdAt = LocalDateTime.now();
