@@ -1,12 +1,12 @@
-package org.ecommerce.service;
+package org.ecommerce.service.payfast;
 
 import jakarta.enterprise.context.ApplicationScoped;
-import org.apache.commons.codec.digest.DigestUtils;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
-import java.nio.charset.StandardCharsets;
-import java.net.URLEncoder;
-import java.util.Map;
-import java.util.TreeMap;
+import org.ecommerce.common.HtmlFormField;
+import org.ecommerce.persistance.entity.OrderEntity;
+
+import java.security.NoSuchAlgorithmException;
+import java.util.*;
 
 @ApplicationScoped
 public class PayFastService {
@@ -19,29 +19,13 @@ public class PayFastService {
     @ConfigProperty(name = "payfast.return-url") String returnUrl;
     @ConfigProperty(name = "payfast.cancel-url") String cancelUrl;
 
-    // Holds the exact string used to compute the signature, preserving key order
-    // Note: ApplicationScoped bean; concurrent requests may overwrite this value.
-    // Callers should read it immediately after calling generateSignature.
+    /*
     private volatile String lastSignatureBaseString;
 
     public String getLastSignatureBaseString() {
         return lastSignatureBaseString;
     }
 
-    /**
-     * Generates the MD5 signature required by PayFast.
-     * IMPORTANT: Must follow the exact key order specified by business, not alphabetical.
-     * Order:
-     * merchant_id, merchant_key, return_url, cancel_url, notify_url, fica_idnumber,
-     * name_first, name_last, email_address, cell_number, m_payment_id, amount,
-     * item_name, item_description, email_confirmation, confirmation_address, payment_method
-     * Notes:
-     * - Do not URL-encode fully; only encode spaces as '+' for the signature base string.
-     * - Skip null/blank values.
-     * - Exclude any keys not in the list above.
-     * - Do NOT include passphrase (not part of required order).
-     * - Never include an existing "signature" field.
-     */
     public String generateSignature(Map<String, String> data) {
         // Inject merchant credentials from configuration (override any provided values)
         TreeMap<String, String> input = new TreeMap<>(data);
@@ -79,18 +63,21 @@ public class PayFastService {
 
         StringBuilder sb = new StringBuilder();
         for (String key : order) {
-            if ("signature".equals(key)) continue; // defensive, though not in list
             String value = input.get(key);
-            if (value == null) continue;
+            if (value == null)
+                continue;
             value = value.trim();
-            if (value.isBlank()) continue;
-            if (sb.length() > 0) sb.append('&');
+            if (value.isBlank())
+                continue;
+            if (sb.length() > 0)
+                sb.append('&');
             // URL-encode value ensuring percent-encodings use uppercase hex digits (Java URLEncoder already does this)
             String encoded = URLEncoder.encode(value, StandardCharsets.UTF_8);
             sb.append(key).append('=').append(encoded);
         }
 
         String finalString = sb.toString();
+
         // Save the exact ordered base string so it can be reused for the POST body construction
         this.lastSignatureBaseString = finalString;
 
@@ -100,11 +87,13 @@ public class PayFastService {
         System.out.println("DEBUG: Signature: " + signature);
 
         return signature;
+        return null;
     }
+     */
 
     /**
      * Verifies an incoming ITN signature.
-     */
+     *
     public boolean verifySignature(Map<String, String> params) {
         String receivedSignature = params.get("signature");
 
@@ -114,5 +103,62 @@ public class PayFastService {
 
         String calculatedSignature = generateSignature(dataToVerify);
         return calculatedSignature.equals(receivedSignature);
+    }
+     */
+
+    public List<HtmlFormField> generateHiddenHTMLForm(OrderEntity quote) {
+
+        try {
+            TreeMap<String, String> stringTreeMap = getStringTreeMap(quote);
+            Map<String, String> sortedData = PayFastUtils.sortByPredefinedOrder(stringTreeMap);
+            String joinedNameValuePair = PayFastUtils.concatenateNonEmptyNameValuePairs(sortedData);
+            String signature = PayFastUtils.generateSecuritySignature(joinedNameValuePair);
+            return buildFormElements(sortedData, signature);
+        } catch (NoSuchAlgorithmException e) {
+            System.out.println("Failed to create security signature" + e);
+        }
+
+        return Collections.emptyList();
+    }
+
+    private TreeMap<String, String> getStringTreeMap(OrderEntity quote) {
+
+        TreeMap<String, String> input = new TreeMap<>();
+        input.put("merchant_id", merchantId);
+        input.put("merchant_key", merchantKey);
+
+        input.put("return_url", returnUrl);
+        input.put("cancel_url", cancelUrl);
+        input.put("notify_url", notifyUrl);
+
+        input.put("amount", quote.totalAmount.setScale(2, java.math.RoundingMode.HALF_UP).toPlainString());
+        input.put("m_payment_id", quote.id.toString());
+        input.put("item_name", quote.id.toString());
+        input.put("email_address", quote.customerEntity.email);
+
+        input.put("payment_method", "dc");
+
+        if (passphrase != null && !passphrase.isBlank()) {
+            input.put("passphrase", passphrase.trim());
+        }
+        return input;
+    }
+
+    private List<HtmlFormField> buildFormElements(Map<String, String> sortedData, String signature) {
+        sortedData.put("signature", signature);
+        List<HtmlFormField> htmlFormElements = new ArrayList<>();
+        for (Map.Entry<String, String> element : sortedData.entrySet()) {
+            if (null != element.getValue()) {
+                HtmlFormField formElement = new HtmlFormField(
+                        element.getKey(),
+                        "hidden",
+                        element.getValue()
+                );
+
+                htmlFormElements.add(formElement);
+            }
+        }
+
+        return htmlFormElements;
     }
 }

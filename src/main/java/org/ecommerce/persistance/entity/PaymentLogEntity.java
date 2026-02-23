@@ -1,4 +1,4 @@
-package org.ecommerce.entity;
+package org.ecommerce.persistance.entity;
 
 import io.quarkus.hibernate.orm.panache.PanacheEntity;
 import jakarta.persistence.*;
@@ -11,8 +11,8 @@ import java.time.LocalDateTime;
 public class PaymentLogEntity extends PanacheEntity {
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "quotation_id")
-    public QuotationEntity quotationEntity;
+    @JoinColumn(name = "order_id")
+    public OrderEntity orderEntity;
 
     @Column(name = "gateway_name")
     public String gatewayName = "PAYFAST"; // Default for now
@@ -34,10 +34,13 @@ public class PaymentLogEntity extends PanacheEntity {
 
     public String status; // COMPLETE, FAILED, PENDING
 
-    @Column(columnDefinition = "TEXT")
+    @Column(name = "raw_response")
     public String rawResponse; // The full POST body for auditing
 
+    @Column(name = "created_at")
     public LocalDateTime createdAt = LocalDateTime.now();
+
+    @Column(name = "updated_at")
     public LocalDateTime updatedAt = LocalDateTime.now();
 
     @PreUpdate

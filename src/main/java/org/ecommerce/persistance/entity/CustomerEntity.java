@@ -1,4 +1,4 @@
-package org.ecommerce.entity;
+package org.ecommerce.persistance.entity;
 
 import io.quarkus.hibernate.orm.panache.PanacheEntity;
 import jakarta.persistence.*;
@@ -9,6 +9,9 @@ import java.util.List;
 @Entity
 @Table(name = "customers")
 public class CustomerEntity extends PanacheEntity {
+
+    @Column(name = "shopper_type")
+    public String shopperType;
 
     @Column(unique = true, nullable = false)
     public String email;
@@ -22,15 +25,28 @@ public class CustomerEntity extends PanacheEntity {
     public String phone;
 
     // --- Default Shipping / Billing Address ---
+    @Column(name = "address_line_1")
     public String addressLine1;
+
+    @Column(name = "address_line_2")
     public String addressLine2;
+
     public String city;
     public String province;
-    public String postal_code;
+
+    @Column(name = "postal_code")
+    public String postalCode;
 
     @OneToMany(mappedBy = "customerEntity", cascade = CascadeType.ALL)
-    public List<QuotationEntity> quotationEntities;
+    public List<OrderEntity> orderEntities;
 
+    @Column(name = "password_hash")
+    public String passwordHash;
+
+    @Column(name = "last_login")
+    public LocalDateTime passwordUpdateddAt;
+
+    @Column(name = "created_at")
     public LocalDateTime createdAt = LocalDateTime.now();
 
     /**
