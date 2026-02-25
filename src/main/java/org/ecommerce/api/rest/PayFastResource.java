@@ -7,6 +7,7 @@ import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.MultivaluedMap;
 import jakarta.ws.rs.core.Response;
 import org.ecommerce.common.HtmlFormField;
+import org.ecommerce.common.enums.OrderStatusEn;
 import org.ecommerce.persistance.entity.OrderEntity;
 import org.ecommerce.persistance.entity.PaymentLogEntity;
 import org.ecommerce.service.payfast.PayFastService;
@@ -191,7 +192,7 @@ public class PayFastResource {
                 Long orderId = Long.parseLong(orderIdStr);
                 OrderEntity order = OrderEntity.findById(orderId);
                 if (order != null) {
-                    order.status = "PAID";
+                    order.status = OrderStatusEn.PAID;
                     // Panache will auto-dirty-check within @Transactional, but call persist() to be explicit
                     order.persist();
                     System.out.println("DEBUG: Updated Order " + orderId + " to PAID (entity update)");
