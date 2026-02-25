@@ -3,6 +3,7 @@ package org.ecommerce.service;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.transaction.Transactional;
 import org.eclipse.microprofile.graphql.GraphQLException;
+import org.ecommerce.common.enums.OrderStatusEn;
 import org.ecommerce.persistance.dto.CustomerDto;
 import org.ecommerce.persistance.dto.OrderDto;
 import org.ecommerce.persistance.dto.OrderItemDto;
@@ -31,16 +32,26 @@ public class OrderService {
             order = new OrderEntity();
             order.sessionId = session;
         }
+        else{
+            // Avoid bulk delete + reassign which breaks orphanRemoval tracking
+            if (order.items == null) {
+                order.items = new java.util.ArrayList<>();
+            } else {
+                order.items.clear();
+            }
+        }
 
         // Map minimal fields from DTO
         BigDecimal dtoTotal = orderDto.getTotalAmount();
-        order.status = "CREATED";
+        order.status = OrderStatusEn.CREATED;
 
         // Map and attach items (will be persisted via cascade from OrderEntity)
         List<OrderItemDto> dtoItems = orderDto.getItems();
+        BigDecimal computedTotal = BigDecimal.ZERO;
         if (dtoItems != null && !dtoItems.isEmpty()) {
-            BigDecimal computedTotal = BigDecimal.ZERO;
-            java.util.ArrayList<OrderItemEntity> entities = new java.util.ArrayList<>();
+            if (order.items == null) {
+                order.items = new java.util.ArrayList<>();
+            }
             for (OrderItemDto dtoItem : dtoItems) {
                 if (dtoItem == null)
                     continue;
@@ -62,12 +73,14 @@ public class OrderService {
                 BigDecimal unit = item.unitPrice != null ? item.unitPrice : BigDecimal.ZERO;
                 int qty = item.quantity != null ? item.quantity : 0;
                 computedTotal = computedTotal.add(unit.multiply(BigDecimal.valueOf(qty)));
-                entities.add(item);
+
+                // Add directly to managed collection so Hibernate can track orphans
+                order.items.add(item);
             }
-            order.items = entities;
             // If total not provided, use computed
             order.totalAmount = dtoTotal != null ? dtoTotal : computedTotal;
         } else {
+            // No items provided, keep items list as is (could be empty from clear above)
             order.totalAmount = BigDecimal.ZERO;
         }
 
@@ -183,5 +196,27 @@ public class OrderService {
         CustomerDto result = new CustomerDto();
         result.setEmail(customer.email);
         return result;
+    }
+
+    @Transactional
+    public OrderEntity updateOrderStatus(String sessionId, String status) throws GraphQLException {
+        if (sessionId == null || sessionId.isBlank()) {
+            throw new GraphQLException("sessionId is required");
+        }
+        if (status == null || status.isBlank()) {
+            throw new GraphQLException("status is required");
+        }
+        System.out.println("DEBUG: Updating order status for sessionId=" + sessionId + " to status=" + status);
+        OrderEntity order = getLatestOrderBySessionId(sessionId);
+        if (order == null) {
+            throw new GraphQLException("Order not found for sessionId");
+        }
+        try {
+            order.status = OrderStatusEn.valueOf(status);
+        } catch (IllegalArgumentException e) {
+            throw new GraphQLException("Invalid status: " + status);
+        }
+        order.persist();
+        return order;
     }
 }

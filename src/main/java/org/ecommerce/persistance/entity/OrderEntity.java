@@ -3,6 +3,7 @@ package org.ecommerce.persistance.entity;
 import io.quarkus.hibernate.orm.panache.PanacheEntity;
 import jakarta.persistence.*;
 import lombok.Data;
+import org.ecommerce.common.enums.OrderStatusEn;
 import org.hibernate.annotations.CreationTimestamp;
 
 import java.math.BigDecimal;
@@ -26,8 +27,9 @@ public class OrderEntity extends PanacheEntity {
     @Column(name = "session_id")
     public UUID sessionId;
 
+    @Enumerated(EnumType.STRING)
     @Column(length = 50)
-    public String status = "PENDING"; // PENDING, PAID, CANCELLED
+    public OrderStatusEn status = OrderStatusEn.PENDING;
 
     // Delivery Details (not yet persisted in DB schema)
     @Transient

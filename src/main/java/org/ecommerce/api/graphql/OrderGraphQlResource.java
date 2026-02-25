@@ -19,17 +19,16 @@ public class OrderGraphQlResource {
     @Mutation("createOrder")
     @Description("Create an order")
     public OrderEntity createOrder(@Name("order") OrderDto orderDto) throws GraphQLException {
-        System.out.println("DEBUG:: Received createOrder request");
-        if (orderDto == null) {
-            throw new GraphQLException("Invalid Order info");
-        }
+        System.out.println("DEBUG:: Received createOrder request for Items:" + orderDto.getItems().size());
 
         if (orderDto.getSessionId() == null) {
             throw new GraphQLException("Invalid Order Session info");
         }
 
         System.out.println("DEBUG:: Received OrderDto: " + orderDto.getSessionId() + " " + (orderDto.getItems() == null ? 0 : orderDto.getItems().size()));
-        return orderService.createOrderFromDto(orderDto);
+        OrderEntity result = orderService.createOrderFromDto(orderDto);
+        System.out.println("DEBUG:: Created Order with Items=" + result.items);
+        return result;
     }
 
 //    @Mutation("addToCart")
@@ -78,6 +77,16 @@ public class OrderGraphQlResource {
     ) throws GraphQLException {
         System.out.println("DEBUG:: Received updateCustomerInformation request for sessionId=" + sessionId);
         return orderService.updateCustomerInformation(sessionId, customerDto);
+    }
+
+    @Mutation("updateOrderStatus")
+    @Description("Update the status of the latest order for a given sessionId")
+    public OrderEntity updateOrderStatus(
+            @Name("sessionId") String sessionId,
+            @Name("status") String status
+    ) throws GraphQLException {
+        System.out.println("DEBUG:: Received updateOrderStatus request for sessionId=" + sessionId + ", status=" + status);
+        return orderService.updateOrderStatus(sessionId, status);
     }
 
     @Query("orderById")
