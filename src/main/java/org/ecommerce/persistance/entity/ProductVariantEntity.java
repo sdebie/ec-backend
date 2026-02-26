@@ -41,4 +41,10 @@ public class ProductVariantEntity extends PanacheEntity {
         if (ids == null || ids.isEmpty()) return Collections.emptyList();
         return list("select v from ProductVariantEntity v left join fetch v.product where v.id in ?1", ids);
     }
+
+    // Helper to fetch all variants for a given product id including the product relation
+    public static List<ProductVariantEntity> listByProductIdWithProduct(Long productId) {
+        if (productId == null) return Collections.emptyList();
+        return list("select v from ProductVariantEntity v left join fetch v.product where v.product.id = ?1 order by v.id asc", productId);
+    }
 }

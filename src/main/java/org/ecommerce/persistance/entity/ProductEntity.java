@@ -3,6 +3,7 @@ package org.ecommerce.persistance.entity;
 import io.quarkus.hibernate.orm.panache.PanacheEntity;
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
+import org.ecommerce.common.enums.ProductTypeEn;
 
 @Entity
 @Table(name = "products")
@@ -22,8 +23,9 @@ public class ProductEntity extends PanacheEntity {
     @Column(columnDefinition = "TEXT")
     public String description;
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "product_type")
-    public String productType; // SIMPLE or VARIABLE
+    public ProductTypeEn productType; // SIMPLE or VARIABLE
 
     @Column(name = "created_at")
     public LocalDateTime createdAt = LocalDateTime.now();

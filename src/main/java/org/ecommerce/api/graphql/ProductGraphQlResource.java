@@ -105,4 +105,12 @@ public class ProductGraphQlResource {
     public List<ProductVariantEntity> variantsByIds(@Name("ids") List<Long> ids) {
         return ProductVariantEntity.listByIdsWithProduct(ids);
     }
+
+    @Query("getProductWithVariants")
+    @Description("Fetch all variants for a given product id, including the product relation")
+    @Transactional(value = TxType.SUPPORTS)
+    public List<ProductVariantEntity> getProductWithVariants(@Name("productId") Long productId) {
+        return ProductVariantEntity.listByProductIdWithProduct(productId);
+    }
+
 }

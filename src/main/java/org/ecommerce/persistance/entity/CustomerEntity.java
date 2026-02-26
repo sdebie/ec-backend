@@ -2,16 +2,20 @@ package org.ecommerce.persistance.entity;
 
 import io.quarkus.hibernate.orm.panache.PanacheEntity;
 import jakarta.persistence.*;
+import lombok.Getter;
+import org.ecommerce.common.enums.CustomerTypeEn;
 
 import java.time.LocalDateTime;
 import java.util.List;
 
 @Entity
+@Getter
 @Table(name = "customers")
 public class CustomerEntity extends PanacheEntity {
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "shopper_type")
-    public String shopperType;
+    public CustomerTypeEn shopperType;
 
     @Column(unique = true, nullable = false)
     public String email;
@@ -55,4 +59,5 @@ public class CustomerEntity extends PanacheEntity {
     public static CustomerEntity findByEmail(String email) {
         return find("email", email).firstResult();
     }
+
 }

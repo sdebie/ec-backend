@@ -4,6 +4,7 @@ import jakarta.transaction.Transactional;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
+import org.ecommerce.common.enums.CustomerTypeEn;
 import org.ecommerce.persistance.dto.CustomerProfileDto;
 import org.ecommerce.persistance.entity.CustomerEntity;
 
@@ -98,10 +99,10 @@ public class CustomerResource {
 
         if (req.password != null && !req.password.isBlank()) {
             ce.passwordHash = hashPassword(req.password);
-            ce.shopperType = "REGISTERED";
+            ce.shopperType = CustomerTypeEn.REGISTERED;
             ce.passwordUpdateddAt = LocalDateTime.now();
-        } else if (ce.shopperType == null || ce.shopperType.isBlank()) {
-            ce.shopperType = "GUEST";
+        } else if (ce.shopperType == null) {
+            ce.shopperType = CustomerTypeEn.GUEST;
         }
 
         CustomerEntity.persist(ce);
@@ -138,7 +139,9 @@ public class CustomerResource {
         dto.setCity(ce.city);
         dto.setProvince(ce.province);
         dto.setPostalCode(ce.postalCode);
-        dto.setShopperType(ce.shopperType);
+        if (ce.shopperType != null) {
+            dto.setShopperType(ce.shopperType.name());
+        }
         dto.setHasPassword(ce.passwordHash != null && !ce.passwordHash.isBlank());
         return dto;
     }

@@ -1,6 +1,9 @@
 package org.ecommerce.service;
 
+import io.quarkus.mailer.MailTemplate;
+import io.quarkus.mailer.reactive.ReactiveMailer;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import org.eclipse.microprofile.graphql.GraphQLException;
 import org.ecommerce.common.enums.OrderStatusEn;
@@ -13,11 +16,19 @@ import org.ecommerce.persistance.entity.OrderItemEntity;
 import org.ecommerce.persistance.entity.ProductVariantEntity;
 
 import java.math.BigDecimal;
-import java.util.List;
-import java.util.UUID;
+import java.util.*;
+import org.jboss.logging.Logger;
 
 @ApplicationScoped
 public class OrderService {
+
+    @Inject
+    ReactiveMailer reactiveMailer;
+
+    @Inject
+    MailTemplate order_confirmation; // Your Qute template
+
+    private static final Logger LOG = Logger.getLogger(OrderService.class);
 
     @Transactional
     public OrderEntity createOrderFromDto(OrderDto orderDto) throws GraphQLException {
@@ -27,64 +38,97 @@ public class OrderService {
         }
         UUID session = UUID.fromString(orderDto.getSessionId());
         OrderEntity order = OrderEntity.findLatestOrderInfoBySessionId(session);
+        boolean isNew = false;
         if (order == null) {
             System.out.println("DEBUG: Creating new Order for sessionId=" + session);
             order = new OrderEntity();
             order.sessionId = session;
-        }
-        else{
-            // Avoid bulk delete + reassign which breaks orphanRemoval tracking
+            isNew = true;
+        } else {
+            // Prepare existing items for reconciliation (no bulk clear)
             if (order.items == null) {
                 order.items = new java.util.ArrayList<>();
-            } else {
-                order.items.clear();
             }
         }
 
         // Map minimal fields from DTO
         BigDecimal dtoTotal = orderDto.getTotalAmount();
-        order.status = OrderStatusEn.CREATED;
-
-        // Map and attach items (will be persisted via cascade from OrderEntity)
-        List<OrderItemDto> dtoItems = orderDto.getItems();
-        BigDecimal computedTotal = BigDecimal.ZERO;
-        if (dtoItems != null && !dtoItems.isEmpty()) {
-            if (order.items == null) {
-                order.items = new java.util.ArrayList<>();
-            }
-            for (OrderItemDto dtoItem : dtoItems) {
-                if (dtoItem == null)
-                    continue;
-                OrderItemEntity item = new OrderItemEntity();
-                item.id = null; // PanacheEntity id
-                item.orderEntity = order;
-                item.unitPrice = dtoItem.getUnitPrice();
-                item.quantity = dtoItem.getQuantity();
-
-                // Map variant by id if provided
-                if (dtoItem.getVariant() != null) {
-                    ProductVariantEntity variant = ProductVariantEntity.findByIdWithProduct(dtoItem.getVariant());
-                    if (variant != null) {
-                        item.variant = variant;
-                    }
-                }
-
-                // Update running total defensively
-                BigDecimal unit = item.unitPrice != null ? item.unitPrice : BigDecimal.ZERO;
-                int qty = item.quantity != null ? item.quantity : 0;
-                computedTotal = computedTotal.add(unit.multiply(BigDecimal.valueOf(qty)));
-
-                // Add directly to managed collection so Hibernate can track orphans
-                order.items.add(item);
-            }
-            // If total not provided, use computed
-            order.totalAmount = dtoTotal != null ? dtoTotal : computedTotal;
-        } else {
-            // No items provided, keep items list as is (could be empty from clear above)
-            order.totalAmount = BigDecimal.ZERO;
+        if (isNew) {
+            order.status = OrderStatusEn.CREATED;
         }
 
-        OrderEntity.persist(order);
+        // Reconcile items (cascade + orphanRemoval on OrderEntity will handle DB writes)
+        List<OrderItemDto> dtoItems = orderDto.getItems();
+        BigDecimal computedTotal = BigDecimal.ZERO;
+        if (order.items == null) {
+            order.items = new java.util.ArrayList<>();
+        }
+
+        // Build lookup of existing items by variant id (only for items that have a variant)
+        Map<Long, OrderItemEntity> existingByVariant = new HashMap<>();
+        for (OrderItemEntity it : order.items) {
+            if (it != null && it.variant != null && it.variant.id != null) {
+                existingByVariant.put(it.variant.id, it);
+            }
+        }
+
+        Set<Long> seenVariantIds = new HashSet<>();
+
+        if (dtoItems != null) {
+            for (OrderItemDto dtoItem : dtoItems) {
+                if (dtoItem == null) continue;
+
+                ProductVariantEntity variant = null;
+                Long variantId = dtoItem.getVariant();
+                if (variantId != null) {
+                    variant = ProductVariantEntity.findByIdWithProduct(variantId);
+                }
+
+                OrderItemEntity target = null;
+                if (variant != null && variant.id != null) {
+                    seenVariantIds.add(variant.id);
+                    target = existingByVariant.get(variant.id);
+                }
+
+                if (target == null) {
+                    // Create a new item (either no matching variant or variant is null)
+                    target = new OrderItemEntity();
+                    target.id = null;
+                    target.orderEntity = order;
+                    target.variant = variant; // may be null
+                    order.items.add(target);
+                }
+
+                // Update mutable fields
+                target.unitPrice = dtoItem.getUnitPrice();
+                target.quantity = dtoItem.getQuantity();
+
+                BigDecimal unit = target.unitPrice != null ? target.unitPrice : BigDecimal.ZERO;
+                int qty = target.quantity != null ? target.quantity : 0;
+                computedTotal = computedTotal.add(unit.multiply(BigDecimal.valueOf(qty)));
+            }
+        }
+
+        // Remove orphan items that have a variant not present in the DTO
+        if (!existingByVariant.isEmpty()) {
+            Iterator<OrderItemEntity> iter = order.items.iterator();
+            while (iter.hasNext()) {
+                OrderItemEntity it = iter.next();
+                if (it != null && it.variant != null && it.variant.id != null) {
+                    if (!seenVariantIds.contains(it.variant.id)) {
+                        iter.remove(); // triggers orphanRemoval
+                    }
+                }
+            }
+        }
+
+        // If total not provided, use computed
+        order.totalAmount = dtoTotal != null ? dtoTotal : computedTotal;
+
+        if (order.id == null) {
+            OrderEntity.persist(order);
+        } // else: entity already managed; no explicit persist needed
+
         return order;
     }
 
@@ -101,67 +145,6 @@ public class OrderService {
             return null;
         }
     }
-//
-//    @Transactional
-//    public OrderEntity updateOrder(OrderDto orderDto) throws GraphQLException {
-//        if (orderDto == null || orderDto.getOrderId() == null) {
-//            throw new GraphQLException("Invalid Order info");
-//        }
-//        OrderEntity existingOrder = OrderEntity.findOrderInfoById(orderDto.getOrderId());
-//        if (existingOrder == null){
-//            throw new GraphQLException("Invalid Order info");
-//        }
-//
-//        // Overwrite items
-//        List<OrderItemDto> incomingItems = orderDto.getItems();
-//
-//        // Prepare managed collection for update (do not replace the collection reference)
-//        if (existingOrder.items == null) {
-//            existingOrder.items = new java.util.ArrayList<>();
-//        } else {
-//            existingOrder.items.clear();
-//        }
-//
-//        BigDecimal dtoTotal = orderDto.getTotalAmount();
-//        BigDecimal computedTotal = BigDecimal.ZERO;
-//
-//        if (incomingItems != null && !incomingItems.isEmpty()) {
-//            for (OrderItemDto dtoItem : incomingItems) {
-//                if (dtoItem == null)
-//                    continue;
-//                OrderItemEntity item = new OrderItemEntity();
-//                // Ensure these are treated as new rows
-//                item.id = null;
-//                // Set back-reference for FK integrity
-//                item.orderEntity = existingOrder;
-//                item.unitPrice = dtoItem.getUnitPrice();
-//                item.quantity = dtoItem.getQuantity();
-//
-//                // Map variant by id if provided
-//                if (dtoItem.getVariant() != null) {
-//                    ProductVariantEntity variant = ProductVariantEntity.findByIdWithProduct(dtoItem.getVariant());
-//                    if (variant != null) {
-//                        item.variant = variant;
-//                    }
-//                }
-//
-//                BigDecimal unit = item.unitPrice != null ? item.unitPrice : BigDecimal.ZERO;
-//                int qty = item.quantity != null ? item.quantity : 0;
-//                computedTotal = computedTotal.add(unit.multiply(BigDecimal.valueOf(qty)));
-//
-//                // Add new item to managed collection
-//                existingOrder.items.add(item);
-//            }
-//        } else {
-//            // No items provided -> overwrite to empty
-//            // Keep items as cleared (empty) collection if it exists; otherwise leave null
-//        }
-//
-//        // Update total: prefer provided total, otherwise computed
-//        existingOrder.totalAmount = dtoTotal != null ? dtoTotal : computedTotal;
-//
-//        return existingOrder;
-//    }
 
     @Transactional
     public CustomerDto updateCustomerInformation(String sessionId, CustomerDto customerDto) throws GraphQLException {
@@ -190,7 +173,7 @@ public class OrderService {
 
         order.customerEntity = customer;
         System.out.println("DEBUG: Updating Order with customer info=" + order.customerEntity.id);
-        order.persist();
+        // no explicit persist needed; managed entity will be updated on commit
 
         // Return only customer information (currently email)
         CustomerDto result = new CustomerDto();
@@ -216,7 +199,27 @@ public class OrderService {
         } catch (IllegalArgumentException e) {
             throw new GraphQLException("Invalid status: " + status);
         }
-        order.persist();
+        // no explicit persist needed; managed entity will be updated on commit
+
+        //Order Created In store Payment
+        if (order.status.equals(OrderStatusEn.IN_STORE_PAYMENT)){
+            sendConfirmationEmail(order);
+        }
         return order;
+    }
+
+    public void sendConfirmationEmail(OrderEntity order) {
+        String firstName = (order.customerEntity.firstName != null && !order.customerEntity.firstName.isBlank()) ? order.customerEntity.firstName : "Guest";
+        order_confirmation.to(order.customerEntity.email)
+                .from("shawn.debie@gmail.com")
+                .subject("Your Order #" + order.id)
+                .data("order", order)
+                .data("orderItems", order.items)
+                .data("customerName", firstName)
+                .send()
+                .subscribe().with(
+                        success -> LOG.info("Order email sent!"),
+                        failure -> LOG.error("Order email failed", failure)
+                );
     }
 }
