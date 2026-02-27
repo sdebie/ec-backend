@@ -65,23 +65,23 @@ public class OrderService {
         }
 
         // Build lookup of existing items by variant id (only for items that have a variant)
-        Map<Long, OrderItemEntity> existingByVariant = new HashMap<>();
+        Map<UUID, OrderItemEntity> existingByVariant = new HashMap<>();
         for (OrderItemEntity it : order.items) {
             if (it != null && it.variant != null && it.variant.id != null) {
                 existingByVariant.put(it.variant.id, it);
             }
         }
 
-        Set<Long> seenVariantIds = new HashSet<>();
+        Set<UUID> seenVariantIds = new HashSet<>();
 
         if (dtoItems != null) {
             for (OrderItemDto dtoItem : dtoItems) {
                 if (dtoItem == null) continue;
 
                 ProductVariantEntity variant = null;
-                Long variantId = dtoItem.getVariant();
+                String variantId = dtoItem.getVariant();
                 if (variantId != null) {
-                    variant = ProductVariantEntity.findByIdWithProduct(variantId);
+                    variant = ProductVariantEntity.findByIdWithProduct(UUID.fromString(variantId));
                 }
 
                 OrderItemEntity target = null;
@@ -132,8 +132,14 @@ public class OrderService {
         return order;
     }
 
-    public OrderEntity getOrderById(Long orderId) {
-        return OrderEntity.findOrderInfoById(orderId);
+    public OrderEntity getOrderById(String orderId) {
+        if (orderId == null || orderId.isBlank()) return null;
+        try {
+            java.util.UUID id = java.util.UUID.fromString(orderId);
+            return OrderEntity.findOrderInfoById(id);
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
     }
 
     public OrderEntity getLatestOrderBySessionId(String sessionId) {

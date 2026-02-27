@@ -36,7 +36,8 @@ public class PayFastResource {
         System.out.println("DEBUG: Checkout received: " + formParams);
 
         List<String> orderId = formParams.get("id");
-        OrderEntity quote = OrderEntity.findById(Long.parseLong(orderId.getFirst()));
+        java.util.UUID orderUuid = java.util.UUID.fromString(orderId.getFirst());
+        OrderEntity quote = OrderEntity.findById(orderUuid);
         if (quote == null || quote.customerEntity == null || quote.customerEntity.email == null || quote.customerEntity.email.isBlank()) {
             System.out.println("DEBUG: Invalid Order information");
             return Response.status(Response.Status.EXPECTATION_FAILED)
@@ -90,7 +91,7 @@ public class PayFastResource {
         if ("COMPLETE".equalsIgnoreCase(params.get("payment_status"))) {
             String orderIdStr = params.get("m_payment_id");
             try {
-                Long orderId = Long.parseLong(orderIdStr);
+                java.util.UUID orderId = java.util.UUID.fromString(orderIdStr);
                 OrderEntity order = OrderEntity.findById(orderId);
                 if (order != null) {
                     order.status = OrderStatusEn.PAID;
@@ -102,7 +103,7 @@ public class PayFastResource {
                 } else {
                     System.out.println("DEBUG: Order not found for m_payment_id=" + orderId + "; no update performed");
                 }
-            } catch (NumberFormatException nfe) {
+            } catch (IllegalArgumentException nfe) {
                 System.out.println("DEBUG: Invalid m_payment_id received: '" + orderIdStr + "'" );
             } catch (Exception ex) {
                 System.out.println("DEBUG: Failed to update Order status to PAID due to: " + ex.getMessage());

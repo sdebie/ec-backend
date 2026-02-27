@@ -1,17 +1,25 @@
 package org.ecommerce.persistance.entity;
 
-import io.quarkus.hibernate.orm.panache.PanacheEntity;
+import io.quarkus.hibernate.orm.panache.PanacheEntityBase;
 import jakarta.persistence.*;
 import lombok.Getter;
 import org.ecommerce.common.enums.CustomerTypeEn;
+import org.hibernate.annotations.UuidGenerator;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.UUID;
 
 @Entity
 @Getter
 @Table(name = "customers")
-public class CustomerEntity extends PanacheEntity {
+public class CustomerEntity extends PanacheEntityBase {
+
+    @Id
+    @GeneratedValue
+    @UuidGenerator
+    @Column(name = "id", updatable = false, nullable = false)
+    public UUID id;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "shopper_type")
@@ -48,7 +56,7 @@ public class CustomerEntity extends PanacheEntity {
     public String passwordHash;
 
     @Column(name = "last_login")
-    public LocalDateTime passwordUpdateddAt;
+    public LocalDateTime passwordUpdatedAt;
 
     @Column(name = "created_at")
     public LocalDateTime createdAt = LocalDateTime.now();

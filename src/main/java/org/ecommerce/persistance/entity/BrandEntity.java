@@ -1,11 +1,19 @@
 package org.ecommerce.persistance.entity;
 
-import io.quarkus.hibernate.orm.panache.PanacheEntity;
+import io.quarkus.hibernate.orm.panache.PanacheEntityBase;
 import jakarta.persistence.*;
+import java.util.UUID;
+import org.hibernate.annotations.UuidGenerator;
 
 @Entity
 @Table(name = "brands")
-public class BrandEntity extends PanacheEntity {
+public class BrandEntity extends PanacheEntityBase {
+
+    @Id
+    @GeneratedValue
+    @UuidGenerator
+    @Column(name = "id", updatable = false, nullable = false)
+    public UUID id;
 
     @Column(nullable = false, unique = true)
     public String name;

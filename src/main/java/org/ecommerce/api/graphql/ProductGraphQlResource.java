@@ -13,6 +13,8 @@ import java.sql.Array;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.UUID;
+import java.util.stream.Collectors;
 
 @ApplicationScoped
 @GraphQLApi
@@ -33,7 +35,7 @@ public class ProductGraphQlResource {
                    ) AS image_url,
                    (SELECT array_agg(v2.id ORDER BY v2.id) FROM product_variants v2 WHERE v2.product_id = p.id) AS variant_ids
             FROM products p
-            ORDER BY p.id ASC
+            ORDER BY p.created_at ASC
         """;
 
         @SuppressWarnings("unchecked")
@@ -43,7 +45,7 @@ public class ProductGraphQlResource {
 
         List<ProductListItem> list = new ArrayList<>();
         for (Object[] r : rows) {
-            Long id = r[0] == null ? null : ((Number) r[0]).longValue();
+            String id = r[0] == null ? null : String.valueOf(r[0]);
             String name = (String) r[1];
             String description = (String) r[2];
             Double price = null;
@@ -54,8 +56,8 @@ public class ProductGraphQlResource {
             }
             String imageUrl = (String) r[4];
 
-            // Map variant IDs from JDBC array / list
-            List<Long> variantIds = new ArrayList<>();
+            // Map variant IDs from JDBC array / list (kept as Long for now)
+            List<String> variantIds = new ArrayList<>();
             Object vCol = r.length > 5 ? r[5] : null;
             if (vCol != null) {
                 try {
@@ -64,21 +66,18 @@ public class ProductGraphQlResource {
                         if (o instanceof Object[] oa) {
                             for (Object x : oa) {
                                 if (x == null) continue;
-                                if (x instanceof Number num) variantIds.add(num.longValue());
-                                else variantIds.add(Long.valueOf(String.valueOf(x)));
+                                variantIds.add(String.valueOf(x));
                             }
                         }
                     } else if (vCol instanceof List<?> lst) {
                         for (Object x : lst) {
                             if (x == null) continue;
-                            if (x instanceof Number num) variantIds.add(num.longValue());
-                            else variantIds.add(Long.valueOf(String.valueOf(x)));
+                            variantIds.add(String.valueOf(x));
                         }
                     } else if (vCol instanceof Object[] oa) {
                         for (Object x : oa) {
                             if (x == null) continue;
-                            if (x instanceof Number num) variantIds.add(num.longValue());
-                            else variantIds.add(Long.valueOf(String.valueOf(x)));
+                            variantIds.add(String.valueOf(x));
                         }
                     } else {
                         // Fallback: comma separated or single value
@@ -87,7 +86,7 @@ public class ProductGraphQlResource {
                             Arrays.stream(s.replaceAll("[{}]", "").split(","))
                                     .map(String::trim)
                                     .filter(t -> !t.isEmpty())
-                                    .forEach(t -> variantIds.add(Long.valueOf(t)));
+                                    .forEach(variantIds::add);
                         }
                     }
                 } catch (Exception ignore) {
@@ -102,15 +101,19 @@ public class ProductGraphQlResource {
     @Query("variantsByIds")
     @Description("Fetch product variants by a list of ids, including product relation")
     @Transactional(value = TxType.SUPPORTS)
-    public List<ProductVariantEntity> variantsByIds(@Name("ids") List<Long> ids) {
-        return ProductVariantEntity.listByIdsWithProduct(ids);
+    public List<ProductVariantEntity> variantsByIds(@Name("ids") List<String> ids) {
+        List<UUID> uuidIds = ids.stream()
+                .map(UUID::fromString)
+                .collect(Collectors.toList());
+        return ProductVariantEntity.listByIdsWithProduct(uuidIds);
     }
 
     @Query("getProductWithVariants")
     @Description("Fetch all variants for a given product id, including the product relation")
     @Transactional(value = TxType.SUPPORTS)
-    public List<ProductVariantEntity> getProductWithVariants(@Name("productId") Long productId) {
-        return ProductVariantEntity.listByProductIdWithProduct(productId);
+    public List<ProductVariantEntity> getProductWithVariants(@Name("productId") String productId) {
+        UUID pid = UUID.fromString(productId);
+        return ProductVariantEntity.listByProductIdWithProduct(pid);
     }
 
 }

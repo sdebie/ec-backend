@@ -53,7 +53,7 @@ public class OrderGraphQlResource {
 
     @Query("orderById")
     @Description("Update an order and return")
-    public OrderEntity getOrderById(@Name("id") Long id) {
+    public OrderEntity getOrderById(@Name("id") String id) {
         System.out.println("DEBUG:: Received getOrderById request");
         return  orderService.getOrderById(id);
     }

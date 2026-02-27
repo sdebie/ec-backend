@@ -1,13 +1,21 @@
 package org.ecommerce.persistance.entity;
 
-import io.quarkus.hibernate.orm.panache.PanacheEntity;
+import io.quarkus.hibernate.orm.panache.PanacheEntityBase;
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
+import java.util.UUID;
+import org.hibernate.annotations.UuidGenerator;
 import org.ecommerce.common.enums.ProductTypeEn;
 
 @Entity
 @Table(name = "products")
-public class ProductEntity extends PanacheEntity {
+public class ProductEntity extends PanacheEntityBase {
+
+    @Id
+    @GeneratedValue
+    @UuidGenerator
+    @Column(name = "id", updatable = false, nullable = false)
+    public UUID id;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "category_id")

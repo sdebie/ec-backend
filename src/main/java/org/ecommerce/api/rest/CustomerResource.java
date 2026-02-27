@@ -56,7 +56,7 @@ public class CustomerResource {
         if (!ok) {
             return Response.status(Response.Status.UNAUTHORIZED).entity("Invalid credentials").build();
         }
-        ce.passwordUpdateddAt = LocalDateTime.now();
+        ce.passwordUpdatedAt = LocalDateTime.now();
         ce.persist();
         return Response.ok(toProfileDto(ce)).build();
     }
@@ -100,7 +100,7 @@ public class CustomerResource {
         if (req.password != null && !req.password.isBlank()) {
             ce.passwordHash = hashPassword(req.password);
             ce.shopperType = CustomerTypeEn.REGISTERED;
-            ce.passwordUpdateddAt = LocalDateTime.now();
+            ce.passwordUpdatedAt = LocalDateTime.now();
         } else if (ce.shopperType == null) {
             ce.shopperType = CustomerTypeEn.GUEST;
         }
