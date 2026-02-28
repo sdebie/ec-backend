@@ -8,8 +8,8 @@ import java.util.List;
  * Minimal DTO for listing products on the storefront.
  */
 public class ProductListItem {
-    @Description("Product ID")
-    public Long id;
+    @Description("Product ID (UUID as string)")
+    public String id;
 
     @Description("Product name")
     public String name;
@@ -24,11 +24,11 @@ public class ProductListItem {
     public String imageUrl;
 
     @Description("All variant IDs for this product")
-    public List<Long> variantIds;
+    public List<String> variantIds;
 
     public ProductListItem() {}
 
-    public ProductListItem(Long id, String name, String description, Double price, String imageUrl, List<Long> variantIds) {
+    public ProductListItem(String id, String name, String description, Double price, String imageUrl, List<String> variantIds) {
         this.id = id;
         this.name = name;
         this.description = description;

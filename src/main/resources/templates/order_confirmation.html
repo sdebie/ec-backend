@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body { font-family: sans-serif; color: #333; line-height: 1.6; }
+        .container { width: 100%; max-width: 600px; margin: 0 auto; border: 1px solid #eee; padding: 20px; border-radius: 10px; }
+        .header { text-align: center; border-bottom: 2px solid #3b82f6; padding-bottom: 20px; }
+        .item-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+        .item-table th { text-align: left; border-bottom: 1px solid #eee; padding: 10px; }
+        .item-table td { padding: 10px; border-bottom: 1px solid #eee; }
+        .total-section { text-align: right; font-size: 1.2em; font-weight: bold; }
+        .footer { font-size: 12px; color: #777; margin-top: 30px; text-align: center; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <h1>Order Confirmed!</h1>
+        <p>Order #<strong>{order.id}</strong></p>
+    </div>
+
+    <p>Hi {customerName},</p>
+    <p>Thank you for your purchase. We are getting your order ready!</p>
+
+    <table class="item-table">
+        <thead>
+        <tr>
+            <th>Product</th>
+            <th>Qty</th>
+            <th>Price</th>
+        </tr>
+        </thead>
+        <tbody>
+        {#for item in orderItems}
+        <tr>
+            <td>
+                <strong>{item.variant.product.name}</strong><br/>
+                {!<small>!}
+                    {!Size: {item.variant.attributesJson.get("size")} | Color: {item.variant.attributesJson.get("color")}!}
+                {!</small>!}
+            </td>
+            <td>{item.quantity}</td>
+            <td>R {item.unitPrice}</td>
+        </tr>
+        {/for}
+        </tbody>
+    </table>
+
+    <div class="total-section">
+        Total: R {order.totalAmount}
+    </div>
+
+    <div class="footer">
+        <p>Questions? Contact us at support@yourstore.com</p>
+        <p>Your Store Name, 123 Fashion Ave, Cape Town</p>
+    </div>
+</div>
+</body>
+</html>
