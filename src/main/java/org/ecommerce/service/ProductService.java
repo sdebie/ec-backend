@@ -1,13 +1,12 @@
-package org.ecommerce.api.graphql;
+package org.ecommerce.service;
 
 import io.quarkus.hibernate.orm.panache.Panache;
 import jakarta.enterprise.context.ApplicationScoped;
-import org.eclipse.microprofile.graphql.*;
-import org.ecommerce.persistance.dto.ProductListItem;
-import org.ecommerce.persistance.entity.ProductVariantEntity;
-
 import jakarta.transaction.Transactional;
 import jakarta.transaction.Transactional.TxType;
+import org.ecommerce.persistance.dto.ProductListItemDto;
+import org.ecommerce.persistance.entity.ProductVariantEntity;
+
 import java.math.BigDecimal;
 import java.sql.Array;
 import java.util.ArrayList;
@@ -17,13 +16,10 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 @ApplicationScoped
-@GraphQLApi
-public class ProductGraphQlResource {
+public class ProductService {
 
-    @Query("products")
-    @Description("Returns a simple list of products with min price, featured image and variant ids")
     @Transactional(value = TxType.SUPPORTS)
-    public List<ProductListItem> products() {
+    public List<ProductListItemDto> getAllProducts(String categoryName) {
         String sql = """
             SELECT p.id,
                    p.name,
@@ -33,17 +29,23 @@ public class ProductGraphQlResource {
                        (SELECT i.image_url FROM product_images i WHERE i.product_id = p.id AND i.is_featured = TRUE ORDER BY i.sort_order ASC LIMIT 1),
                        (SELECT i2.image_url FROM product_images i2 WHERE i2.product_id = p.id ORDER BY i2.sort_order ASC LIMIT 1)
                    ) AS image_url,
-                   (SELECT array_agg(v2.id ORDER BY v2.id) FROM product_variants v2 WHERE v2.product_id = p.id) AS variant_ids
+                   (SELECT array_agg(v2.id ORDER BY v2.id) FROM product_variants v2 WHERE v2.product_id = p.id) AS variant_ids,
+                   c.name AS category_name
             FROM products p
+            LEFT JOIN categories c ON p.category_id = c.id
+            """ + (categoryName != null && !categoryName.isBlank() ? "WHERE c.name = :categoryName" : "") + """
             ORDER BY p.created_at ASC
         """;
 
         @SuppressWarnings("unchecked")
-        List<Object[]> rows = Panache.getEntityManager()
-                .createNativeQuery(sql)
-                .getResultList();
+        var query = Panache.getEntityManager()
+                .createNativeQuery(sql);
+        if (categoryName != null && !categoryName.isBlank()) {
+            query.setParameter("categoryName", categoryName);
+        }
+        List<Object[]> rows = query.getResultList();
 
-        List<ProductListItem> list = new ArrayList<>();
+        List<ProductListItemDto> list = new ArrayList<>();
         for (Object[] r : rows) {
             String id = r[0] == null ? null : String.valueOf(r[0]);
             String name = (String) r[1];
@@ -61,59 +63,60 @@ public class ProductGraphQlResource {
             Object vCol = r.length > 5 ? r[5] : null;
             if (vCol != null) {
                 try {
-                    if (vCol instanceof Array arr) {
-                        Object o = arr.getArray();
-                        if (o instanceof Object[] oa) {
+                    switch (vCol) {
+                        case Array arr -> {
+                            Object o = arr.getArray();
+                            if (o instanceof Object[] oa) {
+                                for (Object x : oa) {
+                                    if (x == null) continue;
+                                    variantIds.add(String.valueOf(x));
+                                }
+                            }
+                        }
+                        case List<?> lst -> {
+                            for (Object x : lst) {
+                                if (x == null) continue;
+                                variantIds.add(String.valueOf(x));
+                            }
+                        }
+                        case Object[] oa -> {
                             for (Object x : oa) {
                                 if (x == null) continue;
                                 variantIds.add(String.valueOf(x));
                             }
                         }
-                    } else if (vCol instanceof List<?> lst) {
-                        for (Object x : lst) {
-                            if (x == null) continue;
-                            variantIds.add(String.valueOf(x));
-                        }
-                    } else if (vCol instanceof Object[] oa) {
-                        for (Object x : oa) {
-                            if (x == null) continue;
-                            variantIds.add(String.valueOf(x));
-                        }
-                    } else {
-                        // Fallback: comma separated or single value
-                        String s = String.valueOf(vCol);
-                        if (s != null && !s.isBlank()) {
-                            Arrays.stream(s.replaceAll("[{}]", "").split(","))
-                                    .map(String::trim)
-                                    .filter(t -> !t.isEmpty())
-                                    .forEach(variantIds::add);
+                        default -> {
+                            // Fallback: comma separated or single value
+                            String s = String.valueOf(vCol);
+                            if (s != null && !s.isBlank()) {
+                                Arrays.stream(s.replaceAll("[{}]", "").split(","))
+                                        .map(String::trim)
+                                        .filter(t -> !t.isEmpty())
+                                        .forEach(variantIds::add);
+                            }
                         }
                     }
                 } catch (Exception ignore) {
                 }
             }
 
-            list.add(new ProductListItem(id, name, description, price, imageUrl, variantIds));
+            String categoryNameResult = (String) (r.length > 6 ? r[6] : null);
+            list.add(new ProductListItemDto(id, name, description, price, imageUrl, variantIds, categoryNameResult));
         }
         return list;
     }
 
-    @Query("variantsByIds")
-    @Description("Fetch product variants by a list of ids, including product relation")
     @Transactional(value = TxType.SUPPORTS)
-    public List<ProductVariantEntity> variantsByIds(@Name("ids") List<String> ids) {
+    public List<ProductVariantEntity> getVariantsByIds(List<String> ids) {
         List<UUID> uuidIds = ids.stream()
                 .map(UUID::fromString)
                 .collect(Collectors.toList());
         return ProductVariantEntity.listByIdsWithProduct(uuidIds);
     }
 
-    @Query("getProductWithVariants")
-    @Description("Fetch all variants for a given product id, including the product relation")
     @Transactional(value = TxType.SUPPORTS)
-    public List<ProductVariantEntity> getProductWithVariants(@Name("productId") String productId) {
+    public List<ProductVariantEntity> getProductWithVariants(String productId) {
         UUID pid = UUID.fromString(productId);
         return ProductVariantEntity.listByProductIdWithProduct(pid);
     }
-
 }

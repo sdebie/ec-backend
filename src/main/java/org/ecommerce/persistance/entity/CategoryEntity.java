@@ -23,6 +23,9 @@ public class CategoryEntity extends PanacheEntityBase {
     @Column(nullable = false, unique = true)
     public String slug;
 
+    @Column(columnDefinition = "TEXT")
+    public String description;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "parent_id")
     public CategoryEntity parent;

@@ -8,11 +8,9 @@ import org.ecommerce.persistance.dto.OrderDto;
 import org.ecommerce.persistance.entity.OrderEntity;
 import org.ecommerce.service.OrderService;
 
-import java.util.List;
-
 @ApplicationScoped
 @GraphQLApi
-public class OrderGraphQlResource {
+public class OrderResource {
     @Inject
     OrderService orderService;
 
