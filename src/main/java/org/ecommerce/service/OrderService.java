@@ -23,10 +23,7 @@ import org.jboss.logging.Logger;
 public class OrderService {
 
     @Inject
-    ReactiveMailer reactiveMailer;
-
-    @Inject
-    MailTemplate order_confirmation; // Your Qute template
+    MailTemplate order_confirmation;
 
     private static final Logger LOG = Logger.getLogger(OrderService.class);
 
