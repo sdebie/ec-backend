@@ -4,6 +4,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import org.eclipse.microprofile.graphql.*;
 import org.ecommerce.persistance.dto.ProductListItemDto;
+import org.ecommerce.persistance.dto.ProductListDto;
 import org.ecommerce.persistance.entity.ProductVariantEntity;
 import org.ecommerce.service.ProductService;
 
@@ -33,10 +34,10 @@ public class ProductResource {
     }
 
     @Query("getProductWithVariants")
-    @Description("Fetch all variants for a given product id, including the product relation")
+    @Description("Fetch a product with all variants for a given product id, including product images")
     @Transactional(value = TxType.SUPPORTS)
-    public List<ProductVariantEntity> getProductWithVariants(@Name("productId") String productId) {
-        return productService.getProductWithVariants(productId);
+    public ProductListDto getProductWithVariants(@Name("productId") String productId) {
+        return productService.getProductWithVariantsDto(productId);
     }
 
 }

@@ -4,7 +4,11 @@ import io.quarkus.hibernate.orm.panache.Panache;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.transaction.Transactional;
 import jakarta.transaction.Transactional.TxType;
+import org.ecommerce.persistance.dto.ProductImageDto;
 import org.ecommerce.persistance.dto.ProductListItemDto;
+import org.ecommerce.persistance.dto.ProductListDto;
+import org.ecommerce.persistance.dto.ProductVariantDto;
+import org.ecommerce.persistance.entity.ProductImageEntity;
 import org.ecommerce.persistance.entity.ProductVariantEntity;
 
 import java.math.BigDecimal;
@@ -25,10 +29,6 @@ public class ProductService {
                    p.name,
                    p.description,
                    (SELECT MIN(v.price) FROM product_variants v WHERE v.product_id = p.id) AS min_price,
-                   COALESCE(
-                       (SELECT i.image_url FROM product_images i WHERE i.product_id = p.id AND i.is_featured = TRUE ORDER BY i.sort_order ASC LIMIT 1),
-                       (SELECT i2.image_url FROM product_images i2 WHERE i2.product_id = p.id ORDER BY i2.sort_order ASC LIMIT 1)
-                   ) AS image_url,
                    (SELECT array_agg(v2.id ORDER BY v2.id) FROM product_variants v2 WHERE v2.product_id = p.id) AS variant_ids,
                    c.name AS category_name
             FROM products p
@@ -56,11 +56,10 @@ public class ProductService {
                 else if (r[3] instanceof Number n) price = n.doubleValue();
                 else price = Double.valueOf(String.valueOf(r[3]));
             }
-            String imageUrl = (String) r[4];
 
-            // Map variant IDs from JDBC array / list (kept as Long for now)
+            // Map variant IDs from JDBC array / list
             List<String> variantIds = new ArrayList<>();
-            Object vCol = r.length > 5 ? r[5] : null;
+            Object vCol = r.length > 4 ? r[4] : null;
             if (vCol != null) {
                 try {
                     switch (vCol) {
@@ -100,8 +99,18 @@ public class ProductService {
                 }
             }
 
-            String categoryNameResult = (String) (r.length > 6 ? r[6] : null);
-            list.add(new ProductListItemDto(id, name, description, price, imageUrl, variantIds, categoryNameResult));
+            // Fetch all product images for this product, ordered by sortOrder
+            UUID productId = id != null ? UUID.fromString(id) : null;
+            List<ProductImageDto> productImages = new ArrayList<>();
+            if (productId != null) {
+                List<ProductImageEntity> images = ProductImageEntity.list("product.id = ?1 order by sortOrder asc", productId);
+                productImages = images.stream()
+                        .map(img -> new ProductImageDto(img.id == null ? null : img.id.toString(), img.imageUrl, img.sortOrder, img.isFeatured != null && img.isFeatured))
+                        .collect(Collectors.toList());
+            }
+
+            String categoryNameResult = (String) (r.length > 5 ? r[5] : null);
+            list.add(new ProductListItemDto(id, name, description, price, productImages, variantIds, categoryNameResult));
         }
         return list;
     }
@@ -118,5 +127,39 @@ public class ProductService {
     public List<ProductVariantEntity> getProductWithVariants(String productId) {
         UUID pid = UUID.fromString(productId);
         return ProductVariantEntity.listByProductIdWithProduct(pid);
+    }
+
+    @Transactional(value = TxType.SUPPORTS)
+    public ProductListDto getProductWithVariantsDto(String productId) {
+        UUID pid = UUID.fromString(productId);
+        List<ProductVariantEntity> variants = ProductVariantEntity.listByProductIdWithProduct(pid);
+
+        // Fetch all images for this product
+        List<ProductImageEntity> images = ProductImageEntity.list("product.id = ?1 order by sortOrder asc", pid);
+        List<ProductImageDto> imageDtos = images.stream()
+                .map(img -> new ProductImageDto(img.id == null ? null : img.id.toString(), img.imageUrl, img.sortOrder, img.isFeatured != null && img.isFeatured))
+                .collect(Collectors.toList());
+
+        // Convert variants to variant-only DTOs
+        List<ProductVariantDto> variantDtos = variants.stream()
+                .map(variant -> new ProductVariantDto(
+                        variant.id.toString(),
+                        variant.sku,
+                        variant.price,
+                        variant.stockQuantity,
+                        variant.attributesJson,
+                        variant.weightKg
+                ))
+                .collect(Collectors.toList());
+
+        // Derive product-level info from first variant if available
+        String name = null;
+        String description = null;
+        if (!variants.isEmpty() && variants.get(0).product != null) {
+            name = variants.get(0).product.name;
+            description = variants.get(0).product.description;
+        }
+
+        return new ProductListDto(productId, name, description, imageDtos, variantDtos);
     }
 }
