@@ -3,6 +3,7 @@ Environment variables
 export IMAGE_STORAGE_PATH=/Users/shawndebie/Develop/storage/images
 
 Staff Security
+
     # 1. Generate the private key
         openssl genrsa -out privateKey.pem 2048
 
