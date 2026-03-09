@@ -19,7 +19,7 @@ import java.util.stream.Collectors;
 public class ProductService
 {
     @Transactional(value = TxType.SUPPORTS)
-    public List<ProductListItemDto> getAllProducts(String categoryName, String priceCategory)
+    public List<ProductListItemDto> getAllProducts(String categoryName)
     {
         boolean filterByCategory = categoryName != null && !categoryName.isBlank() && !"ALL".equalsIgnoreCase(categoryName);
 
@@ -107,17 +107,8 @@ public class ProductService
             BigDecimal wholesalePrice = getMinimumPrice(productId, PriceTypeEn.WHOLESALE_PRICE);
             BigDecimal wholesaleSalePrice = getMinimumPrice(productId, PriceTypeEn.WHOLESALE_SALE_PRICE);
 
-            BigDecimal price, salesPrice;
-            if ("WHOLESALE".equalsIgnoreCase(priceCategory)) {
-                price = wholesalePrice;
-                salesPrice = wholesaleSalePrice;
-            } else {
-                price = retailPrice;
-                salesPrice = retailSalePrice;
-            }
-
             String categoryNameResult = (String) (r.length > 4 ? r[4] : null);
-            list.add(new ProductListItemDto(id, name, description, price, salesPrice, productImages, variantIds, categoryNameResult));
+            list.add(new ProductListItemDto(id, name, description, retailPrice, retailSalePrice, wholesalePrice, wholesaleSalePrice, productImages, variantIds, categoryNameResult));
         }
         return list;
     }

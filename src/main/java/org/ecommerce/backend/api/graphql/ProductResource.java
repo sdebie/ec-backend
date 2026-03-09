@@ -5,19 +5,13 @@ import jakarta.inject.Inject;
 import org.eclipse.microprofile.graphql.*;
 import org.ecommerce.common.dto.ProductListItemDto;
 import org.ecommerce.common.dto.ProductListDto;
-import org.ecommerce.common.dto.VariantPriceDto;
 import org.ecommerce.common.entity.ProductVariantEntity;
-import org.ecommerce.common.entity.VariantPricesEntity;
-import org.ecommerce.common.enums.CustomerTypeEn;
-import org.ecommerce.common.enums.PriceTypeEn;
 import org.ecommerce.backend.service.ProductService;
 
 import jakarta.transaction.Transactional;
 import jakarta.transaction.Transactional.TxType;
 
-import java.math.BigDecimal;
 import java.util.List;
-import java.util.stream.Collectors;
 
 @ApplicationScoped
 @GraphQLApi
@@ -26,12 +20,11 @@ public class ProductResource
     @Inject
     ProductService productService;
 
-    @Query("products")
+    @Query("productList")
     @Description("Returns a simple list of products with price and sales price for the selected category")
     @Transactional(value = TxType.SUPPORTS)
-    public List<ProductListItemDto> products(@Name("categoryName") String categoryName,
-                                             @DefaultValue("RETAIL") @Name("priceCategory") String priceCategory) {
-        return productService.getAllProducts(categoryName, priceCategory);
+    public List<ProductListItemDto> getProductsList(@Name("categoryName") String categoryName) {
+        return productService.getAllProducts(categoryName);
     }
 
     @Query("variantsByIds")
