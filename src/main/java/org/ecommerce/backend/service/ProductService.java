@@ -132,29 +132,51 @@ public class ProductService
     }
 
     @Transactional(value = TxType.SUPPORTS)
-    public List<ProductVariantEntity> getVariantsByIds(List<String> ids, String priceCategory) {
+    public List<ProductVariantDto> getVariantsByIds(List<String> ids) {
         List<UUID> uuidIds = ids.stream()
                 .map(UUID::fromString)
                 .collect(Collectors.toList());
         List<ProductVariantEntity> variants = ProductVariantEntity.listByIdsWithProduct(uuidIds);
 
-        // Filter prices based on priceCategory
-        for (ProductVariantEntity variant : variants) {
-            if (variant.variantPrices != null) {
-                List<VariantPricesEntity> filteredPrices = variant.variantPrices.stream()
-                        .filter(p -> {
-                            if ("WHOLESALE".equalsIgnoreCase(priceCategory)) {
-                                return p.priceType == PriceTypeEn.WHOLESALE_PRICE || p.priceType == PriceTypeEn.WHOLESALE_SALE_PRICE;
-                            } else {
-                                return p.priceType == PriceTypeEn.RETAIL_PRICE || p.priceType == PriceTypeEn.RETAIL_SALE_PRICE;
-                            }
-                        })
-                        .collect(Collectors.toList());
-                variant.variantPrices = filteredPrices;
-            }
-        }
+        return variants.stream()
+                .map(variant -> {
+                    BigDecimal retailPrice = null;
+                    BigDecimal retailSalesPrice = null;
+                    BigDecimal wholesalePrice = null;
+                    BigDecimal wholesaleSalesPrice = null;
+                    List<VariantPriceDto> variantPriceDtos = new ArrayList<>();
 
-        return variants;
+                    if (variant.variantPrices != null) {
+                        for (VariantPricesEntity price : variant.variantPrices) {
+                            if (price.isActive()) {
+                                switch (price.priceType) {
+                                    case RETAIL_PRICE:
+                                        retailPrice = price.price;
+                                        break;
+                                    case RETAIL_SALE_PRICE:
+                                        retailSalesPrice = price.price;
+                                        break;
+                                    case WHOLESALE_PRICE:
+                                        wholesalePrice = price.price;
+                                        break;
+                                    case WHOLESALE_SALE_PRICE:
+                                        wholesaleSalesPrice = price.price;
+                                        break;
+                                }
+                            }
+                            variantPriceDtos.add(new VariantPriceDto(
+                                    price.id.toString(),
+                                    price.priceType.name(),
+                                    price.price,
+                                    price.priceStartDate,
+                                    price.priceEndDate,
+                                    price.isActive()
+                            ));
+                        }
+                    }
+                    return new ProductVariantDto(variant.id.toString(), retailPrice, retailSalesPrice, wholesalePrice, wholesaleSalesPrice, variant.product, variant.sku, variantPriceDtos, variant.stockQuantity, variant.attributesJson, variant.weightKg);
+                })
+                .collect(Collectors.toList());
     }
 
     @Transactional(value = TxType.SUPPORTS)
@@ -165,25 +187,9 @@ public class ProductService
     }
 
     @Transactional(value = TxType.SUPPORTS)
-    public ProductListDto getProductWithVariantsDto(String productId, String priceCategory) {
+    public ProductListDto getProductWithVariantsDto(String productId) {
         UUID pid = UUID.fromString(productId);
         List<ProductVariantEntity> variants = ProductVariantEntity.listByProductIdWithProduct(pid);
-
-        // Filter prices based on priceCategory
-        for (ProductVariantEntity variant : variants) {
-            if (variant.variantPrices != null) {
-                List<VariantPricesEntity> filteredPrices = variant.variantPrices.stream()
-                        .filter(p -> {
-                            if ("WHOLESALE".equalsIgnoreCase(priceCategory)) {
-                                return p.priceType == PriceTypeEn.WHOLESALE_PRICE || p.priceType == PriceTypeEn.WHOLESALE_SALE_PRICE;
-                            } else {
-                                return p.priceType == PriceTypeEn.RETAIL_PRICE || p.priceType == PriceTypeEn.RETAIL_SALE_PRICE;
-                            }
-                        })
-                        .collect(Collectors.toList());
-                variant.variantPrices = filteredPrices;
-            }
-        }
 
         // Fetch all images for this product
         List<ProductImageEntity> images = ProductImageEntity.list("product.id = ?1 order by sortOrder asc", pid);
@@ -194,19 +200,49 @@ public class ProductService
         // Convert variants to variant-only DTOs with prices
         List<ProductVariantDto> variantDtos = variants.stream()
                 .map(variant -> {
-                    List<VariantPriceDto> priceDtos = variant.variantPrices.stream()
-                            .map(vp -> new VariantPriceDto(
+                    BigDecimal retailPrice = null;
+                    BigDecimal retailSalesPrice = null;
+                    BigDecimal wholesalePrice = null;
+                    BigDecimal wholesaleSalesPrice = null;
+                    List<VariantPriceDto> priceDtos = new ArrayList<>();
+
+                    if (variant.variantPrices != null) {
+                        for (VariantPricesEntity vp : variant.variantPrices) {
+                             priceDtos.add(new VariantPriceDto(
                                     vp.id.toString(),
                                     vp.priceType.name(),
                                     vp.price,
                                     vp.priceStartDate,
                                     vp.priceEndDate,
                                     vp.isActive()
-                            ))
-                            .collect(Collectors.toList());
+                            ));
+
+                            if (vp.isActive()) {
+                                switch (vp.priceType) {
+                                    case RETAIL_PRICE:
+                                        retailPrice = vp.price;
+                                        break;
+                                    case RETAIL_SALE_PRICE:
+                                        retailSalesPrice = vp.price;
+                                        break;
+                                    case WHOLESALE_PRICE:
+                                        wholesalePrice = vp.price;
+                                        break;
+                                    case WHOLESALE_SALE_PRICE:
+                                        wholesaleSalesPrice = vp.price;
+                                        break;
+                                }
+                            }
+                        }
+                    }
 
                     return new ProductVariantDto(
                             variant.id.toString(),
+                            retailPrice,
+                            retailSalesPrice,
+                            wholesalePrice,
+                            wholesaleSalesPrice,
+                            variant.product,
                             variant.sku,
                             priceDtos,
                             variant.stockQuantity,
