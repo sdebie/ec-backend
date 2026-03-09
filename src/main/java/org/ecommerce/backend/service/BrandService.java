@@ -1,0 +1,125 @@
+package org.ecommerce.backend.service;
+
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+import jakarta.transaction.Transactional;
+import lombok.extern.slf4j.Slf4j;
+import org.ecommerce.backend.mapper.BrandMapper;
+import org.ecommerce.common.dto.BrandDto;
+import org.ecommerce.common.entity.BrandEntity;
+import org.ecommerce.common.exception.BrandAlreadyExistsException;
+import org.ecommerce.common.exception.BrandNotFoundException;
+
+import java.util.List;
+import java.util.UUID;
+
+@Slf4j
+@ApplicationScoped
+public class BrandService
+{
+    @Inject
+    BrandMapper brandMapper;
+
+    public List<BrandEntity> getAllBrands()
+    {
+        return BrandEntity.listAll();
+    }
+
+    public BrandEntity getBrandById(UUID id)
+    {
+        if (id == null) {
+            throw new IllegalArgumentException("Brand id is null");
+        }
+
+        BrandEntity brandEntity = BrandEntity.findById(id);
+        if (brandEntity == null) {
+            throw new BrandNotFoundException("Brand id " + id + " not found");
+        }
+
+        return brandEntity;
+    }
+
+    @Transactional
+    public void createBrand(BrandDto brandDto)
+    {
+        try {
+
+            if (validateFields(brandDto)) {
+
+                if (brandDto.getId() != null) {
+                    BrandEntity brandEntity = BrandEntity.findById(brandDto.getId());
+                    if (brandEntity != null) {
+                        throw new BrandAlreadyExistsException("Brand with id " + brandDto.getId() + " already exists");
+                    }
+                }
+
+                BrandEntity brandEntity = brandMapper.mapDtoToEntity(brandDto, new BrandEntity());
+                brandEntity.persist();
+
+            }
+        } catch (Exception e) {
+            log.error("Error creating brand: {}", e.getMessage(), e);
+            throw e;
+        }
+    }
+
+    private boolean validateFields(BrandDto brandDto)
+    {
+        if (brandDto == null) {
+            throw new IllegalArgumentException("BrandDto is null");
+        }
+
+        if (brandDto.getName() == null) {
+            throw new IllegalArgumentException("Brand name is null");
+        }
+
+        if (brandDto.getSlug() == null) {
+            throw new IllegalArgumentException("Brand slug is null");
+        }
+
+        return true;
+    }
+
+    @Transactional
+    public void updateBrand(UUID id, BrandDto brandDto)
+    {
+        try {
+            if (validateFields(brandDto)) {
+                if (!id.equals(brandDto.getId())) {
+                    throw new IllegalArgumentException("Id " + id + " does not match brand dto id " + id);
+                }
+
+                BrandEntity brandEntity = BrandEntity.findById(id);
+                if (brandEntity == null) {
+                    throw new BrandNotFoundException("Brand with id " + brandDto.getId() + " not found");
+                }
+
+                brandMapper.mapDtoToEntity(brandDto, brandEntity);
+                brandEntity.persist();
+            }
+        } catch (Exception e) {
+            log.error("Error updating brand: {}", e.getMessage(), e);
+            throw e;
+        }
+    }
+
+    @Transactional
+    public void deleteBrand(UUID id)
+    {
+        try {
+            if (id == null) {
+                throw new IllegalArgumentException("Brand id is null");
+            }
+
+            BrandEntity brandEntity = BrandEntity.findById(id);
+            if (brandEntity == null) {
+                throw new BrandNotFoundException("Brand with id " + id + " not found");
+            }
+
+            brandEntity.delete();
+        } catch (Exception e) {
+            log.error("Error deleting brand: {}", e.getMessage(), e);
+            throw e;
+        }
+    }
+}
