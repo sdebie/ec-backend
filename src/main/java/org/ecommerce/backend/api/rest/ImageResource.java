@@ -11,6 +11,7 @@ import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 
 import java.io.IOException;
+import java.util.List;
 import java.util.UUID;
 
 @Path("/api/admin/images")
@@ -93,4 +94,18 @@ public class ImageResource
             return Response.serverError().entity("Failed to save image").build();
         }
     }
+
+    @POST
+    @Path("/bulk-upload")
+    @Consumes(MediaType.MULTIPART_FORM_DATA)
+    public Response bulkUpload(@RestForm("images") List<FileUpload> uploads) {
+        return Response.ok(imageService.bulkUploadImages(uploads)).build();
+    }
+
+    @GET
+    @Path("/image-list")
+    public List<String> listImages() {
+        return imageService.listImages();
+    }
+
 }

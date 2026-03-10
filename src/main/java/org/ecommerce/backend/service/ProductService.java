@@ -4,6 +4,7 @@ import io.quarkus.hibernate.orm.panache.Panache;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.transaction.Transactional;
 import jakarta.transaction.Transactional.TxType;
+import org.ecommerce.backend.utils.PriceUtils;
 import org.ecommerce.common.dto.*;
 import org.ecommerce.common.entity.ProductImageEntity;
 import org.ecommerce.common.entity.ProductVariantEntity;
@@ -102,33 +103,15 @@ public class ProductService
             }
 
             // Fetch the minimum prices for retail and wholesale
-            BigDecimal retailPrice = getMinimumPrice(productId, PriceTypeEn.RETAIL_PRICE);
-            BigDecimal retailSalePrice = getMinimumPrice(productId, PriceTypeEn.RETAIL_SALE_PRICE);
-            BigDecimal wholesalePrice = getMinimumPrice(productId, PriceTypeEn.WHOLESALE_PRICE);
-            BigDecimal wholesaleSalePrice = getMinimumPrice(productId, PriceTypeEn.WHOLESALE_SALE_PRICE);
+            BigDecimal retailPrice = Optional.ofNullable(PriceUtils.getMinimumPrice(productId, PriceTypeEn.RETAIL_PRICE)).orElse(BigDecimal.ZERO);
+            BigDecimal retailSalePrice = Optional.ofNullable(PriceUtils.getMinimumPrice(productId, PriceTypeEn.RETAIL_SALE_PRICE)).orElse(BigDecimal.ZERO);
+            BigDecimal wholesalePrice = Optional.ofNullable(PriceUtils.getMinimumPrice(productId, PriceTypeEn.WHOLESALE_PRICE)).orElse(BigDecimal.ZERO);
+            BigDecimal wholesaleSalePrice = Optional.ofNullable(PriceUtils.getMinimumPrice(productId, PriceTypeEn.WHOLESALE_SALE_PRICE)).orElse(BigDecimal.ZERO);  
 
             String categoryNameResult = (String) (r.length > 4 ? r[4] : null);
             list.add(new ProductListItemDto(id, name, description, retailPrice, retailSalePrice, wholesalePrice, wholesaleSalePrice, productImages, variantIds, categoryNameResult));
         }
         return list;
-    }
-
-    /**
-     * Get the minimum price for a product across all variants for a specific price type.
-     */
-    private BigDecimal getMinimumPrice(UUID productId, PriceTypeEn priceType) {
-        if (productId == null) return null;
-
-        List<ProductVariantEntity> variants = ProductVariantEntity.listByProductIdWithProduct(productId);
-        if (variants.isEmpty()) return null;
-
-        return variants.stream()
-                .flatMap(v -> v.variantPrices.stream())
-                .filter(p -> p.priceType.equals(priceType) &&
-                           p.isActive())
-                .map(p -> p.price)
-                .min(BigDecimal::compareTo)
-                .orElse(null);
     }
 
     @Transactional(value = TxType.SUPPORTS)
