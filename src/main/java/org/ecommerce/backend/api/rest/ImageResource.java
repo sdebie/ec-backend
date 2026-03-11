@@ -39,22 +39,22 @@ public class ImageResource
     }
 
     /**
-     * Upload product image - saves file and creates ProductImageEntity record
+     * Upload product variant image - saves file and creates ProductImageEntity record.
      */
     @POST
-    @Path("/upload/product/{productId}")
+    @Path("/upload/product-variant/{productVariantId}")
     @Consumes(MediaType.MULTIPART_FORM_DATA)
     @Produces(MediaType.APPLICATION_JSON)
-    public Response uploadProductImage(
-            @PathParam("productId") UUID productId,
+    public Response uploadProductVariantImage(
+            @PathParam("productVariantId") UUID productVariantId,
             @RestForm("file") FileUpload file)
     {
         try {
-            String fileName = imageService.uploadImage(file, ImageTypeEn.PRODUCT, productId);
+            String fileName = imageService.uploadImage(file, ImageTypeEn.PRODUCT, productVariantId);
             return Response.ok(new ImageResponseDto(fileName)).build();
         } catch (IllegalArgumentException e) {
             return Response.status(Response.Status.NOT_FOUND)
-                    .entity("Product not found: " + e.getMessage())
+                    .entity("Product variant not found: " + e.getMessage())
                     .build();
         } catch (IOException e) {
             return Response.serverError().entity("Failed to save image").build();

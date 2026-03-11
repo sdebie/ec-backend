@@ -91,6 +91,8 @@ public class ProductImportService {
             dto.proposedName = staged.name;
             dto.proposedRetailPrice = staged.retailPrice;
             dto.proposedWholesalePrice = staged.wholesalePrice;
+            dto.proposedRetailSalePrice = staged.retailSalePrice;
+            dto.proposedWholesaleSalePrice = staged.wholesaleSalePrice;
             dto.isNewProduct = staged.isNewProduct;
 
             // Fetch live data by SKU
@@ -104,6 +106,8 @@ public class ProductImportService {
 
                 dto.currentRetailPrice = retailPrice;
                 dto.currentWholesalePrice = wholesalePrice;
+                dto.currentRetailSalePrice = retailSalePrice;
+                dto.currentWholesaleSalePrice = wholesaleSalePrice;
 
                 // Logic to highlight changes in the UI
                 dto.hasChanges = !dto.proposedName.equals(dto.currentName) ||

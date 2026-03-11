@@ -5,7 +5,7 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.resteasy.reactive.multipart.FileUpload;
 import org.ecommerce.common.enums.ImageTypeEn;
 import org.ecommerce.common.entity.ProductImageEntity;
-import org.ecommerce.common.entity.ProductEntity;
+import org.ecommerce.common.entity.ProductVariantEntity;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
@@ -130,21 +130,21 @@ public class ImageService
      * Create a ProductImageEntity record in the database for the uploaded image.
      * The image will have the highest sort order.
      */
-    private void createProductImage(String imageUrl, UUID productId)
+    private void createProductImage(String imageUrl, UUID productVariantId)
     {
-        ProductEntity product = entityManager.find(ProductEntity.class, productId);
-        if (product == null) {
-            throw new IllegalArgumentException("Product not found with id: " + productId);
+        ProductVariantEntity productVariant = entityManager.find(ProductVariantEntity.class, productVariantId);
+        if (productVariant == null) {
+            throw new IllegalArgumentException("Product variant not found with id: " + productVariantId);
         }
 
-        // Find the max sort order to add as next in sequence
+        // Keep ordering within a variant-specific image list.
         Integer maxSortOrder = entityManager
-                .createQuery("SELECT COALESCE(MAX(pi.sortOrder), 0) FROM ProductImageEntity pi WHERE pi.product.id = :productId", Integer.class)
-                .setParameter("productId", productId)
+                .createQuery("SELECT COALESCE(MAX(pi.sortOrder), 0) FROM ProductImageEntity pi WHERE pi.productVariant.id = :productVariantId", Integer.class)
+                .setParameter("productVariantId", productVariantId)
                 .getSingleResult();
 
         ProductImageEntity productImage = new ProductImageEntity();
-        productImage.product = product;
+        productImage.productVariant = productVariant;
         productImage.imageUrl = imageUrl;
         productImage.sortOrder = maxSortOrder + 1;
         productImage.isFeatured = maxSortOrder == 0; // First image is featured by default

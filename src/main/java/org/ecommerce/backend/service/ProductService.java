@@ -96,7 +96,7 @@ public class ProductService
             UUID productId = id != null ? UUID.fromString(id) : null;
             List<ProductImageDto> productImages = new ArrayList<>();
             if (productId != null) {
-                List<ProductImageEntity> images = ProductImageEntity.list("product.id = ?1 order by sortOrder asc", productId);
+                List<ProductImageEntity> images = ProductImageEntity.list("productVariant.product.id = ?1 order by sortOrder asc", productId);
                 productImages = images.stream()
                         .map(img -> new ProductImageDto(img.id == null ? null : img.id.toString(), img.imageUrl, img.sortOrder, img.isFeatured != null && img.isFeatured))
                         .collect(Collectors.toList());
@@ -106,7 +106,7 @@ public class ProductService
             BigDecimal retailPrice = Optional.ofNullable(PriceUtils.getMinimumPrice(productId, PriceTypeEn.RETAIL_PRICE)).orElse(BigDecimal.ZERO);
             BigDecimal retailSalePrice = Optional.ofNullable(PriceUtils.getMinimumPrice(productId, PriceTypeEn.RETAIL_SALE_PRICE)).orElse(BigDecimal.ZERO);
             BigDecimal wholesalePrice = Optional.ofNullable(PriceUtils.getMinimumPrice(productId, PriceTypeEn.WHOLESALE_PRICE)).orElse(BigDecimal.ZERO);
-            BigDecimal wholesaleSalePrice = Optional.ofNullable(PriceUtils.getMinimumPrice(productId, PriceTypeEn.WHOLESALE_SALE_PRICE)).orElse(BigDecimal.ZERO);  
+            BigDecimal wholesaleSalePrice = Optional.ofNullable(PriceUtils.getMinimumPrice(productId, PriceTypeEn.WHOLESALE_SALE_PRICE)).orElse(BigDecimal.ZERO);
 
             String categoryNameResult = (String) (r.length > 4 ? r[4] : null);
             list.add(new ProductListItemDto(id, name, description, retailPrice, retailSalePrice, wholesalePrice, wholesaleSalePrice, productImages, variantIds, categoryNameResult));
@@ -175,7 +175,7 @@ public class ProductService
         List<ProductVariantEntity> variants = ProductVariantEntity.listByProductIdWithProduct(pid);
 
         // Fetch all images for this product
-        List<ProductImageEntity> images = ProductImageEntity.list("product.id = ?1 order by sortOrder asc", pid);
+        List<ProductImageEntity> images = ProductImageEntity.list("productVariant.product.id = ?1 order by sortOrder asc", pid);
         List<ProductImageDto> imageDtos = images.stream()
                 .map(img -> new ProductImageDto(img.id == null ? null : img.id.toString(), img.imageUrl, img.sortOrder, img.isFeatured != null && img.isFeatured))
                 .collect(Collectors.toList());
