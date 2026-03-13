@@ -6,6 +6,8 @@ import io.quarkus.panache.mock.PanacheMock;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
 import org.ecommerce.common.entity.*;
+import org.ecommerce.common.enums.ProductImportValidationStatusEn;
+import org.ecommerce.common.enums.ProductUploadStatusEn;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -183,8 +185,7 @@ class ProductImportServiceTest {
         brand.slug = "nike";
 
         ProductEntity product = new ProductEntity();
-        UUID productId = UUID.randomUUID();
-        product.id = productId;
+        product.id = UUID.randomUUID();
         product.name = "Blue Cotton Tee";
         product.category = category;
         product.brand = brand;
@@ -222,6 +223,65 @@ class ProductImportServiceTest {
         assertEquals(Integer.valueOf(5), variant.stockQuantity);
         assertEquals("{\"color\":\"Blue\"}", variant.attributesJson);
         assertTrue(validationErrors.isEmpty());
+    }
+
+    @Test
+    void handleCsvUploadForBatch_shouldLoadExistingBatchByIdAndUpdateItsStatus() throws Exception {
+        String csv = """
+                sku,name,category_slug,brand_slug,retail_price,wholesale_price,stock,images,attributes
+                TSHIRT-BLU-L,"Blue Cotton Tee",apparel,nike,299.00,150.00,100,,"{""color"": ""Blue"", ""size"": ""L""}"
+                """;
+
+        UUID batchId = UUID.randomUUID();
+        ProductUploadBatchEntity batch = new ProductUploadBatchEntity();
+        batch.id = batchId;
+        batch.productUploadStatusEn = ProductUploadStatusEn.IMPORTING;
+
+        when(ProductUploadBatchEntity.findById(batchId)).thenReturn(batch);
+
+        InputStream inputStream = new ByteArrayInputStream(csv.getBytes(StandardCharsets.UTF_8));
+
+        productImportService.handleCsvUploadForBatch(inputStream, batchId);
+
+        assertEquals(1, batch.totalRows);
+        assertEquals(Integer.valueOf(2), batch.validationErrorCount);
+        assertEquals(ProductUploadStatusEn.PENDING, batch.productUploadStatusEn);
+    }
+
+    @Test
+    void handleCsvUpload_shouldAccumulateValidationErrorCountOnBatch() throws Exception {
+        String csv = """
+                sku,name,category_slug,brand_slug,retail_price,wholesale_price,stock,images,attributes
+                TSHIRT-BLU-L,"Blue Cotton Tee",apparel,nike,299.00,150.00,100,,"{""color"": ""Blue"", ""size"": ""L""}"
+                TSHIRT-RED-M,"Red Cotton Tee",apparel,nike,299.00,150.00,50,,"{""color"": ""Red"", ""size"": ""M""}"
+                """;
+
+        InputStream inputStream = new ByteArrayInputStream(csv.getBytes(StandardCharsets.UTF_8));
+
+        ProductUploadBatchEntity result = productImportService.handleCsvUpload(inputStream, "products.csv", null);
+
+        assertEquals(2, result.totalRows);
+        assertEquals(Integer.valueOf(4), result.validationErrorCount);
+        assertEquals(ProductUploadStatusEn.PENDING, result.productUploadStatusEn);
+    }
+
+    @Test
+    void applyValidationResults_shouldStoreValidationStatusAndMessage() throws Exception {
+        ProductUploadStagedEntity staged = new ProductUploadStagedEntity();
+        ArrayList<String> validationErrors = new ArrayList<>();
+        validationErrors.add("Unknown category: apparel");
+        validationErrors.add("Unknown brand: nike");
+
+        Method applyValidationResults = ProductImportService.class.getDeclaredMethod(
+                "applyValidationResults",
+                ProductUploadStagedEntity.class,
+                java.util.List.class
+        );
+        applyValidationResults.setAccessible(true);
+        applyValidationResults.invoke(productImportService, staged, validationErrors);
+
+        assertEquals(ProductImportValidationStatusEn.INVALID, staged.validationStatus);
+        assertEquals("Unknown category: apparel; Unknown brand: nike", staged.validationErrors);
     }
 
     private void invokeValidateAndDiff(

@@ -1,7 +1,11 @@
 package org.ecommerce.backend.service;
 
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
+import jakarta.transaction.Transactional.TxType;
+import jakarta.ws.rs.NotFoundException;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;
 import org.apache.commons.csv.CSVRecord;
@@ -9,8 +13,11 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.ecommerce.backend.utils.PriceUtils;
 import org.ecommerce.common.dto.ProductComparisonDto;
 import org.ecommerce.common.dto.ProductUploadBatchDto;
+import org.ecommerce.common.dto.ProductUploadBatchProcessStatusDto;
 import org.ecommerce.common.entity.*;
 import org.ecommerce.common.enums.PriceTypeEn;
+import org.ecommerce.common.enums.ProductImportValidationStatusEn;
+import org.ecommerce.common.enums.ProductTypeEn;
 import org.ecommerce.common.enums.ProductUploadStatusEn;
 import org.jboss.logging.Logger;
 
@@ -31,19 +38,41 @@ import java.util.stream.Collectors;
 public class ProductImportService {
 
     @ConfigProperty(name = "storage.path")
-    public String storagePath;
+    String storagePath;
+
+    @Inject
+    EntityManager entityManager;
 
     private static final Logger LOG = Logger.getLogger(ProductImportService.class);
 
+    /**
+     * Creates and persists the batch record immediately (status=IMPORTING) so the
+     * caller can return a batch ID to the client without waiting for CSV parsing.
+     */
     @Transactional
-    public ProductUploadBatchEntity handleCsvUpload(InputStream is, String filename, StaffUserEntity admin) throws IOException {
+    public ProductUploadBatchEntity createPendingBatch(String filename, StaffUserEntity admin) {
         ProductUploadBatchEntity batch = new ProductUploadBatchEntity();
         batch.filename = filename;
-        batch.productUploadStatusEn = ProductUploadStatusEn.PENDING;
+        batch.productUploadStatusEn = ProductUploadStatusEn.IMPORTING;
         batch.uploadedBy = admin;
         batch.persist();
+        return batch;
+    }
+
+    /**
+     * Parses the CSV and stages all rows for an already-created batch.
+     * Marks the batch PENDING when done.
+     * Intended to be called from a background thread.
+     */
+    @Transactional
+    public void handleCsvUploadForBatch(InputStream is, UUID batchId) throws IOException {
+        ProductUploadBatchEntity batch = ProductUploadBatchEntity.findById(batchId);
+        if (batch == null) {
+            throw new NotFoundException("Batch not found: " + batchId);
+        }
 
         int rowCount = 0;
+        int validationErrorCount = 0;
 
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(is));
              CSVParser csvParser = new CSVParser(
@@ -70,7 +99,7 @@ public class ProductImportService {
                 staged.wholesalePrice = parseBigDecimal(record, validationErrors, "wholesale_price", "Wholesale Price");
                 staged.wholesaleSalePrice = parseBigDecimal(record, validationErrors, "wholesale_sale_price", "Wholesale Sale Price");
 
-                Integer stock = parseInteger(record, validationErrors, "stock", "stock_quantity");
+                Integer stock = parseStockInteger(record, validationErrors);
                 String brandSlug = getValue(record, "brand_slug", "brand_name", "Brand");
                 String imagesValue = getValue(record, "images");
                 String attributesJson = getValue(record, "attributes");
@@ -84,8 +113,80 @@ public class ProductImportService {
 
                 validateImages(staged, validationErrors);
 
-                staged.validationStatus = validationErrors.isEmpty() ? "VALID" : "INVALID";
-                staged.validationErrors = validationErrors.isEmpty() ? null : String.join("; ", validationErrors);
+                applyValidationResults(staged, validationErrors);
+                validationErrorCount += validationErrors.size();
+                if (!validationErrors.isEmpty()) {
+                    LOG.warnf("CSV import validation failed at row %d (sku=%s): %s", record.getRecordNumber(), staged.sku, staged.validationErrors);
+                }
+
+                staged.persist();
+                rowCount++;
+
+                if (rowCount % 500 == 0) {
+                    entityManager.flush();
+                }
+            }
+        }
+
+        entityManager.flush();
+        batch.totalRows = rowCount;
+        batch.validationErrorCount = validationErrorCount;
+        batch.productUploadStatusEn = ProductUploadStatusEn.PENDING;
+        entityManager.flush();
+    }
+
+    @Transactional
+    public ProductUploadBatchEntity handleCsvUpload(InputStream is, String filename, StaffUserEntity admin) throws IOException {
+        ProductUploadBatchEntity batch = new ProductUploadBatchEntity();
+        batch.filename = filename;
+        batch.productUploadStatusEn = ProductUploadStatusEn.IMPORTING;
+        batch.uploadedBy = admin;
+        batch.persist();
+
+        int rowCount = 0;
+        int validationErrorCount = 0;
+
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(is));
+             CSVParser csvParser = new CSVParser(
+                     reader,
+                     CSVFormat.DEFAULT.builder()
+                             .setHeader()
+                             .setSkipHeaderRecord(true)
+                             .setIgnoreHeaderCase(true)
+                             .setTrim(true)
+                             .build()
+             )) {
+
+            for (CSVRecord record : csvParser) {
+                ProductUploadStagedEntity staged = new ProductUploadStagedEntity();
+                staged.batch = batch;
+
+                List<String> validationErrors = new ArrayList<>();
+
+                staged.sku = getValue(record, "sku", "SKU");
+                staged.name = getValue(record, "name", "Name");
+                staged.categorySlug = getValue(record, "category_slug", "Category", "category_name");
+                staged.retailPrice = parseBigDecimal(record, validationErrors, "retail_price", "Retail Price");
+                staged.retailSalePrice = parseBigDecimal(record, validationErrors, "retail_sale_price", "Retail Sale Price");
+                staged.wholesalePrice = parseBigDecimal(record, validationErrors, "wholesale_price", "Wholesale Price");
+                staged.wholesaleSalePrice = parseBigDecimal(record, validationErrors, "wholesale_sale_price", "Wholesale Sale Price");
+
+                Integer stock = parseStockInteger(record, validationErrors);
+                String brandSlug = getValue(record, "brand_slug", "brand_name", "Brand");
+                String imagesValue = getValue(record, "images");
+                String attributesJson = getValue(record, "attributes");
+
+                staged.stock = stock;
+                staged.brandSlug = brandSlug;
+                staged.images = imagesValue;
+                staged.attributes = attributesJson;
+
+                validateAndDiff(staged, validationErrors, stock, brandSlug, imagesValue, attributesJson);
+
+                validateImages(staged, validationErrors);
+
+                applyValidationResults(staged, validationErrors);
+                validationErrorCount += validationErrors.size();
                 if (!validationErrors.isEmpty()) {
                     LOG.warnf("CSV import validation failed at row %d (sku=%s): %s", record.getRecordNumber(), staged.sku, staged.validationErrors);
                 }
@@ -96,7 +197,202 @@ public class ProductImportService {
         }
 
         batch.totalRows = rowCount;
+        batch.validationErrorCount = validationErrorCount;
+        batch.productUploadStatusEn = ProductUploadStatusEn.PENDING;
+        entityManager.flush();
         return batch;
+    }
+
+    @Transactional
+    public void markBatchAsProcessing(UUID batchId) {
+        ProductUploadBatchEntity batch = ProductUploadBatchEntity.findById(batchId);
+        if (batch == null) {
+            throw new NotFoundException("Batch not found: " + batchId);
+        }
+        if (batch.productUploadStatusEn == ProductUploadStatusEn.PROCESSING) {
+            throw new IllegalStateException("Batch is already processing");
+        }
+
+        long totalRows = ProductUploadStagedEntity.count("batch.id", batchId);
+        batch.productUploadStatusEn = ProductUploadStatusEn.PROCESSING;
+        batch.totalRows = (int) totalRows;
+        batch.processedRows = 0;
+        batch.skippedRows = 0;
+    }
+
+    @Transactional
+    public void markBatchAsProcessed(UUID batchId) {
+        ProductUploadBatchEntity batch = ProductUploadBatchEntity.findById(batchId);
+        if (batch == null) {
+            throw new NotFoundException("Batch not found: " + batchId);
+        }
+        batch.productUploadStatusEn = ProductUploadStatusEn.PROCESSED;
+    }
+
+    @Transactional
+    public void markBatchAsFailed(UUID batchId) {
+        ProductUploadBatchEntity batch = ProductUploadBatchEntity.findById(batchId);
+        if (batch == null) {
+            throw new NotFoundException("Batch not found: " + batchId);
+        }
+        batch.productUploadStatusEn = ProductUploadStatusEn.FAILED;
+    }
+
+    @Transactional
+    public void processStagedRowsForBatch(UUID batchId) {
+
+        LOG.debug("DEBUG:: Processing Batch: " + batchId);
+        ProductUploadBatchEntity batch = ProductUploadBatchEntity.findById(batchId);
+        if (batch == null) {
+            throw new NotFoundException("Batch not found: " + batchId);
+        }
+
+        List<ProductUploadStagedEntity> stagedRows = ProductUploadStagedEntity.list("batch.id = ?1 and processed = false", batchId);
+        long processedCount = 0;
+        long skippedCount = 0;
+
+        for (ProductUploadStagedEntity staged : stagedRows) {
+            if (staged.validationStatus == ProductImportValidationStatusEn.VALID) {
+                applyValidStagedRow(staged);
+                processedCount++;
+            } else {
+                skippedCount++;
+            }
+
+            staged.processed = true;
+            LOG.debugf("DEBUG:: processed=%d skipped=%d", processedCount, skippedCount);
+
+            if ((processedCount + skippedCount) % 500 == 0) {
+                entityManager.flush();
+            }
+        }
+
+        entityManager.flush();
+
+        long totalRows = ProductUploadStagedEntity.count("batch.id", batchId);
+        long totalProcessedRows = ProductUploadStagedEntity.count(
+                "batch.id = ?1 and processed = true and validationStatus = ?2",
+                batchId,
+                ProductImportValidationStatusEn.VALID
+        );
+        long totalSkippedRows = ProductUploadStagedEntity.count(
+                "batch.id = ?1 and processed = true and (validationStatus is null or validationStatus <> ?2)",
+                batchId,
+                ProductImportValidationStatusEn.VALID
+        );
+        batch.totalRows = (int) totalRows;
+        batch.processedRows = (int) totalProcessedRows;
+        batch.skippedRows = (int) totalSkippedRows;
+    }
+
+    private void applyValidStagedRow(ProductUploadStagedEntity staged) {
+        CategoryEntity category = null;
+        BrandEntity brand = null;
+
+        if (!isBlank(staged.categorySlug)) {
+            category = CategoryEntity.find("lower(slug) = ?1", staged.categorySlug.trim().toLowerCase(Locale.ROOT)).firstResult();
+        }
+        if (!isBlank(staged.brandSlug)) {
+            brand = BrandEntity.find("lower(slug) = ?1", staged.brandSlug.trim().toLowerCase(Locale.ROOT)).firstResult();
+        }
+
+        ProductVariantEntity variant = ProductVariantEntity.find("sku", staged.sku).firstResult();
+        ProductEntity product;
+
+        if (variant != null) {
+            product = variant.product;
+        } else {
+            product = null;
+            if (!isBlank(staged.name)) {
+                product = ProductEntity.find("lower(name) = ?1", staged.name.trim().toLowerCase(Locale.ROOT)).firstResult();
+            }
+            if (product == null) {
+                product = new ProductEntity();
+                product.name = staged.name;
+                product.productType = ProductTypeEn.VARIABLE;
+                product.persist();
+            }
+
+            variant = new ProductVariantEntity();
+            variant.product = product;
+            variant.sku = staged.sku;
+            variant.persist();
+        }
+
+        if (!isBlank(staged.name)) {
+            product.name = staged.name.trim();
+        }
+        if (category != null) {
+            product.category = category;
+        }
+        if (brand != null) {
+            product.brand = brand;
+        }
+        if (product.productType == null) {
+            product.productType = ProductTypeEn.VARIABLE;
+        }
+
+        variant.stockQuantity = staged.stock != null ? staged.stock : 0;
+        variant.attributesJson = trimToNull(staged.attributes);
+
+        upsertVariantPrice(variant, PriceTypeEn.RETAIL_PRICE, staged.retailPrice);
+        upsertVariantPrice(variant, PriceTypeEn.RETAIL_SALE_PRICE, staged.retailSalePrice);
+        upsertVariantPrice(variant, PriceTypeEn.WHOLESALE_PRICE, staged.wholesalePrice);
+        upsertVariantPrice(variant, PriceTypeEn.WHOLESALE_SALE_PRICE, staged.wholesaleSalePrice);
+
+        upsertVariantImages(variant, staged.images);
+    }
+
+    private void upsertVariantImages(ProductVariantEntity variant, String stagedImages) {
+        ProductImageEntity.delete("productVariant.id", variant.id);
+
+        List<String> imageNames = splitImageNames(stagedImages);
+        for (int i = 0; i < imageNames.size(); i++) {
+            ProductImageEntity image = new ProductImageEntity();
+            image.productVariant = variant;
+            image.imageUrl = imageNames.get(i);
+            image.sortOrder = i;
+            image.isFeatured = i == 0;
+            image.persist();
+        }
+    }
+
+    private void upsertVariantPrice(ProductVariantEntity variant, PriceTypeEn priceType, BigDecimal priceValue) {
+        if (variant == null || variant.id == null || priceType == null || priceValue == null) {
+            return;
+        }
+
+        VariantPricesEntity price = VariantPricesEntity.findLatestByVariantAndType(variant.id, priceType);
+        if (price == null) {
+            price = new VariantPricesEntity();
+            price.variant = variant;
+            price.priceType = priceType;
+            price.price = priceValue;
+            price.persist();
+            return;
+        }
+
+        price.price = priceValue;
+        price.priceEndDate = null;
+    }
+
+    @Transactional(value = TxType.SUPPORTS)
+    public ProductUploadBatchProcessStatusDto getBatchProcessStatus(UUID batchId) {
+        ProductUploadBatchEntity batch = ProductUploadBatchEntity.findById(batchId);
+        if (batch == null) {
+            throw new NotFoundException("Batch not found: " + batchId);
+        }
+
+        ProductUploadBatchProcessStatusDto status = new ProductUploadBatchProcessStatusDto();
+        status.batchId = batch.id;
+        status.status = batch.productUploadStatusEn != null ? batch.productUploadStatusEn.name() : null;
+        status.totalRows = batch.totalRows;
+        status.stagedRows = ProductUploadStagedEntity.count("batch.id", batchId);
+        status.processedRows = batch.processedRows != null ? (long) batch.processedRows : 0L;
+        status.skippedRows = batch.skippedRows != null ? (long) batch.skippedRows : 0L;
+        status.validationErrorCount = batch.validationErrorCount;
+        status.completed = batch.productUploadStatusEn != ProductUploadStatusEn.PROCESSING;
+        return status;
     }
 
     private void validateAndDiff(
@@ -109,7 +405,7 @@ public class ProductImportService {
     ) {
         CategoryEntity category = findExistingCategory(staged.categorySlug, validationErrors);
         BrandEntity brand = findExistingBrand(brandSlug, validationErrors);
-        ProductEntity existingProduct = findExistingProduct(staged.name, validationErrors);
+        ProductEntity existingProduct = findExistingProduct(staged.name);
         ProductVariantEntity existingVariant = findExistingVariant(staged.sku, validationErrors);
 
         staged.isValidCategory = category != null;
@@ -139,6 +435,9 @@ public class ProductImportService {
     }
 
     private void validateImages(ProductUploadStagedEntity staged, List<String> validationErrors) {
+        if (isBlank(staged.images)) {
+            return;
+        }
 
         String[] images = staged.images.split(",");
         List<String> missing = new ArrayList<>();
@@ -182,7 +481,7 @@ public class ProductImportService {
         return brand;
     }
 
-    private ProductEntity findExistingProduct(String productName, List<String> validationErrors) {
+    private ProductEntity findExistingProduct(String productName) {
         if (isBlank(productName)) {
             //validationErrors.add("name is required");
             return null;
@@ -218,8 +517,8 @@ public class ProductImportService {
         boolean stockChanged = !Objects.equals(stock, existingVariant.stockQuantity);
         boolean attributesChanged = !Objects.equals(trimToNull(attributesJson), trimToNull(existingVariant.attributesJson));
         boolean imagesChanged = !sameImageNames(imagesValue, existingVariant);
-        boolean retailChanged = !pricesMatch(staged.retailPrice, findLatestPrice(existingVariant, PriceTypeEn.RETAIL_PRICE));
-        boolean wholesaleChanged = !pricesMatch(staged.wholesalePrice, findLatestPrice(existingVariant, PriceTypeEn.WHOLESALE_PRICE));
+        boolean retailChanged = pricesDiffer(staged.retailPrice, findLatestPrice(existingVariant, PriceTypeEn.RETAIL_PRICE));
+        boolean wholesaleChanged = pricesDiffer(staged.wholesalePrice, findLatestPrice(existingVariant, PriceTypeEn.WHOLESALE_PRICE));
 
         return nameChanged || categoryChanged || brandChanged || stockChanged || attributesChanged || imagesChanged || retailChanged || wholesaleChanged;
     }
@@ -232,14 +531,14 @@ public class ProductImportService {
         return price != null ? price.price : null;
     }
 
-    private boolean pricesMatch(BigDecimal left, BigDecimal right) {
+    private boolean pricesDiffer(BigDecimal left, BigDecimal right) {
         if (left == null && right == null) {
-            return true;
-        }
-        if (left == null || right == null) {
             return false;
         }
-        return left.compareTo(right) == 0;
+        if (left == null || right == null) {
+            return true;
+        }
+        return left.compareTo(right) != 0;
     }
 
     private boolean sameImageNames(String stagedImages, ProductVariantEntity variant) {
@@ -300,15 +599,15 @@ public class ProductImportService {
         }
     }
 
-    private Integer parseInteger(CSVRecord record, List<String> validationErrors, String... headers) {
-        String value = getValue(record, headers);
+    private Integer parseStockInteger(CSVRecord record, List<String> validationErrors) {
+        String value = getValue(record, "stock", "stock_quantity");
         if (isBlank(value)) {
             return 0;
         }
         try {
             return Integer.valueOf(value.trim());
         } catch (NumberFormatException ex) {
-            validationErrors.add("Invalid integer value for " + headers[0] + ": " + value);
+            validationErrors.add("Invalid integer value for stock: " + value);
             return null;
         }
     }
@@ -389,10 +688,20 @@ public class ProductImportService {
             dto.filename = batch.filename;
             dto.status = batch.productUploadStatusEn.toString();
             dto.totalRows = batch.totalRows;
+            dto.processedRows = batch.processedRows;
+            dto.skippedRows = batch.skippedRows;
+            dto.validationErrorCount = batch.validationErrorCount;
             dto.createdAt = batch.createdAt;
             dto.uploadedByUsername = batch.uploadedBy != null ? batch.uploadedBy.username : null;
             return dto;
         }).collect(Collectors.toList());
+    }
+
+    private void applyValidationResults(ProductUploadStagedEntity staged, List<String> validationErrors) {
+        staged.validationStatus = validationErrors.isEmpty()
+                ? ProductImportValidationStatusEn.VALID
+                : ProductImportValidationStatusEn.INVALID;
+        staged.validationErrors = validationErrors.isEmpty() ? null : String.join("; ", validationErrors);
     }
 
 }
