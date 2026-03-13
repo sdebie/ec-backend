@@ -93,7 +93,9 @@ public class ProductImportService {
 
                 staged.sku = getValue(record, "sku", "SKU");
                 staged.name = getValue(record, "name", "Name");
+                staged.description = getValue(record, "description", "description");
                 staged.categorySlug = getValue(record, "category_slug", "Category", "category_name");
+                staged.shortDescription = getValue(record, "short_description", "short_description");
                 staged.retailPrice = parseBigDecimal(record, validationErrors, "retail_price", "Retail Price");
                 staged.retailSalePrice = parseBigDecimal(record, validationErrors, "retail_sale_price", "Retail Sale Price");
                 staged.wholesalePrice = parseBigDecimal(record, validationErrors, "wholesale_price", "Wholesale Price");
@@ -133,74 +135,6 @@ public class ProductImportService {
         batch.validationErrorCount = validationErrorCount;
         batch.productUploadStatusEn = ProductUploadStatusEn.PENDING;
         entityManager.flush();
-    }
-
-    @Transactional
-    public ProductUploadBatchEntity handleCsvUpload(InputStream is, String filename, StaffUserEntity admin) throws IOException {
-        ProductUploadBatchEntity batch = new ProductUploadBatchEntity();
-        batch.filename = filename;
-        batch.productUploadStatusEn = ProductUploadStatusEn.IMPORTING;
-        batch.uploadedBy = admin;
-        batch.persist();
-
-        int rowCount = 0;
-        int validationErrorCount = 0;
-
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(is));
-             CSVParser csvParser = new CSVParser(
-                     reader,
-                     CSVFormat.DEFAULT.builder()
-                             .setHeader()
-                             .setSkipHeaderRecord(true)
-                             .setIgnoreHeaderCase(true)
-                             .setTrim(true)
-                             .build()
-             )) {
-
-            for (CSVRecord record : csvParser) {
-                ProductUploadStagedEntity staged = new ProductUploadStagedEntity();
-                staged.batch = batch;
-
-                List<String> validationErrors = new ArrayList<>();
-
-                staged.sku = getValue(record, "sku", "SKU");
-                staged.name = getValue(record, "name", "Name");
-                staged.categorySlug = getValue(record, "category_slug", "Category", "category_name");
-                staged.retailPrice = parseBigDecimal(record, validationErrors, "retail_price", "Retail Price");
-                staged.retailSalePrice = parseBigDecimal(record, validationErrors, "retail_sale_price", "Retail Sale Price");
-                staged.wholesalePrice = parseBigDecimal(record, validationErrors, "wholesale_price", "Wholesale Price");
-                staged.wholesaleSalePrice = parseBigDecimal(record, validationErrors, "wholesale_sale_price", "Wholesale Sale Price");
-
-                Integer stock = parseStockInteger(record, validationErrors);
-                String brandSlug = getValue(record, "brand_slug", "brand_name", "Brand");
-                String imagesValue = getValue(record, "images");
-                String attributesJson = getValue(record, "attributes");
-
-                staged.stock = stock;
-                staged.brandSlug = brandSlug;
-                staged.images = imagesValue;
-                staged.attributes = attributesJson;
-
-                validateAndDiff(staged, validationErrors, stock, brandSlug, imagesValue, attributesJson);
-
-                validateImages(staged, validationErrors);
-
-                applyValidationResults(staged, validationErrors);
-                validationErrorCount += validationErrors.size();
-                if (!validationErrors.isEmpty()) {
-                    LOG.warnf("CSV import validation failed at row %d (sku=%s): %s", record.getRecordNumber(), staged.sku, staged.validationErrors);
-                }
-
-                staged.persist();
-                rowCount++;
-            }
-        }
-
-        batch.totalRows = rowCount;
-        batch.validationErrorCount = validationErrorCount;
-        batch.productUploadStatusEn = ProductUploadStatusEn.PENDING;
-        entityManager.flush();
-        return batch;
     }
 
     @Transactional
@@ -309,6 +243,8 @@ public class ProductImportService {
             if (product == null) {
                 product = new ProductEntity();
                 product.name = staged.name;
+                product.description = staged.description;
+                product.shorDescription = staged.shortDescription;
                 product.productType = ProductTypeEn.VARIABLE;
                 product.persist();
             }
@@ -319,9 +255,10 @@ public class ProductImportService {
             variant.persist();
         }
 
-        if (!isBlank(staged.name)) {
-            product.name = staged.name.trim();
-        }
+        product.name = staged.name.trim();
+        product.description = staged.description;
+        product.shorDescription = staged.shortDescription;
+
         if (category != null) {
             product.category = category;
         }
@@ -636,9 +573,13 @@ public class ProductImportService {
             if (!staged.isNewProduct){
                 ProductEntity existingProduct = ProductEntity.find("lower(name) = ?1", staged.name.trim().toLowerCase(Locale.ROOT)).firstResult();
                 dto.currentName = existingProduct.name;
+                dto.currentDescription = existingProduct.description;
+                dto.currentShortDescription = existingProduct.shorDescription;
             }
             dto.stagedId = staged.id;
             dto.sku = staged.sku;
+            dto.proposedDescription = staged.description;
+            dto.proposedShortDescription = staged.shortDescription;
             dto.categorySlug = staged.categorySlug;
             dto.brandSlug = staged.brandSlug;
             dto.proposedImages = staged.images;
@@ -662,6 +603,8 @@ public class ProductImportService {
             ProductVariantEntity variant = ProductVariantEntity.find("sku", staged.sku).firstResult();
             if (variant != null) {
                 dto.currentName = variant.product.name;
+                dto.currentDescription = variant.product.description;
+                dto.currentShortDescription = variant.product.shorDescription;
                 BigDecimal retailPrice = PriceUtils.getMinimumPrice(variant.product.id, PriceTypeEn.RETAIL_PRICE);
                 BigDecimal retailSalePrice = PriceUtils.getMinimumPrice(variant.product.id, PriceTypeEn.RETAIL_SALE_PRICE);
                 BigDecimal wholesalePrice = PriceUtils.getMinimumPrice(variant.product.id, PriceTypeEn.WHOLESALE_PRICE);

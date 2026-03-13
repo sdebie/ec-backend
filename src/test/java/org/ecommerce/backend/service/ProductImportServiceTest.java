@@ -69,21 +69,6 @@ class ProductImportServiceTest {
         when(ProductImageEntity.list(anyString(), org.mockito.ArgumentMatchers.<Object[]>any())).thenReturn(new ArrayList<>());
     }
 
-    @Test
-    void handleCsvUpload_shouldProcessNewCsvLayoutAndCountRows() throws Exception {
-        String csv = """
-                sku,name,category_slug,brand_slug,retail_price,wholesale_price,stock,images,attributes
-                TSHIRT-BLU-L,"Blue Cotton Tee",apparel,nike,299.00,150.00,100,"TSHIRT-BLU-L.jpg,TSHIRT-BLU-L_back.jpg","{""color"": ""Blue"", ""size"": ""L""}"
-                TSHIRT-RED-M,"Red Cotton Tee",apparel,nike,299.00,150.00,50,"TSHIRT-RED-M.jpg","{""color"": ""Red"", ""size"": ""M""}"
-                """;
-
-        InputStream inputStream = new ByteArrayInputStream(csv.getBytes(StandardCharsets.UTF_8));
-
-        ProductUploadBatchEntity result = productImportService.handleCsvUpload(inputStream, "products.csv", null);
-
-        assertEquals("products.csv", result.filename);
-        assertEquals(2, result.totalRows);
-    }
 
     @Test
     void validateAndDiff_shouldAddValidationErrorsWhenRequiredFieldsAreMissing() throws Exception {
@@ -246,23 +231,6 @@ class ProductImportServiceTest {
         assertEquals(1, batch.totalRows);
         assertEquals(Integer.valueOf(2), batch.validationErrorCount);
         assertEquals(ProductUploadStatusEn.PENDING, batch.productUploadStatusEn);
-    }
-
-    @Test
-    void handleCsvUpload_shouldAccumulateValidationErrorCountOnBatch() throws Exception {
-        String csv = """
-                sku,name,category_slug,brand_slug,retail_price,wholesale_price,stock,images,attributes
-                TSHIRT-BLU-L,"Blue Cotton Tee",apparel,nike,299.00,150.00,100,,"{""color"": ""Blue"", ""size"": ""L""}"
-                TSHIRT-RED-M,"Red Cotton Tee",apparel,nike,299.00,150.00,50,,"{""color"": ""Red"", ""size"": ""M""}"
-                """;
-
-        InputStream inputStream = new ByteArrayInputStream(csv.getBytes(StandardCharsets.UTF_8));
-
-        ProductUploadBatchEntity result = productImportService.handleCsvUpload(inputStream, "products.csv", null);
-
-        assertEquals(2, result.totalRows);
-        assertEquals(Integer.valueOf(4), result.validationErrorCount);
-        assertEquals(ProductUploadStatusEn.PENDING, result.productUploadStatusEn);
     }
 
     @Test

@@ -4,6 +4,7 @@ import jakarta.inject.Inject;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
+import jakarta.ws.rs.core.StreamingOutput;
 import org.ecommerce.backend.service.ProductImportService;
 import org.ecommerce.backend.service.ProductUploadAsyncService;
 import org.ecommerce.common.dto.ProductUploadFormDto;
@@ -79,4 +80,5 @@ public class ProductUploadResource {
             return Response.status(Response.Status.NOT_FOUND).entity(ex.getMessage()).build();
         }
     }
+
 }
