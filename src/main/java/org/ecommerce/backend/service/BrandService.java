@@ -9,6 +9,8 @@ import org.ecommerce.common.dto.BrandDto;
 import org.ecommerce.common.entity.BrandEntity;
 import org.ecommerce.common.exception.BrandAlreadyExistsException;
 import org.ecommerce.common.exception.BrandNotFoundException;
+import org.ecommerce.common.repository.BrandRepository;
+import org.ecommerce.common.request.SearchRequest;
 
 import java.util.List;
 import java.util.UUID;
@@ -20,9 +22,11 @@ public class BrandService
     @Inject
     BrandMapper brandMapper;
 
-    public List<BrandEntity> getAllBrands()
-    {
-        return BrandEntity.listAll();
+    @Inject
+    BrandRepository brandRepository;
+
+    public List<BrandEntity> getAllBrands(SearchRequest request) {
+        return brandRepository.search(request);
     }
 
     public BrandEntity getBrandById(UUID id)
@@ -31,7 +35,7 @@ public class BrandService
             throw new IllegalArgumentException("Brand id is null");
         }
 
-        BrandEntity brandEntity = BrandEntity.findById(id);
+        BrandEntity brandEntity = brandRepository.findById(id);
         if (brandEntity == null) {
             throw new BrandNotFoundException("Brand id " + id + " not found");
         }
@@ -47,7 +51,7 @@ public class BrandService
             if (validateFields(brandDto)) {
 
                 if (brandDto.getId() != null) {
-                    BrandEntity brandEntity = BrandEntity.findById(brandDto.getId());
+                    BrandEntity brandEntity = brandRepository.findById(brandDto.getId());
                     if (brandEntity != null) {
                         throw new BrandAlreadyExistsException("Brand with id " + brandDto.getId() + " already exists");
                     }
@@ -95,7 +99,7 @@ public class BrandService
                 }
 
                 brandMapper.mapDtoToEntity(brandDto, brandEntity);
-                brandEntity.persist();
+                brandRepository.persist(brandEntity);
             }
         } catch (Exception e) {
             log.error("Error updating brand: {}", e.getMessage(), e);
@@ -116,7 +120,7 @@ public class BrandService
                 throw new BrandNotFoundException("Brand with id " + id + " not found");
             }
 
-            brandEntity.delete();
+            brandRepository.delete(brandEntity);
         } catch (Exception e) {
             log.error("Error deleting brand: {}", e.getMessage(), e);
             throw e;

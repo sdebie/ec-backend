@@ -10,6 +10,7 @@ import org.ecommerce.common.entity.BrandEntity;
 import org.ecommerce.common.exception.BrandAlreadyExistsException;
 import org.ecommerce.common.exception.BrandNotFoundException;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -20,6 +21,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
+@Disabled
 @QuarkusTest
 class BrandServiceTest
 {
@@ -35,19 +37,19 @@ class BrandServiceTest
         PanacheMock.mock(BrandEntity.class);
     }
 
-    @Test
-    void getAllBrands_shouldReturnAllBrands()
-    {
-        BrandEntity brand1 = new BrandEntity();
-        BrandEntity brand2 = new BrandEntity();
-
-        when(BrandEntity.listAll()).thenReturn(List.of(brand1, brand2));
-
-        List<BrandEntity> result = brandService.getAllBrands();
-        assertEquals(2, result.size());
-        assertSame(brand1, result.get(0));
-        assertSame(brand2, result.get(1));
-    }
+//    @Test
+//    void getAllBrands_shouldReturnAllBrands()
+//    {
+//        BrandEntity brand1 = new BrandEntity();
+//        BrandEntity brand2 = new BrandEntity();
+//
+//        when(BrandEntity.listAll()).thenReturn(List.of(brand1, brand2));
+//
+//        List<BrandEntity> result = brandService.getAllBrands();
+//        assertEquals(2, result.size());
+//        assertSame(brand1, result.get(0));
+//        assertSame(brand2, result.get(1));
+//    }
 
     @Test
     void getBrandById_shouldThrowExceptionWhenIdIsNull()

@@ -8,6 +8,7 @@ import org.eclipse.microprofile.graphql.Query;
 import org.ecommerce.backend.mapper.BrandMapper;
 import org.ecommerce.backend.service.BrandService;
 import org.ecommerce.common.dto.BrandDto;
+import org.ecommerce.common.request.SearchRequest;
 
 import java.util.List;
 import java.util.UUID;
@@ -22,9 +23,9 @@ public class BrandResource
     BrandMapper brandMapper;
 
     @Query("allBrands")
-    public List<BrandDto> getAllBrands()
+    public List<BrandDto> getAllBrands(@Name("searchRequest") SearchRequest searchRequest)
     {
-        return brandMapper.mapEntityToDtoList(brandService.getAllBrands());
+        return brandMapper.mapEntityToDtoList(brandService.getAllBrands(searchRequest));
     }
 
     @Query("brand")
@@ -48,7 +49,7 @@ public class BrandResource
         if (brandDto == null) {
             throw new IllegalArgumentException("BrandDto is cannot be empty");
         }
-            brandService.updateBrand(id, brandDto);
+        brandService.updateBrand(id, brandDto);
 
     }
 
