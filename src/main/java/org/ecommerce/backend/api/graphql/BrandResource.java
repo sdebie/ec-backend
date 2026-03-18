@@ -8,7 +8,8 @@ import org.eclipse.microprofile.graphql.Query;
 import org.ecommerce.backend.mapper.BrandMapper;
 import org.ecommerce.backend.service.BrandService;
 import org.ecommerce.common.dto.BrandDto;
-import org.ecommerce.common.request.SearchRequest;
+import org.ecommerce.common.query.FilterRequest;
+import org.ecommerce.common.query.PageRequest;
 
 import java.util.List;
 import java.util.UUID;
@@ -23,9 +24,9 @@ public class BrandResource
     BrandMapper brandMapper;
 
     @Query("allBrands")
-    public List<BrandDto> getAllBrands(@Name("searchRequest") SearchRequest searchRequest)
+    public List<BrandDto> getAllBrands(@Name("pageRequest") PageRequest pageRequest, @Name("filterRequest") FilterRequest filterRequest)
     {
-        return brandMapper.mapEntityToDtoList(brandService.getAllBrands(searchRequest));
+        return brandMapper.mapEntityToDtoList(brandService.getAllBrands(pageRequest, filterRequest));
     }
 
     @Query("brand")

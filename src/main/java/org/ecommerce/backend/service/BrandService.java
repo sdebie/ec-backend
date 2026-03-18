@@ -9,8 +9,9 @@ import org.ecommerce.common.dto.BrandDto;
 import org.ecommerce.common.entity.BrandEntity;
 import org.ecommerce.common.exception.BrandAlreadyExistsException;
 import org.ecommerce.common.exception.BrandNotFoundException;
+import org.ecommerce.common.query.FilterRequest;
+import org.ecommerce.common.query.PageRequest;
 import org.ecommerce.common.repository.BrandRepository;
-import org.ecommerce.common.request.SearchRequest;
 
 import java.util.List;
 import java.util.UUID;
@@ -25,8 +26,9 @@ public class BrandService
     @Inject
     BrandRepository brandRepository;
 
-    public List<BrandEntity> getAllBrands(SearchRequest request) {
-        return brandRepository.search(request);
+    public List<BrandEntity> getAllBrands(PageRequest pageRequest,  FilterRequest filterRequest)
+    {
+        return brandRepository.findAll(pageRequest, filterRequest);
     }
 
     public BrandEntity getBrandById(UUID id)
