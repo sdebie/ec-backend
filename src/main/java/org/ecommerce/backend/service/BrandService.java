@@ -60,7 +60,7 @@ public class BrandService
                 }
 
                 BrandEntity brandEntity = brandMapper.mapDtoToEntity(brandDto, new BrandEntity());
-                brandEntity.persist();
+                brandRepository.persist(brandEntity);
 
             }
         } catch (Exception e) {
