@@ -29,6 +29,12 @@ public class BrandResource
         return brandMapper.mapEntityToDtoList(brandService.getAllBrands(pageRequest, filterRequest));
     }
 
+    @Query("brandCount")
+    public long brandCount(@Name("filterRequest") FilterRequest filterRequest)
+    {
+        return brandService.brandCount(filterRequest);
+    }
+
     @Query("brand")
     public BrandDto getBrandById(@Name("id") UUID id)
     {

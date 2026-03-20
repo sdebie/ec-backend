@@ -31,6 +31,11 @@ public class BrandService
         return brandRepository.findAll(pageRequest, filterRequest);
     }
 
+    public long brandCount(FilterRequest filterRequest)
+    {
+        return brandRepository.count(filterRequest);
+    }
+
     public BrandEntity getBrandById(UUID id)
     {
         if (id == null) {
@@ -128,4 +133,5 @@ public class BrandService
             throw e;
         }
     }
+
 }
