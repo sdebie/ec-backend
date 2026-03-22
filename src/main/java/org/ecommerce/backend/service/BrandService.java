@@ -64,6 +64,14 @@ public class BrandService
                     }
                 }
 
+                if (brandRepository.findByNameExcludingId(brandDto.getName(), null) != null) {
+                    throw new BrandAlreadyExistsException("Brand with name '" + brandDto.getName() + "' already exists");
+                }
+
+                if (brandRepository.findBySlugExcludingId(brandDto.getSlug(), null) != null) {
+                    throw new BrandAlreadyExistsException("Brand with slug '" + brandDto.getSlug() + "' already exists");
+                }
+
                 BrandEntity brandEntity = brandMapper.mapDtoToEntity(brandDto, new BrandEntity());
                 brandRepository.persist(brandEntity);
 
@@ -96,13 +104,19 @@ public class BrandService
     {
         try {
             if (validateFields(brandDto)) {
-                if (!id.equals(brandDto.getId())) {
-                    throw new IllegalArgumentException("Id " + id + " does not match brand dto id " + id);
-                }
+                brandDto.setId(id);
 
                 BrandEntity brandEntity = BrandEntity.findById(id);
                 if (brandEntity == null) {
                     throw new BrandNotFoundException("Brand with id " + brandDto.getId() + " not found");
+                }
+
+                if (brandRepository.findByNameExcludingId(brandDto.getName(), id) != null) {
+                    throw new BrandAlreadyExistsException("Brand with name '" + brandDto.getName() + "' already exists");
+                }
+
+                if (brandRepository.findBySlugExcludingId(brandDto.getSlug(), id) != null) {
+                    throw new BrandAlreadyExistsException("Brand with slug '" + brandDto.getSlug() + "' already exists");
                 }
 
                 brandMapper.mapDtoToEntity(brandDto, brandEntity);

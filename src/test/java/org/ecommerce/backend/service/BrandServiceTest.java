@@ -9,6 +9,7 @@ import org.ecommerce.common.dto.BrandDto;
 import org.ecommerce.common.entity.BrandEntity;
 import org.ecommerce.common.exception.BrandAlreadyExistsException;
 import org.ecommerce.common.exception.BrandNotFoundException;
+import org.ecommerce.common.repository.BrandRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
@@ -138,28 +139,11 @@ class BrandServiceTest
     }
 
     @Test
-    void updateBrand_shouldThrowExceptionWhenIdsDoNotMatch()
-    {
-        UUID id = UUID.randomUUID();
-        UUID brandDtoId = UUID.randomUUID();
-
-        BrandDto brandDto = new BrandDto();
-        brandDto.setId(brandDtoId);
-        brandDto.setName("Test Brand");
-        brandDto.setDescription("Test Description");
-        brandDto.setSlug("test-brand");
-
-        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () -> brandService.updateBrand(id, brandDto));
-        assertEquals("Id " + id + " does not match brand dto id " + id, ex.getMessage());
-    }
-
-    @Test
     void updateBrand_shouldThrowExceptionWhenBrandNotFound()
     {
         UUID id = UUID.randomUUID();
 
         BrandDto brandDto = new BrandDto();
-        brandDto.setId(id);
         brandDto.setName("Test Brand");
         brandDto.setDescription("Test Description");
         brandDto.setSlug("test-brand");
@@ -176,7 +160,7 @@ class BrandServiceTest
         UUID id = UUID.randomUUID();
 
         BrandDto brandDto = new BrandDto();
-        brandDto.setId(id);
+        // id is intentionally not set here – the service must assign it from the id parameter
         brandDto.setName("Test Brand");
         brandDto.setDescription("Test Description");
         brandDto.setSlug("test-brand");
