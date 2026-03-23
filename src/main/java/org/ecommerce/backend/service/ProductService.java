@@ -2,6 +2,7 @@ package org.ecommerce.backend.service;
 
 import io.quarkus.hibernate.orm.panache.Panache;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import jakarta.transaction.Transactional.TxType;
 import org.ecommerce.backend.utils.PriceUtils;
@@ -10,6 +11,8 @@ import org.ecommerce.common.entity.ProductImageEntity;
 import org.ecommerce.common.entity.ProductVariantEntity;
 import org.ecommerce.common.entity.VariantPricesEntity;
 import org.ecommerce.common.enums.PriceTypeEn;
+import org.ecommerce.common.repository.BrandRepository;
+import org.ecommerce.common.repository.ProductRepository;
 
 import java.math.BigDecimal;
 import java.sql.Array;
@@ -19,6 +22,9 @@ import java.util.stream.Collectors;
 @ApplicationScoped
 public class ProductService
 {
+    @Inject
+    ProductRepository productRepository;
+
     @Transactional(value = TxType.SUPPORTS)
     public List<ProductListItemDto> getAllProducts(String categoryName)
     {

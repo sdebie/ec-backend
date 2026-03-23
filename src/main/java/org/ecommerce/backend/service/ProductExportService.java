@@ -2,13 +2,18 @@ package org.ecommerce.backend.service;
 
 import io.quarkus.hibernate.orm.panache.Panache;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
+import org.ecommerce.common.repository.ProductImportRepository;
 
 import java.io.PrintWriter;
 import java.util.stream.Stream;
 
 @ApplicationScoped
 public class ProductExportService {
+
+    @Inject
+    ProductImportRepository productImportRepository;
 
     private static final String CSV_HEADER =
             "sku,name,description,short_description,category_slug,brand_slug,retail_price,retail_sale_price,wholesale_price,wholesale_sale_price,stock,images,attributes";

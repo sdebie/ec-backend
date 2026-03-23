@@ -19,6 +19,7 @@ import org.ecommerce.common.enums.PriceTypeEn;
 import org.ecommerce.common.enums.ProductImportValidationStatusEn;
 import org.ecommerce.common.enums.ProductTypeEn;
 import org.ecommerce.common.enums.ProductUploadStatusEn;
+import org.ecommerce.common.repository.ProductImportRepository;
 import org.jboss.logging.Logger;
 
 import java.io.BufferedReader;
@@ -42,6 +43,9 @@ public class ProductImportService {
 
     @Inject
     EntityManager entityManager;
+
+    @Inject
+    ProductImportRepository productImportRepository;
 
     private static final Logger LOG = Logger.getLogger(ProductImportService.class);
 
