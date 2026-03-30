@@ -52,15 +52,19 @@ public class ImageService
     @Transactional
     public String uploadImage(FileUpload file, ImageTypeEn imageType, UUID entityId) throws IOException
     {
+        Path thumbDirectory = Paths.get(storagePath, "thumbnails");
+
         // 1. Ensure the directory exists (extra safety)
         Path root = Paths.get(storagePath);
+
         if (!Files.exists(root)) {
             Files.createDirectories(root);
         }
 
         // 2. Generate a unique filename using UUID
         String extension = getFileExtension(file.fileName());
-        String newFileName = UUID.randomUUID().toString() + extension;
+        String newFileName = UUID.randomUUID() + extension;
+        Path thumbPath = thumbDirectory.resolve(newFileName);
 
         // 3. Move the uploaded temp file to your storage path
         Path targetPath = root.resolve(newFileName);
@@ -71,6 +75,12 @@ public class ImageService
             System.out.println("Creating ProductImageEntity for product: " + entityId + " URL:" + newFileName);
             createProductImage(newFileName, entityId);
         }
+
+        //4.1 Create thumbnail
+        net.coobird.thumbnailator.Thumbnails.of(targetPath.toFile())
+                .size(150, 150)
+                .outputQuality(0.8)
+                .toFile(thumbPath.toFile());
 
         // 5. Return the filename (or relative path) to store in the DB
         return newFileName;
