@@ -9,9 +9,10 @@ import org.ecommerce.common.dto.BrandDto;
 import org.ecommerce.common.entity.BrandEntity;
 import org.ecommerce.common.exception.BrandAlreadyExistsException;
 import org.ecommerce.common.exception.BrandNotFoundException;
+import org.ecommerce.common.query.FilterRequest;
+import org.ecommerce.common.query.PageRequest;
 import org.ecommerce.common.repository.BrandRepository;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -22,15 +23,18 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
-@Disabled
 @QuarkusTest
 class BrandServiceTest
 {
     @Inject
     BrandService brandService;
-
+    @InjectMock
+    BrandRepository brandRepository;
     @InjectMock
     BrandMapper brandMapper;
+
+    private final PageRequest pageRequest = new PageRequest();
+    private final FilterRequest filterRequest = new FilterRequest();
 
     @BeforeEach
     void setUp()
@@ -38,19 +42,19 @@ class BrandServiceTest
         PanacheMock.mock(BrandEntity.class);
     }
 
-//    @Test
-//    void getAllBrands_shouldReturnAllBrands()
-//    {
-//        BrandEntity brand1 = new BrandEntity();
-//        BrandEntity brand2 = new BrandEntity();
-//
-//        when(BrandEntity.listAll()).thenReturn(List.of(brand1, brand2));
-//
-//        List<BrandEntity> result = brandService.getAllBrands();
-//        assertEquals(2, result.size());
-//        assertSame(brand1, result.get(0));
-//        assertSame(brand2, result.get(1));
-//    }
+    @Test
+    void getAllBrands_shouldReturnAllBrands()
+    {
+        BrandDto brand1 = new BrandDto();
+        BrandDto brand2 = new BrandDto();
+
+        when(brandMapper.mapEntityToDto(brandRepository.findAll(pageRequest, filterRequest))).thenReturn(List.of(brand1, brand2));
+
+        List<BrandDto> result = brandService.getAllBrands(pageRequest, filterRequest);
+        assertEquals(2, result.size());
+        assertSame(brand1, result.get(0));
+        assertSame(brand2, result.get(1));
+    }
 
     @Test
     void getBrandById_shouldThrowExceptionWhenIdIsNull()
@@ -64,11 +68,13 @@ class BrandServiceTest
     {
         UUID id = UUID.randomUUID();
         BrandEntity brandEntity = new BrandEntity();
+        BrandDto brandDto = new BrandDto();
 
-        when(BrandEntity.findById(id)).thenReturn(brandEntity);
+        when(brandRepository.findById(id)).thenReturn(brandEntity);
+        when(brandMapper.mapEntityToDto(brandRepository.findById(id))).thenReturn(brandDto);
 
-        BrandEntity result = brandService.getBrandById(id);
-        assertSame(brandEntity, result);
+        BrandDto result = brandService.getBrandById(id);
+        assertSame(brandDto, result);
     }
 
     @Test
@@ -76,7 +82,7 @@ class BrandServiceTest
     {
         UUID id = UUID.randomUUID();
 
-        when(BrandEntity.findById(id)).thenReturn(null);
+        when(brandRepository.findById(id)).thenReturn(null);
 
         BrandNotFoundException ex = assertThrows(BrandNotFoundException.class, () -> brandService.getBrandById(id));
         assertEquals("Brand id " + id + " not found", ex.getMessage());
@@ -117,7 +123,7 @@ class BrandServiceTest
         brandService.createBrand(brandDto);
 
         verify(brandMapper).mapDtoToEntity(eq(brandDto), any(BrandEntity.class));
-        verify(brandEntity).persist();
+        verify(brandRepository).persist(brandEntity);
     }
 
     @Test
@@ -131,8 +137,9 @@ class BrandServiceTest
         brandDto.setSlug("test-brand");
 
         BrandEntity existingBrandEntity = new BrandEntity();
+        existingBrandEntity.id = id;
 
-        when(BrandEntity.findById(id)).thenReturn(existingBrandEntity);
+        when(brandRepository.findById(id)).thenReturn(existingBrandEntity);
 
         BrandAlreadyExistsException ex = assertThrows(BrandAlreadyExistsException.class, () -> brandService.createBrand(brandDto));
         assertEquals("Brand with id " + brandDto.getId() + " already exists", ex.getMessage());
@@ -148,7 +155,7 @@ class BrandServiceTest
         brandDto.setDescription("Test Description");
         brandDto.setSlug("test-brand");
 
-        when(BrandEntity.findById(id)).thenReturn(null);
+        when(brandRepository.findById(id)).thenReturn(null);
 
         BrandNotFoundException ex = assertThrows(BrandNotFoundException.class, () -> brandService.updateBrand(id, brandDto));
         assertEquals("Brand with id " + brandDto.getId() + " not found", ex.getMessage());
@@ -166,14 +173,15 @@ class BrandServiceTest
         brandDto.setSlug("test-brand");
 
         BrandEntity existingBrandEntity = mock();
+        existingBrandEntity.id = id;
 
-        when(BrandEntity.findById(id)).thenReturn(existingBrandEntity);
+        when(brandRepository.findById(id)).thenReturn(existingBrandEntity);
         when(brandMapper.mapDtoToEntity(brandDto, existingBrandEntity)).thenReturn(existingBrandEntity);
 
         brandService.updateBrand(id, brandDto);
 
         verify(brandMapper).mapDtoToEntity(brandDto, existingBrandEntity);
-        verify(existingBrandEntity).persist();
+        verify(brandRepository).persist(existingBrandEntity);
     }
 
     @Test
@@ -188,7 +196,7 @@ class BrandServiceTest
     {
         UUID id = UUID.randomUUID();
 
-        when(BrandEntity.findById(id)).thenReturn(null);
+        when(brandRepository.findById(id)).thenReturn(null);
 
         BrandNotFoundException ex = assertThrows(BrandNotFoundException.class, () -> brandService.deleteBrand(id));
         assertEquals("Brand with id " + id + " not found", ex.getMessage());
@@ -200,9 +208,9 @@ class BrandServiceTest
         UUID id = UUID.randomUUID();
         BrandEntity brandEntity = mock();
 
-        when(BrandEntity.findById(id)).thenReturn(brandEntity);
+        when(brandRepository.findById(id)).thenReturn(brandEntity);
         brandService.deleteBrand(id);
 
-        verify(brandEntity).delete();
+        verify(brandRepository).delete(brandEntity);
     }
 }

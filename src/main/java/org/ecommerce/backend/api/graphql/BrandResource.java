@@ -5,7 +5,6 @@ import org.eclipse.microprofile.graphql.GraphQLApi;
 import org.eclipse.microprofile.graphql.Mutation;
 import org.eclipse.microprofile.graphql.Name;
 import org.eclipse.microprofile.graphql.Query;
-import org.ecommerce.backend.mapper.BrandMapper;
 import org.ecommerce.backend.service.BrandService;
 import org.ecommerce.common.dto.BrandDto;
 import org.ecommerce.common.query.FilterRequest;
@@ -20,13 +19,10 @@ public class BrandResource
     @Inject
     BrandService brandService;
 
-    @Inject
-    BrandMapper brandMapper;
-
     @Query("allBrands")
     public List<BrandDto> getAllBrands(@Name("pageRequest") PageRequest pageRequest, @Name("filterRequest") FilterRequest filterRequest)
     {
-        return brandMapper.mapEntityToDtoList(brandService.getAllBrands(pageRequest, filterRequest));
+        return brandService.getAllBrands(pageRequest, filterRequest);
     }
 
     @Query("brandCount")
@@ -38,7 +34,7 @@ public class BrandResource
     @Query("brand")
     public BrandDto getBrandById(@Name("id") UUID id)
     {
-        return brandMapper.mapEntityToDto(brandService.getBrandById(id));
+        return brandService.getBrandById(id);
     }
 
     @Mutation("createBrand")

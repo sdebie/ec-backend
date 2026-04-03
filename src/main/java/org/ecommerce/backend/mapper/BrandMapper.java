@@ -18,7 +18,7 @@ public interface BrandMapper
 {
     BrandDto mapEntityToDto(BrandEntity brandEntity);
 
-    List<BrandDto> mapEntityToDtoList(List<BrandEntity> allBrands);
+    List<BrandDto> mapEntityToDto(List<BrandEntity> allBrands);
 
     BrandEntity mapDtoToEntity(BrandDto brandDto, @MappingTarget BrandEntity brandEntity);
 }
