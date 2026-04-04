@@ -1,7 +1,7 @@
 package org.ecommerce.backend.mapper;
 
-import org.ecommerce.common.dto.BrandDto;
-import org.ecommerce.common.entity.BrandEntity;
+import org.ecommerce.common.dto.CategoryDto;
+import org.ecommerce.common.entity.CategoryEntity;
 import org.mapstruct.Mapper;
 import org.mapstruct.MappingTarget;
 
@@ -14,11 +14,14 @@ import static org.mapstruct.NullValuePropertyMappingStrategy.SET_TO_NULL;
 @Mapper(componentModel = "cdi", nullValueMappingStrategy = RETURN_NULL,
         nullValuePropertyMappingStrategy = SET_TO_NULL,
         nullValueCheckStrategy = ALWAYS)
-public interface BrandMapper
+public interface CategoryMapper
 {
-    BrandDto mapEntityToDto(BrandEntity brandEntity);
+    CategoryDto mapEntityToDto(CategoryEntity categoryEntity);
 
-    List<BrandDto> mapEntityToDto(List<BrandEntity> allBrands);
+    List<CategoryDto> mapEntityToDto(List<CategoryEntity> categoryEntities);
 
-    BrandEntity mapDtoToEntity(BrandDto brandDto, @MappingTarget BrandEntity brandEntity);
+    CategoryEntity mapDtoToEntity(CategoryDto categoryDto);
+
+    CategoryEntity mapDtoToEntity(CategoryDto categoryDto, @MappingTarget CategoryEntity categoryEntity);
+
 }

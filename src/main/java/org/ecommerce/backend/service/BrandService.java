@@ -26,9 +26,10 @@ public class BrandService
     @Inject
     BrandRepository brandRepository;
 
-    public List<BrandEntity> getAllBrands(PageRequest pageRequest,  FilterRequest filterRequest)
+    public List<BrandDto> getAllBrands(PageRequest pageRequest, FilterRequest filterRequest)
     {
-        return brandRepository.findAll(pageRequest, filterRequest);
+        List<BrandEntity> brandEntities = brandRepository.findAll(pageRequest, filterRequest);
+        return brandMapper.mapEntityToDto(brandEntities);
     }
 
     public long brandCount(FilterRequest filterRequest)
@@ -36,7 +37,7 @@ public class BrandService
         return brandRepository.count(filterRequest);
     }
 
-    public BrandEntity getBrandById(UUID id)
+    public BrandDto getBrandById(UUID id)
     {
         if (id == null) {
             throw new IllegalArgumentException("Brand id is null");
@@ -47,7 +48,7 @@ public class BrandService
             throw new BrandNotFoundException("Brand id " + id + " not found");
         }
 
-        return brandEntity;
+        return brandMapper.mapEntityToDto(brandEntity);
     }
 
     @Transactional
@@ -74,10 +75,12 @@ public class BrandService
 
                 BrandEntity brandEntity = brandMapper.mapDtoToEntity(brandDto, new BrandEntity());
                 brandRepository.persist(brandEntity);
-
             }
+        } catch (BrandNotFoundException | BrandAlreadyExistsException e) {
+            log.warn("Brand create operation failed: {}", e.getMessage());
+            throw e;
         } catch (Exception e) {
-            log.error("Error creating brand: {}", e.getMessage(), e);
+            log.error("Unexpected error creating brand: {}", e.getMessage(), e);
             throw e;
         }
     }
@@ -106,7 +109,7 @@ public class BrandService
             if (validateFields(brandDto)) {
                 brandDto.setId(id);
 
-                BrandEntity brandEntity = BrandEntity.findById(id);
+                BrandEntity brandEntity = brandRepository.findById(id);
                 if (brandEntity == null) {
                     throw new BrandNotFoundException("Brand with id " + brandDto.getId() + " not found");
                 }
@@ -122,8 +125,11 @@ public class BrandService
                 brandMapper.mapDtoToEntity(brandDto, brandEntity);
                 brandRepository.persist(brandEntity);
             }
+        } catch (BrandNotFoundException | BrandAlreadyExistsException e) {
+            log.warn("Brand update operation failed: {}", e.getMessage());
+            throw e;
         } catch (Exception e) {
-            log.error("Error updating brand: {}", e.getMessage(), e);
+            log.error("Unexpected error updating brand: {}", e.getMessage(), e);
             throw e;
         }
     }
@@ -136,14 +142,17 @@ public class BrandService
                 throw new IllegalArgumentException("Brand id is null");
             }
 
-            BrandEntity brandEntity = BrandEntity.findById(id);
+            BrandEntity brandEntity = brandRepository.findById(id);
             if (brandEntity == null) {
                 throw new BrandNotFoundException("Brand with id " + id + " not found");
             }
 
             brandRepository.delete(brandEntity);
+        } catch (BrandNotFoundException | BrandAlreadyExistsException e) {
+            log.warn("Brand operation failed: {}", e.getMessage());
+            throw e;
         } catch (Exception e) {
-            log.error("Error deleting brand: {}", e.getMessage(), e);
+            log.error("Unexpected error deleting brand: {}", e.getMessage(), e);
             throw e;
         }
     }
