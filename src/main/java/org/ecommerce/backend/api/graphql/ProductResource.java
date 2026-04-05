@@ -3,14 +3,19 @@ package org.ecommerce.backend.api.graphql;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import org.eclipse.microprofile.graphql.*;
-import org.ecommerce.common.dto.ProductListItemDto;
-import org.ecommerce.common.dto.ProductListDto;
-import org.ecommerce.common.dto.ProductVariantDto;
 import org.ecommerce.backend.service.ProductService;
+import org.ecommerce.common.dto.ProductListDto;
+import org.ecommerce.common.dto.ProductListItemDto;
+import org.ecommerce.common.dto.ProductVariantDto;
+import org.ecommerce.common.query.Filter;
+import org.ecommerce.common.query.FilterRequest;
+import org.ecommerce.common.query.PageRequest;
+import org.ecommerce.common.query.enums.FilterOperator;
 
 import jakarta.transaction.Transactional;
 import jakarta.transaction.Transactional.TxType;
 
+import java.util.ArrayList;
 import java.util.List;
 
 @ApplicationScoped
@@ -21,10 +26,33 @@ public class ProductResource
     ProductService productService;
 
     @Query("productList")
-    @Description("Returns a simple list of products with price and sales price for the selected category")
+    @Description("Returns a paged list of products with price and sales price. Supports legacy categoryName and filterRequest.")
     @Transactional(value = TxType.SUPPORTS)
-    public List<ProductListItemDto> getProductsList(@Name("categoryName") String categoryName) {
-        return productService.getAllProducts(categoryName);
+    public List<ProductListItemDto> getProductsList(
+            @Name("pageRequest") PageRequest pageRequest,
+            @Name("filterRequest") FilterRequest filterRequest,
+            @Name("categoryName") String categoryName)
+    {
+        FilterRequest resolvedFilterRequest = filterRequest != null ? filterRequest : new FilterRequest();
+
+        // Backward compatibility: if categoryName is provided, apply it as category.name = :categoryName.
+        if (categoryName != null && !categoryName.isBlank() && !"ALL".equalsIgnoreCase(categoryName)) {
+            List<Filter> filters = resolvedFilterRequest.getFilters() != null
+                    ? resolvedFilterRequest.getFilters()
+                    : new ArrayList<>();
+            filters.add(new Filter("category.name", FilterOperator.EQUALS, categoryName));
+            resolvedFilterRequest.setFilters(filters);
+        }
+
+        return productService.getAllProducts(pageRequest, resolvedFilterRequest);
+    }
+
+    @Query("productCount")
+    @Description("Returns the total number of products matching the given filter.")
+    @Transactional(value = TxType.SUPPORTS)
+    public long productCount(@Name("filterRequest") FilterRequest filterRequest)
+    {
+        return productService.productCount(filterRequest);
     }
 
     @Query("variantsByIds")
@@ -40,6 +68,4 @@ public class ProductResource
     public ProductListDto getProductWithVariants(@Name("productId") String productId) {
         return productService.getProductWithVariantsDto(productId);
     }
-
-
 }
