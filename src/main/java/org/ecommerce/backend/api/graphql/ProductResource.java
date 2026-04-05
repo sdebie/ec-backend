@@ -62,10 +62,10 @@ public class ProductResource
         return productService.getVariantsByIds(ids);
     }
 
-    @Query("getProductWithVariants")
+    @Query("getProductAndVariants")
     @Description("Fetch a product with all variants for a given product id, including product images and prices for the selected category")
     @Transactional(value = TxType.SUPPORTS)
-    public ProductListDto getProductWithVariants(@Name("productId") String productId) {
-        return productService.getProductWithVariantsDto(productId);
+    public ProductListDto getProductAndVariants(@Name("productId") String productId) {
+        return productService.getProductAndVariantsDto(productId);
     }
 }

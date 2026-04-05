@@ -9,7 +9,6 @@ import org.ecommerce.backend.mapper.ProductMapper;
 import org.ecommerce.common.dto.ProductListDto;
 import org.ecommerce.common.dto.ProductListItemDto;
 import org.ecommerce.common.dto.ProductVariantDto;
-import org.ecommerce.common.entity.ProductEntity;
 import org.ecommerce.common.enums.PriceTypeEn;
 import org.ecommerce.common.query.FilterRequest;
 import org.ecommerce.common.query.PageRequest;
@@ -41,30 +40,35 @@ public class ProductService
     @Transactional(value = TxType.SUPPORTS)
     public List<ProductListItemDto> getAllProducts(PageRequest pageRequest, FilterRequest filterRequest)
     {
-        List<ProductEntity> products = productRepository.findAll(pageRequest, filterRequest);
+        List<ProductListItemDto> products = productRepository.findAllProductListItems(pageRequest, filterRequest);
 
         return products.stream().map(product -> {
-            UUID productId = product.id;
+            if (product.id == null) {
+                product.variantIds = List.of();
+                product.productImages = List.of();
+                product.retailPrice = BigDecimal.ZERO;
+                product.retailSalesPrice = BigDecimal.ZERO;
+                product.wholesalePrice = BigDecimal.ZERO;
+                product.wholesaleSalesPrice = BigDecimal.ZERO;
+                return product;
+            }
 
-            List<String> variantIds = productVariantRepository.findByProductIdWithProduct(productId)
+            UUID productId = UUID.fromString(product.id);
+
+            product.variantIds = productVariantRepository.findByVariantsForProductId(productId)
                     .stream()
                     .map(v -> v.id.toString())
                     .collect(Collectors.toList());
 
-            var productImages = productMapper.mapImageEntitiesToDtos(
+            product.productImages = productMapper.mapImageEntitiesToDtos(
                     productImageRepository.findByProductId(productId));
 
-            BigDecimal retailPrice        = productVariantRepository.getMinimumPrice(productId, PriceTypeEn.RETAIL_PRICE);
-            BigDecimal retailSalePrice    = productVariantRepository.getMinimumPrice(productId, PriceTypeEn.RETAIL_SALE_PRICE);
-            BigDecimal wholesalePrice     = productVariantRepository.getMinimumPrice(productId, PriceTypeEn.WHOLESALE_PRICE);
-            BigDecimal wholesaleSalePrice = productVariantRepository.getMinimumPrice(productId, PriceTypeEn.WHOLESALE_SALE_PRICE);
+            product.retailPrice = productVariantRepository.getMinimumPrice(productId, PriceTypeEn.RETAIL_PRICE);
+            product.retailSalesPrice = productVariantRepository.getMinimumPrice(productId, PriceTypeEn.RETAIL_SALE_PRICE);
+            product.wholesalePrice = productVariantRepository.getMinimumPrice(productId, PriceTypeEn.WHOLESALE_PRICE);
+            product.wholesaleSalesPrice = productVariantRepository.getMinimumPrice(productId, PriceTypeEn.WHOLESALE_SALE_PRICE);
 
-            String categoryName = product.category != null ? product.category.name : null;
-
-            return new ProductListItemDto(
-                    productId.toString(), product.name, product.description,
-                    retailPrice, retailSalePrice, wholesalePrice, wholesaleSalePrice,
-                    productImages, variantIds, categoryName);
+            return product;
         }).collect(Collectors.toList());
     }
 
@@ -85,12 +89,12 @@ public class ProductService
     }
 
     @Transactional(value = TxType.SUPPORTS)
-    public ProductListDto getProductWithVariantsDto(String productId)
+    public ProductListDto getProductAndVariantsDto(String productId)
     {
         UUID pid = UUID.fromString(productId);
         return productMapper.mapToProductListDto(
                 productId,
-                productVariantRepository.findByProductIdWithProduct(pid),
+                productVariantRepository.findByVariantsForProductId(pid),
                 productImageRepository.findByProductId(pid));
     }
 }
