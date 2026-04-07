@@ -5,7 +5,10 @@ import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
 import org.ecommerce.backend.mapper.ProductMapper;
 import org.ecommerce.common.dto.ProductImageDto;
+import org.ecommerce.common.dto.ProductInformationDto;
 import org.ecommerce.common.dto.ProductListItemDto;
+import org.ecommerce.common.entity.ProductEntity;
+import org.ecommerce.common.entity.ProductImageEntity;
 import org.ecommerce.common.entity.ProductVariantEntity;
 import org.ecommerce.common.enums.PriceTypeEn;
 import org.ecommerce.common.query.FilterRequest;
@@ -21,6 +24,7 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -121,6 +125,48 @@ class ProductServiceTest
         assertEquals(BigDecimal.ZERO, repositoryDto.retailSalesPrice);
         assertEquals(BigDecimal.ZERO, repositoryDto.wholesalePrice);
         assertEquals(BigDecimal.ZERO, repositoryDto.wholesaleSalesPrice);
+    }
+
+    @Test
+    void getProductInformationDto_shouldMapNestedProductWithVariantsAndImages()
+    {
+        UUID productId = UUID.randomUUID();
+        ProductEntity product = new ProductEntity();
+        product.id = productId;
+        product.name = "Desk Lamp";
+
+        ProductVariantEntity variant = new ProductVariantEntity();
+        variant.id = UUID.randomUUID();
+
+        List<ProductVariantEntity> variants = List.of(variant);
+        List<ProductImageEntity> images = List.of();
+        ProductInformationDto mappedDto = new ProductInformationDto();
+
+        when(productRepository.findByIdWithCategoryAndBrand(productId)).thenReturn(product);
+        when(productVariantRepository.findByVariantsForProductId(productId)).thenReturn(variants);
+        when(productImageRepository.findByProductId(productId)).thenReturn(images);
+        when(productMapper.mapToProductInformationDto(product, variants, images)).thenReturn(mappedDto);
+
+        ProductInformationDto result = productService.getProductInformationDto(productId.toString());
+
+        assertSame(mappedDto, result);
+        verify(productRepository).findByIdWithCategoryAndBrand(productId);
+        verify(productVariantRepository).findByVariantsForProductId(productId);
+        verify(productImageRepository).findByProductId(productId);
+        verify(productMapper).mapToProductInformationDto(product, variants, images);
+    }
+
+    @Test
+    void getProductInformationDto_shouldReturnNullWhenProductDoesNotExist()
+    {
+        UUID productId = UUID.randomUUID();
+
+        when(productRepository.findByIdWithCategoryAndBrand(productId)).thenReturn(null);
+
+        ProductInformationDto result = productService.getProductInformationDto(productId.toString());
+
+        assertNull(result);
+        verify(productRepository).findByIdWithCategoryAndBrand(productId);
     }
 }
 

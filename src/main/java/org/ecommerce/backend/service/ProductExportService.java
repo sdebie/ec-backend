@@ -16,10 +16,11 @@ public class ProductExportService {
     ProductImportRepository productImportRepository;
 
     private static final String CSV_HEADER =
-            "sku,name,description,short_description,category_slug,brand_slug,retail_price,retail_sale_price,wholesale_price,wholesale_sale_price,stock,images,attributes";
+            "product_slug,sku,name,description,short_description,category_slug,brand_slug,retail_price,retail_sale_price,wholesale_price,wholesale_sale_price,stock,images,attributes";
 
     private static final String EXPORT_SQL = """
             SELECT
+                p.slug AS product_slug,
                 v.sku,
                 p.name,
                 p.description,

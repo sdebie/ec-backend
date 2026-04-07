@@ -1,9 +1,11 @@
 package org.ecommerce.backend.mapper;
 
 import org.ecommerce.common.dto.ProductImageDto;
-import org.ecommerce.common.dto.ProductListDto;
+import org.ecommerce.common.dto.ProductDto;
+import org.ecommerce.common.dto.ProductInformationDto;
 import org.ecommerce.common.dto.ProductVariantDto;
 import org.ecommerce.common.dto.VariantPriceDto;
+import org.ecommerce.common.entity.ProductEntity;
 import org.ecommerce.common.entity.ProductImageEntity;
 import org.ecommerce.common.entity.ProductVariantEntity;
 import org.ecommerce.common.entity.VariantPricesEntity;
@@ -52,6 +54,16 @@ public interface ProductMapper
 
     List<ProductVariantDto> mapVariantEntitiesToDtos(List<ProductVariantEntity> entities);
 
+    // ── ProductEntity → ProductDto ─────────────────────────────────────────
+
+    @Mapping(target = "id", expression = "java(entity.id == null ? null : entity.id.toString())")
+    @Mapping(target = "shortDescription", source = "shorDescription")
+    @Mapping(target = "productType", expression = "java(entity.productType == null ? null : entity.productType.name())")
+    @Mapping(target = "createdAt", expression = "java(entity.createdAt == null ? null : entity.createdAt.toString())")
+    @Mapping(target = "categoryId", expression = "java(entity.category == null || entity.category.id == null ? null : entity.category.id.toString())")
+    @Mapping(target = "brandId", expression = "java(entity.brand == null || entity.brand.id == null ? null : entity.brand.id.toString())")
+    ProductDto mapProductEntityToDto(ProductEntity entity);
+
     /**
      * Derives the four convenience price fields from the mapped {@code variantPrices} list.
      * Runs automatically after {@link #mapVariantEntityToDto(ProductVariantEntity)}.
@@ -73,25 +85,16 @@ public interface ProductMapper
 
     // ── Composite: variants + images → ProductListDto ────────────────────
 
-    /**
-     * Builds a {@link ProductListDto} from the raw entity collections.
-     * Product name and description are resolved from the first variant's product relation.
-     */
-    default ProductListDto mapToProductListDto(String productId,
-                                               List<ProductVariantEntity> variants,
-                                               List<ProductImageEntity> images)
+    default ProductInformationDto mapToProductInformationDto(ProductEntity product,
+                                                             List<ProductVariantEntity> variants,
+                                                             List<ProductImageEntity> images)
     {
+        if (product == null) return null;
+
         List<ProductImageDto> imageDtos  = images  != null ? mapImageEntitiesToDtos(images)      : Collections.emptyList();
         List<ProductVariantDto> variantDtos = variants != null ? mapVariantEntitiesToDtos(variants) : Collections.emptyList();
 
-        String name        = null;
-        String description = null;
-        if (variants != null && !variants.isEmpty() && variants.getFirst().product != null) {
-            name        = variants.getFirst().product.name;
-            description = variants.getFirst().product.description;
-        }
-
-        return new ProductListDto(productId, name, description, imageDtos, variantDtos);
+        return new ProductInformationDto(mapProductEntityToDto(product), imageDtos, variantDtos);
     }
 }
 

@@ -6,9 +6,10 @@ import jakarta.transaction.Transactional;
 import jakarta.transaction.Transactional.TxType;
 import lombok.extern.slf4j.Slf4j;
 import org.ecommerce.backend.mapper.ProductMapper;
-import org.ecommerce.common.dto.ProductListDto;
+import org.ecommerce.common.dto.ProductInformationDto;
 import org.ecommerce.common.dto.ProductListItemDto;
 import org.ecommerce.common.dto.ProductVariantDto;
+import org.ecommerce.common.entity.ProductEntity;
 import org.ecommerce.common.enums.PriceTypeEn;
 import org.ecommerce.common.query.FilterRequest;
 import org.ecommerce.common.query.PageRequest;
@@ -89,11 +90,16 @@ public class ProductService
     }
 
     @Transactional(value = TxType.SUPPORTS)
-    public ProductListDto getProductAndVariantsDto(String productId)
+    public ProductInformationDto getProductInformationDto(String productId)
     {
         UUID pid = UUID.fromString(productId);
-        return productMapper.mapToProductListDto(
-                productId,
+        ProductEntity product = productRepository.findByIdWithCategoryAndBrand(pid);
+        if (product == null) {
+            return null;
+        }
+
+        return productMapper.mapToProductInformationDto(
+                product,
                 productVariantRepository.findByVariantsForProductId(pid),
                 productImageRepository.findByProductId(pid));
     }

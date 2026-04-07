@@ -4,7 +4,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import org.eclipse.microprofile.graphql.*;
 import org.ecommerce.backend.service.ProductService;
-import org.ecommerce.common.dto.ProductListDto;
+import org.ecommerce.common.dto.ProductInformationDto;
 import org.ecommerce.common.dto.ProductListItemDto;
 import org.ecommerce.common.dto.ProductVariantDto;
 import org.ecommerce.common.query.Filter;
@@ -62,10 +62,10 @@ public class ProductResource
         return productService.getVariantsByIds(ids);
     }
 
-    @Query("getProductAndVariants")
+    @Query("getProductInformation")
     @Description("Fetch a product with all variants for a given product id, including product images and prices for the selected category")
     @Transactional(value = TxType.SUPPORTS)
-    public ProductListDto getProductAndVariants(@Name("productId") String productId) {
-        return productService.getProductAndVariantsDto(productId);
+    public ProductInformationDto getProductInformation(@Name("productId") String productId) {
+        return productService.getProductInformationDto(productId);
     }
 }
