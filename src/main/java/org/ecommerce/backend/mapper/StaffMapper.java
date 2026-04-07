@@ -1,7 +1,7 @@
 package org.ecommerce.backend.mapper;
 
-import org.ecommerce.common.dto.BrandDto;
-import org.ecommerce.common.entity.BrandEntity;
+import org.ecommerce.common.dto.StaffDto;
+import org.ecommerce.common.entity.StaffUserEntity;
 import org.mapstruct.Mapper;
 import org.mapstruct.MappingTarget;
 
@@ -14,11 +14,11 @@ import static org.mapstruct.NullValuePropertyMappingStrategy.SET_TO_NULL;
 @Mapper(componentModel = "cdi", nullValueMappingStrategy = RETURN_NULL,
         nullValuePropertyMappingStrategy = SET_TO_NULL,
         nullValueCheckStrategy = ALWAYS)
-public interface BrandMapper
+public interface StaffMapper
 {
-    BrandDto mapEntityToDto(BrandEntity brandEntity);
+    StaffDto mapEntityToDto(StaffUserEntity staffUser);
 
-    List<BrandDto> mapEntityToDto(List<BrandEntity> allBrands);
+    List<StaffDto> mapEntityToDto(List<StaffUserEntity> allStaffUsers);
 
-    BrandEntity mapDtoToEntity(BrandDto brandDto, @MappingTarget BrandEntity brandEntity);
+    StaffUserEntity mapDtoToEntity(StaffDto staffDto, @MappingTarget StaffUserEntity staffUserEntity);
 }

@@ -2,6 +2,7 @@ package org.ecommerce.backend.service;
 
 import jakarta.transaction.Transactional;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.jboss.logging.Logger;
 import org.jboss.resteasy.reactive.multipart.FileUpload;
 import org.ecommerce.common.enums.ImageTypeEn;
 import org.ecommerce.common.entity.ProductImageEntity;
@@ -25,8 +26,10 @@ import java.util.stream.Collectors;
 @ApplicationScoped
 public class ImageService
 {
+    private static final Logger LOG = Logger.getLogger(ImageService.class);
+
     @ConfigProperty(name = "storage.path")
-    public String storagePath;
+    String storagePath;
 
     @Inject
     EntityManager entityManager;
@@ -60,15 +63,18 @@ public class ImageService
 
         // 2. Generate a unique filename using UUID
         String extension = getFileExtension(file.fileName());
-        String newFileName = UUID.randomUUID().toString() + extension;
+        String newFileName = UUID.randomUUID() + extension;
 
         // 3. Move the uploaded temp file to your storage path
         Path targetPath = root.resolve(newFileName);
         Files.copy(file.filePath(), targetPath);
 
+        // 3.5 Generate thumbnail for uploaded image
+        createThumbnail(targetPath, newFileName);
+
         // 4. If image type is PRODUCT and entityId is provided, create ProductImageEntity
         if (imageType == ImageTypeEn.PRODUCT && entityId != null) {
-            System.out.println("Creating ProductImageEntity for product: " + entityId + " URL:" + newFileName);
+            LOG.debugf("Creating ProductImageEntity for product=%s url=%s", entityId, newFileName);
             createProductImage(newFileName, entityId);
         }
 
@@ -79,32 +85,34 @@ public class ImageService
     public Map<String, Integer> bulkUploadImages(List<FileUpload> uploads) {
         int uploadedCount = 0;
         int skippedCount = 0;
-        Path thumbDirectory = Paths.get(storagePath, "thumbnails");
+
+        if (uploads == null || uploads.isEmpty()) {
+            return Map.of("uploaded", 0, "skipped", 0);
+        }
+
+        try {
+            Files.createDirectories(Paths.get(storagePath));
+        } catch (IOException e) {
+            throw new RuntimeException("Unable to create storage directory", e);
+        }
 
         for (FileUpload file : uploads) {
             try {
                 Path fullPath = Paths.get(file.fileName());
                 String justTheFileName = fullPath.getFileName().toString();
                 Path targetPath = Paths.get(storagePath, justTheFileName);
-                Path thumbPath = thumbDirectory.resolve(justTheFileName);
 
                 // 2. ONLY save if it doesn't exist
                 if (Files.notExists(targetPath)) {
                     Files.copy(file.filePath(), targetPath);
-                    Files.createDirectories(thumbDirectory);
-
-                    net.coobird.thumbnailator.Thumbnails.of(targetPath.toFile())
-                            .size(150, 150)
-                            .outputQuality(0.8)
-                            .toFile(thumbPath.toFile());
+                    createThumbnail(targetPath, justTheFileName);
                     uploadedCount++;
                 } else {
                     skippedCount++;
                 }
             } catch (IOException e) {
                 // Log error for specific file but continue the loop
-                System.err.println("DEBUG::Error saving " + e.getMessage());
-                System.err.println("Error saving " + file.fileName());
+                LOG.errorf(e, "Error saving file: %s", file.fileName());
             }
         }
 
@@ -112,6 +120,17 @@ public class ImageService
                 "uploaded", uploadedCount,
                 "skipped", skippedCount
         );
+    }
+
+    private void createThumbnail(Path sourcePath, String fileName) throws IOException {
+        Path thumbDirectory = Paths.get(storagePath, "thumbnails");
+        Files.createDirectories(thumbDirectory);
+        Path thumbPath = thumbDirectory.resolve(fileName);
+
+        net.coobird.thumbnailator.Thumbnails.of(sourcePath.toFile())
+                .size(150, 150)
+                .outputQuality(0.8)
+                .toFile(thumbPath.toFile());
     }
 
     public List<String> listImages() {

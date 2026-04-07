@@ -95,6 +95,7 @@ public class ProductImportService {
 
                 List<String> validationErrors = new ArrayList<>();
 
+                staged.productSlug = normalizeSlug(getValue(record, "product_slug", "product-slug"));
                 staged.sku = getValue(record, "sku", "SKU");
                 staged.name = getValue(record, "name", "Name");
                 staged.description = getValue(record, "description", "description");
@@ -240,12 +241,10 @@ public class ProductImportService {
         if (variant != null) {
             product = variant.product;
         } else {
-            product = null;
-            if (!isBlank(staged.name)) {
-                product = ProductEntity.find("lower(name) = ?1", staged.name.trim().toLowerCase(Locale.ROOT)).firstResult();
-            }
+            product = findExistingProduct(staged.productSlug, staged.name);
             if (product == null) {
                 product = new ProductEntity();
+                product.slug = normalizeSlug(staged.productSlug);
                 product.name = staged.name;
                 product.description = staged.description;
                 product.shorDescription = staged.shortDescription;
@@ -346,7 +345,7 @@ public class ProductImportService {
     ) {
         CategoryEntity category = findExistingCategory(staged.categorySlug, validationErrors);
         BrandEntity brand = findExistingBrand(brandSlug, validationErrors);
-        ProductEntity existingProduct = findExistingProduct(staged.name);
+        ProductEntity existingProduct = findExistingProduct(staged.productSlug, staged.name);
         ProductVariantEntity existingVariant = findExistingVariant(staged.sku, validationErrors);
 
         staged.isValidCategory = category != null;
@@ -422,9 +421,16 @@ public class ProductImportService {
         return brand;
     }
 
-    private ProductEntity findExistingProduct(String productName) {
+    private ProductEntity findExistingProduct(String productSlug, String productName) {
+        String normalizedSlug = normalizeSlug(productSlug);
+        if (normalizedSlug != null) {
+            ProductEntity slugMatch = ProductEntity.find("lower(slug) = ?1", normalizedSlug).firstResult();
+            if (slugMatch != null) {
+                return slugMatch;
+            }
+        }
+
         if (isBlank(productName)) {
-            //validationErrors.add("name is required");
             return null;
         }
 
@@ -453,6 +459,7 @@ public class ProductImportService {
         }
 
         boolean nameChanged = !Objects.equals(trimToNull(staged.name), trimToNull(existingProduct.name));
+        boolean productSlugChanged = !Objects.equals(normalizeSlug(staged.productSlug), normalizeSlug(existingProduct.slug));
         boolean categoryChanged = !Objects.equals(trimToNull(staged.categorySlug), trimToNull(existingProduct.category != null ? existingProduct.category.slug : null));
         boolean brandChanged = !Objects.equals(trimToNull(staged.brandSlug), trimToNull(existingProduct.brand != null ? existingProduct.brand.slug : null));
         boolean stockChanged = !Objects.equals(stock, existingVariant.stockQuantity);
@@ -461,7 +468,7 @@ public class ProductImportService {
         boolean retailChanged = pricesDiffer(staged.retailPrice, findLatestPrice(existingVariant, PriceTypeEn.RETAIL_PRICE));
         boolean wholesaleChanged = pricesDiffer(staged.wholesalePrice, findLatestPrice(existingVariant, PriceTypeEn.WHOLESALE_PRICE));
 
-        return nameChanged || categoryChanged || brandChanged || stockChanged || attributesChanged || imagesChanged || retailChanged || wholesaleChanged;
+        return nameChanged || productSlugChanged || categoryChanged || brandChanged || stockChanged || attributesChanged || imagesChanged || retailChanged || wholesaleChanged;
     }
 
     private BigDecimal findLatestPrice(ProductVariantEntity variant, PriceTypeEn priceType) {
@@ -525,6 +532,11 @@ public class ProductImportService {
 
     private String trimToNull(String value) {
         return isBlank(value) ? null : value.trim();
+    }
+
+    private String normalizeSlug(String value) {
+        String normalized = trimToNull(value);
+        return normalized == null ? null : normalized.toLowerCase(Locale.ROOT);
     }
 
     private BigDecimal parseBigDecimal(CSVRecord record, List<String> validationErrors, String... headers) {

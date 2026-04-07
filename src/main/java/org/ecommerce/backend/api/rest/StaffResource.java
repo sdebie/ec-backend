@@ -13,7 +13,7 @@ import org.ecommerce.backend.service.AdminAuthService;
 @Path("/api/admin/auth")
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
-public class AdminAuthResource
+public class StaffResource
 {
     @Inject
     AdminAuthService authService;

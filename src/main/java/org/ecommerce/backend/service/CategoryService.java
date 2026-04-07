@@ -1,6 +1,13 @@
 package org.ecommerce.backend.service;
 
+import lombok.extern.slf4j.Slf4j;
+import org.ecommerce.backend.mapper.CategoryMapper;
+import org.ecommerce.common.dto.CategoryDto;
 import org.ecommerce.common.entity.CategoryEntity;
+import org.ecommerce.common.exception.CategoryAlreadyExistsException;
+import org.ecommerce.common.exception.CategoryNotFoundException;
+import org.ecommerce.common.query.FilterRequest;
+import org.ecommerce.common.query.PageRequest;
 import org.ecommerce.common.repository.CategoryRepository;
 
 import jakarta.enterprise.context.ApplicationScoped;
@@ -9,39 +16,127 @@ import jakarta.transaction.Transactional;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
+@Slf4j
 @ApplicationScoped
 public class CategoryService
 {
     @Inject
     CategoryRepository categoryRepository;
 
-    public List<CategoryEntity> getAllCategories()
+    @Inject
+    CategoryMapper categoryMapper;
+
+    public List<CategoryDto> getAllCategories(PageRequest pageRequest, FilterRequest filterRequest)
     {
-        return categoryRepository.listAll();
+        List<CategoryEntity> categoryEntities = categoryRepository.findAll(pageRequest, filterRequest);
+        return categoryMapper.mapEntityToDto(categoryEntities);
     }
 
-    public Optional<CategoryEntity> getCategoryById(Long id)
+    public long categoryCount(FilterRequest filterRequest)
     {
-        return Optional.ofNullable(categoryRepository.findById(id));
+        return categoryRepository.count(filterRequest);
+    }
+
+    public Optional<CategoryDto> getCategoryById(UUID id)
+    {
+        if (id == null) {
+            throw new IllegalArgumentException("Category id is null");
+        }
+
+        CategoryEntity categoryEntity = categoryRepository.findById(id);
+        return Optional.ofNullable(categoryMapper.mapEntityToDto(categoryEntity));
     }
 
     @Transactional
-    public CategoryEntity createCategory(CategoryEntity category)
+    public void createCategory(CategoryDto categoryDto)
     {
-        categoryRepository.persist(category);
-        return category;
+        try {
+            if (validateFields(categoryDto)) {
+                if (categoryDto.getId() != null) {
+                    CategoryEntity categoryEntity = categoryRepository.findById(categoryDto.getId());
+                    if (categoryEntity != null) {
+                        throw new CategoryAlreadyExistsException("Category with id " + categoryDto.getId() + " already exists");
+                    }
+                }
+
+                if (categoryRepository.findByNameExcludingId(categoryDto.getName(), null) != null) {
+                    throw new CategoryAlreadyExistsException("Category with name '" + categoryDto.getName() + "' already exists");
+                }
+
+                if (categoryRepository.findBySlugExcludingId(categoryDto.getSlug(), null) != null) {
+                    throw new CategoryAlreadyExistsException("Category with slug '" + categoryDto.getSlug() + "' already exists");
+                }
+                CategoryEntity categoryEntity = categoryMapper.mapDtoToEntity(categoryDto, new CategoryEntity());
+                categoryRepository.persist(categoryEntity);
+            }
+        } catch (Exception e) {
+            log.error("Error creating category: {}", e.getMessage(), e);
+            throw e;
+        }
+
+    }
+
+    private boolean validateFields(CategoryDto categoryDto)
+    {
+        if (categoryDto.getName() == null) {
+            throw new IllegalArgumentException("Category name is required");
+        }
+
+        if (categoryDto.getSlug() == null) {
+            throw new IllegalArgumentException("Category slug is required");
+        }
+
+        return true;
     }
 
     @Transactional
-    public CategoryEntity updateCategory(CategoryEntity category)
+    public void updateCategory(UUID id, CategoryDto categoryDto)
     {
-        return categoryRepository.getEntityManager().merge(category);
+        try {
+            if (validateFields(categoryDto)) {
+                categoryDto.setId(id);
+
+                CategoryEntity categoryEntity = CategoryEntity.findById(id);
+                if (categoryEntity == null) {
+                    throw new CategoryNotFoundException("Category with id " + categoryDto.getId() + " not found");
+                }
+
+                if (categoryRepository.findByNameExcludingId(categoryDto.getName(), id) != null) {
+                    throw new CategoryAlreadyExistsException("Category with name '" + categoryDto.getName() + "' already exists");
+                }
+
+                if (categoryRepository.findBySlugExcludingId(categoryDto.getSlug(), id) != null) {
+                    throw new CategoryAlreadyExistsException("Category with slug '" + categoryDto.getSlug() + "' already exists");
+                }
+
+                categoryMapper.mapDtoToEntity(categoryDto, categoryEntity);
+                categoryRepository.persist(categoryEntity);
+            }
+        } catch (Exception e) {
+            log.error("Error updating category: {}", e.getMessage(), e);
+            throw e;
+        }
     }
 
     @Transactional
-    public void deleteCategory(Long id)
+    public void deleteCategory(UUID id)
     {
-        categoryRepository.deleteById(id);
+        try {
+            if (id == null) {
+                throw new IllegalArgumentException("Category id is null");
+            }
+
+            CategoryEntity categoryEntity = CategoryEntity.findById(id);
+            if (categoryEntity == null) {
+                throw new CategoryNotFoundException("Category with id " + id + " not found");
+            }
+
+            categoryRepository.delete(categoryEntity);
+        } catch (Exception e) {
+            log.error("Error deleting category: {}", e.getMessage(), e);
+            throw e;
+        }
     }
 }
