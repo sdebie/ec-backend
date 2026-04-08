@@ -33,7 +33,7 @@ public class ProductUploadResource {
     public Response uploadCsv(ProductUploadFormDto form) {
         try {
             // 1. Resolve the admin user from the security context
-            StaffUserEntity admin = StaffUserEntity.find("username", "admin").firstResult();
+            StaffUserEntity admin = StaffUserEntity.findByEmail("admin@gmail.com");
 
             if (admin == null) {
                 return Response.status(Response.Status.UNAUTHORIZED).build();

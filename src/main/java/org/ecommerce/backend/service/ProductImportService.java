@@ -651,7 +651,7 @@ public class ProductImportService {
             dto.skippedRows = batch.skippedRows;
             dto.validationErrorCount = batch.validationErrorCount;
             dto.createdAt = batch.createdAt;
-            dto.uploadedByUsername = batch.uploadedBy != null ? batch.uploadedBy.username : null;
+            dto.uploadedByUsername = batch.uploadedBy != null ? batch.uploadedBy.email : null;
             return dto;
         }).collect(Collectors.toList());
     }

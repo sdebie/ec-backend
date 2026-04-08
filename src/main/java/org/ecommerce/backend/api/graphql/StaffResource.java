@@ -5,6 +5,7 @@ import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import org.eclipse.microprofile.graphql.Description;
 import org.eclipse.microprofile.graphql.GraphQLApi;
+import org.eclipse.microprofile.graphql.Mutation;
 import org.eclipse.microprofile.graphql.Name;
 import org.eclipse.microprofile.graphql.Query;
 import org.ecommerce.backend.service.StaffService;
@@ -47,6 +48,34 @@ public class StaffResource {
     public StaffDto getStaffById(@Name("id") UUID id)
     {
         return staffService.getStaffById(id);
+    }
+
+    @Mutation("addStaffUser")
+    @Description("Creates a new staff user")
+    @Transactional(value = Transactional.TxType.REQUIRED)
+    public void addStaffUser(@Name("staffDto") StaffDto staffDto)
+    {
+        if (staffDto == null) {
+            throw new IllegalArgumentException("StaffDto cannot be null");
+        }
+
+        staffService.createStaffUser(staffDto);
+    }
+
+    @Mutation("updateStaffUser")
+    @Description("Updates an existing staff user")
+    @Transactional(value = Transactional.TxType.REQUIRED)
+    public void updateStaffUser(@Name("id") UUID id, @Name("staffDto") StaffDto staffDto)
+    {
+        if (id == null) {
+            throw new IllegalArgumentException("Staff id is null");
+        }
+
+        if (staffDto == null) {
+            throw new IllegalArgumentException("StaffDto cannot be null");
+        }
+
+        staffService.updateStaffUser(id, staffDto);
     }
 
 }
