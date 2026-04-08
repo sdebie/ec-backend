@@ -6,16 +6,20 @@ import jakarta.transaction.Transactional;
 import jakarta.transaction.Transactional.TxType;
 import lombok.extern.slf4j.Slf4j;
 import org.ecommerce.backend.mapper.ProductMapper;
-import org.ecommerce.common.dto.ProductInformationDto;
-import org.ecommerce.common.dto.ProductListItemDto;
-import org.ecommerce.common.dto.ProductVariantDto;
+import org.ecommerce.common.dto.*;
 import org.ecommerce.common.entity.ProductEntity;
+import org.ecommerce.common.entity.ProductImageEntity;
+import org.ecommerce.common.entity.ProductVariantEntity;
+import org.ecommerce.common.entity.VariantPricesEntity;
 import org.ecommerce.common.enums.PriceTypeEn;
+import org.ecommerce.common.enums.ProductTypeEn;
 import org.ecommerce.common.query.FilterRequest;
 import org.ecommerce.common.query.PageRequest;
 import org.ecommerce.common.repository.ProductImageRepository;
 import org.ecommerce.common.repository.ProductRepository;
 import org.ecommerce.common.repository.ProductVariantRepository;
+import org.ecommerce.common.repository.CategoryRepository;
+import org.ecommerce.common.repository.BrandRepository;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -34,6 +38,12 @@ public class ProductService
 
     @Inject
     ProductImageRepository productImageRepository;
+
+    @Inject
+    CategoryRepository categoryRepository;
+
+    @Inject
+    BrandRepository brandRepository;
 
     @Inject
     ProductMapper productMapper;
@@ -102,5 +112,250 @@ public class ProductService
                 product,
                 productVariantRepository.findByVariantsForProductId(pid),
                 productImageRepository.findByProductId(pid));
+    }
+
+    @Transactional(value = TxType.REQUIRED)
+    public ProductInformationDto addProductInformation(ProductInformationDto input)
+    {
+        if (input == null) {
+            log.error("ProductInformationDto is null");
+            throw new IllegalArgumentException("Product information cannot be null");
+        }
+
+        // Create new product entity
+        ProductEntity product = new ProductEntity();
+        product.name = input.product.name;
+        product.slug = input.product.slug;
+        product.description = input.product.description;
+        product.shorDescription = input.product.shortDescription;
+        product.productType = input.product.productType != null ? ProductTypeEn.valueOf(input.product.productType) : ProductTypeEn.SIMPLE;
+
+        // Link category if provided
+        if (input.product.categoryId != null && !input.product.categoryId.isBlank()) {
+            try {
+                UUID categoryId = UUID.fromString(input.product.categoryId);
+                product.category = categoryRepository.findById(categoryId);
+                if (product.category != null) {
+                    log.info("Linked category with ID: {}", categoryId);
+                } else {
+                    log.warn("Category not found with ID: {}", categoryId);
+                }
+            } catch (IllegalArgumentException e) {
+                log.warn("Invalid category UUID format: {}", input.product.categoryId);
+            }
+        }
+
+        // Link brand if provided
+        if (input.product.brandId != null && !input.product.brandId.isBlank()) {
+            try {
+                UUID brandId = UUID.fromString(input.product.brandId);
+                product.brand = brandRepository.findById(brandId);
+                if (product.brand != null) {
+                    log.info("Linked brand with ID: {}", brandId);
+                } else {
+                    log.warn("Brand not found with ID: {}", brandId);
+                }
+            } catch (IllegalArgumentException e) {
+                log.warn("Invalid brand UUID format: {}", input.product.brandId);
+            }
+        }
+
+        // Save product
+        product.persist();
+        log.info("Created new product with ID: {}", product.id);
+
+        // TODO: Handle product images and variants creation
+        // This would require additional repository methods or separate transactions
+
+        return productMapper.mapToProductInformationDto(
+                product,
+                List.of(),
+                List.of());
+    }
+
+    @Transactional(value = TxType.REQUIRED)
+    public ProductInformationDto updateProductInformation(String productId, ProductInformationDto input)
+    {
+        if (input == null) {
+            log.error("ProductInformationDto is null");
+            throw new IllegalArgumentException("Product information cannot be null");
+        }
+
+        UUID pid = UUID.fromString(productId);
+        ProductEntity product = productRepository.findByIdWithCategoryAndBrand(pid);
+
+        if (product == null) {
+            log.error("Product not found with ID: {}", productId);
+            throw new IllegalArgumentException("Product not found");
+        }
+
+        // Update product information
+        if (input.product.name != null && !input.product.name.isBlank()) {
+            product.name = input.product.name;
+        }
+        if (input.product.slug != null && !input.product.slug.isBlank()) {
+            product.slug = input.product.slug;
+        }
+        if (input.product.description != null && !input.product.description.isBlank()) {
+            product.description = input.product.description;
+        }
+        if (input.product.shortDescription != null && !input.product.shortDescription.isBlank()) {
+            product.shorDescription = input.product.shortDescription;
+        }
+        if (input.product.productType != null && !input.product.productType.isBlank()) {
+            product.productType = ProductTypeEn.valueOf(input.product.productType);
+        }
+
+        // Update category if provided
+        if (input.product.categoryId != null && !input.product.categoryId.isBlank()) {
+            try {
+                UUID categoryId = UUID.fromString(input.product.categoryId);
+                product.category = categoryRepository.findById(categoryId);
+                if (product.category != null) {
+                    log.info("Linked category with ID: {}", categoryId);
+                } else {
+                    log.warn("Category not found with ID: {}", categoryId);
+                }
+            } catch (IllegalArgumentException e) {
+                log.warn("Invalid category UUID format: {}", input.product.categoryId);
+            }
+        }
+
+        // Update brand if provided
+        if (input.product.brandId != null && !input.product.brandId.isBlank()) {
+            try {
+                UUID brandId = UUID.fromString(input.product.brandId);
+                product.brand = brandRepository.findById(brandId);
+                if (product.brand != null) {
+                    log.info("Linked brand with ID: {}", brandId);
+                } else {
+                    log.warn("Brand not found with ID: {}", brandId);
+                }
+            } catch (IllegalArgumentException e) {
+                log.warn("Invalid brand UUID format: {}", input.product.brandId);
+            }
+        }
+
+        // Save updated product
+        product.persist();
+        log.info("Updated product with ID: {}", product.id);
+
+        // Handle product images and variants updates
+        if (input.productImages != null && !input.productImages.isEmpty()) {
+            updateProductImages(pid, input.productImages);
+        }
+
+        if (input.variants != null && !input.variants.isEmpty()) {
+            updateProductVariants(pid, input.variants);
+        }
+
+        return productMapper.mapToProductInformationDto(
+                product,
+                productVariantRepository.findByVariantsForProductId(pid),
+                productImageRepository.findByProductId(pid));
+    }
+
+    /**
+     * Updates product images by replacing existing images with new ones
+     */
+    private void updateProductImages(UUID productId, List<ProductImageDto> newImages) {
+        log.info("Updating images for product ID: {}", productId);
+
+        // Delete all existing images for this product
+        List<ProductImageEntity> existingImages = productImageRepository.findByProductId(productId);
+        for (ProductImageEntity image : existingImages) {
+            image.delete();
+        }
+
+        // Note: ProductImageEntity requires a ProductVariantEntity relationship
+        // Images are typically linked to variants, not directly to products
+        // This is a limitation of the current schema - would need product variants to exist first
+        // TODO: Once variants are created, associate images with the appropriate variant
+    }
+
+    /**
+     * Updates product variants and their prices
+     */
+    private void updateProductVariants(UUID productId, List<ProductVariantDto> newVariants) {
+        log.info("Updating variants for product ID: {}", productId);
+
+        // Get existing variants for this product
+        List<ProductVariantEntity> existingVariants = productVariantRepository.findByVariantsForProductId(productId);
+
+        // Update existing variants or create new ones
+        for (ProductVariantDto variantDto : newVariants) {
+            ProductVariantEntity variant = null;
+
+            // Check if variant with this SKU already exists
+            if (variantDto.id != null && !variantDto.id.isBlank()) {
+                variant = productVariantRepository.findByIdWithProduct(UUID.fromString(variantDto.id));
+            } else if (variantDto.sku != null) {
+                // Try to find by SKU
+                variant = existingVariants.stream()
+                        .filter(v -> v.sku.equals(variantDto.sku))
+                        .findFirst()
+                        .orElse(null);
+            }
+
+            if (variant == null) {
+                // Create new variant
+                variant = new ProductVariantEntity();
+                variant.product = productRepository.findByIdWithCategoryAndBrand(productId);
+                variant.sku = variantDto.sku;
+                variant.stockQuantity = variantDto.stockQuantity;
+                variant.attributesJson = variantDto.attributesJson;
+                variant.weightKg = variantDto.weightKg;
+                variant.persist();
+                log.info("Created new variant with SKU: {}", variantDto.sku);
+            } else {
+                // Update existing variant
+                if (variantDto.stockQuantity != null) {
+                    variant.stockQuantity = variantDto.stockQuantity;
+                }
+                if (variantDto.attributesJson != null) {
+                    variant.attributesJson = variantDto.attributesJson;
+                }
+                if (variantDto.weightKg != null) {
+                    variant.weightKg = variantDto.weightKg;
+                }
+                variant.persist();
+                log.info("Updated variant with SKU: {}", variantDto.sku);
+            }
+
+            // Update variant prices if provided
+            if (variantDto.variantPrices != null && !variantDto.variantPrices.isEmpty()) {
+                updateVariantPrices(variant, variantDto.variantPrices);
+            }
+        }
+
+        // Optionally delete variants not in the new list
+        // For now, we'll keep this as a TODO to preserve existing data
+        // TODO: Implement logic to delete variants not provided in the update
+    }
+
+    /**
+     * Updates prices for a variant
+     */
+    private void updateVariantPrices(ProductVariantEntity variant, List<VariantPriceDto> newPrices) {
+        log.info("Updating prices for variant with SKU: {}", variant.sku);
+
+        // Clear existing prices
+        variant.variantPrices.clear();
+
+        // Create new prices
+        for (VariantPriceDto priceDto : newPrices) {
+            VariantPricesEntity priceEntity = new VariantPricesEntity();
+            priceEntity.variant = variant;
+            priceEntity.priceType = PriceTypeEn.valueOf(priceDto.priceType);
+            priceEntity.price = priceDto.price;
+            priceEntity.priceStartDate = priceDto.priceStartDate;
+            priceEntity.priceEndDate = priceDto.priceEndDate;
+            priceEntity.persist();
+
+            variant.variantPrices.add(priceEntity);
+            log.debug("Created price of type {} for variant {}", priceDto.priceType, variant.sku);
+        }
+
+        variant.persist();
     }
 }

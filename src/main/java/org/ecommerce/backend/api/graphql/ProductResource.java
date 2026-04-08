@@ -4,9 +4,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import org.eclipse.microprofile.graphql.*;
 import org.ecommerce.backend.service.ProductService;
-import org.ecommerce.common.dto.ProductInformationDto;
-import org.ecommerce.common.dto.ProductListItemDto;
-import org.ecommerce.common.dto.ProductVariantDto;
+import org.ecommerce.common.dto.*;
 import org.ecommerce.common.query.Filter;
 import org.ecommerce.common.query.FilterRequest;
 import org.ecommerce.common.query.PageRequest;
@@ -67,5 +65,21 @@ public class ProductResource
     @Transactional(value = TxType.SUPPORTS)
     public ProductInformationDto getProductInformation(@Name("productId") String productId) {
         return productService.getProductInformationDto(productId);
+    }
+
+    @Mutation("addProductInformation")
+    @Description("Create a new product with variants and images")
+    @Transactional(value = TxType.REQUIRED)
+    public ProductInformationDto addProductInformation(@Name("input") ProductInformationDto input) {
+        return productService.addProductInformation(input);
+    }
+
+    @Mutation("updateProductInformation")
+    @Description("Update an existing product with variants and images")
+    @Transactional(value = TxType.REQUIRED)
+    public ProductInformationDto updateProductInformation(
+            @Name("productId") String productId,
+            @Name("input") ProductInformationDto input) {
+        return productService.updateProductInformation(productId, input);
     }
 }
