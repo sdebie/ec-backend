@@ -22,6 +22,7 @@ import org.ecommerce.common.repository.CategoryRepository;
 import org.ecommerce.common.repository.BrandRepository;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -51,8 +52,61 @@ public class ProductService
     @Transactional(value = TxType.SUPPORTS)
     public List<ProductListItemDto> getAllProducts(PageRequest pageRequest, FilterRequest filterRequest)
     {
-        List<ProductListItemDto> products = productRepository.findAllProductListItems(pageRequest, filterRequest);
+        return enrichProductListItems(productRepository.findAllProductListItems(pageRequest, filterRequest));
+    }
 
+    @Transactional(value = TxType.SUPPORTS)
+    public List<SaleVariantDto> getProductsOnSale(PageRequest pageRequest)
+    {
+        List<ProductVariantEntity> saleVariants = productVariantRepository.findOnSaleVariants(pageRequest);
+
+        return saleVariants.stream().map(variantEntity -> {
+            ProductVariantDto variantDto = productMapper.mapVariantEntityToDto(variantEntity);
+
+            ProductDto productDto = variantEntity.product != null
+                    ? productMapper.mapProductEntityToDto(variantEntity.product)
+                    : null;
+
+            UUID productId = variantEntity.product != null ? variantEntity.product.id : null;
+            List<ProductImageDto> images = productId != null
+                    ? productMapper.mapImageEntitiesToDtos(productImageRepository.findByProductId(productId))
+                    : List.of();
+
+            VariantPricesEntity activeSalePrice = resolveActiveSalePrice(variantEntity);
+            if (activeSalePrice != null) {
+                variantDto.price_start_date = activeSalePrice.priceStartDate;
+                variantDto.price_end_date = activeSalePrice.priceEndDate;
+            }
+
+            return new SaleVariantDto(variantDto, productDto, images);
+        }).collect(Collectors.toList());
+    }
+
+    private VariantPricesEntity resolveActiveSalePrice(ProductVariantEntity variantEntity) {
+        if (variantEntity == null || variantEntity.variantPrices == null) return null;
+
+        LocalDateTime now = LocalDateTime.now();
+
+        // Prefer retail sale price when both retail and wholesale sale prices are active.
+        VariantPricesEntity retailSalePrice = variantEntity.variantPrices.stream()
+                .filter(price -> price != null && price.priceType == PriceTypeEn.RETAIL_SALE_PRICE)
+                .filter(price -> (price.priceStartDate == null || !price.priceStartDate.isAfter(now))
+                        && (price.priceEndDate == null || !price.priceEndDate.isBefore(now)))
+                .findFirst()
+                .orElse(null);
+
+        if (retailSalePrice != null) return retailSalePrice;
+
+        return variantEntity.variantPrices.stream()
+                .filter(price -> price != null && price.priceType == PriceTypeEn.WHOLESALE_SALE_PRICE)
+                .filter(price -> (price.priceStartDate == null || !price.priceStartDate.isAfter(now))
+                        && (price.priceEndDate == null || !price.priceEndDate.isBefore(now)))
+                .findFirst()
+                .orElse(null);
+    }
+
+    private List<ProductListItemDto> enrichProductListItems(List<ProductListItemDto> products)
+    {
         return products.stream().map(product -> {
             if (product.id == null) {
                 product.variantIds = List.of();
@@ -131,32 +185,24 @@ public class ProductService
         product.productType = input.product.productType != null ? ProductTypeEn.valueOf(input.product.productType) : ProductTypeEn.SIMPLE;
 
         // Link category if provided
-        if (input.product.categoryId != null && !input.product.categoryId.isBlank()) {
-            try {
-                UUID categoryId = UUID.fromString(input.product.categoryId);
-                product.category = categoryRepository.findById(categoryId);
-                if (product.category != null) {
-                    log.info("Linked category with ID: {}", categoryId);
-                } else {
-                    log.warn("Category not found with ID: {}", categoryId);
-                }
-            } catch (IllegalArgumentException e) {
-                log.warn("Invalid category UUID format: {}", input.product.categoryId);
+        if (input.product.category != null && input.product.category.id != null) {
+            UUID categoryId = input.product.category.id;
+            product.category = categoryRepository.findById(categoryId);
+            if (product.category != null) {
+                log.info("Linked category with ID: {}", categoryId);
+            } else {
+                log.warn("Category not found with ID: {}", categoryId);
             }
         }
 
         // Link brand if provided
-        if (input.product.brandId != null && !input.product.brandId.isBlank()) {
-            try {
-                UUID brandId = UUID.fromString(input.product.brandId);
-                product.brand = brandRepository.findById(brandId);
-                if (product.brand != null) {
-                    log.info("Linked brand with ID: {}", brandId);
-                } else {
-                    log.warn("Brand not found with ID: {}", brandId);
-                }
-            } catch (IllegalArgumentException e) {
-                log.warn("Invalid brand UUID format: {}", input.product.brandId);
+        if (input.product.brand != null && input.product.brand.id != null) {
+            UUID brandId = input.product.brand.id;
+            product.brand = brandRepository.findById(brandId);
+            if (product.brand != null) {
+                log.info("Linked brand with ID: {}", brandId);
+            } else {
+                log.warn("Brand not found with ID: {}", brandId);
             }
         }
 
@@ -207,32 +253,24 @@ public class ProductService
         }
 
         // Update category if provided
-        if (input.product.categoryId != null && !input.product.categoryId.isBlank()) {
-            try {
-                UUID categoryId = UUID.fromString(input.product.categoryId);
-                product.category = categoryRepository.findById(categoryId);
-                if (product.category != null) {
-                    log.info("Linked category with ID: {}", categoryId);
-                } else {
-                    log.warn("Category not found with ID: {}", categoryId);
-                }
-            } catch (IllegalArgumentException e) {
-                log.warn("Invalid category UUID format: {}", input.product.categoryId);
+        if (input.product.category != null && input.product.category.id != null) {
+            UUID categoryId = input.product.category.id;
+            product.category = categoryRepository.findById(categoryId);
+            if (product.category != null) {
+                log.info("Linked category with ID: {}", categoryId);
+            } else {
+                log.warn("Category not found with ID: {}", categoryId);
             }
         }
 
         // Update brand if provided
-        if (input.product.brandId != null && !input.product.brandId.isBlank()) {
-            try {
-                UUID brandId = UUID.fromString(input.product.brandId);
-                product.brand = brandRepository.findById(brandId);
-                if (product.brand != null) {
-                    log.info("Linked brand with ID: {}", brandId);
-                } else {
-                    log.warn("Brand not found with ID: {}", brandId);
-                }
-            } catch (IllegalArgumentException e) {
-                log.warn("Invalid brand UUID format: {}", input.product.brandId);
+        if (input.product.brand != null && input.product.brand.id != null) {
+            UUID brandId = input.product.brand.id;
+            product.brand = brandRepository.findById(brandId);
+            if (product.brand != null) {
+                log.info("Linked brand with ID: {}", brandId);
+            } else {
+                log.warn("Brand not found with ID: {}", brandId);
             }
         }
 

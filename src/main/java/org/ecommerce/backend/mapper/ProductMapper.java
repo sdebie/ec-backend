@@ -1,10 +1,14 @@
 package org.ecommerce.backend.mapper;
 
+import org.ecommerce.common.dto.BrandDto;
+import org.ecommerce.common.dto.CategoryDto;
 import org.ecommerce.common.dto.ProductImageDto;
 import org.ecommerce.common.dto.ProductDto;
 import org.ecommerce.common.dto.ProductInformationDto;
 import org.ecommerce.common.dto.ProductVariantDto;
 import org.ecommerce.common.dto.VariantPriceDto;
+import org.ecommerce.common.entity.BrandEntity;
+import org.ecommerce.common.entity.CategoryEntity;
 import org.ecommerce.common.entity.ProductEntity;
 import org.ecommerce.common.entity.ProductImageEntity;
 import org.ecommerce.common.entity.ProductVariantEntity;
@@ -49,10 +53,20 @@ public interface ProductMapper
     @Mapping(target = "retailSalesPrice",   ignore = true)
     @Mapping(target = "wholesalePrice",     ignore = true)
     @Mapping(target = "wholesaleSalesPrice",ignore = true)
+    @Mapping(target = "price_start_date",   ignore = true)
+    @Mapping(target = "price_end_date",     ignore = true)
     @Mapping(target = "variantPrices",      source = "variantPrices")
     ProductVariantDto mapVariantEntityToDto(ProductVariantEntity entity);
 
     List<ProductVariantDto> mapVariantEntitiesToDtos(List<ProductVariantEntity> entities);
+
+    // ── CategoryEntity → CategoryDto ──────────────────────────────────────
+
+    CategoryDto mapCategoryEntityToDto(CategoryEntity entity);
+
+    // ── BrandEntity → BrandDto ────────────────────────────────────────────
+
+    BrandDto mapBrandEntityToDto(BrandEntity entity);
 
     // ── ProductEntity → ProductDto ─────────────────────────────────────────
 
@@ -60,8 +74,8 @@ public interface ProductMapper
     @Mapping(target = "shortDescription", source = "shorDescription")
     @Mapping(target = "productType", expression = "java(entity.productType == null ? null : entity.productType.name())")
     @Mapping(target = "createdAt", expression = "java(entity.createdAt == null ? null : entity.createdAt.toString())")
-    @Mapping(target = "categoryId", expression = "java(entity.category == null || entity.category.id == null ? null : entity.category.id.toString())")
-    @Mapping(target = "brandId", expression = "java(entity.brand == null || entity.brand.id == null ? null : entity.brand.id.toString())")
+    @Mapping(target = "category", source = "category")
+    @Mapping(target = "brand", source = "brand")
     ProductDto mapProductEntityToDto(ProductEntity entity);
 
     /**

@@ -24,25 +24,32 @@ public class ProductResource
     ProductService productService;
 
     @Query("productList")
-    @Description("Returns a paged list of products with price and sales price. Supports legacy categoryName and filterRequest.")
+    @Description("Returns a paged list of products with active retail or wholesale pricing. Supports categoryId and filterRequest.")
     @Transactional(value = TxType.SUPPORTS)
     public List<ProductListItemDto> getProductsList(
             @Name("pageRequest") PageRequest pageRequest,
             @Name("filterRequest") FilterRequest filterRequest,
-            @Name("categoryName") String categoryName)
+            @Name("categoryId") String categoryId)
     {
         FilterRequest resolvedFilterRequest = filterRequest != null ? filterRequest : new FilterRequest();
 
-        // Backward compatibility: if categoryName is provided, apply it as category.name = :categoryName.
-        if (categoryName != null && !categoryName.isBlank() && !"ALL".equalsIgnoreCase(categoryName)) {
+        if (categoryId != null && !categoryId.isBlank() && !"ALL".equalsIgnoreCase(categoryId)) {
             List<Filter> filters = resolvedFilterRequest.getFilters() != null
                     ? resolvedFilterRequest.getFilters()
                     : new ArrayList<>();
-            filters.add(new Filter("category.name", FilterOperator.EQUALS, categoryName));
+            filters.add(new Filter("category.id", FilterOperator.EQUALS, categoryId));
             resolvedFilterRequest.setFilters(filters);
         }
 
         return productService.getAllProducts(pageRequest, resolvedFilterRequest);
+    }
+
+    @Query("saleProductList")
+    @Description("Returns product variants with an active sale price based on the current date, including parent product info and images.")
+    @Transactional(value = TxType.SUPPORTS)
+    public List<SaleVariantDto> getSaleProductsList(@Name("pageRequest") PageRequest pageRequest)
+    {
+        return productService.getProductsOnSale(pageRequest);
     }
 
     @Query("productCount")

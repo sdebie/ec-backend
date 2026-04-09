@@ -4,12 +4,16 @@ import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
 import org.ecommerce.backend.mapper.ProductMapper;
+import org.ecommerce.common.dto.ProductDto;
 import org.ecommerce.common.dto.ProductImageDto;
 import org.ecommerce.common.dto.ProductInformationDto;
 import org.ecommerce.common.dto.ProductListItemDto;
+import org.ecommerce.common.dto.ProductVariantDto;
+import org.ecommerce.common.dto.SaleVariantDto;
 import org.ecommerce.common.entity.ProductEntity;
 import org.ecommerce.common.entity.ProductImageEntity;
 import org.ecommerce.common.entity.ProductVariantEntity;
+import org.ecommerce.common.entity.VariantPricesEntity;
 import org.ecommerce.common.enums.PriceTypeEn;
 import org.ecommerce.common.query.FilterRequest;
 import org.ecommerce.common.query.PageRequest;
@@ -19,6 +23,7 @@ import org.ecommerce.common.repository.ProductVariantRepository;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -125,6 +130,63 @@ class ProductServiceTest
         assertEquals(BigDecimal.ZERO, repositoryDto.retailSalesPrice);
         assertEquals(BigDecimal.ZERO, repositoryDto.wholesalePrice);
         assertEquals(BigDecimal.ZERO, repositoryDto.wholesaleSalesPrice);
+    }
+
+    @Test
+    void getProductsOnSale_shouldReturnSaleVariantDtoList()
+    {
+        PageRequest pageRequest = new PageRequest();
+        UUID productId = UUID.randomUUID();
+        UUID variantId = UUID.randomUUID();
+
+        ProductEntity productEntity = new ProductEntity();
+        productEntity.id = productId;
+        productEntity.name = "Promo Lamp";
+
+        ProductVariantEntity variantEntity = new ProductVariantEntity();
+        variantEntity.id = variantId;
+        variantEntity.product = productEntity;
+        variantEntity.sku = "PROMO-SKU";
+
+        LocalDateTime saleStart = LocalDateTime.of(2026, 4, 1, 0, 0);
+        LocalDateTime saleEnd = LocalDateTime.of(2026, 4, 30, 23, 59);
+        VariantPricesEntity salePrice = new VariantPricesEntity();
+        salePrice.priceType = PriceTypeEn.RETAIL_SALE_PRICE;
+        salePrice.priceStartDate = saleStart;
+        salePrice.priceEndDate = saleEnd;
+        variantEntity.variantPrices = List.of(salePrice);
+
+        ProductVariantDto variantDto = new ProductVariantDto();
+        variantDto.id = variantId.toString();
+        variantDto.sku = "PROMO-SKU";
+
+        ProductDto productDto = new ProductDto();
+        productDto.id = productId.toString();
+        productDto.name = "Promo Lamp";
+
+        ProductImageDto imageDto = new ProductImageDto("img-sale", "/images/promo-lamp.jpg", 1, true);
+
+        when(productVariantRepository.findOnSaleVariants(pageRequest)).thenReturn(List.of(variantEntity));
+        when(productMapper.mapVariantEntityToDto(variantEntity)).thenReturn(variantDto);
+        when(productMapper.mapProductEntityToDto(productEntity)).thenReturn(productDto);
+        when(productImageRepository.findByProductId(productId)).thenReturn(List.of());
+        when(productMapper.mapImageEntitiesToDtos(List.of())).thenReturn(List.of(imageDto));
+
+        List<SaleVariantDto> result = productService.getProductsOnSale(pageRequest);
+
+        assertEquals(1, result.size());
+        SaleVariantDto saleVariant = result.getFirst();
+        assertSame(variantDto, saleVariant.variant);
+        assertSame(productDto, saleVariant.product);
+        assertEquals(List.of(imageDto), saleVariant.productImages);
+        assertEquals(saleStart, saleVariant.variant.price_start_date);
+        assertEquals(saleEnd, saleVariant.variant.price_end_date);
+
+        verify(productVariantRepository).findOnSaleVariants(pageRequest);
+        verify(productMapper).mapVariantEntityToDto(variantEntity);
+        verify(productMapper).mapProductEntityToDto(productEntity);
+        verify(productImageRepository).findByProductId(productId);
+        verify(productMapper).mapImageEntitiesToDtos(List.of());
     }
 
     @Test
