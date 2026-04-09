@@ -44,10 +44,31 @@ public class ProductResource
         return productService.getAllProducts(pageRequest, resolvedFilterRequest);
     }
 
-    @Query("saleProductList")
-    @Description("Returns product variants with an active sale price based on the current date, including parent product info and images.")
+    @Query("shoppingProductList")
+    @Description("Returns shopping product cards with variant count, image list, and active lowest prices by type. Supports categoryId and filterRequest.")
     @Transactional(value = TxType.SUPPORTS)
-    public List<SaleVariantDto> getSaleProductsList(@Name("pageRequest") PageRequest pageRequest)
+    public List<ProductShoppingListItemDto> getShoppingProductsList(
+            @Name("pageRequest") PageRequest pageRequest,
+            @Name("filterRequest") FilterRequest filterRequest,
+            @Name("categoryId") String categoryId)
+    {
+        FilterRequest resolvedFilterRequest = filterRequest != null ? filterRequest : new FilterRequest();
+
+        if (categoryId != null && !categoryId.isBlank() && !"ALL".equalsIgnoreCase(categoryId)) {
+            List<Filter> filters = resolvedFilterRequest.getFilters() != null
+                    ? resolvedFilterRequest.getFilters()
+                    : new ArrayList<>();
+            filters.add(new Filter("category.id", FilterOperator.EQUALS, categoryId));
+            resolvedFilterRequest.setFilters(filters);
+        }
+
+        return productService.getShoppingProducts(pageRequest, resolvedFilterRequest);
+    }
+
+    @Query("saleProductList")
+    @Description("Returns products with variants that currently have active RETAIL_SALE_PRICE or WHOLESALE_SALE_PRICE values only.")
+    @Transactional(value = TxType.SUPPORTS)
+    public List<SalesProductListDto> getSaleProductsList(@Name("pageRequest") PageRequest pageRequest)
     {
         return productService.getProductsOnSale(pageRequest);
     }
@@ -89,4 +110,6 @@ public class ProductResource
             @Name("input") ProductInformationDto input) {
         return productService.updateProductInformation(productId, input);
     }
+
+
 }

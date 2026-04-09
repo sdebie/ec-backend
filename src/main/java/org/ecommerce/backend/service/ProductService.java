@@ -10,7 +10,6 @@ import org.ecommerce.common.dto.*;
 import org.ecommerce.common.entity.ProductEntity;
 import org.ecommerce.common.entity.ProductImageEntity;
 import org.ecommerce.common.entity.ProductVariantEntity;
-import org.ecommerce.common.entity.VariantPricesEntity;
 import org.ecommerce.common.enums.PriceTypeEn;
 import org.ecommerce.common.enums.ProductTypeEn;
 import org.ecommerce.common.query.FilterRequest;
@@ -21,9 +20,11 @@ import org.ecommerce.common.repository.ProductVariantRepository;
 import org.ecommerce.common.repository.CategoryRepository;
 import org.ecommerce.common.repository.BrandRepository;
 
-import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -56,65 +57,67 @@ public class ProductService
     }
 
     @Transactional(value = TxType.SUPPORTS)
-    public List<SaleVariantDto> getProductsOnSale(PageRequest pageRequest)
+    public List<ProductShoppingListItemDto> getShoppingProducts(PageRequest pageRequest, FilterRequest filterRequest)
+    {
+        return productRepository.findShoppingProductList(pageRequest, filterRequest);
+    }
+
+    @Transactional(value = TxType.SUPPORTS)
+    public List<SalesProductListDto> getProductsOnSale(PageRequest pageRequest)
     {
         List<ProductVariantEntity> saleVariants = productVariantRepository.findOnSaleVariants(pageRequest);
+        LocalDateTime now = LocalDateTime.now();
+        Map<UUID, SalesProductListDto> groupedByProduct = new LinkedHashMap<>();
 
-        return saleVariants.stream().map(variantEntity -> {
-            ProductVariantDto variantDto = productMapper.mapVariantEntityToDto(variantEntity);
-
-            ProductDto productDto = variantEntity.product != null
-                    ? productMapper.mapProductEntityToDto(variantEntity.product)
-                    : null;
-
-            UUID productId = variantEntity.product != null ? variantEntity.product.id : null;
-            List<ProductImageDto> images = productId != null
-                    ? productMapper.mapImageEntitiesToDtos(productImageRepository.findByProductId(productId))
-                    : List.of();
-
-            VariantPricesEntity activeSalePrice = resolveActiveSalePrice(variantEntity);
-            if (activeSalePrice != null) {
-                variantDto.price_start_date = activeSalePrice.priceStartDate;
-                variantDto.price_end_date = activeSalePrice.priceEndDate;
+        for (ProductVariantEntity variantEntity : saleVariants) {
+            if (variantEntity == null || variantEntity.product == null || variantEntity.product.id == null) {
+                continue;
             }
 
-            return new SaleVariantDto(variantDto, productDto, images);
-        }).collect(Collectors.toList());
+            UUID productId = variantEntity.product.id;
+            SalesProductListDto productGroup = groupedByProduct.computeIfAbsent(productId, id ->
+                    new SalesProductListDto(
+                            productMapper.mapProductEntityToDto(variantEntity.product),
+                            new ArrayList<>()));
+
+            ProductVariantDto variantDto = productMapper.mapVariantEntityToDto(variantEntity);
+            if (variantDto == null) {
+                continue;
+            }
+
+            variantDto.prices = filterActiveSalePrices(variantDto.prices, now);
+            if (!variantDto.prices.isEmpty()) {
+                productGroup.variants.add(variantDto);
+            }
+        }
+
+        return groupedByProduct.values().stream()
+                .filter(group -> group.variants != null && !group.variants.isEmpty())
+                .collect(Collectors.toList());
     }
 
-    private VariantPricesEntity resolveActiveSalePrice(ProductVariantEntity variantEntity) {
-        if (variantEntity == null || variantEntity.variantPrices == null) return null;
+    private List<VariantPriceDto> filterActiveSalePrices(List<VariantPriceDto> prices, LocalDateTime now)
+    {
+        if (prices == null || prices.isEmpty()) {
+            return List.of();
+        }
 
-        LocalDateTime now = LocalDateTime.now();
-
-        // Prefer retail sale price when both retail and wholesale sale prices are active.
-        VariantPricesEntity retailSalePrice = variantEntity.variantPrices.stream()
-                .filter(price -> price != null && price.priceType == PriceTypeEn.RETAIL_SALE_PRICE)
-                .filter(price -> (price.priceStartDate == null || !price.priceStartDate.isAfter(now))
-                        && (price.priceEndDate == null || !price.priceEndDate.isBefore(now)))
-                .findFirst()
-                .orElse(null);
-
-        if (retailSalePrice != null) return retailSalePrice;
-
-        return variantEntity.variantPrices.stream()
-                .filter(price -> price != null && price.priceType == PriceTypeEn.WHOLESALE_SALE_PRICE)
-                .filter(price -> (price.priceStartDate == null || !price.priceStartDate.isAfter(now))
-                        && (price.priceEndDate == null || !price.priceEndDate.isBefore(now)))
-                .findFirst()
-                .orElse(null);
+        return prices.stream()
+                .filter(price -> price != null && price.priceType != null)
+                .filter(price -> PriceTypeEn.RETAIL_SALE_PRICE.name().equals(price.priceType)
+                        || PriceTypeEn.WHOLESALE_SALE_PRICE.name().equals(price.priceType))
+                .filter(price -> price.priceStartDate == null || !now.isBefore(price.priceStartDate))
+                .filter(price -> price.priceEndDate == null || !now.isAfter(price.priceEndDate))
+                .collect(Collectors.toList());
     }
+
 
     private List<ProductListItemDto> enrichProductListItems(List<ProductListItemDto> products)
     {
         return products.stream().map(product -> {
             if (product.id == null) {
                 product.variantIds = List.of();
-                product.productImages = List.of();
-                product.retailPrice = BigDecimal.ZERO;
-                product.retailSalesPrice = BigDecimal.ZERO;
-                product.wholesalePrice = BigDecimal.ZERO;
-                product.wholesaleSalesPrice = BigDecimal.ZERO;
+                product.imageName = null;
                 return product;
             }
 
@@ -125,13 +128,8 @@ public class ProductService
                     .map(v -> v.id.toString())
                     .collect(Collectors.toList());
 
-            product.productImages = productMapper.mapImageEntitiesToDtos(
-                    productImageRepository.findByProductId(productId));
-
-            product.retailPrice = productVariantRepository.getMinimumPrice(productId, PriceTypeEn.RETAIL_PRICE);
-            product.retailSalesPrice = productVariantRepository.getMinimumPrice(productId, PriceTypeEn.RETAIL_SALE_PRICE);
-            product.wholesalePrice = productVariantRepository.getMinimumPrice(productId, PriceTypeEn.WHOLESALE_PRICE);
-            product.wholesaleSalesPrice = productVariantRepository.getMinimumPrice(productId, PriceTypeEn.WHOLESALE_SALE_PRICE);
+            ProductImageEntity featuredImage = productImageRepository.findFeaturedByProductId(productId);
+            product.imageName = featuredImage != null ? featuredImage.imageUrl : null;
 
             return product;
         }).collect(Collectors.toList());
@@ -164,8 +162,7 @@ public class ProductService
 
         return productMapper.mapToProductInformationDto(
                 product,
-                productVariantRepository.findByVariantsForProductId(pid),
-                productImageRepository.findByProductId(pid));
+                productVariantRepository.findByVariantsForProductId(pid));
     }
 
     @Transactional(value = TxType.REQUIRED)
@@ -215,7 +212,6 @@ public class ProductService
 
         return productMapper.mapToProductInformationDto(
                 product,
-                List.of(),
                 List.of());
     }
 
@@ -278,19 +274,14 @@ public class ProductService
         product.persist();
         log.info("Updated product with ID: {}", product.id);
 
-        // Handle product images and variants updates
-        if (input.productImages != null && !input.productImages.isEmpty()) {
-            updateProductImages(pid, input.productImages);
-        }
-
+        // Handle product variants updates
         if (input.variants != null && !input.variants.isEmpty()) {
             updateProductVariants(pid, input.variants);
         }
 
         return productMapper.mapToProductInformationDto(
                 product,
-                productVariantRepository.findByVariantsForProductId(pid),
-                productImageRepository.findByProductId(pid));
+                productVariantRepository.findByVariantsForProductId(pid));
     }
 
     /**
@@ -359,11 +350,7 @@ public class ProductService
                 variant.persist();
                 log.info("Updated variant with SKU: {}", variantDto.sku);
             }
-
-            // Update variant prices if provided
-            if (variantDto.variantPrices != null && !variantDto.variantPrices.isEmpty()) {
-                updateVariantPrices(variant, variantDto.variantPrices);
-            }
+            //TODO:: Update Pricing
         }
 
         // Optionally delete variants not in the new list
@@ -371,29 +358,4 @@ public class ProductService
         // TODO: Implement logic to delete variants not provided in the update
     }
 
-    /**
-     * Updates prices for a variant
-     */
-    private void updateVariantPrices(ProductVariantEntity variant, List<VariantPriceDto> newPrices) {
-        log.info("Updating prices for variant with SKU: {}", variant.sku);
-
-        // Clear existing prices
-        variant.variantPrices.clear();
-
-        // Create new prices
-        for (VariantPriceDto priceDto : newPrices) {
-            VariantPricesEntity priceEntity = new VariantPricesEntity();
-            priceEntity.variant = variant;
-            priceEntity.priceType = PriceTypeEn.valueOf(priceDto.priceType);
-            priceEntity.price = priceDto.price;
-            priceEntity.priceStartDate = priceDto.priceStartDate;
-            priceEntity.priceEndDate = priceDto.priceEndDate;
-            priceEntity.persist();
-
-            variant.variantPrices.add(priceEntity);
-            log.debug("Created price of type {} for variant {}", priceDto.priceType, variant.sku);
-        }
-
-        variant.persist();
-    }
 }
