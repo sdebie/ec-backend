@@ -15,25 +15,24 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 @ApplicationScoped
-public class ProductUploadAsyncService {
-
+public class ProductPriceUploadAsyncService {
     private static final Logger LOG = Logger.getLogger(ProductUploadAsyncService.class);
     private static final String CACHED_PLAN_RESULT_TYPE_ERROR = "cached plan must not change result type";
 
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
 
     @Inject
-    ProductImportService importService;
+    ProductPriceImportService productPriceimportService;
 
     @Inject
     DataSource dataSource;
 
-    public void handleProductCsvUploadAsync(InputStream is, UUID batchId) {
+    public void handleProductPriceCsvUploadAsync(InputStream is, UUID batchId) {
         executor.submit(() -> {
             try {
                 QuarkusTransaction.requiringNew().run(() -> {
                     try {
-                        importService.handleCsvUploadForBatch(is, batchId);
+                        productPriceimportService.handleProductPriceCsvUploadForBatch(is, batchId);
                     } catch (Exception e) {
                         throw new RuntimeException(e);
                     }
@@ -41,7 +40,7 @@ public class ProductUploadAsyncService {
             } catch (Exception ex) {
                 LOG.errorf(ex, "Failed async CSV staging for batch %s", batchId);
                 try {
-                    QuarkusTransaction.requiringNew().run(() -> importService.markProductImportBatchAsFailed(batchId));
+                    QuarkusTransaction.requiringNew().run(() -> productPriceimportService.markProductPriceBatchAsFailed(batchId));
                 } catch (Exception statusEx) {
                     LOG.errorf(statusEx, "Failed to mark batch %s as FAILED", batchId);
                 }
@@ -49,14 +48,14 @@ public class ProductUploadAsyncService {
         });
     }
 
-    public void processProductImportRowsAsync(UUID batchId) {
+    public void processProductPriceImportRowsAsync(UUID batchId) {
         executor.submit(() -> {
             boolean retriedCachedPlanFailure = false;
 
             while (true) {
                 try {
-                    QuarkusTransaction.requiringNew().run(() -> importService.processProductStagedRowsForBatch(batchId));
-                    QuarkusTransaction.requiringNew().run(() -> importService.markProductBatchAsProcessed(batchId));
+                    QuarkusTransaction.requiringNew().run(() -> productPriceimportService.processProductPriceStagedRowsForBatch(batchId));
+                    QuarkusTransaction.requiringNew().run(() -> productPriceimportService.markProductPriceBatchAsProcessed(batchId));
                     return;
                 } catch (Exception ex) {
                     if (!retriedCachedPlanFailure && isCachedPlanResultTypeError(ex)) {
@@ -68,7 +67,7 @@ public class ProductUploadAsyncService {
 
                     LOG.errorf(ex, "Failed staged product upload for batch %s", batchId);
                     try {
-                        QuarkusTransaction.requiringNew().run(() -> importService.markProductImportBatchAsFailed(batchId));
+                        QuarkusTransaction.requiringNew().run(() -> productPriceimportService.markProductPriceBatchAsFailed(batchId));
                     } catch (Exception statusEx) {
                         LOG.errorf(statusEx, "Failed to mark batch %s as REJECTED", batchId);
                     }

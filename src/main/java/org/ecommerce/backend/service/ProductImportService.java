@@ -10,23 +10,19 @@ import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;
 import org.apache.commons.csv.CSVRecord;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
-import org.ecommerce.backend.utils.PriceUtils;
 import org.ecommerce.common.dto.ProductComparisonDto;
 import org.ecommerce.common.dto.ProductUploadBatchDto;
 import org.ecommerce.common.dto.ProductUploadBatchProcessStatusDto;
 import org.ecommerce.common.entity.*;
-import org.ecommerce.common.enums.PriceTypeEn;
 import org.ecommerce.common.enums.ProductImportValidationStatusEn;
 import org.ecommerce.common.enums.ProductTypeEn;
 import org.ecommerce.common.enums.ProductUploadStatusEn;
-import org.ecommerce.common.repository.ProductImportRepository;
 import org.jboss.logging.Logger;
 
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -34,6 +30,9 @@ import java.util.Locale;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.stream.Collectors;
+
+import static org.ecommerce.common.util.CsvImportUtils.getValue;
+import static org.ecommerce.common.util.CsvImportUtils.isBlank;
 
 @ApplicationScoped
 public class ProductImportService {
@@ -44,9 +43,6 @@ public class ProductImportService {
     @Inject
     EntityManager entityManager;
 
-    @Inject
-    ProductImportRepository productImportRepository;
-
     private static final Logger LOG = Logger.getLogger(ProductImportService.class);
 
     /**
@@ -54,7 +50,7 @@ public class ProductImportService {
      * caller can return a batch ID to the client without waiting for CSV parsing.
      */
     @Transactional
-    public ProductUploadBatchEntity createPendingBatch(String filename, StaffUserEntity admin) {
+    public ProductUploadBatchEntity createProductImportPendingBatch(String filename, StaffUserEntity admin) {
         ProductUploadBatchEntity batch = new ProductUploadBatchEntity();
         batch.filename = filename;
         batch.productUploadStatusEn = ProductUploadStatusEn.IMPORTING;
@@ -101,10 +97,6 @@ public class ProductImportService {
                 staged.description = getValue(record, "description", "description");
                 staged.categorySlug = getValue(record, "category_slug", "Category", "category_name");
                 staged.shortDescription = getValue(record, "short_description", "short_description");
-                staged.retailPrice = parseBigDecimal(record, validationErrors, "retail_price", "Retail Price");
-                staged.retailSalePrice = parseBigDecimal(record, validationErrors, "retail_sale_price", "Retail Sale Price");
-                staged.wholesalePrice = parseBigDecimal(record, validationErrors, "wholesale_price", "Wholesale Price");
-                staged.wholesaleSalePrice = parseBigDecimal(record, validationErrors, "wholesale_sale_price", "Wholesale Sale Price");
 
                 Integer stock = parseStockInteger(record, validationErrors);
                 String brandSlug = getValue(record, "brand_slug", "brand_name", "Brand");
@@ -143,7 +135,7 @@ public class ProductImportService {
     }
 
     @Transactional
-    public void markBatchAsProcessing(UUID batchId) {
+    public void markProductImportBatchAsProcessing(UUID batchId) {
         ProductUploadBatchEntity batch = ProductUploadBatchEntity.findById(batchId);
         if (batch == null) {
             throw new NotFoundException("Batch not found: " + batchId);
@@ -160,7 +152,7 @@ public class ProductImportService {
     }
 
     @Transactional
-    public void markBatchAsProcessed(UUID batchId) {
+    public void markProductBatchAsProcessed(UUID batchId) {
         ProductUploadBatchEntity batch = ProductUploadBatchEntity.findById(batchId);
         if (batch == null) {
             throw new NotFoundException("Batch not found: " + batchId);
@@ -169,7 +161,7 @@ public class ProductImportService {
     }
 
     @Transactional
-    public void markBatchAsFailed(UUID batchId) {
+    public void markProductImportBatchAsFailed(UUID batchId) {
         ProductUploadBatchEntity batch = ProductUploadBatchEntity.findById(batchId);
         if (batch == null) {
             throw new NotFoundException("Batch not found: " + batchId);
@@ -178,7 +170,7 @@ public class ProductImportService {
     }
 
     @Transactional
-    public void processStagedRowsForBatch(UUID batchId) {
+    public void processProductStagedRowsForBatch(UUID batchId) {
 
         LOG.debug("DEBUG:: Processing Batch: " + batchId);
         ProductUploadBatchEntity batch = ProductUploadBatchEntity.findById(batchId);
@@ -192,7 +184,7 @@ public class ProductImportService {
 
         for (ProductUploadStagedEntity staged : stagedRows) {
             if (staged.validationStatus == ProductImportValidationStatusEn.VALID) {
-                applyValidStagedRow(staged);
+                applyValidProductStagedRow(staged);
                 processedCount++;
             } else {
                 skippedCount++;
@@ -224,7 +216,7 @@ public class ProductImportService {
         batch.skippedRows = (int) totalSkippedRows;
     }
 
-    private void applyValidStagedRow(ProductUploadStagedEntity staged) {
+    private void applyValidProductStagedRow(ProductUploadStagedEntity staged) {
         CategoryEntity category = null;
         BrandEntity brand = null;
 
@@ -275,11 +267,6 @@ public class ProductImportService {
         variant.stockQuantity = staged.stock != null ? staged.stock : 0;
         variant.attributesJson = trimToNull(staged.attributes);
 
-        upsertVariantPrice(variant, PriceTypeEn.RETAIL_PRICE, staged.retailPrice);
-        upsertVariantPrice(variant, PriceTypeEn.RETAIL_SALE_PRICE, staged.retailSalePrice);
-        upsertVariantPrice(variant, PriceTypeEn.WHOLESALE_PRICE, staged.wholesalePrice);
-        upsertVariantPrice(variant, PriceTypeEn.WHOLESALE_SALE_PRICE, staged.wholesaleSalePrice);
-
         upsertVariantImages(variant, staged.images);
     }
 
@@ -297,27 +284,8 @@ public class ProductImportService {
         }
     }
 
-    private void upsertVariantPrice(ProductVariantEntity variant, PriceTypeEn priceType, BigDecimal priceValue) {
-        if (variant == null || variant.id == null || priceType == null || priceValue == null) {
-            return;
-        }
-
-        VariantPricesEntity price = VariantPricesEntity.findLatestByVariantAndType(variant.id, priceType);
-        if (price == null) {
-            price = new VariantPricesEntity();
-            price.variant = variant;
-            price.priceType = priceType;
-            price.price = priceValue;
-            price.persist();
-            return;
-        }
-
-        price.price = priceValue;
-        price.priceEndDate = null;
-    }
-
     @Transactional(value = TxType.SUPPORTS)
-    public ProductUploadBatchProcessStatusDto getBatchProcessStatus(UUID batchId) {
+    public ProductUploadBatchProcessStatusDto getProductImportBatchProcessStatus(UUID batchId) {
         ProductUploadBatchEntity batch = ProductUploadBatchEntity.findById(batchId);
         if (batch == null) {
             throw new NotFoundException("Batch not found: " + batchId);
@@ -465,29 +433,10 @@ public class ProductImportService {
         boolean stockChanged = !Objects.equals(stock, existingVariant.stockQuantity);
         boolean attributesChanged = !Objects.equals(trimToNull(attributesJson), trimToNull(existingVariant.attributesJson));
         boolean imagesChanged = !sameImageNames(imagesValue, existingVariant);
-        boolean retailChanged = pricesDiffer(staged.retailPrice, findLatestPrice(existingVariant, PriceTypeEn.RETAIL_PRICE));
-        boolean wholesaleChanged = pricesDiffer(staged.wholesalePrice, findLatestPrice(existingVariant, PriceTypeEn.WHOLESALE_PRICE));
 
-        return nameChanged || productSlugChanged || categoryChanged || brandChanged || stockChanged || attributesChanged || imagesChanged || retailChanged || wholesaleChanged;
+        return nameChanged || productSlugChanged || categoryChanged || brandChanged || stockChanged || attributesChanged || imagesChanged;
     }
 
-    private BigDecimal findLatestPrice(ProductVariantEntity variant, PriceTypeEn priceType) {
-        if (variant == null || variant.id == null) {
-            return null;
-        }
-        VariantPricesEntity price = VariantPricesEntity.findLatestByVariantAndType(variant.id, priceType);
-        return price != null ? price.price : null;
-    }
-
-    private boolean pricesDiffer(BigDecimal left, BigDecimal right) {
-        if (left == null && right == null) {
-            return false;
-        }
-        if (left == null || right == null) {
-            return true;
-        }
-        return left.compareTo(right) != 0;
-    }
 
     private boolean sameImageNames(String stagedImages, ProductVariantEntity variant) {
         if (variant == null || variant.id == null) {
@@ -539,19 +488,6 @@ public class ProductImportService {
         return normalized == null ? null : normalized.toLowerCase(Locale.ROOT);
     }
 
-    private BigDecimal parseBigDecimal(CSVRecord record, List<String> validationErrors, String... headers) {
-        String value = getValue(record, headers);
-        if (isBlank(value)) {
-            return new BigDecimal(0);
-        }
-        try {
-            return new BigDecimal(value.trim());
-        } catch (NumberFormatException ex) {
-            validationErrors.add("Invalid decimal value for " + headers[0] + ": " + value);
-            return null;
-        }
-    }
-
     private Integer parseStockInteger(CSVRecord record, List<String> validationErrors) {
         String value = getValue(record, "stock", "stock_quantity");
         if (isBlank(value)) {
@@ -565,21 +501,6 @@ public class ProductImportService {
         }
     }
 
-    private String getValue(CSVRecord record, String... headers) {
-        for (String header : headers) {
-            if (record.isMapped(header)) {
-                String value = record.get(header);
-                if (value != null) {
-                    return value;
-                }
-            }
-        }
-        return null;
-    }
-
-    private boolean isBlank(String value) {
-        return value == null || value.trim().isEmpty();
-    }
 
     public List<ProductComparisonDto> getProductImportRows(UUID batchId) {
         List<ProductUploadStagedEntity> stagedList = ProductUploadStagedEntity.find("batch.id = ?1", batchId).list();
@@ -606,10 +527,6 @@ public class ProductImportService {
             dto.imageErrors = staged.imageErrors;
 
             dto.proposedName = staged.name;
-            dto.proposedRetailPrice = staged.retailPrice;
-            dto.proposedWholesalePrice = staged.wholesalePrice;
-            dto.proposedRetailSalePrice = staged.retailSalePrice;
-            dto.proposedWholesaleSalePrice = staged.wholesaleSalePrice;
             dto.isValidCategory = staged.isValidCategory;
             dto.isValidBrand = staged.isValidBrand;
             dto.isNewProduct = staged.isNewProduct;
@@ -621,15 +538,6 @@ public class ProductImportService {
                 dto.currentName = variant.product.name;
                 dto.currentDescription = variant.product.description;
                 dto.currentShortDescription = variant.product.shorDescription;
-                BigDecimal retailPrice = PriceUtils.getMinimumPrice(variant.product.id, PriceTypeEn.RETAIL_PRICE);
-                BigDecimal retailSalePrice = PriceUtils.getMinimumPrice(variant.product.id, PriceTypeEn.RETAIL_SALE_PRICE);
-                BigDecimal wholesalePrice = PriceUtils.getMinimumPrice(variant.product.id, PriceTypeEn.WHOLESALE_PRICE);
-                BigDecimal wholesaleSalePrice = PriceUtils.getMinimumPrice(variant.product.id, PriceTypeEn.WHOLESALE_SALE_PRICE);
-
-                dto.currentRetailPrice = retailPrice;
-                dto.currentWholesalePrice = wholesalePrice;
-                dto.currentRetailSalePrice = retailSalePrice;
-                dto.currentWholesaleSalePrice = wholesaleSalePrice;
 
                 dto.currentStock = variant.stockQuantity;
                 dto.currentAttributes = variant.attributesJson;
