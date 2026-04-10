@@ -68,9 +68,18 @@ public class ProductResource
     @Query("saleProductList")
     @Description("Returns products with variants that currently have active RETAIL_SALE_PRICE or WHOLESALE_SALE_PRICE values only.")
     @Transactional(value = TxType.SUPPORTS)
-    public List<SalesProductListDto> getSaleProductsList(@Name("pageRequest") PageRequest pageRequest)
+    public List<OnSaleProductListDto> getProductsOnSaleList(@Name("pageRequest") PageRequest pageRequest)
     {
         return productService.getProductsOnSale(pageRequest);
+    }
+
+    @Query("topBestSellers")
+    @Description("Returns the top 10 best-selling products ranked by units sold in DELIVERED orders. " +
+                 "If fewer than 10 delivered-order products exist, the list is padded with random products.")
+    @Transactional(value = TxType.SUPPORTS)
+    public List<ProductShoppingListItemDto> getTopBestSellers()
+    {
+        return productService.getTopBestSellers();
     }
 
     @Query("productCount")

@@ -8,7 +8,7 @@ import org.ecommerce.common.dto.ProductDto;
 import org.ecommerce.common.dto.ProductInformationDto;
 import org.ecommerce.common.dto.ProductListItemDto;
 import org.ecommerce.common.dto.ProductVariantDto;
-import org.ecommerce.common.dto.SalesProductListDto;
+import org.ecommerce.common.dto.OnSaleProductListDto;
 import org.ecommerce.common.dto.VariantPriceDto;
 import org.ecommerce.common.entity.ProductEntity;
 import org.ecommerce.common.entity.ProductImageEntity;
@@ -160,10 +160,10 @@ class ProductServiceTest
         when(productMapper.mapVariantEntityToDto(variantEntity)).thenReturn(variantDto);
         when(productMapper.mapProductEntityToDto(productEntity)).thenReturn(productDto);
 
-        List<SalesProductListDto> result = productService.getProductsOnSale(pageRequest);
+        List<OnSaleProductListDto> result = productService.getProductsOnSale(pageRequest);
 
         assertEquals(1, result.size());
-        SalesProductListDto salesProduct = result.getFirst();
+        OnSaleProductListDto salesProduct = result.getFirst();
         assertSame(productDto, salesProduct.product);
         assertEquals(1, salesProduct.variants.size());
         ProductVariantDto saleVariant = salesProduct.variants.getFirst();
