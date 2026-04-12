@@ -17,6 +17,7 @@ import org.ecommerce.common.entity.*;
 import org.ecommerce.common.enums.ProductImportValidationStatusEn;
 import org.ecommerce.common.enums.ProductTypeEn;
 import org.ecommerce.common.enums.ProductUploadStatusEn;
+import org.ecommerce.common.repository.*;
 import org.jboss.logging.Logger;
 
 import java.io.BufferedReader;
@@ -35,7 +36,7 @@ import static org.ecommerce.common.util.CsvImportUtils.getValue;
 import static org.ecommerce.common.util.CsvImportUtils.isBlank;
 
 @ApplicationScoped
-public class ProductImportService {
+public class ProductImportService implements ImportBatchService<ProductComparisonDto, ProductUploadBatchProcessStatusDto, ProductUploadBatchEntity>, AsyncImportOperations {
 
     @ConfigProperty(name = "storage.path")
     String storagePath;
@@ -43,7 +44,78 @@ public class ProductImportService {
     @Inject
     EntityManager entityManager;
 
+    @Inject
+    ProductUploadBatchRepository productUploadBatchRepository;
+
+    @Inject
+    ProductUploadStagedRepository productUploadStagedRepository;
+
+    @Inject
+    CategoryRepository categoryRepository;
+
+    @Inject
+    BrandRepository brandRepository;
+
+    @Inject
+    ProductRepository productRepository;
+
+    @Inject
+    ProductVariantRepository productVariantRepository;
+
+    @Inject
+    ProductImageRepository productImageRepository;
+
     private static final Logger LOG = Logger.getLogger(ProductImportService.class);
+
+    @Override
+    public ProductUploadBatchEntity createImportPendingBatch(String filename, StaffUserEntity admin) {
+        return createProductImportPendingBatch(filename, admin);
+    }
+
+    @Override
+    public void markImportBatchAsProcessing(UUID batchId) {
+        markProductImportBatchAsProcessing(batchId);
+    }
+
+    @Override
+    public void markImportBatchAsProcessed(UUID batchId) {
+        markProductBatchAsProcessed(batchId);
+    }
+
+    @Override
+    public void markImportBatchAsFailed(UUID batchId) {
+        markProductImportBatchAsFailed(batchId);
+    }
+
+    @Override
+    public ProductUploadBatchProcessStatusDto getImportBatchProcessStatus(UUID batchId) {
+        return getProductImportBatchProcessStatus(batchId);
+    }
+
+    @Override
+    public List<ProductComparisonDto> getImportRows(UUID batchId) {
+        return getProductImportRows(batchId);
+    }
+
+    @Override
+    public List<ProductUploadBatchDto> getUploadBatches() {
+        return getProductUploadBatches();
+    }
+
+    @Override
+    public void processStagedRowsForBatch(UUID batchId) {
+        processProductStagedRowsForBatch(batchId);
+    }
+
+    @Override
+    public void markBatchAsProcessed(UUID batchId) {
+        markProductBatchAsProcessed(batchId);
+    }
+
+    @Override
+    public void markBatchAsFailed(UUID batchId) {
+        markProductImportBatchAsFailed(batchId);
+    }
 
     /**
      * Creates and persists the batch record immediately (status=IMPORTING) so the
@@ -55,7 +127,7 @@ public class ProductImportService {
         batch.filename = filename;
         batch.productUploadStatusEn = ProductUploadStatusEn.IMPORTING;
         batch.uploadedBy = admin;
-        batch.persist();
+        productUploadBatchRepository.persist(batch);
         return batch;
     }
 
@@ -66,7 +138,7 @@ public class ProductImportService {
      */
     @Transactional
     public void handleCsvUploadForBatch(InputStream is, UUID batchId) throws IOException {
-        ProductUploadBatchEntity batch = ProductUploadBatchEntity.findById(batchId);
+        ProductUploadBatchEntity batch = productUploadBatchRepository.findById(batchId);
         if (batch == null) {
             throw new NotFoundException("Batch not found: " + batchId);
         }
@@ -118,7 +190,7 @@ public class ProductImportService {
                     LOG.warnf("CSV import validation failed at row %d (sku=%s): %s", record.getRecordNumber(), staged.sku, staged.validationErrors);
                 }
 
-                staged.persist();
+                productUploadStagedRepository.persist(staged);
                 rowCount++;
 
                 if (rowCount % 500 == 0) {
@@ -136,7 +208,7 @@ public class ProductImportService {
 
     @Transactional
     public void markProductImportBatchAsProcessing(UUID batchId) {
-        ProductUploadBatchEntity batch = ProductUploadBatchEntity.findById(batchId);
+        ProductUploadBatchEntity batch = productUploadBatchRepository.findById(batchId);
         if (batch == null) {
             throw new NotFoundException("Batch not found: " + batchId);
         }
@@ -144,7 +216,7 @@ public class ProductImportService {
             throw new IllegalStateException("Batch is already processing");
         }
 
-        long totalRows = ProductUploadStagedEntity.count("batch.id", batchId);
+        long totalRows = productUploadStagedRepository.countByBatchId(batchId);
         batch.productUploadStatusEn = ProductUploadStatusEn.PROCESSING;
         batch.totalRows = (int) totalRows;
         batch.processedRows = 0;
@@ -153,7 +225,7 @@ public class ProductImportService {
 
     @Transactional
     public void markProductBatchAsProcessed(UUID batchId) {
-        ProductUploadBatchEntity batch = ProductUploadBatchEntity.findById(batchId);
+        ProductUploadBatchEntity batch = productUploadBatchRepository.findById(batchId);
         if (batch == null) {
             throw new NotFoundException("Batch not found: " + batchId);
         }
@@ -162,7 +234,7 @@ public class ProductImportService {
 
     @Transactional
     public void markProductImportBatchAsFailed(UUID batchId) {
-        ProductUploadBatchEntity batch = ProductUploadBatchEntity.findById(batchId);
+        ProductUploadBatchEntity batch = productUploadBatchRepository.findById(batchId);
         if (batch == null) {
             throw new NotFoundException("Batch not found: " + batchId);
         }
@@ -173,12 +245,12 @@ public class ProductImportService {
     public void processProductStagedRowsForBatch(UUID batchId) {
 
         LOG.debug("DEBUG:: Processing Batch: " + batchId);
-        ProductUploadBatchEntity batch = ProductUploadBatchEntity.findById(batchId);
+        ProductUploadBatchEntity batch = productUploadBatchRepository.findById(batchId);
         if (batch == null) {
             throw new NotFoundException("Batch not found: " + batchId);
         }
 
-        List<ProductUploadStagedEntity> stagedRows = ProductUploadStagedEntity.list("batch.id = ?1 and processed = false", batchId);
+        List<ProductUploadStagedEntity> stagedRows = productUploadStagedRepository.findUnprocessedByBatchId(batchId);
         long processedCount = 0;
         long skippedCount = 0;
 
@@ -200,17 +272,9 @@ public class ProductImportService {
 
         entityManager.flush();
 
-        long totalRows = ProductUploadStagedEntity.count("batch.id", batchId);
-        long totalProcessedRows = ProductUploadStagedEntity.count(
-                "batch.id = ?1 and processed = true and validationStatus = ?2",
-                batchId,
-                ProductImportValidationStatusEn.VALID
-        );
-        long totalSkippedRows = ProductUploadStagedEntity.count(
-                "batch.id = ?1 and processed = true and (validationStatus is null or validationStatus <> ?2)",
-                batchId,
-                ProductImportValidationStatusEn.VALID
-        );
+        long totalRows = productUploadStagedRepository.countByBatchId(batchId);
+        long totalProcessedRows = productUploadStagedRepository.countProcessedValidByBatchId(batchId);
+        long totalSkippedRows = productUploadStagedRepository.countProcessedInvalidByBatchId(batchId);
         batch.totalRows = (int) totalRows;
         batch.processedRows = (int) totalProcessedRows;
         batch.skippedRows = (int) totalSkippedRows;
@@ -221,13 +285,13 @@ public class ProductImportService {
         BrandEntity brand = null;
 
         if (!isBlank(staged.categorySlug)) {
-            category = CategoryEntity.find("lower(slug) = ?1", staged.categorySlug.trim().toLowerCase(Locale.ROOT)).firstResult();
+            category = categoryRepository.findBySlugIgnoreCase(staged.categorySlug);
         }
         if (!isBlank(staged.brandSlug)) {
-            brand = BrandEntity.find("lower(slug) = ?1", staged.brandSlug.trim().toLowerCase(Locale.ROOT)).firstResult();
+            brand = brandRepository.findBySlugIgnoreCase(staged.brandSlug);
         }
 
-        ProductVariantEntity variant = ProductVariantEntity.find("sku", staged.sku).firstResult();
+        ProductVariantEntity variant = productVariantRepository.findBySku(staged.sku);
         ProductEntity product;
 
         if (variant != null) {
@@ -241,13 +305,13 @@ public class ProductImportService {
                 product.description = staged.description;
                 product.shorDescription = staged.shortDescription;
                 product.productType = ProductTypeEn.VARIABLE;
-                product.persist();
+                productRepository.persist(product);
             }
 
             variant = new ProductVariantEntity();
             variant.product = product;
             variant.sku = staged.sku;
-            variant.persist();
+            productVariantRepository.persist(variant);
         }
 
         product.name = staged.name.trim();
@@ -271,7 +335,7 @@ public class ProductImportService {
     }
 
     private void upsertVariantImages(ProductVariantEntity variant, String stagedImages) {
-        ProductImageEntity.delete("productVariant.id", variant.id);
+        productImageRepository.deleteByVariantId(variant.id);
 
         List<String> imageNames = splitImageNames(stagedImages);
         for (int i = 0; i < imageNames.size(); i++) {
@@ -280,13 +344,13 @@ public class ProductImportService {
             image.imageUrl = imageNames.get(i);
             image.sortOrder = i;
             image.isFeatured = i == 0;
-            image.persist();
+            productImageRepository.persist(image);
         }
     }
 
     @Transactional(value = TxType.SUPPORTS)
     public ProductUploadBatchProcessStatusDto getProductImportBatchProcessStatus(UUID batchId) {
-        ProductUploadBatchEntity batch = ProductUploadBatchEntity.findById(batchId);
+        ProductUploadBatchEntity batch = productUploadBatchRepository.findById(batchId);
         if (batch == null) {
             throw new NotFoundException("Batch not found: " + batchId);
         }
@@ -295,7 +359,7 @@ public class ProductImportService {
         status.batchId = batch.id;
         status.status = batch.productUploadStatusEn != null ? batch.productUploadStatusEn.name() : null;
         status.totalRows = batch.totalRows;
-        status.stagedRows = ProductUploadStagedEntity.count("batch.id", batchId);
+        status.stagedRows = productUploadStagedRepository.countByBatchId(batchId);
         status.processedRows = batch.processedRows != null ? (long) batch.processedRows : 0L;
         status.skippedRows = batch.skippedRows != null ? (long) batch.skippedRows : 0L;
         status.validationErrorCount = batch.validationErrorCount;
@@ -369,7 +433,7 @@ public class ProductImportService {
             return null;
         }
 
-        CategoryEntity category = CategoryEntity.find("lower(slug) = ?1", categorySlug.trim().toLowerCase(Locale.ROOT)).firstResult();
+        CategoryEntity category = categoryRepository.findBySlugIgnoreCase(categorySlug);
         if (category == null) {
             validationErrors.add("Unknown category: " + categorySlug.trim());
         }
@@ -382,7 +446,7 @@ public class ProductImportService {
             return null;
         }
 
-        BrandEntity brand = BrandEntity.find("lower(slug) = ?1", brandSlug.trim().toLowerCase(Locale.ROOT)).firstResult();
+        BrandEntity brand = brandRepository.findBySlugIgnoreCase(brandSlug);
         if (brand == null) {
             validationErrors.add("Unknown brand: " + brandSlug.trim());
         }
@@ -392,7 +456,7 @@ public class ProductImportService {
     private ProductEntity findExistingProduct(String productSlug, String productName) {
         String normalizedSlug = normalizeSlug(productSlug);
         if (normalizedSlug != null) {
-            ProductEntity slugMatch = ProductEntity.find("lower(slug) = ?1", normalizedSlug).firstResult();
+            ProductEntity slugMatch = productRepository.findBySlugIgnoreCase(normalizedSlug);
             if (slugMatch != null) {
                 return slugMatch;
             }
@@ -402,7 +466,7 @@ public class ProductImportService {
             return null;
         }
 
-        return ProductEntity.find("lower(name) = ?1", productName.trim().toLowerCase(Locale.ROOT)).firstResult();
+        return productRepository.findByNameIgnoreCase(productName);
     }
 
     private ProductVariantEntity findExistingVariant(String sku, List<String> validationErrors) {
@@ -411,7 +475,7 @@ public class ProductImportService {
             return null;
         }
 
-        return ProductVariantEntity.find("sku", sku.trim()).firstResult();
+        return productVariantRepository.findBySku(sku);
     }
 
     private boolean determineHasChanges(
@@ -443,8 +507,7 @@ public class ProductImportService {
             return false;
         }
 
-        List<String> existing = ProductImageEntity.list("productVariant.id", variant.id).stream()
-                .map(ProductImageEntity.class::cast)
+        List<String> existing = productImageRepository.findByVariantId(variant.id).stream()
                 .map(img -> extractFileName(img.imageUrl))
                 .filter(name -> !isBlank(name))
                 .toList();
@@ -503,15 +566,17 @@ public class ProductImportService {
 
 
     public List<ProductComparisonDto> getProductImportRows(UUID batchId) {
-        List<ProductUploadStagedEntity> stagedList = ProductUploadStagedEntity.find("batch.id = ?1", batchId).list();
+        List<ProductUploadStagedEntity> stagedList = productUploadStagedRepository.findByBatchId(batchId);
 
         return stagedList.stream().map(staged -> {
             ProductComparisonDto dto = new ProductComparisonDto();
             if (!staged.isNewProduct){
-                ProductEntity existingProduct = ProductEntity.find("lower(name) = ?1", staged.name.trim().toLowerCase(Locale.ROOT)).firstResult();
-                dto.currentName = existingProduct.name;
-                dto.currentDescription = existingProduct.description;
-                dto.currentShortDescription = existingProduct.shorDescription;
+                ProductEntity existingProduct = productRepository.findByNameIgnoreCase(staged.name);
+                if (existingProduct != null) {
+                    dto.currentName = existingProduct.name;
+                    dto.currentDescription = existingProduct.description;
+                    dto.currentShortDescription = existingProduct.shorDescription;
+                }
             }
             dto.stagedId = staged.id;
             dto.sku = staged.sku;
@@ -533,7 +598,7 @@ public class ProductImportService {
             dto.isNewVariant = staged.isNewVariant;
             dto.hasChanges = Boolean.TRUE.equals(staged.hasChanges);
 
-            ProductVariantEntity variant = ProductVariantEntity.find("sku", staged.sku).firstResult();
+            ProductVariantEntity variant = productVariantRepository.findBySkuWithProduct(staged.sku);
             if (variant != null) {
                 dto.currentName = variant.product.name;
                 dto.currentDescription = variant.product.description;
@@ -548,20 +613,8 @@ public class ProductImportService {
     }
 
     public List<ProductUploadBatchDto> getProductUploadBatches() {
-        List<ProductUploadBatchEntity> batches = ProductUploadBatchEntity.listAll();
-        return batches.stream().map(batch -> {
-            ProductUploadBatchDto dto = new ProductUploadBatchDto();
-            dto.id = batch.id;
-            dto.filename = batch.filename;
-            dto.status = batch.productUploadStatusEn.toString();
-            dto.totalRows = batch.totalRows;
-            dto.processedRows = batch.processedRows;
-            dto.skippedRows = batch.skippedRows;
-            dto.validationErrorCount = batch.validationErrorCount;
-            dto.createdAt = batch.createdAt;
-            dto.uploadedByUsername = batch.uploadedBy != null ? batch.uploadedBy.email : null;
-            return dto;
-        }).collect(Collectors.toList());
+        List<ProductUploadBatchEntity> batches = productUploadBatchRepository.listAll();
+        return batches.stream().map(UploadBatchDtoMapper::fromProductBatch).collect(Collectors.toList());
     }
 
     private void applyValidationResults(ProductUploadStagedEntity staged, List<String> validationErrors) {

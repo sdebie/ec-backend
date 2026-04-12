@@ -15,8 +15,11 @@ import org.ecommerce.common.dto.ProductUploadBatchDto;
 import org.ecommerce.common.entity.*;
 import org.ecommerce.common.enums.PriceTypeEn;
 import org.ecommerce.common.enums.ProductImportValidationStatusEn;
-import org.ecommerce.common.enums.ProductTypeEn;
 import org.ecommerce.common.enums.ProductUploadStatusEn;
+import org.ecommerce.common.repository.ProductPriceUploadBatchRepository;
+import org.ecommerce.common.repository.ProductPriceUploadStagedRepository;
+import org.ecommerce.common.repository.ProductVariantRepository;
+import org.ecommerce.common.repository.VariantPricesRepository;
 import org.jboss.logging.Logger;
 
 import java.io.BufferedReader;
@@ -27,7 +30,6 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Objects;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -35,16 +37,83 @@ import static java.time.LocalDateTime.now;
 import static org.ecommerce.common.util.CsvImportUtils.*;
 
 @ApplicationScoped
-public class ProductPriceImportService {
+public class ProductPriceImportService implements ImportBatchService<ProductPriceComparisonDto, ProductPriceUploadBatchProcessStatusDto, ProductPriceUploadBatchEntity>, AsyncImportOperations {
 
     @Inject
     EntityManager entityManager;
 
+    @Inject
+    ProductPriceUploadBatchRepository productPriceUploadBatchRepository;
+
+    @Inject
+    ProductPriceUploadStagedRepository productPriceUploadStagedRepository;
+
+    @Inject
+    ProductVariantRepository productVariantRepository;
+
+    @Inject
+    VariantPricesRepository variantPricesRepository;
+
     private static final Logger LOG = Logger.getLogger(ProductImportService.class);
+
+    @Override
+    public ProductPriceUploadBatchEntity createImportPendingBatch(String filename, StaffUserEntity admin) {
+        return createProductPriceImportPendingBatch(filename, admin);
+    }
+
+    @Override
+    public void markImportBatchAsProcessing(UUID batchId) {
+        markProductPriceImportBatchAsProcessing(batchId);
+    }
+
+    @Override
+    public void markImportBatchAsProcessed(UUID batchId) {
+        markProductPriceBatchAsProcessed(batchId);
+    }
+
+    @Override
+    public void markImportBatchAsFailed(UUID batchId) {
+        markProductPriceBatchAsFailed(batchId);
+    }
+
+    @Override
+    public ProductPriceUploadBatchProcessStatusDto getImportBatchProcessStatus(UUID batchId) {
+        return getProductPriceImportBatchProcessStatus(batchId);
+    }
+
+    @Override
+    public List<ProductPriceComparisonDto> getImportRows(UUID batchId) {
+        return getProductPriceImportRows(batchId);
+    }
+
+    @Override
+    public List<ProductUploadBatchDto> getUploadBatches() {
+        return getProductPriceUploadBatches();
+    }
+
+    @Override
+    public void handleCsvUploadForBatch(InputStream is, UUID batchId) throws Exception {
+        handleProductPriceCsvUploadForBatch(is, batchId);
+    }
+
+    @Override
+    public void processStagedRowsForBatch(UUID batchId) {
+        processProductPriceStagedRowsForBatch(batchId);
+    }
+
+    @Override
+    public void markBatchAsProcessed(UUID batchId) {
+        markProductPriceBatchAsProcessed(batchId);
+    }
+
+    @Override
+    public void markBatchAsFailed(UUID batchId) {
+        markProductPriceBatchAsFailed(batchId);
+    }
 
     @Transactional
     public void handleProductPriceCsvUploadForBatch(InputStream is, UUID batchId) throws IOException {
-        ProductPriceUploadBatchEntity batch = ProductPriceUploadBatchEntity.findById(batchId);
+        ProductPriceUploadBatchEntity batch = productPriceUploadBatchRepository.findById(batchId);
         if (batch == null) {
             throw new NotFoundException("Price Batch not found: " + batchId);
         }
@@ -73,14 +142,20 @@ public class ProductPriceImportService {
                 staged.retailPrice = parseBigDecimal(record, validationErrors, "retail_price", "Retail Price");
                 staged.wholesalePrice = parseBigDecimal(record, validationErrors, "wholesale_price", "Wholesale Price");
 
-                findExistingVariant(staged.sku, validationErrors);
+                ProductVariantEntity existingVariant = findExistingVariant(staged.sku, validationErrors);
 
+                boolean retailChanged = pricesDiffer(staged.retailPrice, findLatestPrice(existingVariant, PriceTypeEn.RETAIL_PRICE));
+                boolean wholesaleChanged = pricesDiffer(staged.wholesalePrice, findLatestPrice(existingVariant, PriceTypeEn.WHOLESALE_PRICE));
+
+                staged.hasChanges = retailChanged || wholesaleChanged;
+
+                applyValidationResults(staged, validationErrors);
                 validationErrorCount += validationErrors.size();
                 if (!validationErrors.isEmpty()) {
                     LOG.warnf("CSV import validation failed at row %d (sku=%s): %s", record.getRecordNumber(), staged.sku, staged.validationErrors);
                 }
 
-                staged.persist();
+                productPriceUploadStagedRepository.persist(staged);
                 rowCount++;
 
                 if (rowCount % 500 == 0) {
@@ -98,7 +173,7 @@ public class ProductPriceImportService {
 
     @Transactional
     public void markProductPriceImportBatchAsProcessing(UUID batchId) {
-        ProductPriceUploadBatchEntity batch = ProductPriceUploadBatchEntity.findById(batchId);
+        ProductPriceUploadBatchEntity batch = productPriceUploadBatchRepository.findById(batchId);
         if (batch == null) {
             throw new NotFoundException("Price Batch not found: " + batchId);
         }
@@ -106,7 +181,7 @@ public class ProductPriceImportService {
             throw new IllegalStateException("Price Batch is already processing");
         }
 
-        long totalRows = ProductPriceUploadStagedEntity.count("batch.id", batchId);
+        long totalRows = productPriceUploadStagedRepository.countByBatchId(batchId);
         batch.productUploadStatusEn = ProductUploadStatusEn.PROCESSING;
         batch.totalRows = (int) totalRows;
         batch.processedRows = 0;
@@ -119,13 +194,13 @@ public class ProductPriceImportService {
         batch.filename = filename;
         batch.productUploadStatusEn = ProductUploadStatusEn.IMPORTING;
         batch.uploadedBy = admin;
-        batch.persist();
+        productPriceUploadBatchRepository.persist(batch);
         return batch;
     }
 
     @Transactional
     public void markProductPriceBatchAsFailed(UUID batchId) {
-        ProductPriceUploadBatchEntity batch = ProductPriceUploadBatchEntity.findById(batchId);
+        ProductPriceUploadBatchEntity batch = productPriceUploadBatchRepository.findById(batchId);
         if (batch == null) {
             throw new NotFoundException("Price Batch not found: " + batchId);
         }
@@ -134,7 +209,7 @@ public class ProductPriceImportService {
 
     @Transactional
     public void markProductPriceBatchAsProcessed(UUID batchId) {
-        ProductPriceUploadBatchEntity batch = ProductPriceUploadBatchEntity.findById(batchId);
+        ProductPriceUploadBatchEntity batch = productPriceUploadBatchRepository.findById(batchId);
         if (batch == null) {
             throw new NotFoundException("Price Batch not found: " + batchId);
         }
@@ -143,7 +218,7 @@ public class ProductPriceImportService {
 
     @Transactional(value = Transactional.TxType.SUPPORTS)
     public ProductPriceUploadBatchProcessStatusDto getProductPriceImportBatchProcessStatus(UUID batchId) {
-        ProductPriceUploadBatchEntity batch = ProductPriceUploadBatchEntity.findById(batchId);
+        ProductPriceUploadBatchEntity batch = productPriceUploadBatchRepository.findById(batchId);
         if (batch == null) {
             throw new NotFoundException("Price Batch not found: " + batchId);
         }
@@ -152,7 +227,7 @@ public class ProductPriceImportService {
         status.batchId = batch.id;
         status.status = batch.productUploadStatusEn != null ? batch.productUploadStatusEn.name() : null;
         status.totalRows = batch.totalRows;
-        status.stagedRows = ProductUploadStagedEntity.count("batch.id", batchId);
+        status.stagedRows = productPriceUploadStagedRepository.countByBatchId(batchId);
         status.processedRows = batch.processedRows != null ? (long) batch.processedRows : 0L;
         status.skippedRows = batch.skippedRows != null ? (long) batch.skippedRows : 0L;
         status.validationErrorCount = batch.validationErrorCount;
@@ -164,12 +239,12 @@ public class ProductPriceImportService {
     @Transactional
     public void processProductPriceStagedRowsForBatch(UUID batchId) {
         LOG.debug("DEBUG:: Processing Price Batch: " + batchId);
-        ProductPriceUploadBatchEntity batch = ProductPriceUploadBatchEntity.findById(batchId);
+        ProductPriceUploadBatchEntity batch = productPriceUploadBatchRepository.findById(batchId);
         if (batch == null) {
             throw new NotFoundException("Price Batch not found: " + batchId);
         }
 
-        List<ProductPriceUploadStagedEntity> stagedRows = ProductPriceUploadStagedEntity.list("batch.id = ?1 and processed = false", batchId);
+        List<ProductPriceUploadStagedEntity> stagedRows = productPriceUploadStagedRepository.findUnprocessedByBatchId(batchId);
         long processedCount = 0;
         long skippedCount = 0;
 
@@ -191,25 +266,42 @@ public class ProductPriceImportService {
 
         entityManager.flush();
 
-        long totalRows = ProductPriceUploadStagedEntity.count("batch.id", batchId);
-        long totalProcessedRows = ProductUploadStagedEntity.count(
-                "batch.id = ?1 and processed = true and validationStatus = ?2",
-                batchId,
-                ProductImportValidationStatusEn.VALID
-        );
-        long totalSkippedRows = ProductPriceUploadStagedEntity.count(
-                "batch.id = ?1 and processed = true and (validationStatus is null or validationStatus <> ?2)",
-                batchId,
-                ProductImportValidationStatusEn.VALID
-        );
+        long totalRows = productPriceUploadStagedRepository.countByBatchId(batchId);
+        long totalProcessedRows = productPriceUploadStagedRepository.countProcessedValidByBatchId(batchId);
+        long totalSkippedRows = productPriceUploadStagedRepository.countProcessedInvalidByBatchId(batchId);
         batch.totalRows = (int) totalRows;
         batch.processedRows = (int) totalProcessedRows;
         batch.skippedRows = (int) totalSkippedRows;
     }
 
+    private void applyValidationResults(ProductPriceUploadStagedEntity staged, List<String> validationErrors) {
+        staged.validationStatus = validationErrors.isEmpty()
+                ? ProductImportValidationStatusEn.VALID
+                : ProductImportValidationStatusEn.INVALID;
+        staged.validationErrors = validationErrors.isEmpty() ? null : String.join("; ", validationErrors);
+    }
+
+    private boolean pricesDiffer(BigDecimal left, BigDecimal right) {
+        if (left == null && right == null) {
+            return false;
+        }
+        if (left == null || right == null) {
+            return true;
+        }
+        return left.compareTo(right) != 0;
+    }
+
+    private BigDecimal findLatestPrice(ProductVariantEntity variant, PriceTypeEn priceType) {
+        if (variant == null || variant.id == null) {
+            return null;
+        }
+        VariantPricesEntity price = VariantPricesEntity.findLatestByVariantAndType(variant.id, priceType);
+        return price != null ? price.price : null;
+    }
+
     private void applyValidProductPriceStagedRow(ProductPriceUploadStagedEntity staged) {
 
-        ProductVariantEntity variant = ProductVariantEntity.find("sku", staged.sku).firstResult();
+        ProductVariantEntity variant = productVariantRepository.findBySku(staged.sku);
 
         if (variant == null) {
             //TODO::SDB ERRRO
@@ -225,12 +317,12 @@ public class ProductPriceImportService {
             return;
         }
 
-        VariantPricesEntity price = VariantPricesEntity.findLatestByVariantAndType(variant.id, priceType);
+        VariantPricesEntity price = variantPricesRepository.findLatestByVariantAndType(variant.id, priceType);
         if (price != null) {
             //Expire current row
             price.price = priceValue;
             price.priceEndDate = now();
-            price.persist();
+            variantPricesRepository.persist(price);
         }
         //Create nwe price
         price = new VariantPricesEntity();
@@ -239,7 +331,7 @@ public class ProductPriceImportService {
         price.price = priceValue;
         price.priceEndDate = LocalDateTime.of(2099, 1, 1, 0, 0, 0);
         price.priceStartDate = now();
-        price.persist();
+        variantPricesRepository.persist(price);
     }
 
     private ProductVariantEntity findExistingVariant(String sku, List<String> validationErrors) {
@@ -248,7 +340,7 @@ public class ProductPriceImportService {
             return null;
         }
 
-        ProductVariantEntity variant = ProductVariantEntity.find("sku", sku.trim()).firstResult();
+        ProductVariantEntity variant = productVariantRepository.findBySku(sku);
         if (variant == null) {
             validationErrors.add("variant with sku '" + sku + "' not found");
         }
@@ -256,7 +348,7 @@ public class ProductPriceImportService {
     }
 
     public List<ProductPriceComparisonDto> getProductPriceImportRows(UUID batchId) {
-        List<ProductPriceUploadStagedEntity> stagedList = ProductPriceUploadStagedEntity.find("batch.id = ?1", batchId).list();
+        List<ProductPriceUploadStagedEntity> stagedList = productPriceUploadStagedRepository.findByBatchId(batchId);
 
         return stagedList.stream().map(staged -> {
             ProductPriceComparisonDto dto = new ProductPriceComparisonDto();
@@ -267,10 +359,10 @@ public class ProductPriceImportService {
             dto.proposedRetailPrice = staged.retailPrice;
             dto.proposedWholesalePrice = staged.wholesalePrice;
 
-            ProductVariantEntity variant = ProductVariantEntity.find("sku", staged.sku).firstResult();
+            ProductVariantEntity variant = productVariantRepository.findBySkuWithProduct(staged.sku);
             if (variant != null) {
-                BigDecimal retailPrice = PriceUtils.getMinimumPrice(variant.product.id, PriceTypeEn.RETAIL_PRICE);
-                BigDecimal wholesalePrice = PriceUtils.getMinimumPrice(variant.product.id, PriceTypeEn.WHOLESALE_PRICE);
+                BigDecimal retailPrice = PriceUtils.getMinimumPrice(variant.id, PriceTypeEn.RETAIL_PRICE);
+                BigDecimal wholesalePrice = PriceUtils.getMinimumPrice(variant.id, PriceTypeEn.WHOLESALE_PRICE);
 
                 dto.currentRetailPrice = retailPrice;
                 dto.currentWholesalePrice = wholesalePrice;
@@ -283,20 +375,8 @@ public class ProductPriceImportService {
     }
 
     public List<ProductUploadBatchDto> getProductPriceUploadBatches() {
-        List<ProductPriceUploadBatchEntity> batches = ProductPriceUploadBatchEntity.listAll();
-        return batches.stream().map(batch -> {
-            ProductUploadBatchDto dto = new ProductUploadBatchDto();
-            dto.id = batch.id;
-            dto.filename = batch.filename;
-            dto.status = batch.productUploadStatusEn.toString();
-            dto.totalRows = batch.totalRows;
-            dto.processedRows = batch.processedRows;
-            dto.skippedRows = batch.skippedRows;
-            dto.validationErrorCount = batch.validationErrorCount;
-            dto.createdAt = batch.createdAt;
-            dto.uploadedByUsername = batch.uploadedBy != null ? batch.uploadedBy.email : null;
-            return dto;
-        }).collect(Collectors.toList());
+        List<ProductPriceUploadBatchEntity> batches = productPriceUploadBatchRepository.listAll();
+        return batches.stream().map(UploadBatchDtoMapper::fromProductPriceBatch).collect(Collectors.toList());
     }
 
 }

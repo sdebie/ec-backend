@@ -116,7 +116,7 @@ public class ProductUploadResource {
     }
 
     @POST
-    @Path("/batches/price/{batchId}/staged/async")
+    @Path("/price/batches/{batchId}/staged/async")
     @Consumes(MediaType.APPLICATION_JSON)
     public Response startProcessProductPriceImportBatch(@PathParam("batchId") UUID batchId) {
         try {
@@ -132,7 +132,7 @@ public class ProductUploadResource {
     }
 
     @GET
-    @Path("/batches/price/{batchId}/staged/status")
+    @Path("/price/batches/{batchId}/staged/status")
     public Response getProductPriceImportStatus(@PathParam("batchId") UUID batchId) {
         try {
             return Response.ok(priceImportService.getProductPriceImportBatchProcessStatus(batchId)).build();

@@ -11,14 +11,9 @@ import org.ecommerce.common.dto.ProductUploadBatchDto;
 
 import jakarta.transaction.Transactional;
 import jakarta.transaction.Transactional.TxType;
-import org.ecommerce.common.entity.ProductEntity;
-import org.ecommerce.common.entity.ProductUploadStagedEntity;
-import org.ecommerce.common.entity.ProductVariantEntity;
 
 import java.util.List;
-import java.util.Locale;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 @ApplicationScoped
 @GraphQLApi
