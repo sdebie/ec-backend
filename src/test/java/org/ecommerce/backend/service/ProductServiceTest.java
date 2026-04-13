@@ -4,17 +4,13 @@ import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
 import org.ecommerce.backend.mapper.ProductMapper;
-import org.ecommerce.common.dto.ProductDto;
 import org.ecommerce.common.dto.ProductInformationDto;
 import org.ecommerce.common.dto.ProductListItemDto;
+import org.ecommerce.common.dto.ProductShoppingListItemDto;
 import org.ecommerce.common.dto.ProductVariantDto;
-import org.ecommerce.common.dto.OnSaleProductListDto;
-import org.ecommerce.common.dto.VariantPriceDto;
 import org.ecommerce.common.entity.ProductEntity;
 import org.ecommerce.common.entity.ProductImageEntity;
 import org.ecommerce.common.entity.ProductVariantEntity;
-import org.ecommerce.common.entity.VariantPricesEntity;
-import org.ecommerce.common.enums.PriceTypeEn;
 import org.ecommerce.common.query.FilterRequest;
 import org.ecommerce.common.query.PageRequest;
 import org.ecommerce.common.repository.ProductImageRepository;
@@ -22,7 +18,6 @@ import org.ecommerce.common.repository.ProductRepository;
 import org.ecommerce.common.repository.ProductVariantRepository;
 import org.junit.jupiter.api.Test;
 
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -116,85 +111,28 @@ class ProductServiceTest
         assertNull(repositoryDto.brandName);
     }
 
+
     @Test
-    void getProductsOnSale_shouldReturnSalesProductListWithLatestActiveListingPrices()
+    void getProductsOnSale_shouldReturnShoppingProductCardsFromRepository()
     {
         PageRequest pageRequest = new PageRequest();
-        UUID productId = UUID.randomUUID();
-        UUID variantId = UUID.randomUUID();
-        LocalDateTime now = LocalDateTime.now();
+        ProductShoppingListItemDto first = new ProductShoppingListItemDto();
+        first.id = UUID.randomUUID().toString();
+        first.name = "Promo Lamp";
 
-        ProductEntity productEntity = new ProductEntity();
-        productEntity.id = productId;
-        productEntity.name = "Promo Lamp";
+        ProductShoppingListItemDto second = new ProductShoppingListItemDto();
+        second.id = UUID.randomUUID().toString();
+        second.name = "Promo Chair";
 
-        ProductVariantEntity variantEntity = new ProductVariantEntity();
-        variantEntity.id = variantId;
-        variantEntity.product = productEntity;
-        variantEntity.sku = "PROMO-SKU";
+        when(productRepository.findOnSaleShoppingProductList(pageRequest)).thenReturn(List.of(first, second));
 
-        VariantPricesEntity retailSalePriceEntity = new VariantPricesEntity();
-        retailSalePriceEntity.id = UUID.randomUUID();
-        retailSalePriceEntity.priceType = PriceTypeEn.RETAIL_SALE_PRICE;
-        retailSalePriceEntity.price = java.math.BigDecimal.valueOf(99.99);
-        retailSalePriceEntity.priceStartDate = now.minusDays(1);
-        retailSalePriceEntity.priceEndDate = now.plusDays(5);
+        List<ProductShoppingListItemDto> result = productService.getProductsOnSale(pageRequest);
 
-        VariantPricesEntity retailBasePriceEntity = new VariantPricesEntity();
-        retailBasePriceEntity.id = UUID.randomUUID();
-        retailBasePriceEntity.priceType = PriceTypeEn.RETAIL_PRICE;
-        retailBasePriceEntity.price = java.math.BigDecimal.valueOf(149.99);
-        retailBasePriceEntity.priceStartDate = now.minusDays(2);
-        retailBasePriceEntity.priceEndDate = now.plusDays(10);
+        assertEquals(2, result.size());
+        assertSame(first, result.get(0));
+        assertSame(second, result.get(1));
 
-        variantEntity.prices = List.of(retailSalePriceEntity, retailBasePriceEntity);
-
-
-        ProductVariantDto variantDto = new ProductVariantDto();
-        variantDto.id = variantId.toString();
-        variantDto.sku = "PROMO-SKU";
-
-        VariantPriceDto retailSalePrice = new VariantPriceDto();
-        retailSalePrice.id = UUID.randomUUID().toString();
-        retailSalePrice.priceType = "RETAIL_SALE_PRICE";
-        retailSalePrice.price = java.math.BigDecimal.valueOf(99.99);
-        retailSalePrice.priceStartDate = now.minusDays(1);
-        retailSalePrice.priceEndDate = now.plusDays(5);
-
-        VariantPriceDto retailBasePrice = new VariantPriceDto();
-        retailBasePrice.id = UUID.randomUUID().toString();
-        retailBasePrice.priceType = "RETAIL_PRICE";
-        retailBasePrice.price = java.math.BigDecimal.valueOf(149.99);
-        retailBasePrice.priceStartDate = now.minusDays(2);
-        retailBasePrice.priceEndDate = now.plusDays(10);
-
-        ProductDto productDto = new ProductDto();
-        productDto.id = productId.toString();
-        productDto.name = "Promo Lamp";
-
-        when(productVariantRepository.findOnSaleVariants(pageRequest)).thenReturn(List.of(variantEntity));
-        when(productMapper.mapVariantEntityToDto(variantEntity)).thenReturn(variantDto);
-        when(productMapper.mapProductEntityToDto(productEntity)).thenReturn(productDto);
-        when(productMapper.mapPriceEntityToDto(retailSalePriceEntity)).thenReturn(retailSalePrice);
-        when(productMapper.mapPriceEntityToDto(retailBasePriceEntity)).thenReturn(retailBasePrice);
-
-        List<OnSaleProductListDto> result = productService.getProductsOnSale(pageRequest);
-
-        assertEquals(1, result.size());
-        OnSaleProductListDto salesProduct = result.getFirst();
-        assertSame(productDto, salesProduct.product);
-        assertEquals(1, salesProduct.variants.size());
-        ProductVariantDto saleVariant = salesProduct.variants.getFirst();
-        assertSame(variantDto, saleVariant);
-        assertEquals(2, saleVariant.prices.size());
-        assertEquals(List.of("RETAIL_PRICE", "RETAIL_SALE_PRICE"),
-                saleVariant.prices.stream().map(price -> price.priceType).sorted().toList());
-
-        verify(productVariantRepository).findOnSaleVariants(pageRequest);
-        verify(productMapper).mapVariantEntityToDto(variantEntity);
-        verify(productMapper).mapProductEntityToDto(productEntity);
-        verify(productMapper).mapPriceEntityToDto(retailSalePriceEntity);
-        verify(productMapper).mapPriceEntityToDto(retailBasePriceEntity);
+        verify(productRepository).findOnSaleShoppingProductList(pageRequest);
     }
 
     @Test

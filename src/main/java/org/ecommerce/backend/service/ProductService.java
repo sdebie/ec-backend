@@ -10,8 +10,6 @@ import org.ecommerce.common.dto.*;
 import org.ecommerce.common.entity.ProductEntity;
 import org.ecommerce.common.entity.ProductImageEntity;
 import org.ecommerce.common.entity.ProductVariantEntity;
-import org.ecommerce.common.entity.VariantPricesEntity;
-import org.ecommerce.common.enums.PriceTypeEn;
 import org.ecommerce.common.enums.ProductTypeEn;
 import org.ecommerce.common.query.FilterRequest;
 import org.ecommerce.common.query.PageRequest;
@@ -21,14 +19,7 @@ import org.ecommerce.common.repository.ProductVariantRepository;
 import org.ecommerce.common.repository.CategoryRepository;
 import org.ecommerce.common.repository.BrandRepository;
 
-import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.EnumMap;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.Objects;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -67,98 +58,11 @@ public class ProductService
     }
 
     @Transactional(value = TxType.SUPPORTS)
-    public List<OnSaleProductListDto> getProductsOnSale(PageRequest pageRequest)
+    public List<ProductShoppingListItemDto> getProductsOnSale(PageRequest pageRequest)
     {
-        List<ProductVariantEntity> saleVariants = productVariantRepository.findOnSaleVariants(pageRequest);
-        LocalDateTime now = LocalDateTime.now();
-        Map<UUID, OnSaleProductListDto> groupedByProduct = new LinkedHashMap<>();
-
-        for (ProductVariantEntity variantEntity : saleVariants) {
-            if (variantEntity == null || variantEntity.product == null || variantEntity.product.id == null) {
-                continue;
-            }
-
-            UUID productId = variantEntity.product.id;
-            OnSaleProductListDto productGroup = groupedByProduct.computeIfAbsent(productId, id ->
-                    new OnSaleProductListDto(
-                            productMapper.mapProductEntityToDto(variantEntity.product),
-                            new ArrayList<>()));
-
-            ProductVariantDto variantDto = productMapper.mapVariantEntityToDto(variantEntity);
-            if (variantDto == null) {
-                continue;
-            }
-
-            variantDto.prices = selectLatestActiveSaleListingPrices(variantEntity, now);
-            if (!variantDto.prices.isEmpty()) {
-                productGroup.variants.add(variantDto);
-            }
-        }
-
-        return groupedByProduct.values().stream()
-                .filter(group -> group.variants != null && !group.variants.isEmpty())
-                .collect(Collectors.toList());
+        return productRepository.findOnSaleShoppingProductList(pageRequest);
     }
 
-    private List<VariantPriceDto> selectLatestActiveSaleListingPrices(ProductVariantEntity variantEntity, LocalDateTime now)
-    {
-        if (variantEntity == null || variantEntity.prices == null || variantEntity.prices.isEmpty()) {
-            return List.of();
-        }
-
-        Map<PriceTypeEn, VariantPricesEntity> latestByType = new EnumMap<>(PriceTypeEn.class);
-
-        for (VariantPricesEntity priceEntity : variantEntity.prices) {
-            if (priceEntity == null || priceEntity.priceType == null) {
-                continue;
-            }
-
-            if (!isSaleListingPriceType(priceEntity.priceType)) {
-                continue;
-            }
-
-            if (priceEntity.priceStartDate != null && now.isBefore(priceEntity.priceStartDate)) {
-                continue;
-            }
-
-            if (priceEntity.priceEndDate != null && now.isAfter(priceEntity.priceEndDate)) {
-                continue;
-            }
-
-            VariantPricesEntity current = latestByType.get(priceEntity.priceType);
-            if (current == null || PRICE_RECENCY_COMPARATOR.compare(priceEntity, current) > 0) {
-                latestByType.put(priceEntity.priceType, priceEntity);
-            }
-        }
-
-        return List.of(
-                        PriceTypeEn.RETAIL_PRICE,
-                        PriceTypeEn.RETAIL_SALE_PRICE,
-                        PriceTypeEn.WHOLESALE_PRICE,
-                        PriceTypeEn.WHOLESALE_SALE_PRICE)
-                .stream()
-                .map(latestByType::get)
-                .filter(Objects::nonNull)
-                .map(productMapper::mapPriceEntityToDto)
-                .collect(Collectors.toList());
-    }
-
-    private boolean isSaleListingPriceType(PriceTypeEn priceType)
-    {
-        return priceType == PriceTypeEn.RETAIL_PRICE
-                || priceType == PriceTypeEn.RETAIL_SALE_PRICE
-                || priceType == PriceTypeEn.WHOLESALE_PRICE
-                || priceType == PriceTypeEn.WHOLESALE_SALE_PRICE;
-    }
-
-    private static final Comparator<VariantPricesEntity> PRICE_RECENCY_COMPARATOR =
-            Comparator.comparing((VariantPricesEntity price) -> price.priceStartDate,
-                            Comparator.nullsFirst(LocalDateTime::compareTo))
-                    .thenComparing(price -> price.updatedAt,
-                            Comparator.nullsFirst(LocalDateTime::compareTo))
-                    .thenComparing(price -> price.createdAt,
-                            Comparator.nullsFirst(LocalDateTime::compareTo))
-                    .thenComparing(price -> price.id == null ? "" : price.id.toString());
 
 
     private List<ProductListItemDto> enrichProductListItems(List<ProductListItemDto> products)

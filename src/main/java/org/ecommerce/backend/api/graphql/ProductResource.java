@@ -66,9 +66,9 @@ public class ProductResource
     }
 
     @Query("saleProductList")
-    @Description("Returns products with variants that currently have active RETAIL_SALE_PRICE or WHOLESALE_SALE_PRICE values only.")
+    @Description("Returns shopping product cards that currently have active RETAIL_SALE_PRICE or WHOLESALE_SALE_PRICE values only.")
     @Transactional(value = TxType.SUPPORTS)
-    public List<OnSaleProductListDto> getProductsOnSaleList(@Name("pageRequest") PageRequest pageRequest)
+    public List<ProductShoppingListItemDto> getProductsOnSaleList(@Name("pageRequest") PageRequest pageRequest)
     {
         return productService.getProductsOnSale(pageRequest);
     }
