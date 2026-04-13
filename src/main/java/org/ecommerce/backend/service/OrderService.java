@@ -8,11 +8,14 @@ import org.eclipse.microprofile.graphql.GraphQLException;
 import org.ecommerce.common.dto.CustomerDto;
 import org.ecommerce.common.dto.OrderDto;
 import org.ecommerce.common.dto.OrderItemDto;
+import org.ecommerce.common.dto.OrderResponseDto;
 import org.ecommerce.common.entity.CustomerEntity;
 import org.ecommerce.common.entity.OrderEntity;
 import org.ecommerce.common.entity.OrderItemEntity;
 import org.ecommerce.common.entity.ProductVariantEntity;
 import org.ecommerce.common.enums.OrderStatusEn;
+import org.ecommerce.common.repository.OrderRepository;
+import org.ecommerce.backend.mapper.OrderMapper;
 
 import java.math.BigDecimal;
 import java.util.*;
@@ -25,17 +28,23 @@ public class OrderService
     @Inject
     MailTemplate order_confirmation;
 
+    @Inject
+    OrderRepository orderRepository;
+
+    @Inject
+    OrderMapper orderMapper;
+
     private static final Logger LOG = Logger.getLogger(OrderService.class);
 
     @Transactional
-    public OrderEntity createOrderFromDto(OrderDto orderDto) throws GraphQLException
+    public OrderResponseDto createOrderFromDto(OrderDto orderDto) throws GraphQLException
     {
 
         if (orderDto == null || orderDto.getSessionId() == null) {
             throw new GraphQLException("Invalid Order Session info");
         }
         UUID session = UUID.fromString(orderDto.getSessionId());
-        OrderEntity order = OrderEntity.findLatestOrderInfoBySessionId(session);
+        OrderEntity order = orderRepository.findLatestOrderInfoBySessionId(session);
         boolean isNew = false;
         if (order == null) {
             System.out.println("DEBUG: Creating new Order for sessionId=" + session);
@@ -127,26 +136,29 @@ public class OrderService
             OrderEntity.persist(order);
         } // else: entity already managed; no explicit persist needed
 
-        return order;
+        return orderMapper.toResponseDto(order);
     }
 
-    public OrderEntity getOrderById(String orderId)
+    public OrderResponseDto getOrderById(UUID orderId)
     {
-        if (orderId == null || orderId.isBlank()) return null;
-        try {
-            java.util.UUID id = java.util.UUID.fromString(orderId);
-            return OrderEntity.findOrderInfoById(id);
-        } catch (IllegalArgumentException e) {
+        if (orderId == null) {
             return null;
         }
+        return orderMapper.toResponseDto(orderRepository.findOrderInfoById(orderId));
     }
 
-    public OrderEntity getLatestOrderBySessionId(String sessionId)
+    public OrderResponseDto getLatestOrderBySessionId(String sessionId)
+    {
+        OrderEntity order = findLatestOrderEntityBySessionId(sessionId);
+        return orderMapper.toResponseDto(order);
+    }
+
+    private OrderEntity findLatestOrderEntityBySessionId(String sessionId)
     {
         try {
             UUID sid = UUID.fromString(sessionId);
             System.out.println("DEBUG: getLatestOrderBySessionId for sessionId=" + sid);
-            return OrderEntity.findLatestOrderInfoBySessionId(sid);
+            return orderRepository.findLatestOrderInfoBySessionId(sid);
         } catch (Exception e) {
             return null;
         }
@@ -163,7 +175,7 @@ public class OrderService
         }
 
         System.out.println("DEBUG: Updating customer info for sessionId=" + sessionId + " email=" + customerDto.getEmail());
-        OrderEntity order = getLatestOrderBySessionId(sessionId);
+        OrderEntity order = findLatestOrderEntityBySessionId(sessionId);
         if (order == null) {
             throw new GraphQLException("Order not found for sessionId");
         }
@@ -189,7 +201,7 @@ public class OrderService
     }
 
     @Transactional
-    public OrderEntity updateOrderStatus(String sessionId, String status) throws GraphQLException
+    public OrderResponseDto updateOrderStatus(String sessionId, String status) throws GraphQLException
     {
         if (sessionId == null || sessionId.isBlank()) {
             throw new GraphQLException("sessionId is required");
@@ -198,7 +210,7 @@ public class OrderService
             throw new GraphQLException("status is required");
         }
         System.out.println("DEBUG: Updating order status for sessionId=" + sessionId + " to status=" + status);
-        OrderEntity order = getLatestOrderBySessionId(sessionId);
+        OrderEntity order = findLatestOrderEntityBySessionId(sessionId);
         if (order == null) {
             throw new GraphQLException("Order not found for sessionId");
         }
@@ -213,7 +225,7 @@ public class OrderService
         if (order.status.equals(OrderStatusEn.IN_STORE_PAYMENT)) {
             sendConfirmationEmail(order);
         }
-        return order;
+        return orderMapper.toResponseDto(order);
     }
 
     public void sendConfirmationEmail(OrderEntity order)

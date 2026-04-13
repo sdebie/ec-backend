@@ -40,6 +40,7 @@ public class ProductUploadResource {
     public Response productUploadCsv(ProductUploadFormDto form) {
         try {
             // 1. Resolve the admin user from the security context
+            //TODO::SDB Fix Hardcoded admin
             StaffUserEntity admin = StaffUserEntity.findByEmail("admin@gmail.com");
 
             if (admin == null) {
@@ -93,6 +94,7 @@ public class ProductUploadResource {
     public Response productPriceUploadCsv(ProductUploadFormDto form) {
         try {
             // 1. Resolve the admin user from the security context
+            //TODO::SDB Fix Hardcoded
             StaffUserEntity admin = StaffUserEntity.findByEmail("admin@gmail.com");
 
             if (admin == null) {
