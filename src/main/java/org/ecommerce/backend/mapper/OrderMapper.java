@@ -31,6 +31,7 @@ public class OrderMapper
         dto.id = entity.id == null ? null : entity.id.toString();
         dto.sessionId = entity.sessionId == null ? null : entity.sessionId.toString();
         dto.status = entity.status == null ? null : entity.status.name();
+        dto.createDate = entity.createdAt == null ? null : entity.createdAt.toString();
         dto.totalAmount = entity.totalAmount;
         dto.customer = toCustomerDto(entity.customerEntity);
 
@@ -43,6 +44,8 @@ public class OrderMapper
                 }
             }
         }
+
+        dto.itemCount = dto.items == null ? 0 : dto.items.size();
 
         return dto;
     }
@@ -118,4 +121,3 @@ public class OrderMapper
         return dto;
     }
 }
-

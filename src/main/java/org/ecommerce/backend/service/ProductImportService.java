@@ -324,9 +324,10 @@ public class ProductImportService implements ImportBatchService<ProductCompariso
         if (brand != null) {
             product.brand = brand;
         }
-        if (product.productType == null) {
-            product.productType = ProductTypeEn.VARIABLE;
-        }
+
+        // Determine product type based on variant count
+        int variantCount = (int) productVariantRepository.findByVariantsForProductId(product.id).size();
+        product.productType = variantCount == 1 ? ProductTypeEn.SIMPLE : ProductTypeEn.VARIABLE;
 
         variant.stockQuantity = staged.stock != null ? staged.stock : 0;
         variant.attributesJson = trimToNull(staged.attributes);

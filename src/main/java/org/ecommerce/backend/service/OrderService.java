@@ -6,14 +6,14 @@ import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import org.eclipse.microprofile.graphql.GraphQLException;
 import org.ecommerce.common.dto.CustomerDto;
+import org.ecommerce.common.dto.OrderDetailRespDto;
 import org.ecommerce.common.dto.OrderDto;
 import org.ecommerce.common.dto.OrderItemDto;
 import org.ecommerce.common.dto.OrderResponseDto;
-import org.ecommerce.common.entity.CustomerEntity;
-import org.ecommerce.common.entity.OrderEntity;
-import org.ecommerce.common.entity.OrderItemEntity;
-import org.ecommerce.common.entity.ProductVariantEntity;
+import org.ecommerce.common.entity.*;
 import org.ecommerce.common.enums.OrderStatusEn;
+import org.ecommerce.common.query.FilterRequest;
+import org.ecommerce.common.query.PageRequest;
 import org.ecommerce.common.repository.OrderRepository;
 import org.ecommerce.backend.mapper.OrderMapper;
 
@@ -201,25 +201,36 @@ public class OrderService
     }
 
     @Transactional
-    public OrderResponseDto updateOrderStatus(String sessionId, String status) throws GraphQLException
+    public OrderResponseDto updateOrderStatus(String sessionId, String newStatus) throws GraphQLException
     {
         if (sessionId == null || sessionId.isBlank()) {
             throw new GraphQLException("sessionId is required");
         }
-        if (status == null || status.isBlank()) {
+        if (newStatus == null || newStatus.isBlank()) {
             throw new GraphQLException("status is required");
         }
-        System.out.println("DEBUG: Updating order status for sessionId=" + sessionId + " to status=" + status);
+        System.out.println("DEBUG: Updating order status for sessionId=" + sessionId + " to status=" + newStatus);
         OrderEntity order = findLatestOrderEntityBySessionId(sessionId);
         if (order == null) {
             throw new GraphQLException("Order not found for sessionId");
         }
         try {
-            order.status = OrderStatusEn.valueOf(status);
+            order.status = OrderStatusEn.valueOf(newStatus);
         } catch (IllegalArgumentException e) {
-            throw new GraphQLException("Invalid status: " + status);
+            throw new GraphQLException("Invalid status: " + newStatus);
         }
-        // no explicit persist needed; managed entity will be updated on commit
+        order.persist(); // ensure status update is saved before creating history record
+
+
+        // 2. Create history record
+        OrderStatusHistoryEntity history = new OrderStatusHistoryEntity();
+        history.order = order;
+        history.status = OrderStatusEn.valueOf(newStatus);
+        history.comment = "Order Update";
+        //history.changedBy = staffId;
+
+        history.persist();
+
 
         //Order Created In store Payment
         if (order.status.equals(OrderStatusEn.IN_STORE_PAYMENT)) {
@@ -243,4 +254,70 @@ public class OrderService
                         failure -> LOG.error("Order email failed", failure)
                 );
     }
+
+    public List<OrderResponseDto> getAllOrders(PageRequest pageRequest, FilterRequest filterRequest)
+    {
+        List<OrderEntity> orderEntities = orderRepository.findAllOrderInfo(pageRequest, filterRequest);
+        List<OrderResponseDto> orders = new ArrayList<>(orderEntities.size());
+        for (OrderEntity orderEntity : orderEntities) {
+            orders.add(orderMapper.toResponseDto(orderEntity));
+        }
+        return orders;
+    }
+
+    public OrderDetailRespDto getOrderDetail(UUID orderId)
+    {
+        if (orderId == null) {
+            return null;
+        }
+
+        OrderEntity order = orderRepository.findOrderInfoById(orderId);
+        if (order == null) {
+            return null;
+        }
+
+        OrderDetailRespDto detail = new OrderDetailRespDto();
+
+        // Map all OrderEntity fields
+        detail.id = order.id;
+        detail.customerEntity = order.customerEntity;
+        detail.totalAmount = order.totalAmount;
+        detail.sessionId = order.sessionId;
+        detail.status = order.status;
+        detail.shippingPhone = order.shippingPhone;
+        detail.shippingAddressLine1 = order.shippingAddressLine1;
+        detail.shippingAddressLine2 = order.shippingAddressLine2;
+        detail.shippingCity = order.shippingCity;
+        detail.shippingProvince = order.shippingProvince;
+        detail.shippingPostalCode = order.shippingPostalCode;
+        if (order.items != null) {
+            detail.items = new ArrayList<>(order.items);
+        }
+        detail.createdAt = order.createdAt;
+
+        // Map all OrderStatusHistoryEntity fields
+        List<OrderStatusHistoryEntity> histories = OrderStatusHistoryEntity
+                .find("select h from OrderStatusHistoryEntity h where h.order.id = ?1 order by h.createdAt desc", orderId)
+                .list();
+
+        if (histories != null) {
+            for (OrderStatusHistoryEntity history : histories) {
+                if (history == null) {
+                    continue;
+                }
+                OrderDetailRespDto.OrderStatusHistoryDetailRespDto historyDto =
+                        new OrderDetailRespDto.OrderStatusHistoryDetailRespDto();
+                historyDto.id = history.id;
+                historyDto.order = history.order;
+                historyDto.status = history.status;
+                historyDto.comment = history.comment;
+                historyDto.changedBy = history.changedBy;
+                historyDto.createdAt = history.createdAt;
+                detail.statusHistory.add(historyDto);
+            }
+        }
+
+        return detail;
+    }
+
 }
