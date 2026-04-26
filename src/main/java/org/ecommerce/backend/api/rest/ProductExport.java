@@ -23,14 +23,50 @@ public class ProductExport {
     ProductExportService exportService;
 
     @GET
-    @Path("/export")
+    @Path("/full_export")
     @Produces("text/csv")
     public Response exportAllProducts() {
         StreamingOutput stream = output -> {
             try (PrintWriter writer = new PrintWriter(output)) {
-                exportService.writeProductsCsv(writer);
+                exportService.writeFullProductsInfoCsv(writer);
             } catch (Exception e) {
                 LOG.error("Error exporting products to CSV", e);
+                throw e;
+            }
+        };
+
+        return Response.ok(stream)
+                .header("Content-Disposition", "attachment; filename=catalog_export.csv")
+                .build();
+    }
+
+    @GET
+    @Path("/list_export")
+    @Produces("text/csv")
+    public Response exportProductsList() {
+        StreamingOutput stream = output -> {
+            try (PrintWriter writer = new PrintWriter(output)) {
+                exportService.writeProductsListCsv(writer);
+            } catch (Exception e) {
+                LOG.error("Error exporting products list to CSV", e);
+                throw e;
+            }
+        };
+
+        return Response.ok(stream)
+                .header("Content-Disposition", "attachment; filename=catalog_export.csv")
+                .build();
+    }
+
+    @GET
+    @Path("/price_export")
+    @Produces("text/csv")
+    public Response exportProductsPrice() {
+        StreamingOutput stream = output -> {
+            try (PrintWriter writer = new PrintWriter(output)) {
+                exportService.writeProductsPriceCsv(writer);
+            } catch (Exception e) {
+                LOG.error("Error exporting products price to CSV", e);
                 throw e;
             }
         };

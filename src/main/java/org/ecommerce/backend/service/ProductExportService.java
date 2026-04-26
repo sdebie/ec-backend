@@ -15,10 +15,17 @@ public class ProductExportService {
     @Inject
     ProductImportRepository productImportRepository;
 
-    private static final String CSV_HEADER =
+    private static final String CSV_INFO_HEADER =
             "product_slug,sku,name,description,short_description,category_slug,brand_slug,retail_price,retail_sale_price,wholesale_price,wholesale_sale_price,stock,images,attributes";
 
-    private static final String EXPORT_SQL = """
+    private static final String CSV_LIST_HEADER =
+            "product_slug,sku,name,description,short_description,category_slug,brand_slug,stock,images,attributes";
+
+    private static final String CSV_PRICE_HEADER =
+            "sku,retail_price,wholesale_price";
+
+
+    private static final String EXPORT_PRD_DETAIL_SQL = """
             SELECT
                 p.slug AS product_slug,
                 v.sku,
@@ -40,13 +47,72 @@ public class ProductExportService {
             LEFT JOIN brands b ON p.brand_id = b.id
             """;
 
+    //"sku,retail_price,wholesale_price";
+    private static final String EXPORT_PRD_PRICE_SQL = """
+            SELECT
+                v.sku,
+                (SELECT price FROM variant_prices WHERE variant_id = v.id AND price_type = 'RETAIL_PRICE' ORDER BY created_at DESC LIMIT 1) as retail_price,
+                (SELECT price FROM variant_prices WHERE variant_id = v.id AND price_type = 'WHOLESALE_PRICE' ORDER BY created_at DESC LIMIT 1) as wholesale_price
+            FROM product_variants v
+            """;
+
+    private static final String EXPORT_PRD_LIST_SQL = """
+            SELECT
+                p.slug AS product_slug,
+                v.sku,
+                p.name,
+                p.description,
+                p.short_description,
+                c.slug AS category_slug,
+                b.slug AS brand_slug,
+                v.stock_quantity as stock,
+                (SELECT STRING_AGG(image_url, ',') FROM product_images WHERE variant_id = v.id) as images,
+                v.attributes
+            FROM product_variants v
+            JOIN products p ON v.product_id = p.id
+            LEFT JOIN categories c ON p.category_id = c.id
+            LEFT JOIN brands b ON p.brand_id = b.id
+            """;
+
     @Transactional(Transactional.TxType.SUPPORTS)
-    public void writeProductsCsv(PrintWriter writer) {
-        writer.println(CSV_HEADER);
+    public void writeFullProductsInfoCsv(PrintWriter writer) {
+        writer.println(CSV_INFO_HEADER);
 
         @SuppressWarnings("unchecked")
         Stream<Object[]> resultStream = Panache.getEntityManager()
-                .createNativeQuery(EXPORT_SQL)
+                .createNativeQuery(EXPORT_PRD_DETAIL_SQL)
+                .getResultStream();
+
+        try (resultStream) {
+            resultStream.forEach(row -> writer.println(formatCsvLine(row)));
+        }
+
+        writer.flush();
+    }
+
+    @Transactional(Transactional.TxType.SUPPORTS)
+    public void writeProductsListCsv(PrintWriter writer) {
+        writer.println(CSV_LIST_HEADER);
+
+        @SuppressWarnings("unchecked")
+        Stream<Object[]> resultStream = Panache.getEntityManager()
+                .createNativeQuery(EXPORT_PRD_LIST_SQL)
+                .getResultStream();
+
+        try (resultStream) {
+            resultStream.forEach(row -> writer.println(formatCsvLine(row)));
+        }
+
+        writer.flush();
+    }
+
+    @Transactional(Transactional.TxType.SUPPORTS)
+    public void writeProductsPriceCsv(PrintWriter writer) {
+        writer.println(CSV_PRICE_HEADER);
+
+        @SuppressWarnings("unchecked")
+        Stream<Object[]> resultStream = Panache.getEntityManager()
+                .createNativeQuery(EXPORT_PRD_PRICE_SQL)
                 .getResultStream();
 
         try (resultStream) {

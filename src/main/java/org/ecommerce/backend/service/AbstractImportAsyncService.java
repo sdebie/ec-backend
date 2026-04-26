@@ -30,14 +30,8 @@ public abstract class AbstractImportAsyncService
     protected void runCsvStagingAsync(InputStream is, UUID batchId)
     {
         executor.submit(() -> {
-            try {
-                QuarkusTransaction.requiringNew().run(() -> {
-                    try {
-                        importOperations().handleCsvUploadForBatch(is, batchId);
-                    } catch (Exception e) {
-                        throw new RuntimeException(e);
-                    }
-                });
+            try (InputStream inputStream = is) {
+                importOperations().handleCsvUploadForBatch(inputStream, batchId);
             } catch (Exception ex) {
                 logger().errorf(ex, "Failed async CSV staging for batch %s", batchId);
                 markFailedSafely(batchId);
@@ -52,7 +46,7 @@ public abstract class AbstractImportAsyncService
 
             while (true) {
                 try {
-                    QuarkusTransaction.requiringNew().run(() -> importOperations().processStagedRowsForBatch(batchId));
+                    importOperations().processStagedRowsForBatch(batchId);
                     QuarkusTransaction.requiringNew().run(() -> importOperations().markBatchAsProcessed(batchId));
                     return;
                 } catch (Exception ex) {

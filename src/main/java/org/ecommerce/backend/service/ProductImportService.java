@@ -1,5 +1,6 @@
 package org.ecommerce.backend.service;
 
+import io.quarkus.narayana.jta.QuarkusTransaction;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
@@ -37,6 +38,9 @@ import static org.ecommerce.common.util.CsvImportUtils.isBlank;
 
 @ApplicationScoped
 public class ProductImportService implements ImportBatchService<ProductComparisonDto, ProductUploadBatchProcessStatusDto, ProductUploadBatchEntity>, AsyncImportOperations {
+
+    private static final int STAGING_CHUNK_SIZE = 200;
+    private static final int PROCESSING_CHUNK_SIZE = 100;
 
     @ConfigProperty(name = "storage.path")
     String storagePath;
@@ -127,6 +131,10 @@ public class ProductImportService implements ImportBatchService<ProductCompariso
         batch.filename = filename;
         batch.productUploadStatusEn = ProductUploadStatusEn.IMPORTING;
         batch.uploadedBy = admin;
+        batch.totalRows = 0;
+        batch.processedRows = 0;
+        batch.skippedRows = 0;
+        batch.validationErrorCount = 0;
         productUploadBatchRepository.persist(batch);
         return batch;
     }
@@ -136,13 +144,8 @@ public class ProductImportService implements ImportBatchService<ProductCompariso
      * Marks the batch PENDING when done.
      * Intended to be called from a background thread.
      */
-    @Transactional
     public void handleCsvUploadForBatch(InputStream is, UUID batchId) throws IOException {
-        ProductUploadBatchEntity batch = productUploadBatchRepository.findById(batchId);
-        if (batch == null) {
-            throw new NotFoundException("Batch not found: " + batchId);
-        }
-
+        List<StagedProductCsvRow> chunk = new ArrayList<>(STAGING_CHUNK_SIZE);
         int rowCount = 0;
         int validationErrorCount = 0;
 
@@ -158,52 +161,23 @@ public class ProductImportService implements ImportBatchService<ProductCompariso
              )) {
 
             for (CSVRecord record : csvParser) {
-                ProductUploadStagedEntity staged = new ProductUploadStagedEntity();
-                staged.batch = batch;
-
-                List<String> validationErrors = new ArrayList<>();
-
-                staged.productSlug = normalizeSlug(getValue(record, "product_slug", "product-slug"));
-                staged.sku = getValue(record, "sku", "SKU");
-                staged.name = getValue(record, "name", "Name");
-                staged.description = getValue(record, "description", "description");
-                staged.categorySlug = getValue(record, "category_slug", "Category", "category_name");
-                staged.shortDescription = getValue(record, "short_description", "short_description");
-
-                Integer stock = parseStockInteger(record, validationErrors);
-                String brandSlug = getValue(record, "brand_slug", "brand_name", "Brand");
-                String imagesValue = getValue(record, "images");
-                String attributesJson = getValue(record, "attributes");
-
-                staged.stock = stock;
-                staged.brandSlug = brandSlug;
-                staged.images = imagesValue;
-                staged.attributes = attributesJson;
-
-                validateAndDiff(staged, validationErrors, stock, brandSlug, imagesValue, attributesJson);
-
-                validateImages(staged, validationErrors);
-
-                applyValidationResults(staged, validationErrors);
-                validationErrorCount += validationErrors.size();
-                if (!validationErrors.isEmpty()) {
-                    LOG.warnf("CSV import validation failed at row %d (sku=%s): %s", record.getRecordNumber(), staged.sku, staged.validationErrors);
-                }
-
-                productUploadStagedRepository.persist(staged);
-                rowCount++;
-
-                if (rowCount % 500 == 0) {
-                    entityManager.flush();
+                chunk.add(parseProductCsvRow(record));
+                if (chunk.size() == STAGING_CHUNK_SIZE) {
+                    StagingChunkResult result = stageProductRowsChunk(batchId, chunk);
+                    rowCount += result.rowCount();
+                    validationErrorCount += result.validationErrorCount();
+                    chunk = new ArrayList<>(STAGING_CHUNK_SIZE);
                 }
             }
         }
 
-        entityManager.flush();
-        batch.totalRows = rowCount;
-        batch.validationErrorCount = validationErrorCount;
-        batch.productUploadStatusEn = ProductUploadStatusEn.PENDING;
-        entityManager.flush();
+        if (!chunk.isEmpty()) {
+            StagingChunkResult result = stageProductRowsChunk(batchId, chunk);
+            rowCount += result.rowCount();
+            validationErrorCount += result.validationErrorCount();
+        }
+
+        completeProductCsvUpload(batchId, rowCount, validationErrorCount);
     }
 
     @Transactional
@@ -241,18 +215,113 @@ public class ProductImportService implements ImportBatchService<ProductCompariso
         batch.productUploadStatusEn = ProductUploadStatusEn.FAILED;
     }
 
-    @Transactional
     public void processProductStagedRowsForBatch(UUID batchId) {
-
         LOG.debug("DEBUG:: Processing Batch: " + batchId);
-        ProductUploadBatchEntity batch = productUploadBatchRepository.findById(batchId);
-        if (batch == null) {
-            throw new NotFoundException("Batch not found: " + batchId);
+        while (true) {
+            int handledRows = processNextProductStagedChunk(batchId);
+            if (handledRows == 0) {
+                break;
+            }
         }
 
-        List<ProductUploadStagedEntity> stagedRows = productUploadStagedRepository.findUnprocessedByBatchId(batchId);
-        long processedCount = 0;
-        long skippedCount = 0;
+        synchronizeProductBatchProgress(batchId);
+    }
+
+    private StagedProductCsvRow parseProductCsvRow(CSVRecord record) {
+        List<String> validationErrors = new ArrayList<>();
+        Integer stock = parseStockInteger(getValue(record, "stock", "stock_quantity"), validationErrors);
+
+        return new StagedProductCsvRow(
+                record.getRecordNumber(),
+                normalizeSlug(getValue(record, "product_slug", "product-slug")),
+                getValue(record, "sku", "SKU"),
+                getValue(record, "name", "Name"),
+                getValue(record, "description", "description"),
+                getValue(record, "category_slug", "Category", "category_name"),
+                getValue(record, "short_description", "short_description"),
+                stock,
+                getValue(record, "brand_slug", "brand_name", "Brand"),
+                getValue(record, "images"),
+                getValue(record, "attributes"),
+                List.copyOf(validationErrors));
+    }
+
+    private StagingChunkResult stageProductRowsChunk(UUID batchId, List<StagedProductCsvRow> rows) {
+        try {
+            return QuarkusTransaction.requiringNew().call(() -> stageProductRowsChunkInTransaction(batchId, List.copyOf(rows)));
+        } catch (RuntimeException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            throw new RuntimeException(ex);
+        }
+    }
+
+    private StagingChunkResult stageProductRowsChunkInTransaction(UUID batchId, List<StagedProductCsvRow> rows) {
+        ProductUploadBatchEntity batch = getRequiredProductBatch(batchId);
+        int validationErrorCount = 0;
+
+        for (StagedProductCsvRow row : rows) {
+            ProductUploadStagedEntity staged = new ProductUploadStagedEntity();
+            staged.batch = batch;
+            staged.productSlug = row.productSlug();
+            staged.sku = row.sku();
+            staged.name = row.name();
+            staged.description = row.description();
+            staged.categorySlug = row.categorySlug();
+            staged.shortDescription = row.shortDescription();
+            staged.stock = row.stock();
+            staged.brandSlug = row.brandSlug();
+            staged.images = row.images();
+            staged.attributes = row.attributes();
+
+            List<String> validationErrors = new ArrayList<>(row.validationErrors());
+            validateAndDiff(staged, validationErrors, row.stock(), row.brandSlug(), row.images(), row.attributes());
+            validateImages(staged, validationErrors);
+            applyValidationResults(staged, validationErrors);
+            validationErrorCount += validationErrors.size();
+
+            if (!validationErrors.isEmpty()) {
+                LOG.warnf("CSV import validation failed at row %d (sku=%s): %s", row.recordNumber(), staged.sku, staged.validationErrors);
+            }
+
+            productUploadStagedRepository.persist(staged);
+        }
+
+        batch.totalRows = safeInt(batch.totalRows) + rows.size();
+        batch.validationErrorCount = safeInt(batch.validationErrorCount) + validationErrorCount;
+        entityManager.flush();
+        entityManager.clear();
+        return new StagingChunkResult(rows.size(), validationErrorCount);
+    }
+
+    private void completeProductCsvUpload(UUID batchId, int totalRows, int validationErrorCount) {
+        QuarkusTransaction.requiringNew().run(() -> {
+            ProductUploadBatchEntity batch = getRequiredProductBatch(batchId);
+            batch.totalRows = totalRows;
+            batch.validationErrorCount = validationErrorCount;
+            batch.productUploadStatusEn = ProductUploadStatusEn.PENDING;
+        });
+    }
+
+    private int processNextProductStagedChunk(UUID batchId) {
+        try {
+            return QuarkusTransaction.requiringNew().call(() -> processNextProductStagedChunkInTransaction(batchId));
+        } catch (RuntimeException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            throw new RuntimeException(ex);
+        }
+    }
+
+    private int processNextProductStagedChunkInTransaction(UUID batchId) {
+        ProductUploadBatchEntity batch = getRequiredProductBatch(batchId);
+        List<ProductUploadStagedEntity> stagedRows = productUploadStagedRepository.findNextUnprocessedByBatchId(batchId, PROCESSING_CHUNK_SIZE);
+        if (stagedRows.isEmpty()) {
+            return 0;
+        }
+
+        int processedCount = 0;
+        int skippedCount = 0;
 
         for (ProductUploadStagedEntity staged : stagedRows) {
             if (staged.validationStatus == ProductImportValidationStatusEn.VALID) {
@@ -263,21 +332,40 @@ public class ProductImportService implements ImportBatchService<ProductCompariso
             }
 
             staged.processed = true;
-            LOG.debugf("DEBUG:: processed=%d skipped=%d", processedCount, skippedCount);
-
-            if ((processedCount + skippedCount) % 500 == 0) {
-                entityManager.flush();
-            }
         }
 
-        entityManager.flush();
+        batch.totalRows = batch.totalRows != null ? batch.totalRows : (int) productUploadStagedRepository.countByBatchId(batchId);
+        batch.processedRows = safeInt(batch.processedRows) + processedCount;
+        batch.skippedRows = safeInt(batch.skippedRows) + skippedCount;
 
-        long totalRows = productUploadStagedRepository.countByBatchId(batchId);
-        long totalProcessedRows = productUploadStagedRepository.countProcessedValidByBatchId(batchId);
-        long totalSkippedRows = productUploadStagedRepository.countProcessedInvalidByBatchId(batchId);
-        batch.totalRows = (int) totalRows;
-        batch.processedRows = (int) totalProcessedRows;
-        batch.skippedRows = (int) totalSkippedRows;
+        LOG.debugf("DEBUG:: processed=%d skipped=%d", processedCount, skippedCount);
+        entityManager.flush();
+        entityManager.clear();
+        return stagedRows.size();
+    }
+
+    private void synchronizeProductBatchProgress(UUID batchId) {
+        QuarkusTransaction.requiringNew().run(() -> {
+            ProductUploadBatchEntity batch = getRequiredProductBatch(batchId);
+            long totalRows = productUploadStagedRepository.countByBatchId(batchId);
+            long totalProcessedRows = productUploadStagedRepository.countProcessedValidByBatchId(batchId);
+            long totalSkippedRows = productUploadStagedRepository.countProcessedInvalidByBatchId(batchId);
+            batch.totalRows = (int) totalRows;
+            batch.processedRows = (int) totalProcessedRows;
+            batch.skippedRows = (int) totalSkippedRows;
+        });
+    }
+
+    private ProductUploadBatchEntity getRequiredProductBatch(UUID batchId) {
+        ProductUploadBatchEntity batch = productUploadBatchRepository.findById(batchId);
+        if (batch == null) {
+            throw new NotFoundException("Batch not found: " + batchId);
+        }
+        return batch;
+    }
+
+    private int safeInt(Integer value) {
+        return value != null ? value : 0;
     }
 
     private void applyValidProductStagedRow(ProductUploadStagedEntity staged) {
@@ -405,6 +493,22 @@ public class ProductImportService implements ImportBatchService<ProductCompariso
                 imagesValue,
                 attributesJson
         );
+
+        // Capture current (live) values for comparison display
+        if (existingVariant != null) {
+            staged.currentStock = existingVariant.stockQuantity;
+            staged.currentAttributes = existingVariant.attributesJson;
+            List<String> existingImageNames = productImageRepository.findByVariantId(existingVariant.id).stream()
+                    .map(img -> extractFileName(img.imageUrl))
+                    .filter(name -> !isBlank(name))
+                    .toList();
+            staged.currentImages = existingImageNames.isEmpty() ? null : String.join(",", existingImageNames);
+        }
+        if (existingProduct != null) {
+            staged.currentName = existingProduct.name;
+            staged.currentDescription = existingProduct.description;
+            staged.currentShortDescription = existingProduct.shorDescription; // note: typo in ProductEntity field name
+        }
     }
 
     private void validateImages(ProductUploadStagedEntity staged, List<String> validationErrors) {
@@ -418,6 +522,7 @@ public class ProductImportService implements ImportBatchService<ProductCompariso
         for(String fileName :images) {
             java.io.File file = new java.io.File(storagePath, fileName.trim());
             if (!file.exists()) {
+                LOG.warnf("Image Not Found %s%s", storagePath, fileName.trim());
                 missing.add(fileName.trim());
             }
         }
@@ -450,6 +555,7 @@ public class ProductImportService implements ImportBatchService<ProductCompariso
         BrandEntity brand = brandRepository.findBySlugIgnoreCase(brandSlug);
         if (brand == null) {
             validationErrors.add("Unknown brand: " + brandSlug.trim());
+            return null;
         }
         return brand;
     }
@@ -552,8 +658,7 @@ public class ProductImportService implements ImportBatchService<ProductCompariso
         return normalized == null ? null : normalized.toLowerCase(Locale.ROOT);
     }
 
-    private Integer parseStockInteger(CSVRecord record, List<String> validationErrors) {
-        String value = getValue(record, "stock", "stock_quantity");
+    private Integer parseStockInteger(String value, List<String> validationErrors) {
         if (isBlank(value)) {
             return 0;
         }
@@ -571,16 +676,9 @@ public class ProductImportService implements ImportBatchService<ProductCompariso
 
         return stagedList.stream().map(staged -> {
             ProductComparisonDto dto = new ProductComparisonDto();
-            if (!staged.isNewProduct){
-                ProductEntity existingProduct = productRepository.findByNameIgnoreCase(staged.name);
-                if (existingProduct != null) {
-                    dto.currentName = existingProduct.name;
-                    dto.currentDescription = existingProduct.description;
-                    dto.currentShortDescription = existingProduct.shorDescription;
-                }
-            }
             dto.stagedId = staged.id;
             dto.sku = staged.sku;
+            dto.proposedName = staged.name;
             dto.proposedDescription = staged.description;
             dto.proposedShortDescription = staged.shortDescription;
             dto.categorySlug = staged.categorySlug;
@@ -591,30 +689,26 @@ public class ProductImportService implements ImportBatchService<ProductCompariso
             dto.validationErrors = staged.validationErrors;
             dto.validationStatus = staged.validationStatus;
             dto.imageErrors = staged.imageErrors;
-
-            dto.proposedName = staged.name;
             dto.isValidCategory = staged.isValidCategory;
             dto.isValidBrand = staged.isValidBrand;
             dto.isNewProduct = staged.isNewProduct;
             dto.isNewVariant = staged.isNewVariant;
             dto.hasChanges = Boolean.TRUE.equals(staged.hasChanges);
 
-            ProductVariantEntity variant = productVariantRepository.findBySkuWithProduct(staged.sku);
-            if (variant != null) {
-                dto.currentName = variant.product.name;
-                dto.currentDescription = variant.product.description;
-                dto.currentShortDescription = variant.product.shorDescription;
-
-                dto.currentStock = variant.stockQuantity;
-                dto.currentAttributes = variant.attributesJson;
-            }
+            // Use persisted current values captured at import time
+            dto.currentName = staged.currentName;
+            dto.currentDescription = staged.currentDescription;
+            dto.currentShortDescription = staged.currentShortDescription;
+            dto.currentStock = staged.currentStock;
+            dto.currentImages = staged.currentImages;
+            dto.currentAttributes = staged.currentAttributes;
 
             return dto;
         }).collect(Collectors.toList());
     }
 
     public List<ProductUploadBatchDto> getProductUploadBatches() {
-        List<ProductUploadBatchEntity> batches = productUploadBatchRepository.listAll();
+        List<ProductUploadBatchEntity> batches = productUploadBatchRepository.listAllOrderByCreatedAtDesc();
         return batches.stream().map(UploadBatchDtoMapper::fromProductBatch).collect(Collectors.toList());
     }
 
@@ -623,6 +717,25 @@ public class ProductImportService implements ImportBatchService<ProductCompariso
                 ? ProductImportValidationStatusEn.VALID
                 : ProductImportValidationStatusEn.INVALID;
         staged.validationErrors = validationErrors.isEmpty() ? null : String.join("; ", validationErrors);
+    }
+
+    private record StagedProductCsvRow(
+            long recordNumber,
+            String productSlug,
+            String sku,
+            String name,
+            String description,
+            String categorySlug,
+            String shortDescription,
+            Integer stock,
+            String brandSlug,
+            String images,
+            String attributes,
+            List<String> validationErrors
+    ) {
+    }
+
+    private record StagingChunkResult(int rowCount, int validationErrorCount) {
     }
 
 }
