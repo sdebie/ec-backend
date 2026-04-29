@@ -16,7 +16,7 @@ public class AdminAuthService
     public String authenticate(LoginRequestDto loginDto)
     {
         // 1. Fetch user from DB (assuming Panache)
-        StaffUserEntity user = StaffUserEntity.find("username", loginDto.username()).firstResult();
+        StaffUserEntity user = StaffUserEntity.findByEmail(loginDto.email());
 
         // 2. Verify password against BCrypt hash
         if (user != null && user.isActive && BcryptUtil.matches(loginDto.password(), user.passwordHash)) {

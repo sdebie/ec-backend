@@ -42,7 +42,6 @@ public class Startup {
         // 3. User Seed logic
         if (StaffUserEntity.count() == 0) {
             StaffUserEntity admin = new StaffUserEntity();
-            admin.username = "admin";
             admin.email = "admin@gmail.com";
             admin.fullName = "System Administrator";
             admin.role = StaffRoleEn.SUPER_ADMIN;

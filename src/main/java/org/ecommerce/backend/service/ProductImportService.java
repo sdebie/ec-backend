@@ -1,5 +1,6 @@
 package org.ecommerce.backend.service;
 
+import io.quarkus.narayana.jta.QuarkusTransaction;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
@@ -10,33 +11,38 @@ import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;
 import org.apache.commons.csv.CSVRecord;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
-import org.ecommerce.backend.utils.PriceUtils;
 import org.ecommerce.common.dto.ProductComparisonDto;
 import org.ecommerce.common.dto.ProductUploadBatchDto;
 import org.ecommerce.common.dto.ProductUploadBatchProcessStatusDto;
 import org.ecommerce.common.entity.*;
-import org.ecommerce.common.enums.PriceTypeEn;
 import org.ecommerce.common.enums.ProductImportValidationStatusEn;
 import org.ecommerce.common.enums.ProductTypeEn;
 import org.ecommerce.common.enums.ProductUploadStatusEn;
-import org.ecommerce.common.repository.ProductImportRepository;
+import org.ecommerce.common.repository.*;
 import org.jboss.logging.Logger;
 
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import static org.ecommerce.common.util.CsvImportUtils.getValue;
+import static org.ecommerce.common.util.CsvImportUtils.isBlank;
+
 @ApplicationScoped
-public class ProductImportService {
+public class ProductImportService implements ImportBatchService<ProductComparisonDto, ProductUploadBatchProcessStatusDto, ProductUploadBatchEntity>, AsyncImportOperations {
+
+    private static final int STAGING_CHUNK_SIZE = 200;
+    private static final int PROCESSING_CHUNK_SIZE = 100;
 
     @ConfigProperty(name = "storage.path")
     String storagePath;
@@ -45,21 +51,93 @@ public class ProductImportService {
     EntityManager entityManager;
 
     @Inject
-    ProductImportRepository productImportRepository;
+    ProductUploadBatchRepository productUploadBatchRepository;
+
+    @Inject
+    ProductUploadStagedRepository productUploadStagedRepository;
+
+    @Inject
+    CategoryRepository categoryRepository;
+
+    @Inject
+    BrandRepository brandRepository;
+
+    @Inject
+    ProductRepository productRepository;
+
+    @Inject
+    ProductVariantRepository productVariantRepository;
+
+    @Inject
+    ProductImageRepository productImageRepository;
 
     private static final Logger LOG = Logger.getLogger(ProductImportService.class);
+
+    @Override
+    public ProductUploadBatchEntity createImportPendingBatch(String filename, StaffUserEntity admin) {
+        return createProductImportPendingBatch(filename, admin);
+    }
+
+    @Override
+    public void markImportBatchAsProcessing(UUID batchId) {
+        markProductImportBatchAsProcessing(batchId);
+    }
+
+    @Override
+    public void markImportBatchAsProcessed(UUID batchId) {
+        markProductBatchAsProcessed(batchId);
+    }
+
+    @Override
+    public void markImportBatchAsFailed(UUID batchId) {
+        markProductImportBatchAsFailed(batchId);
+    }
+
+    @Override
+    public ProductUploadBatchProcessStatusDto getImportBatchProcessStatus(UUID batchId) {
+        return getProductImportBatchProcessStatus(batchId);
+    }
+
+    @Override
+    public List<ProductComparisonDto> getImportRows(UUID batchId) {
+        return getProductImportRows(batchId);
+    }
+
+    @Override
+    public List<ProductUploadBatchDto> getUploadBatches() {
+        return getProductUploadBatches();
+    }
+
+    @Override
+    public void processStagedRowsForBatch(UUID batchId) {
+        processProductStagedRowsForBatch(batchId);
+    }
+
+    @Override
+    public void markBatchAsProcessed(UUID batchId) {
+        markProductBatchAsProcessed(batchId);
+    }
+
+    @Override
+    public void markBatchAsFailed(UUID batchId) {
+        markProductImportBatchAsFailed(batchId);
+    }
 
     /**
      * Creates and persists the batch record immediately (status=IMPORTING) so the
      * caller can return a batch ID to the client without waiting for CSV parsing.
      */
     @Transactional
-    public ProductUploadBatchEntity createPendingBatch(String filename, StaffUserEntity admin) {
+    public ProductUploadBatchEntity createProductImportPendingBatch(String filename, StaffUserEntity admin) {
         ProductUploadBatchEntity batch = new ProductUploadBatchEntity();
         batch.filename = filename;
         batch.productUploadStatusEn = ProductUploadStatusEn.IMPORTING;
         batch.uploadedBy = admin;
-        batch.persist();
+        batch.totalRows = 0;
+        batch.processedRows = 0;
+        batch.skippedRows = 0;
+        batch.validationErrorCount = 0;
+        productUploadBatchRepository.persist(batch);
         return batch;
     }
 
@@ -68,13 +146,8 @@ public class ProductImportService {
      * Marks the batch PENDING when done.
      * Intended to be called from a background thread.
      */
-    @Transactional
     public void handleCsvUploadForBatch(InputStream is, UUID batchId) throws IOException {
-        ProductUploadBatchEntity batch = ProductUploadBatchEntity.findById(batchId);
-        if (batch == null) {
-            throw new NotFoundException("Batch not found: " + batchId);
-        }
-
+        List<StagedProductCsvRow> chunk = new ArrayList<>(STAGING_CHUNK_SIZE);
         int rowCount = 0;
         int validationErrorCount = 0;
 
@@ -90,61 +163,28 @@ public class ProductImportService {
              )) {
 
             for (CSVRecord record : csvParser) {
-                ProductUploadStagedEntity staged = new ProductUploadStagedEntity();
-                staged.batch = batch;
-
-                List<String> validationErrors = new ArrayList<>();
-
-                staged.productSlug = normalizeSlug(getValue(record, "product_slug", "product-slug"));
-                staged.sku = getValue(record, "sku", "SKU");
-                staged.name = getValue(record, "name", "Name");
-                staged.description = getValue(record, "description", "description");
-                staged.categorySlug = getValue(record, "category_slug", "Category", "category_name");
-                staged.shortDescription = getValue(record, "short_description", "short_description");
-                staged.retailPrice = parseBigDecimal(record, validationErrors, "retail_price", "Retail Price");
-                staged.retailSalePrice = parseBigDecimal(record, validationErrors, "retail_sale_price", "Retail Sale Price");
-                staged.wholesalePrice = parseBigDecimal(record, validationErrors, "wholesale_price", "Wholesale Price");
-                staged.wholesaleSalePrice = parseBigDecimal(record, validationErrors, "wholesale_sale_price", "Wholesale Sale Price");
-
-                Integer stock = parseStockInteger(record, validationErrors);
-                String brandSlug = getValue(record, "brand_slug", "brand_name", "Brand");
-                String imagesValue = getValue(record, "images");
-                String attributesJson = getValue(record, "attributes");
-
-                staged.stock = stock;
-                staged.brandSlug = brandSlug;
-                staged.images = imagesValue;
-                staged.attributes = attributesJson;
-
-                validateAndDiff(staged, validationErrors, stock, brandSlug, imagesValue, attributesJson);
-
-                validateImages(staged, validationErrors);
-
-                applyValidationResults(staged, validationErrors);
-                validationErrorCount += validationErrors.size();
-                if (!validationErrors.isEmpty()) {
-                    LOG.warnf("CSV import validation failed at row %d (sku=%s): %s", record.getRecordNumber(), staged.sku, staged.validationErrors);
-                }
-
-                staged.persist();
-                rowCount++;
-
-                if (rowCount % 500 == 0) {
-                    entityManager.flush();
+                chunk.add(parseProductCsvRow(record));
+                if (chunk.size() == STAGING_CHUNK_SIZE) {
+                    StagingChunkResult result = stageProductRowsChunk(batchId, chunk);
+                    rowCount += result.rowCount();
+                    validationErrorCount += result.validationErrorCount();
+                    chunk = new ArrayList<>(STAGING_CHUNK_SIZE);
                 }
             }
         }
 
-        entityManager.flush();
-        batch.totalRows = rowCount;
-        batch.validationErrorCount = validationErrorCount;
-        batch.productUploadStatusEn = ProductUploadStatusEn.PENDING;
-        entityManager.flush();
+        if (!chunk.isEmpty()) {
+            StagingChunkResult result = stageProductRowsChunk(batchId, chunk);
+            rowCount += result.rowCount();
+            validationErrorCount += result.validationErrorCount();
+        }
+
+        completeProductCsvUpload(batchId, rowCount, validationErrorCount);
     }
 
     @Transactional
-    public void markBatchAsProcessing(UUID batchId) {
-        ProductUploadBatchEntity batch = ProductUploadBatchEntity.findById(batchId);
+    public void markProductImportBatchAsProcessing(UUID batchId) {
+        ProductUploadBatchEntity batch = productUploadBatchRepository.findById(batchId);
         if (batch == null) {
             throw new NotFoundException("Batch not found: " + batchId);
         }
@@ -152,7 +192,7 @@ public class ProductImportService {
             throw new IllegalStateException("Batch is already processing");
         }
 
-        long totalRows = ProductUploadStagedEntity.count("batch.id", batchId);
+        long totalRows = productUploadStagedRepository.countByBatchId(batchId);
         batch.productUploadStatusEn = ProductUploadStatusEn.PROCESSING;
         batch.totalRows = (int) totalRows;
         batch.processedRows = 0;
@@ -160,8 +200,8 @@ public class ProductImportService {
     }
 
     @Transactional
-    public void markBatchAsProcessed(UUID batchId) {
-        ProductUploadBatchEntity batch = ProductUploadBatchEntity.findById(batchId);
+    public void markProductBatchAsProcessed(UUID batchId) {
+        ProductUploadBatchEntity batch = productUploadBatchRepository.findById(batchId);
         if (batch == null) {
             throw new NotFoundException("Batch not found: " + batchId);
         }
@@ -169,73 +209,184 @@ public class ProductImportService {
     }
 
     @Transactional
-    public void markBatchAsFailed(UUID batchId) {
-        ProductUploadBatchEntity batch = ProductUploadBatchEntity.findById(batchId);
+    public void markProductImportBatchAsFailed(UUID batchId) {
+        ProductUploadBatchEntity batch = productUploadBatchRepository.findById(batchId);
         if (batch == null) {
             throw new NotFoundException("Batch not found: " + batchId);
         }
         batch.productUploadStatusEn = ProductUploadStatusEn.FAILED;
     }
 
-    @Transactional
-    public void processStagedRowsForBatch(UUID batchId) {
-
+    public void processProductStagedRowsForBatch(UUID batchId) {
         LOG.debug("DEBUG:: Processing Batch: " + batchId);
-        ProductUploadBatchEntity batch = ProductUploadBatchEntity.findById(batchId);
-        if (batch == null) {
-            throw new NotFoundException("Batch not found: " + batchId);
+        while (true) {
+            int handledRows = processNextProductStagedChunk(batchId);
+            if (handledRows == 0) {
+                break;
+            }
         }
 
-        List<ProductUploadStagedEntity> stagedRows = ProductUploadStagedEntity.list("batch.id = ?1 and processed = false", batchId);
-        long processedCount = 0;
-        long skippedCount = 0;
+        synchronizeProductBatchProgress(batchId);
+    }
+
+    private StagedProductCsvRow parseProductCsvRow(CSVRecord record) {
+        List<String> validationErrors = new ArrayList<>();
+        Integer stock = parseStockInteger(getValue(record, "stock", "stock_quantity"), validationErrors);
+
+        return new StagedProductCsvRow(
+                record.getRecordNumber(),
+                normalizeSlug(getValue(record, "product_slug", "product-slug")),
+                getValue(record, "sku", "SKU"),
+                getValue(record, "name", "Name"),
+                getValue(record, "description", "description"),
+                getValue(record, "category_slug", "Category", "category_name"),
+                getValue(record, "short_description", "short_description"),
+                stock,
+                getValue(record, "brand_slug", "brand_name", "Brand"),
+                getValue(record, "images"),
+                getValue(record, "attributes"),
+                List.copyOf(validationErrors));
+    }
+
+    private StagingChunkResult stageProductRowsChunk(UUID batchId, List<StagedProductCsvRow> rows) {
+        try {
+            return QuarkusTransaction.requiringNew().call(() -> stageProductRowsChunkInTransaction(batchId, List.copyOf(rows)));
+        } catch (RuntimeException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            throw new RuntimeException(ex);
+        }
+    }
+
+    private StagingChunkResult stageProductRowsChunkInTransaction(UUID batchId, List<StagedProductCsvRow> rows) {
+        ProductUploadBatchEntity batch = getRequiredProductBatch(batchId);
+        int validationErrorCount = 0;
+
+        for (StagedProductCsvRow row : rows) {
+            ProductUploadStagedEntity staged = new ProductUploadStagedEntity();
+            staged.batch = batch;
+            staged.productSlug = row.productSlug();
+            staged.sku = row.sku();
+            staged.name = row.name();
+            staged.description = row.description();
+            staged.categorySlug = normalizeCategorySlugs(row.categorySlug());
+            staged.shortDescription = row.shortDescription();
+            staged.stock = row.stock();
+            staged.brandSlug = row.brandSlug();
+            staged.images = row.images();
+            staged.attributes = row.attributes();
+
+            List<String> validationErrors = new ArrayList<>(row.validationErrors());
+            validateAndDiff(staged, validationErrors, row.stock(), row.brandSlug(), row.images(), row.attributes());
+            validateImages(staged, validationErrors);
+            applyValidationResults(staged, validationErrors);
+            validationErrorCount += validationErrors.size();
+
+            if (!validationErrors.isEmpty()) {
+                LOG.warnf("CSV import validation failed at row %d (sku=%s): %s", row.recordNumber(), staged.sku, staged.validationErrors);
+            }
+
+            productUploadStagedRepository.persist(staged);
+        }
+
+        batch.totalRows = safeInt(batch.totalRows) + rows.size();
+        batch.validationErrorCount = safeInt(batch.validationErrorCount) + validationErrorCount;
+        entityManager.flush();
+        entityManager.clear();
+        return new StagingChunkResult(rows.size(), validationErrorCount);
+    }
+
+    private void completeProductCsvUpload(UUID batchId, int totalRows, int validationErrorCount) {
+        QuarkusTransaction.requiringNew().run(() -> {
+            ProductUploadBatchEntity batch = getRequiredProductBatch(batchId);
+            batch.totalRows = totalRows;
+            batch.validationErrorCount = validationErrorCount;
+            batch.productUploadStatusEn = ProductUploadStatusEn.PENDING;
+        });
+    }
+
+    private int processNextProductStagedChunk(UUID batchId) {
+        try {
+            return QuarkusTransaction.requiringNew().call(() -> processNextProductStagedChunkInTransaction(batchId));
+        } catch (RuntimeException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            throw new RuntimeException(ex);
+        }
+    }
+
+    private int processNextProductStagedChunkInTransaction(UUID batchId) {
+        ProductUploadBatchEntity batch = getRequiredProductBatch(batchId);
+        List<ProductUploadStagedEntity> stagedRows = productUploadStagedRepository.findNextUnprocessedByBatchId(batchId, PROCESSING_CHUNK_SIZE);
+        if (stagedRows.isEmpty()) {
+            return 0;
+        }
+
+        int processedCount = 0;
+        int skippedCount = 0;
 
         for (ProductUploadStagedEntity staged : stagedRows) {
             if (staged.validationStatus == ProductImportValidationStatusEn.VALID) {
-                applyValidStagedRow(staged);
+                applyValidProductStagedRow(staged);
                 processedCount++;
             } else {
                 skippedCount++;
             }
 
             staged.processed = true;
-            LOG.debugf("DEBUG:: processed=%d skipped=%d", processedCount, skippedCount);
-
-            if ((processedCount + skippedCount) % 500 == 0) {
-                entityManager.flush();
-            }
         }
 
-        entityManager.flush();
+        batch.totalRows = batch.totalRows != null ? batch.totalRows : (int) productUploadStagedRepository.countByBatchId(batchId);
+        batch.processedRows = safeInt(batch.processedRows) + processedCount;
+        batch.skippedRows = safeInt(batch.skippedRows) + skippedCount;
 
-        long totalRows = ProductUploadStagedEntity.count("batch.id", batchId);
-        long totalProcessedRows = ProductUploadStagedEntity.count(
-                "batch.id = ?1 and processed = true and validationStatus = ?2",
-                batchId,
-                ProductImportValidationStatusEn.VALID
-        );
-        long totalSkippedRows = ProductUploadStagedEntity.count(
-                "batch.id = ?1 and processed = true and (validationStatus is null or validationStatus <> ?2)",
-                batchId,
-                ProductImportValidationStatusEn.VALID
-        );
-        batch.totalRows = (int) totalRows;
-        batch.processedRows = (int) totalProcessedRows;
-        batch.skippedRows = (int) totalSkippedRows;
+        LOG.debugf("DEBUG:: processed=%d skipped=%d", processedCount, skippedCount);
+        entityManager.flush();
+        entityManager.clear();
+        return stagedRows.size();
     }
 
-    private void applyValidStagedRow(ProductUploadStagedEntity staged) {
-        CategoryEntity category = null;
+    private void synchronizeProductBatchProgress(UUID batchId) {
+        QuarkusTransaction.requiringNew().run(() -> {
+            ProductUploadBatchEntity batch = getRequiredProductBatch(batchId);
+            long totalRows = productUploadStagedRepository.countByBatchId(batchId);
+            long totalProcessedRows = productUploadStagedRepository.countProcessedValidByBatchId(batchId);
+            long totalSkippedRows = productUploadStagedRepository.countProcessedInvalidByBatchId(batchId);
+            batch.totalRows = (int) totalRows;
+            batch.processedRows = (int) totalProcessedRows;
+            batch.skippedRows = (int) totalSkippedRows;
+        });
+    }
+
+    private ProductUploadBatchEntity getRequiredProductBatch(UUID batchId) {
+        ProductUploadBatchEntity batch = productUploadBatchRepository.findById(batchId);
+        if (batch == null) {
+            throw new NotFoundException("Batch not found: " + batchId);
+        }
+        return batch;
+    }
+
+    private int safeInt(Integer value) {
+        return value != null ? value : 0;
+    }
+
+    private void applyValidProductStagedRow(ProductUploadStagedEntity staged) {
+        List<CategoryEntity> categories = new ArrayList<>();
         BrandEntity brand = null;
 
         if (!isBlank(staged.categorySlug)) {
-            category = CategoryEntity.find("lower(slug) = ?1", staged.categorySlug.trim().toLowerCase(Locale.ROOT)).firstResult();
+            for (String slug : splitCategorySlugs(staged.categorySlug)) {
+                CategoryEntity category = categoryRepository.findBySlugIgnoreCase(slug);
+                if (category != null) {
+                    categories.add(category);
+                }
+            }
         }
         if (!isBlank(staged.brandSlug)) {
-            brand = BrandEntity.find("lower(slug) = ?1", staged.brandSlug.trim().toLowerCase(Locale.ROOT)).firstResult();
+            brand = brandRepository.findBySlugIgnoreCase(staged.brandSlug);
         }
 
-        ProductVariantEntity variant = ProductVariantEntity.find("sku", staged.sku).firstResult();
+        ProductVariantEntity variant = productVariantRepository.findBySku(staged.sku);
         ProductEntity product;
 
         if (variant != null) {
@@ -249,42 +400,39 @@ public class ProductImportService {
                 product.description = staged.description;
                 product.shorDescription = staged.shortDescription;
                 product.productType = ProductTypeEn.VARIABLE;
-                product.persist();
+                productRepository.persist(product);
             }
 
             variant = new ProductVariantEntity();
             variant.product = product;
             variant.sku = staged.sku;
-            variant.persist();
+            productVariantRepository.persist(variant);
         }
 
         product.name = staged.name.trim();
         product.description = staged.description;
         product.shorDescription = staged.shortDescription;
 
-        if (category != null) {
-            product.category = category;
+        if (!categories.isEmpty()) {
+            product.categories.clear();
+            product.categories.addAll(categories);
         }
         if (brand != null) {
             product.brand = brand;
         }
-        if (product.productType == null) {
-            product.productType = ProductTypeEn.VARIABLE;
-        }
+
+        // Determine product type based on variant count
+        int variantCount = (int) productVariantRepository.findByVariantsForProductId(product.id).size();
+        product.productType = variantCount == 1 ? ProductTypeEn.SIMPLE : ProductTypeEn.VARIABLE;
 
         variant.stockQuantity = staged.stock != null ? staged.stock : 0;
         variant.attributesJson = trimToNull(staged.attributes);
-
-        upsertVariantPrice(variant, PriceTypeEn.RETAIL_PRICE, staged.retailPrice);
-        upsertVariantPrice(variant, PriceTypeEn.RETAIL_SALE_PRICE, staged.retailSalePrice);
-        upsertVariantPrice(variant, PriceTypeEn.WHOLESALE_PRICE, staged.wholesalePrice);
-        upsertVariantPrice(variant, PriceTypeEn.WHOLESALE_SALE_PRICE, staged.wholesaleSalePrice);
 
         upsertVariantImages(variant, staged.images);
     }
 
     private void upsertVariantImages(ProductVariantEntity variant, String stagedImages) {
-        ProductImageEntity.delete("productVariant.id", variant.id);
+        productImageRepository.deleteByVariantId(variant.id);
 
         List<String> imageNames = splitImageNames(stagedImages);
         for (int i = 0; i < imageNames.size(); i++) {
@@ -293,32 +441,13 @@ public class ProductImportService {
             image.imageUrl = imageNames.get(i);
             image.sortOrder = i;
             image.isFeatured = i == 0;
-            image.persist();
+            productImageRepository.persist(image);
         }
-    }
-
-    private void upsertVariantPrice(ProductVariantEntity variant, PriceTypeEn priceType, BigDecimal priceValue) {
-        if (variant == null || variant.id == null || priceType == null || priceValue == null) {
-            return;
-        }
-
-        VariantPricesEntity price = VariantPricesEntity.findLatestByVariantAndType(variant.id, priceType);
-        if (price == null) {
-            price = new VariantPricesEntity();
-            price.variant = variant;
-            price.priceType = priceType;
-            price.price = priceValue;
-            price.persist();
-            return;
-        }
-
-        price.price = priceValue;
-        price.priceEndDate = null;
     }
 
     @Transactional(value = TxType.SUPPORTS)
-    public ProductUploadBatchProcessStatusDto getBatchProcessStatus(UUID batchId) {
-        ProductUploadBatchEntity batch = ProductUploadBatchEntity.findById(batchId);
+    public ProductUploadBatchProcessStatusDto getProductImportBatchProcessStatus(UUID batchId) {
+        ProductUploadBatchEntity batch = productUploadBatchRepository.findById(batchId);
         if (batch == null) {
             throw new NotFoundException("Batch not found: " + batchId);
         }
@@ -327,7 +456,7 @@ public class ProductImportService {
         status.batchId = batch.id;
         status.status = batch.productUploadStatusEn != null ? batch.productUploadStatusEn.name() : null;
         status.totalRows = batch.totalRows;
-        status.stagedRows = ProductUploadStagedEntity.count("batch.id", batchId);
+        status.stagedRows = productUploadStagedRepository.countByBatchId(batchId);
         status.processedRows = batch.processedRows != null ? (long) batch.processedRows : 0L;
         status.skippedRows = batch.skippedRows != null ? (long) batch.skippedRows : 0L;
         status.validationErrorCount = batch.validationErrorCount;
@@ -343,12 +472,13 @@ public class ProductImportService {
             String imagesValue,
             String attributesJson
     ) {
-        CategoryEntity category = findExistingCategory(staged.categorySlug, validationErrors);
+        List<String> categorySlugs = splitCategorySlugs(staged.categorySlug);
+        List<CategoryEntity> categories = findExistingCategories(categorySlugs, validationErrors);
         BrandEntity brand = findExistingBrand(brandSlug, validationErrors);
         ProductEntity existingProduct = findExistingProduct(staged.productSlug, staged.name);
         ProductVariantEntity existingVariant = findExistingVariant(staged.sku, validationErrors);
 
-        staged.isValidCategory = category != null;
+        staged.isValidCategory = !categorySlugs.isEmpty() && categories.size() == categorySlugs.size();
         staged.isValidBrand = brand != null;
 
         staged.isNewProduct = existingProduct == null;
@@ -372,6 +502,22 @@ public class ProductImportService {
                 imagesValue,
                 attributesJson
         );
+
+        // Capture current (live) values for comparison display
+        if (existingVariant != null) {
+            staged.currentStock = existingVariant.stockQuantity;
+            staged.currentAttributes = existingVariant.attributesJson;
+            List<String> existingImageNames = productImageRepository.findByVariantId(existingVariant.id).stream()
+                    .map(img -> extractFileName(img.imageUrl))
+                    .filter(name -> !isBlank(name))
+                    .toList();
+            staged.currentImages = existingImageNames.isEmpty() ? null : String.join(",", existingImageNames);
+        }
+        if (existingProduct != null) {
+            staged.currentName = existingProduct.name;
+            staged.currentDescription = existingProduct.description;
+            staged.currentShortDescription = existingProduct.shorDescription; // note: typo in ProductEntity field name
+        }
     }
 
     private void validateImages(ProductUploadStagedEntity staged, List<String> validationErrors) {
@@ -385,6 +531,7 @@ public class ProductImportService {
         for(String fileName :images) {
             java.io.File file = new java.io.File(storagePath, fileName.trim());
             if (!file.exists()) {
+                LOG.warnf("Image Not Found %s%s", storagePath, fileName.trim());
                 missing.add(fileName.trim());
             }
         }
@@ -395,17 +542,22 @@ public class ProductImportService {
         }
     }
 
-    private CategoryEntity findExistingCategory(String categorySlug, List<String> validationErrors) {
-        if (isBlank(categorySlug)) {
+    private List<CategoryEntity> findExistingCategories(List<String> categorySlugs, List<String> validationErrors) {
+        if (categorySlugs.isEmpty()) {
             validationErrors.add("category is required");
-            return null;
+            return List.of();
         }
 
-        CategoryEntity category = CategoryEntity.find("lower(slug) = ?1", categorySlug.trim().toLowerCase(Locale.ROOT)).firstResult();
-        if (category == null) {
-            validationErrors.add("Unknown category: " + categorySlug.trim());
+        List<CategoryEntity> categories = new ArrayList<>();
+        for (String categorySlug : categorySlugs) {
+            CategoryEntity category = categoryRepository.findBySlugIgnoreCase(categorySlug);
+            if (category == null) {
+                validationErrors.add("Unknown category: " + categorySlug);
+                continue;
+            }
+            categories.add(category);
         }
-        return category;
+        return categories;
     }
 
     private BrandEntity findExistingBrand(String brandSlug, List<String> validationErrors) {
@@ -414,9 +566,10 @@ public class ProductImportService {
             return null;
         }
 
-        BrandEntity brand = BrandEntity.find("lower(slug) = ?1", brandSlug.trim().toLowerCase(Locale.ROOT)).firstResult();
+        BrandEntity brand = brandRepository.findBySlugIgnoreCase(brandSlug);
         if (brand == null) {
             validationErrors.add("Unknown brand: " + brandSlug.trim());
+            return null;
         }
         return brand;
     }
@@ -424,7 +577,7 @@ public class ProductImportService {
     private ProductEntity findExistingProduct(String productSlug, String productName) {
         String normalizedSlug = normalizeSlug(productSlug);
         if (normalizedSlug != null) {
-            ProductEntity slugMatch = ProductEntity.find("lower(slug) = ?1", normalizedSlug).firstResult();
+            ProductEntity slugMatch = productRepository.findBySlugIgnoreCase(normalizedSlug);
             if (slugMatch != null) {
                 return slugMatch;
             }
@@ -434,7 +587,7 @@ public class ProductImportService {
             return null;
         }
 
-        return ProductEntity.find("lower(name) = ?1", productName.trim().toLowerCase(Locale.ROOT)).firstResult();
+        return productRepository.findByNameIgnoreCase(productName);
     }
 
     private ProductVariantEntity findExistingVariant(String sku, List<String> validationErrors) {
@@ -443,7 +596,7 @@ public class ProductImportService {
             return null;
         }
 
-        return ProductVariantEntity.find("sku", sku.trim()).firstResult();
+        return productVariantRepository.findBySku(sku);
     }
 
     private boolean determineHasChanges(
@@ -460,42 +613,22 @@ public class ProductImportService {
 
         boolean nameChanged = !Objects.equals(trimToNull(staged.name), trimToNull(existingProduct.name));
         boolean productSlugChanged = !Objects.equals(normalizeSlug(staged.productSlug), normalizeSlug(existingProduct.slug));
-        boolean categoryChanged = !Objects.equals(trimToNull(staged.categorySlug), trimToNull(existingProduct.category != null ? existingProduct.category.slug : null));
+        boolean categoryChanged = !categorySlugSet(staged.categorySlug).equals(categorySlugSet(existingProduct));
         boolean brandChanged = !Objects.equals(trimToNull(staged.brandSlug), trimToNull(existingProduct.brand != null ? existingProduct.brand.slug : null));
         boolean stockChanged = !Objects.equals(stock, existingVariant.stockQuantity);
         boolean attributesChanged = !Objects.equals(trimToNull(attributesJson), trimToNull(existingVariant.attributesJson));
         boolean imagesChanged = !sameImageNames(imagesValue, existingVariant);
-        boolean retailChanged = pricesDiffer(staged.retailPrice, findLatestPrice(existingVariant, PriceTypeEn.RETAIL_PRICE));
-        boolean wholesaleChanged = pricesDiffer(staged.wholesalePrice, findLatestPrice(existingVariant, PriceTypeEn.WHOLESALE_PRICE));
 
-        return nameChanged || productSlugChanged || categoryChanged || brandChanged || stockChanged || attributesChanged || imagesChanged || retailChanged || wholesaleChanged;
+        return nameChanged || productSlugChanged || categoryChanged || brandChanged || stockChanged || attributesChanged || imagesChanged;
     }
 
-    private BigDecimal findLatestPrice(ProductVariantEntity variant, PriceTypeEn priceType) {
-        if (variant == null || variant.id == null) {
-            return null;
-        }
-        VariantPricesEntity price = VariantPricesEntity.findLatestByVariantAndType(variant.id, priceType);
-        return price != null ? price.price : null;
-    }
-
-    private boolean pricesDiffer(BigDecimal left, BigDecimal right) {
-        if (left == null && right == null) {
-            return false;
-        }
-        if (left == null || right == null) {
-            return true;
-        }
-        return left.compareTo(right) != 0;
-    }
 
     private boolean sameImageNames(String stagedImages, ProductVariantEntity variant) {
         if (variant == null || variant.id == null) {
             return false;
         }
 
-        List<String> existing = ProductImageEntity.list("productVariant.id", variant.id).stream()
-                .map(ProductImageEntity.class::cast)
+        List<String> existing = productImageRepository.findByVariantId(variant.id).stream()
                 .map(img -> extractFileName(img.imageUrl))
                 .filter(name -> !isBlank(name))
                 .toList();
@@ -539,21 +672,39 @@ public class ProductImportService {
         return normalized == null ? null : normalized.toLowerCase(Locale.ROOT);
     }
 
-    private BigDecimal parseBigDecimal(CSVRecord record, List<String> validationErrors, String... headers) {
-        String value = getValue(record, headers);
-        if (isBlank(value)) {
-            return new BigDecimal(0);
-        }
-        try {
-            return new BigDecimal(value.trim());
-        } catch (NumberFormatException ex) {
-            validationErrors.add("Invalid decimal value for " + headers[0] + ": " + value);
-            return null;
-        }
+    private String normalizeCategorySlugs(String value) {
+        List<String> normalized = splitCategorySlugs(value);
+        return normalized.isEmpty() ? null : String.join(",", normalized);
     }
 
-    private Integer parseStockInteger(CSVRecord record, List<String> validationErrors) {
-        String value = getValue(record, "stock", "stock_quantity");
+    private List<String> splitCategorySlugs(String categorySlugs) {
+        if (isBlank(categorySlugs)) {
+            return List.of();
+        }
+
+        return Arrays.stream(categorySlugs.split(","))
+                .map(this::normalizeSlug)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+    }
+
+    private Set<String> categorySlugSet(String categorySlugs) {
+        return new LinkedHashSet<>(splitCategorySlugs(categorySlugs));
+    }
+
+    private Set<String> categorySlugSet(ProductEntity product) {
+        if (product == null || product.categories == null || product.categories.isEmpty()) {
+            return Set.of();
+        }
+
+        return product.categories.stream()
+                .map(category -> normalizeSlug(category.slug))
+                .filter(Objects::nonNull)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+    }
+
+    private Integer parseStockInteger(String value, List<String> validationErrors) {
         if (isBlank(value)) {
             return 0;
         }
@@ -565,35 +716,15 @@ public class ProductImportService {
         }
     }
 
-    private String getValue(CSVRecord record, String... headers) {
-        for (String header : headers) {
-            if (record.isMapped(header)) {
-                String value = record.get(header);
-                if (value != null) {
-                    return value;
-                }
-            }
-        }
-        return null;
-    }
-
-    private boolean isBlank(String value) {
-        return value == null || value.trim().isEmpty();
-    }
 
     public List<ProductComparisonDto> getProductImportRows(UUID batchId) {
-        List<ProductUploadStagedEntity> stagedList = ProductUploadStagedEntity.find("batch.id = ?1", batchId).list();
+        List<ProductUploadStagedEntity> stagedList = productUploadStagedRepository.findByBatchId(batchId);
 
         return stagedList.stream().map(staged -> {
             ProductComparisonDto dto = new ProductComparisonDto();
-            if (!staged.isNewProduct){
-                ProductEntity existingProduct = ProductEntity.find("lower(name) = ?1", staged.name.trim().toLowerCase(Locale.ROOT)).firstResult();
-                dto.currentName = existingProduct.name;
-                dto.currentDescription = existingProduct.description;
-                dto.currentShortDescription = existingProduct.shorDescription;
-            }
             dto.stagedId = staged.id;
             dto.sku = staged.sku;
+            dto.proposedName = staged.name;
             dto.proposedDescription = staged.description;
             dto.proposedShortDescription = staged.shortDescription;
             dto.categorySlug = staged.categorySlug;
@@ -604,56 +735,27 @@ public class ProductImportService {
             dto.validationErrors = staged.validationErrors;
             dto.validationStatus = staged.validationStatus;
             dto.imageErrors = staged.imageErrors;
-
-            dto.proposedName = staged.name;
-            dto.proposedRetailPrice = staged.retailPrice;
-            dto.proposedWholesalePrice = staged.wholesalePrice;
-            dto.proposedRetailSalePrice = staged.retailSalePrice;
-            dto.proposedWholesaleSalePrice = staged.wholesaleSalePrice;
             dto.isValidCategory = staged.isValidCategory;
             dto.isValidBrand = staged.isValidBrand;
             dto.isNewProduct = staged.isNewProduct;
             dto.isNewVariant = staged.isNewVariant;
             dto.hasChanges = Boolean.TRUE.equals(staged.hasChanges);
 
-            ProductVariantEntity variant = ProductVariantEntity.find("sku", staged.sku).firstResult();
-            if (variant != null) {
-                dto.currentName = variant.product.name;
-                dto.currentDescription = variant.product.description;
-                dto.currentShortDescription = variant.product.shorDescription;
-                BigDecimal retailPrice = PriceUtils.getMinimumPrice(variant.product.id, PriceTypeEn.RETAIL_PRICE);
-                BigDecimal retailSalePrice = PriceUtils.getMinimumPrice(variant.product.id, PriceTypeEn.RETAIL_SALE_PRICE);
-                BigDecimal wholesalePrice = PriceUtils.getMinimumPrice(variant.product.id, PriceTypeEn.WHOLESALE_PRICE);
-                BigDecimal wholesaleSalePrice = PriceUtils.getMinimumPrice(variant.product.id, PriceTypeEn.WHOLESALE_SALE_PRICE);
-
-                dto.currentRetailPrice = retailPrice;
-                dto.currentWholesalePrice = wholesalePrice;
-                dto.currentRetailSalePrice = retailSalePrice;
-                dto.currentWholesaleSalePrice = wholesaleSalePrice;
-
-                dto.currentStock = variant.stockQuantity;
-                dto.currentAttributes = variant.attributesJson;
-            }
+            // Use persisted current values captured at import time
+            dto.currentName = staged.currentName;
+            dto.currentDescription = staged.currentDescription;
+            dto.currentShortDescription = staged.currentShortDescription;
+            dto.currentStock = staged.currentStock;
+            dto.currentImages = staged.currentImages;
+            dto.currentAttributes = staged.currentAttributes;
 
             return dto;
         }).collect(Collectors.toList());
     }
 
     public List<ProductUploadBatchDto> getProductUploadBatches() {
-        List<ProductUploadBatchEntity> batches = ProductUploadBatchEntity.listAll();
-        return batches.stream().map(batch -> {
-            ProductUploadBatchDto dto = new ProductUploadBatchDto();
-            dto.id = batch.id;
-            dto.filename = batch.filename;
-            dto.status = batch.productUploadStatusEn.toString();
-            dto.totalRows = batch.totalRows;
-            dto.processedRows = batch.processedRows;
-            dto.skippedRows = batch.skippedRows;
-            dto.validationErrorCount = batch.validationErrorCount;
-            dto.createdAt = batch.createdAt;
-            dto.uploadedByUsername = batch.uploadedBy != null ? batch.uploadedBy.username : null;
-            return dto;
-        }).collect(Collectors.toList());
+        List<ProductUploadBatchEntity> batches = productUploadBatchRepository.listAllOrderByCreatedAtDesc();
+        return batches.stream().map(UploadBatchDtoMapper::fromProductBatch).collect(Collectors.toList());
     }
 
     private void applyValidationResults(ProductUploadStagedEntity staged, List<String> validationErrors) {
@@ -661,6 +763,25 @@ public class ProductImportService {
                 ? ProductImportValidationStatusEn.VALID
                 : ProductImportValidationStatusEn.INVALID;
         staged.validationErrors = validationErrors.isEmpty() ? null : String.join("; ", validationErrors);
+    }
+
+    private record StagedProductCsvRow(
+            long recordNumber,
+            String productSlug,
+            String sku,
+            String name,
+            String description,
+            String categorySlug,
+            String shortDescription,
+            Integer stock,
+            String brandSlug,
+            String images,
+            String attributes,
+            List<String> validationErrors
+    ) {
+    }
+
+    private record StagingChunkResult(int rowCount, int validationErrorCount) {
     }
 
 }

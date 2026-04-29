@@ -4,9 +4,15 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import org.eclipse.microprofile.graphql.*;
 import org.ecommerce.common.dto.CustomerDto;
+import org.ecommerce.common.dto.OrderDetailRespDto;
 import org.ecommerce.common.dto.OrderDto;
-import org.ecommerce.common.entity.OrderEntity;
+import org.ecommerce.common.dto.OrderResponseDto;
 import org.ecommerce.backend.service.OrderService;
+import org.ecommerce.common.query.FilterRequest;
+import org.ecommerce.common.query.PageRequest;
+
+import java.util.List;
+import java.util.UUID;
 
 @ApplicationScoped
 @GraphQLApi
@@ -17,7 +23,7 @@ public class OrderResource
 
     @Mutation("createOrder")
     @Description("Create an order")
-    public OrderEntity createOrder(@Name("order") OrderDto orderDto) throws GraphQLException
+    public OrderResponseDto createOrder(@Name("order") OrderDto orderDto) throws GraphQLException
     {
         System.out.println("DEBUG:: Received createOrder request for Items:" + orderDto.getItems().size());
 
@@ -26,7 +32,7 @@ public class OrderResource
         }
 
         System.out.println("DEBUG:: Received OrderDto: " + orderDto.getSessionId() + " " + (orderDto.getItems() == null ? 0 : orderDto.getItems().size()));
-        OrderEntity result = orderService.createOrderFromDto(orderDto);
+        OrderResponseDto result = orderService.createOrderFromDto(orderDto);
         System.out.println("DEBUG:: Created Order with Items=" + result.items);
         return result;
     }
@@ -44,7 +50,7 @@ public class OrderResource
 
     @Mutation("updateOrderStatus")
     @Description("Update the status of the latest order for a given sessionId")
-    public OrderEntity updateOrderStatus(
+    public OrderResponseDto updateOrderStatus(
             @Name("sessionId") String sessionId,
             @Name("status") String status
     ) throws GraphQLException
@@ -55,15 +61,19 @@ public class OrderResource
 
     @Query("orderById")
     @Description("Update an order and return")
-    public OrderEntity getOrderById(@Name("id") String id)
+    public OrderResponseDto getOrderById(@Name("id") String id) throws GraphQLException
     {
         System.out.println("DEBUG:: Received getOrderById request");
-        return orderService.getOrderById(id);
+        try {
+            return orderService.getOrderById(UUID.fromString(id));
+        } catch (IllegalArgumentException e) {
+            throw new GraphQLException("Invalid id format: " + id);
+        }
     }
 
     @Query("orderBySessionId")
     @Description("Get the latest order for a given sessionId")
-    public OrderEntity getOrderBySessionId(@Name("sessionId") String sessionId) throws GraphQLException
+    public OrderResponseDto getOrderBySessionId(@Name("sessionId") String sessionId) throws GraphQLException
     {
         System.out.println("DEBUG:: Received getOrderBySessionId request: " + sessionId);
         if (sessionId == null || sessionId.isBlank()) {
@@ -72,5 +82,29 @@ public class OrderResource
         return orderService.getLatestOrderBySessionId(sessionId);
     }
 
+    @Query("allOrders")
+    @Description("Get all orders with paging, newest created orders first by default")
+    public List<OrderResponseDto> getAllOrders(
+            @Name("pageRequest") PageRequest pageRequest,
+            @Name("filterRequest") FilterRequest filterRequest
+    )
+    {
+        return orderService.getAllOrders(pageRequest, filterRequest);
+    }
+
+    @Query("getOrderDetail")
+    @Description("Get order detail by order id")
+    public OrderDetailRespDto getOrderDetail(@Name("orderid") String orderId) throws GraphQLException
+    {
+        System.out.println("DEBUG:: Received getOrderDetail request for orderid=" + orderId);
+        if (orderId == null || orderId.isBlank()) {
+            throw new GraphQLException("orderid is required");
+        }
+        try {
+            return orderService.getOrderDetail(UUID.fromString(orderId));
+        } catch (IllegalArgumentException e) {
+            throw new GraphQLException("Invalid orderid format: " + orderId);
+        }
+    }
 
 }

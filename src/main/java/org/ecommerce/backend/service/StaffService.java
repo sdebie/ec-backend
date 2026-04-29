@@ -3,6 +3,7 @@ package org.ecommerce.backend.service;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
+import io.quarkus.elytron.security.common.BcryptUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.ecommerce.backend.mapper.StaffMapper;
 import org.ecommerce.common.dto.StaffDto;
@@ -13,6 +14,7 @@ import org.ecommerce.common.query.FilterRequest;
 import org.ecommerce.common.query.PageRequest;
 import org.ecommerce.common.repository.StaffRepository;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -55,6 +57,9 @@ public class StaffService {
     {
         try {
             if (validateFields(staffDto)) {
+                if (staffDto.getTemporaryPassword() == null || staffDto.getTemporaryPassword().isBlank()) {
+                    throw new IllegalArgumentException("Staff temporary password is required");
+                }
 
                 if (staffDto.getId() != null) {
                     StaffUserEntity existing = staffRepository.findById(staffDto.getId());
@@ -63,15 +68,14 @@ public class StaffService {
                     }
                 }
 
-                if (staffRepository.findByUsernameExcludingId(staffDto.getUsername(), null) != null) {
-                    throw new StaffAlreadyExistsException("Staff user with username '" + staffDto.getUsername() + "' already exists");
-                }
-
                 if (staffRepository.findByEmailExcludingId(staffDto.getEmail(), null) != null) {
                     throw new StaffAlreadyExistsException("Staff user with email '" + staffDto.getEmail() + "' already exists");
                 }
 
                 StaffUserEntity staffEntity = staffMapper.mapDtoToEntity(staffDto, new StaffUserEntity());
+                staffEntity.passwordHash = BcryptUtil.bcryptHash(staffDto.getTemporaryPassword());
+                staffEntity.resetPassword = true;
+                staffEntity.createdAt = LocalDateTime.now();
                 staffRepository.persist(staffEntity);
             }
         } catch (StaffNotFoundException | StaffAlreadyExistsException e) {
@@ -95,15 +99,24 @@ public class StaffService {
                     throw new StaffNotFoundException("Staff user with id " + id + " not found");
                 }
 
-                if (staffRepository.findByUsernameExcludingId(staffDto.getUsername(), id) != null) {
-                    throw new StaffAlreadyExistsException("Staff user with username '" + staffDto.getUsername() + "' already exists");
-                }
-
                 if (staffRepository.findByEmailExcludingId(staffDto.getEmail(), id) != null) {
                     throw new StaffAlreadyExistsException("Staff user with email '" + staffDto.getEmail() + "' already exists");
                 }
 
+                // Preserve immutable audit data before DTO mapping.
+                var createdAt = staffEntity.createdAt;
                 staffMapper.mapDtoToEntity(staffDto, staffEntity);
+
+                // Never allow update payloads to overwrite the original create timestamp.
+                staffEntity.createdAt = createdAt;
+
+                staffEntity.resetPassword = staffDto.isResetPassword();
+
+                if (staffDto.getTemporaryPassword() != null && !staffDto.getTemporaryPassword().isBlank()) {
+                    staffEntity.passwordHash = BcryptUtil.bcryptHash(staffDto.getTemporaryPassword());
+                    staffEntity.resetPassword = true;
+                }
+
                 staffRepository.persist(staffEntity);
             }
         } catch (StaffNotFoundException | StaffAlreadyExistsException e) {
@@ -115,15 +128,32 @@ public class StaffService {
         }
     }
 
+    @Transactional
+    public void resetStaffPassword(String email, String password)
+    {
+        if (email == null || email.isBlank()) {
+            throw new IllegalArgumentException("Staff email is null");
+        }
+        if (password == null || password.isBlank()) {
+            throw new IllegalArgumentException("Password is null");
+        }
+
+        StaffUserEntity staffEntity = StaffUserEntity.findByEmail(email);
+        if (staffEntity == null) {
+            throw new StaffNotFoundException("Staff user with email '" + email + "' not found");
+        }
+
+        staffEntity.passwordHash = BcryptUtil.bcryptHash(password);
+        staffEntity.resetPassword = false;
+        staffRepository.persist(staffEntity);
+    }
+
     private boolean validateFields(StaffDto staffDto)
     {
         if (staffDto == null) {
             throw new IllegalArgumentException("StaffDto is null");
         }
 
-        if (staffDto.getUsername() == null) {
-            throw new IllegalArgumentException("Staff username is null");
-        }
 
         if (staffDto.getEmail() == null) {
             throw new IllegalArgumentException("Staff email is null");

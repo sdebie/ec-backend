@@ -163,8 +163,6 @@ class ProductImportServiceTest {
         staged.name = "Blue Cotton Tee";
         staged.categorySlug = "apparel";
         staged.brandSlug = "nike";
-        staged.retailPrice = new java.math.BigDecimal("299.00");
-        staged.wholesalePrice = new java.math.BigDecimal("150.00");
 
         CategoryEntity category = new CategoryEntity();
         category.slug = "apparel";

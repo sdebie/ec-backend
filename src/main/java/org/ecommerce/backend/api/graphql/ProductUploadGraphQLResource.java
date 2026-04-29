@@ -4,7 +4,9 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import org.eclipse.microprofile.graphql.*;
 import org.ecommerce.backend.service.ProductImportService;
+import org.ecommerce.backend.service.ProductPriceImportService;
 import org.ecommerce.common.dto.ProductComparisonDto;
+import org.ecommerce.common.dto.ProductPriceComparisonDto;
 import org.ecommerce.common.dto.ProductUploadBatchDto;
 
 import jakarta.transaction.Transactional;
@@ -20,6 +22,9 @@ public class ProductUploadGraphQLResource {
     @Inject
     ProductImportService importService;
 
+    @Inject
+    ProductPriceImportService productPriceImportService;
+
     @Query("importRows")
     @Description("Returns the list of product import rows for a given batch ID")
     @Transactional(value = TxType.SUPPORTS)
@@ -33,6 +38,22 @@ public class ProductUploadGraphQLResource {
     @Transactional(value = TxType.SUPPORTS)
     public List<ProductUploadBatchDto> getProductUploadBatches() {
         return importService.getProductUploadBatches();
+    }
+
+
+    @Query("getPriceImportRows")
+    @Description("Returns the list of product price import rows for a given batch ID")
+    @Transactional(value = TxType.SUPPORTS)
+    public List<ProductPriceComparisonDto> getPriceImportRows(@Name("batchId") UUID batchId) {
+        // We sort by SKU or created_at to keep the list stable for the user
+        return productPriceImportService.getProductPriceImportRows(batchId);
+    }
+
+    @Query("productPriceUploadBatches")
+    @Description("Returns the list of all product price upload batches")
+    @Transactional(value = TxType.SUPPORTS)
+    public List<ProductUploadBatchDto> getProductPriceUploadBatches() {
+        return productPriceImportService.getProductPriceUploadBatches();
     }
 
 
