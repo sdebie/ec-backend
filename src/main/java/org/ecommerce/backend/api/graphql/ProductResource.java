@@ -24,12 +24,12 @@ public class ProductResource
     ProductService productService;
 
     @Query("productList")
-    @Description("Returns a paged list of products with active retail or wholesale pricing. Supports categoryId and filterRequest.")
+    @Description("Returns a paged list of products with active retail or wholesale pricing. Supports categoryId and filterRequest. Products can belong to multiple categories.")
     @Transactional(value = TxType.SUPPORTS)
     public List<ProductListItemDto> getProductsList(
             @Name("pageRequest") PageRequest pageRequest,
             @Name("filterRequest") FilterRequest filterRequest,
-            @Name("categoryId") String categoryId)
+            @Name("categoryId") @Description("Optional category UUID to filter products. Returns products that belong to this category (products can belong to multiple categories).") String categoryId)
     {
         FilterRequest resolvedFilterRequest = filterRequest != null ? filterRequest : new FilterRequest();
 
@@ -45,12 +45,12 @@ public class ProductResource
     }
 
     @Query("shoppingProductList")
-    @Description("Returns shopping product cards with variant count, image list, and active lowest prices by type. Supports categoryId and filterRequest.")
+    @Description("Returns shopping product cards with variant count, image list, and active lowest prices by type. Products can belong to multiple categories. Supports categoryId and filterRequest.")
     @Transactional(value = TxType.SUPPORTS)
     public List<ProductShoppingListItemDto> getShoppingProductsList(
             @Name("pageRequest") PageRequest pageRequest,
             @Name("filterRequest") FilterRequest filterRequest,
-            @Name("categoryId") String categoryId)
+            @Name("categoryId") @Description("Optional category UUID to filter products. Returns products that belong to this category (products can belong to multiple categories).") String categoryId)
     {
         FilterRequest resolvedFilterRequest = filterRequest != null ? filterRequest : new FilterRequest();
 
@@ -74,7 +74,7 @@ public class ProductResource
     }
 
     @Query("topBestSellers")
-    @Description("Returns the top 10 best-selling products ranked by units sold in DELIVERED orders. " +
+    @Description("Returns the top 10 best-selling products ranked by units sold in DELIVERED orders. Products can belong to multiple categories. " +
                  "If fewer than 10 delivered-order products exist, the list is padded with random products.")
     @Transactional(value = TxType.SUPPORTS)
     public List<ProductShoppingListItemDto> getTopBestSellers()
@@ -98,21 +98,21 @@ public class ProductResource
     }
 
     @Query("getProductInformation")
-    @Description("Fetch a product with all variants for a given product id, including product images and prices for the selected category")
+    @Description("Fetch a product with all variants, categories, and images for a given product id. Products can belong to multiple categories which are returned in the response.")
     @Transactional(value = TxType.SUPPORTS)
     public ProductInformationDto getProductInformation(@Name("productId") String productId) {
         return productService.getProductInformationDto(productId);
     }
 
     @Mutation("addProductInformation")
-    @Description("Create a new product with variants and images")
+    @Description("Create a new product with variants, images, and multiple categories. Products can be assigned to one or more categories.")
     @Transactional(value = TxType.REQUIRED)
     public ProductInformationDto addProductInformation(@Name("input") ProductInformationDto input) {
         return productService.addProductInformation(input);
     }
 
     @Mutation("updateProductInformation")
-    @Description("Update an existing product with variants and images")
+    @Description("Update an existing product with variants, images, and multiple categories. When updating categories, all previous category assignments are replaced with the new ones provided.")
     @Transactional(value = TxType.REQUIRED)
     public ProductInformationDto updateProductInformation(
             @Name("productId") String productId,

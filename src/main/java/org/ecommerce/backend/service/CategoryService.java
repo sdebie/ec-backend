@@ -139,4 +139,33 @@ public class CategoryService
             throw e;
         }
     }
+
+    /**
+     * Fix category names by replacing HTML entity &amp; with ampersand &
+     * This method updates all categories that contain '&amp;' in their names.
+     *
+     * @return the number of categories updated
+     */
+    @Transactional
+    public long fixCategoryNamesAmpersand()
+    {
+        try {
+            List<CategoryEntity> categoriesToFix = categoryRepository.list("name like ?1", "%&amp;%");
+            long count = 0;
+
+            for (CategoryEntity category : categoriesToFix) {
+                String originalName = category.name;
+                category.name = category.name.replace("&amp;", "&");
+                categoryRepository.persist(category);
+                count++;
+                log.info("Fixed category name: '{}' -> '{}'", originalName, category.name);
+            }
+
+            log.info("Total categories fixed: {}", count);
+            return count;
+        } catch (Exception e) {
+            log.error("Error fixing category names: {}", e.getMessage(), e);
+            throw e;
+        }
+    }
 }

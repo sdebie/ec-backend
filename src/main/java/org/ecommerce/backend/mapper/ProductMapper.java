@@ -19,7 +19,6 @@ import org.mapstruct.Mapping;
 import java.util.Collections;
 import java.util.List;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 
 import static org.mapstruct.NullValueCheckStrategy.ALWAYS;
@@ -72,7 +71,8 @@ public interface ProductMapper
     @Mapping(target = "shortDescription", source = "shorDescription")
     @Mapping(target = "productType", expression = "java(entity.productType == null ? null : entity.productType.name())")
     @Mapping(target = "createdAt", expression = "java(entity.createdAt == null ? null : entity.createdAt.toString())")
-    @Mapping(target = "category", source = "category")
+    @Mapping(target = "category", expression = "java(mapPrimaryCategory(entity))")
+    @Mapping(target = "categories", expression = "java(mapCategoryList(entity))")
     @Mapping(target = "brand", source = "brand")
     @Mapping(target = "variants", ignore = true)
     ProductDto mapProductEntityToDto(ProductEntity entity);
@@ -89,18 +89,34 @@ public interface ProductMapper
         return new ProductInformationDto(mapProductEntityToDto(product), variantDtos);
     }
 
-    default Long calculateSaleDaysRemaining(VariantPricesEntity entity)
-    {
-        if (entity == null || entity.priceType == null || entity.priceEndDate == null) return null;
+     default Long calculateSaleDaysRemaining(VariantPricesEntity entity)
+     {
+         if (entity == null || entity.priceType == null || entity.priceEndDate == null) return null;
 
-        if (entity.priceType != PriceTypeEn.RETAIL_SALE_PRICE
-                && entity.priceType != PriceTypeEn.WHOLESALE_SALE_PRICE) {
-            return null;
-        }
+         if (entity.priceType != PriceTypeEn.RETAIL_SALE_PRICE
+                 && entity.priceType != PriceTypeEn.WHOLESALE_SALE_PRICE) {
+             return null;
+         }
 
-        LocalDate today = LocalDate.now();
-        LocalDate endDate = entity.priceEndDate.toLocalDate();
-        long daysRemaining = ChronoUnit.DAYS.between(today, endDate);
-        return Math.max(daysRemaining, 0L);
-    }
+         LocalDate today = LocalDate.now();
+         LocalDate endDate = entity.priceEndDate.toLocalDate();
+         long daysRemaining = ChronoUnit.DAYS.between(today, endDate);
+         return Math.max(daysRemaining, 0L);
+     }
+
+     default CategoryDto mapPrimaryCategory(ProductEntity entity) {
+         if (entity == null || entity.categories == null || entity.categories.isEmpty()) {
+             return null;
+         }
+         return mapCategoryEntityToDto(entity.categories.iterator().next());
+     }
+
+     default List<CategoryDto> mapCategoryList(ProductEntity entity) {
+         if (entity == null || entity.categories == null) {
+             return Collections.emptyList();
+         }
+         return entity.categories.stream()
+                 .map(this::mapCategoryEntityToDto)
+                 .toList();
+     }
 }

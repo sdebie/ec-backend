@@ -10,6 +10,7 @@ import org.ecommerce.common.dto.*;
 import org.ecommerce.common.entity.ProductEntity;
 import org.ecommerce.common.entity.ProductImageEntity;
 import org.ecommerce.common.entity.ProductVariantEntity;
+import org.ecommerce.common.entity.CategoryEntity;
 import org.ecommerce.common.enums.ProductTypeEn;
 import org.ecommerce.common.query.FilterRequest;
 import org.ecommerce.common.query.PageRequest;
@@ -140,11 +141,26 @@ public class ProductService
         product.shorDescription = input.product.shortDescription;
         product.productType = input.product.productType != null ? ProductTypeEn.valueOf(input.product.productType) : ProductTypeEn.SIMPLE;
 
-        // Link category if provided
-        if (input.product.category != null && input.product.category.id != null) {
+        // Link categories if provided
+        if (input.product.categories != null && !input.product.categories.isEmpty()) {
+            for (CategoryDto categoryDto : input.product.categories) {
+                if (categoryDto.id != null) {
+                    UUID categoryId = categoryDto.id;
+                    CategoryEntity category = categoryRepository.findById(categoryId);
+                    if (category != null) {
+                        product.categories.add(category);
+                        log.info("Linked category with ID: {}", categoryId);
+                    } else {
+                        log.warn("Category not found with ID: {}", categoryId);
+                    }
+                }
+            }
+        } else if (input.product.category != null && input.product.category.id != null) {
+            // Backward compatibility: handle single category
             UUID categoryId = input.product.category.id;
-            product.category = categoryRepository.findById(categoryId);
-            if (product.category != null) {
+            CategoryEntity category = categoryRepository.findById(categoryId);
+            if (category != null) {
+                product.categories.add(category);
                 log.info("Linked category with ID: {}", categoryId);
             } else {
                 log.warn("Category not found with ID: {}", categoryId);
@@ -207,11 +223,28 @@ public class ProductService
             product.productType = ProductTypeEn.valueOf(input.product.productType);
         }
 
-        // Update category if provided
-        if (input.product.category != null && input.product.category.id != null) {
+        // Update categories if provided
+        if (input.product.categories != null && !input.product.categories.isEmpty()) {
+            product.categories.clear();
+            for (CategoryDto categoryDto : input.product.categories) {
+                if (categoryDto.id != null) {
+                    UUID categoryId = categoryDto.id;
+                    CategoryEntity category = categoryRepository.findById(categoryId);
+                    if (category != null) {
+                        product.categories.add(category);
+                        log.info("Linked category with ID: {}", categoryId);
+                    } else {
+                        log.warn("Category not found with ID: {}", categoryId);
+                    }
+                }
+            }
+        } else if (input.product.category != null && input.product.category.id != null) {
+            // Backward compatibility: handle single category
+            product.categories.clear();
             UUID categoryId = input.product.category.id;
-            product.category = categoryRepository.findById(categoryId);
-            if (product.category != null) {
+            CategoryEntity category = categoryRepository.findById(categoryId);
+            if (category != null) {
+                product.categories.add(category);
                 log.info("Linked category with ID: {}", categoryId);
             } else {
                 log.warn("Category not found with ID: {}", categoryId);

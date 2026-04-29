@@ -27,9 +27,11 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -267,7 +269,7 @@ public class ProductImportService implements ImportBatchService<ProductCompariso
             staged.sku = row.sku();
             staged.name = row.name();
             staged.description = row.description();
-            staged.categorySlug = row.categorySlug();
+            staged.categorySlug = normalizeCategorySlugs(row.categorySlug());
             staged.shortDescription = row.shortDescription();
             staged.stock = row.stock();
             staged.brandSlug = row.brandSlug();
@@ -369,11 +371,16 @@ public class ProductImportService implements ImportBatchService<ProductCompariso
     }
 
     private void applyValidProductStagedRow(ProductUploadStagedEntity staged) {
-        CategoryEntity category = null;
+        List<CategoryEntity> categories = new ArrayList<>();
         BrandEntity brand = null;
 
         if (!isBlank(staged.categorySlug)) {
-            category = categoryRepository.findBySlugIgnoreCase(staged.categorySlug);
+            for (String slug : splitCategorySlugs(staged.categorySlug)) {
+                CategoryEntity category = categoryRepository.findBySlugIgnoreCase(slug);
+                if (category != null) {
+                    categories.add(category);
+                }
+            }
         }
         if (!isBlank(staged.brandSlug)) {
             brand = brandRepository.findBySlugIgnoreCase(staged.brandSlug);
@@ -406,8 +413,9 @@ public class ProductImportService implements ImportBatchService<ProductCompariso
         product.description = staged.description;
         product.shorDescription = staged.shortDescription;
 
-        if (category != null) {
-            product.category = category;
+        if (!categories.isEmpty()) {
+            product.categories.clear();
+            product.categories.addAll(categories);
         }
         if (brand != null) {
             product.brand = brand;
@@ -464,12 +472,13 @@ public class ProductImportService implements ImportBatchService<ProductCompariso
             String imagesValue,
             String attributesJson
     ) {
-        CategoryEntity category = findExistingCategory(staged.categorySlug, validationErrors);
+        List<String> categorySlugs = splitCategorySlugs(staged.categorySlug);
+        List<CategoryEntity> categories = findExistingCategories(categorySlugs, validationErrors);
         BrandEntity brand = findExistingBrand(brandSlug, validationErrors);
         ProductEntity existingProduct = findExistingProduct(staged.productSlug, staged.name);
         ProductVariantEntity existingVariant = findExistingVariant(staged.sku, validationErrors);
 
-        staged.isValidCategory = category != null;
+        staged.isValidCategory = !categorySlugs.isEmpty() && categories.size() == categorySlugs.size();
         staged.isValidBrand = brand != null;
 
         staged.isNewProduct = existingProduct == null;
@@ -533,17 +542,22 @@ public class ProductImportService implements ImportBatchService<ProductCompariso
         }
     }
 
-    private CategoryEntity findExistingCategory(String categorySlug, List<String> validationErrors) {
-        if (isBlank(categorySlug)) {
+    private List<CategoryEntity> findExistingCategories(List<String> categorySlugs, List<String> validationErrors) {
+        if (categorySlugs.isEmpty()) {
             validationErrors.add("category is required");
-            return null;
+            return List.of();
         }
 
-        CategoryEntity category = categoryRepository.findBySlugIgnoreCase(categorySlug);
-        if (category == null) {
-            validationErrors.add("Unknown category: " + categorySlug.trim());
+        List<CategoryEntity> categories = new ArrayList<>();
+        for (String categorySlug : categorySlugs) {
+            CategoryEntity category = categoryRepository.findBySlugIgnoreCase(categorySlug);
+            if (category == null) {
+                validationErrors.add("Unknown category: " + categorySlug);
+                continue;
+            }
+            categories.add(category);
         }
-        return category;
+        return categories;
     }
 
     private BrandEntity findExistingBrand(String brandSlug, List<String> validationErrors) {
@@ -599,7 +613,7 @@ public class ProductImportService implements ImportBatchService<ProductCompariso
 
         boolean nameChanged = !Objects.equals(trimToNull(staged.name), trimToNull(existingProduct.name));
         boolean productSlugChanged = !Objects.equals(normalizeSlug(staged.productSlug), normalizeSlug(existingProduct.slug));
-        boolean categoryChanged = !Objects.equals(trimToNull(staged.categorySlug), trimToNull(existingProduct.category != null ? existingProduct.category.slug : null));
+        boolean categoryChanged = !categorySlugSet(staged.categorySlug).equals(categorySlugSet(existingProduct));
         boolean brandChanged = !Objects.equals(trimToNull(staged.brandSlug), trimToNull(existingProduct.brand != null ? existingProduct.brand.slug : null));
         boolean stockChanged = !Objects.equals(stock, existingVariant.stockQuantity);
         boolean attributesChanged = !Objects.equals(trimToNull(attributesJson), trimToNull(existingVariant.attributesJson));
@@ -656,6 +670,38 @@ public class ProductImportService implements ImportBatchService<ProductCompariso
     private String normalizeSlug(String value) {
         String normalized = trimToNull(value);
         return normalized == null ? null : normalized.toLowerCase(Locale.ROOT);
+    }
+
+    private String normalizeCategorySlugs(String value) {
+        List<String> normalized = splitCategorySlugs(value);
+        return normalized.isEmpty() ? null : String.join(",", normalized);
+    }
+
+    private List<String> splitCategorySlugs(String categorySlugs) {
+        if (isBlank(categorySlugs)) {
+            return List.of();
+        }
+
+        return Arrays.stream(categorySlugs.split(","))
+                .map(this::normalizeSlug)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+    }
+
+    private Set<String> categorySlugSet(String categorySlugs) {
+        return new LinkedHashSet<>(splitCategorySlugs(categorySlugs));
+    }
+
+    private Set<String> categorySlugSet(ProductEntity product) {
+        if (product == null || product.categories == null || product.categories.isEmpty()) {
+            return Set.of();
+        }
+
+        return product.categories.stream()
+                .map(category -> normalizeSlug(category.slug))
+                .filter(Objects::nonNull)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
     }
 
     private Integer parseStockInteger(String value, List<String> validationErrors) {

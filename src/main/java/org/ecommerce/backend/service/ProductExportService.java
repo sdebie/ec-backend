@@ -43,7 +43,8 @@ public class ProductExportService {
                 v.attributes
             FROM product_variants v
             JOIN products p ON v.product_id = p.id
-            LEFT JOIN categories c ON p.category_id = c.id
+            LEFT JOIN product_categories pc ON p.id = pc.product_id
+            LEFT JOIN categories c ON pc.category_id = c.id
             LEFT JOIN brands b ON p.brand_id = b.id
             """;
 
@@ -70,7 +71,8 @@ public class ProductExportService {
                 v.attributes
             FROM product_variants v
             JOIN products p ON v.product_id = p.id
-            LEFT JOIN categories c ON p.category_id = c.id
+            LEFT JOIN product_categories pc ON p.id = pc.product_id
+            LEFT JOIN categories c ON pc.category_id = c.id
             LEFT JOIN brands b ON p.brand_id = b.id
             """;
 

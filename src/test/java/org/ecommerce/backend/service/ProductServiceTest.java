@@ -7,7 +7,6 @@ import org.ecommerce.backend.mapper.ProductMapper;
 import org.ecommerce.common.dto.ProductInformationDto;
 import org.ecommerce.common.dto.ProductListItemDto;
 import org.ecommerce.common.dto.ProductShoppingListItemDto;
-import org.ecommerce.common.dto.ProductVariantDto;
 import org.ecommerce.common.entity.ProductEntity;
 import org.ecommerce.common.entity.ProductImageEntity;
 import org.ecommerce.common.entity.ProductVariantEntity;
@@ -52,14 +51,14 @@ class ProductServiceTest
         FilterRequest filterRequest = new FilterRequest();
         UUID productId = UUID.randomUUID();
 
-        ProductListItemDto repositoryDto = new ProductListItemDto(
-                productId.toString(),
-                "Desk Lamp",
-                "Warm light",
-                null,
-                List.of(),
-                "Lighting",
-                "BrightCo");
+        ProductListItemDto repositoryDto = new ProductListItemDto();
+        repositoryDto.id = productId.toString();
+        repositoryDto.name = "Desk Lamp";
+        repositoryDto.description = "Warm light";
+        repositoryDto.imageName = null;
+        repositoryDto.variantIds = List.of();
+        repositoryDto.categoryNames = List.of("Lighting");
+        repositoryDto.brandName = "BrightCo";
 
         ProductVariantEntity variant1 = new ProductVariantEntity();
         variant1.id = UUID.randomUUID();
@@ -80,7 +79,7 @@ class ProductServiceTest
         assertSame(repositoryDto, result.getFirst());
         assertEquals(List.of(variant1.id.toString(), variant2.id.toString()), repositoryDto.variantIds);
         assertEquals("/images/lamp.jpg", repositoryDto.imageName);
-        assertEquals("Lighting", repositoryDto.categoryName);
+        assertEquals(List.of("Lighting"), repositoryDto.categoryNames);
         assertEquals("BrightCo", repositoryDto.brandName);
 
         verify(productRepository).findAllProductListItems(pageRequest, filterRequest);
@@ -91,14 +90,14 @@ class ProductServiceTest
     {
         PageRequest pageRequest = new PageRequest();
         FilterRequest filterRequest = new FilterRequest();
-        ProductListItemDto repositoryDto = new ProductListItemDto(
-                null,
-                "Draft Product",
-                "No persisted id yet",
-                null,
-                List.of(),
-                null,
-                null);
+        ProductListItemDto repositoryDto = new ProductListItemDto();
+        repositoryDto.id = null;
+        repositoryDto.name = "Draft Product";
+        repositoryDto.description = "No persisted id yet";
+        repositoryDto.imageName = null;
+        repositoryDto.variantIds = List.of();
+        repositoryDto.categoryNames = List.of();
+        repositoryDto.brandName = null;
 
         when(productRepository.findAllProductListItems(pageRequest, filterRequest)).thenReturn(List.of(repositoryDto));
 
