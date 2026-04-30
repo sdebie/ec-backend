@@ -21,6 +21,9 @@ import org.ecommerce.common.repository.CategoryRepository;
 import org.ecommerce.common.repository.BrandRepository;
 
 import java.util.List;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -50,6 +53,28 @@ public class ProductService
     public List<ProductListItemDto> getAllProducts(PageRequest pageRequest, FilterRequest filterRequest)
     {
         return enrichProductListItems(productRepository.findAllProductListItems(pageRequest, filterRequest));
+    }
+
+    @Transactional(value = TxType.SUPPORTS)
+    public List<ProductListItemDto> getProductsByCategory(String categoryId, boolean includeSubCategories, PageRequest pageRequest, FilterRequest filterRequest)
+    {
+        if (categoryId == null || categoryId.isBlank()) {
+            throw new IllegalArgumentException("Category id is required");
+        }
+
+        UUID selectedCategoryId = UUID.fromString(categoryId);
+        CategoryEntity selectedCategory = categoryRepository.findById(selectedCategoryId);
+        if (selectedCategory == null) {
+            throw new IllegalArgumentException("Category not found with id: " + categoryId);
+        }
+
+        List<UUID> categoryIds = includeSubCategories
+                ? resolveCategoryScopeIds(selectedCategory)
+                : List.of(selectedCategoryId);
+
+        return enrichProductListItems(
+                productRepository.findProductListItemsByCategoryIds(pageRequest, filterRequest, categoryIds)
+        );
     }
 
     @Transactional(value = TxType.SUPPORTS)
@@ -87,6 +112,22 @@ public class ProductService
 
             return product;
         }).collect(Collectors.toList());
+    }
+
+    private List<UUID> resolveCategoryScopeIds(CategoryEntity selectedCategory)
+    {
+        Set<UUID> scopedIds = new LinkedHashSet<>();
+        scopedIds.add(selectedCategory.id);
+
+        UUID groupParentId = selectedCategory.parent != null ? selectedCategory.parent.id : selectedCategory.id;
+        List<CategoryEntity> groupedCategories = categoryRepository.list("parent.id", groupParentId);
+        for (CategoryEntity category : groupedCategories) {
+            if (category != null && category.id != null) {
+                scopedIds.add(category.id);
+            }
+        }
+
+        return new ArrayList<>(scopedIds);
     }
 
     @Transactional(value = TxType.SUPPORTS)

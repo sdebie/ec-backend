@@ -20,9 +20,12 @@ public class CategoryResource
 
     @Query("allCategories")
     @Description("Get all categories")
-    public List<CategoryDto> getAllCategories(@Name("pageRequest") PageRequest pageRequest, @Name("filterRequest") FilterRequest filterRequest)
+    public List<CategoryDto> getAllCategories(
+            @Name("pageRequest") PageRequest pageRequest,
+            @Name("filterRequest") FilterRequest filterRequest,
+            @Name("includeSubCategories") @DefaultValue("false") boolean includeSubCategories)
     {
-        return categoryService.getAllCategories(pageRequest, filterRequest);
+        return categoryService.getAllCategories(pageRequest, filterRequest, includeSubCategories);
     }
 
     @Query("categoryCount")

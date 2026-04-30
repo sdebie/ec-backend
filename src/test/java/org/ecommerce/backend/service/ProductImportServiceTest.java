@@ -120,7 +120,7 @@ class ProductImportServiceTest {
         ProductEntity matchedProduct = new ProductEntity();
         matchedProduct.id = UUID.randomUUID();
         matchedProduct.name = "Blue Cotton Tee";
-        matchedProduct.category = category;
+        matchedProduct.setCategory(category);
         matchedProduct.brand = brand;
 
         ProductVariantEntity existingVariant = new ProductVariantEntity();
@@ -172,7 +172,7 @@ class ProductImportServiceTest {
         ProductEntity product = new ProductEntity();
         product.id = UUID.randomUUID();
         product.name = "Blue Cotton Tee";
-        product.category = category;
+        product.setCategory(category);
         product.brand = brand;
 
         ProductVariantEntity variant = new ProductVariantEntity();

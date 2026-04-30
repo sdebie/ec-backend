@@ -10,8 +10,10 @@ import org.ecommerce.common.dto.ProductShoppingListItemDto;
 import org.ecommerce.common.entity.ProductEntity;
 import org.ecommerce.common.entity.ProductImageEntity;
 import org.ecommerce.common.entity.ProductVariantEntity;
+import org.ecommerce.common.entity.CategoryEntity;
 import org.ecommerce.common.query.FilterRequest;
 import org.ecommerce.common.query.PageRequest;
+import org.ecommerce.common.repository.CategoryRepository;
 import org.ecommerce.common.repository.ProductImageRepository;
 import org.ecommerce.common.repository.ProductRepository;
 import org.ecommerce.common.repository.ProductVariantRepository;
@@ -21,6 +23,7 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.mockito.Mockito.verify;
@@ -43,6 +46,9 @@ class ProductServiceTest
 
     @InjectMock
     ProductMapper productMapper;
+
+    @InjectMock
+    CategoryRepository categoryRepository;
 
     @Test
     void getAllProducts_shouldEnrichRepositoryDtosWithoutUsingEntitiesInService()
@@ -171,5 +177,82 @@ class ProductServiceTest
 
         assertNull(result);
         verify(productRepository).findByIdWithCategoryAndBrand(productId);
+    }
+
+    @Test
+    void getProductsByCategory_shouldRequireExistingCategory()
+    {
+        PageRequest pageRequest = new PageRequest();
+        FilterRequest filterRequest = new FilterRequest();
+        UUID categoryId = UUID.randomUUID();
+
+        when(categoryRepository.findById(categoryId)).thenReturn(null);
+
+        IllegalArgumentException ex = assertThrows(
+                IllegalArgumentException.class,
+                () -> productService.getProductsByCategory(categoryId.toString(), true, pageRequest, filterRequest)
+        );
+
+        assertEquals("Category not found with id: " + categoryId, ex.getMessage());
+    }
+
+    @Test
+    void getProductsByCategory_shouldLoadProductsForMainCategoryOnlyWhenSubcategoriesDisabled()
+    {
+        PageRequest pageRequest = new PageRequest();
+        FilterRequest filterRequest = new FilterRequest();
+        UUID categoryId = UUID.randomUUID();
+
+        CategoryEntity rootCategory = new CategoryEntity();
+        rootCategory.id = categoryId;
+
+        ProductListItemDto repositoryDto = new ProductListItemDto();
+        repositoryDto.id = null;
+        repositoryDto.name = "Main Category Product";
+
+        when(categoryRepository.findById(categoryId)).thenReturn(rootCategory);
+        when(productRepository.findProductListItemsByCategoryIds(pageRequest, filterRequest, List.of(categoryId)))
+                .thenReturn(List.of(repositoryDto));
+
+        List<ProductListItemDto> result = productService.getProductsByCategory(categoryId.toString(), false, pageRequest, filterRequest);
+
+        assertEquals(1, result.size());
+        verify(productRepository).findProductListItemsByCategoryIds(pageRequest, filterRequest, List.of(categoryId));
+    }
+
+    @Test
+    void getProductsByCategory_shouldLoadSelectedAndParentScopeCategoriesWhenSubcategoriesEnabled()
+    {
+        PageRequest pageRequest = new PageRequest();
+        FilterRequest filterRequest = new FilterRequest();
+
+        UUID parentCategoryId = UUID.randomUUID();
+        UUID selectedCategoryId = UUID.randomUUID();
+        UUID siblingCategoryId = UUID.randomUUID();
+
+        CategoryEntity parentCategory = new CategoryEntity();
+        parentCategory.id = parentCategoryId;
+
+        CategoryEntity selectedCategory = new CategoryEntity();
+        selectedCategory.id = selectedCategoryId;
+        selectedCategory.parent = parentCategory;
+
+        CategoryEntity siblingCategory = new CategoryEntity();
+        siblingCategory.id = siblingCategoryId;
+        siblingCategory.parent = parentCategory;
+
+        ProductListItemDto repositoryDto = new ProductListItemDto();
+        repositoryDto.id = null;
+        repositoryDto.name = "Parent Scope Product";
+
+        when(categoryRepository.findById(selectedCategoryId)).thenReturn(selectedCategory);
+        when(categoryRepository.list("parent.id", parentCategoryId)).thenReturn(List.of(selectedCategory, siblingCategory));
+        when(productRepository.findProductListItemsByCategoryIds(pageRequest, filterRequest, List.of(selectedCategoryId, siblingCategoryId)))
+                .thenReturn(List.of(repositoryDto));
+
+        List<ProductListItemDto> result = productService.getProductsByCategory(selectedCategoryId.toString(), true, pageRequest, filterRequest);
+
+        assertEquals(1, result.size());
+        verify(productRepository).findProductListItemsByCategoryIds(pageRequest, filterRequest, List.of(selectedCategoryId, siblingCategoryId));
     }
 }

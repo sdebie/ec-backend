@@ -9,12 +9,14 @@ import org.ecommerce.common.query.Filter;
 import org.ecommerce.common.query.FilterRequest;
 import org.ecommerce.common.query.PageRequest;
 import org.ecommerce.common.query.enums.FilterOperator;
+import org.ecommerce.common.repository.CategoryRepository;
 
 import jakarta.transaction.Transactional;
 import jakarta.transaction.Transactional.TxType;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 @ApplicationScoped
 @GraphQLApi
@@ -23,25 +25,44 @@ public class ProductResource
     @Inject
     ProductService productService;
 
+    @Inject
+    CategoryRepository categoryRepository;
+
     @Query("productList")
-    @Description("Returns a paged list of products with active retail or wholesale pricing. Supports categoryId and filterRequest. Products can belong to multiple categories.")
+    @Description("Returns a paged list of products with active retail or wholesale pricing. Category scoping is not applied in this endpoint.")
     @Transactional(value = TxType.SUPPORTS)
     public List<ProductListItemDto> getProductsList(
             @Name("pageRequest") PageRequest pageRequest,
-            @Name("filterRequest") FilterRequest filterRequest,
-            @Name("categoryId") @Description("Optional category UUID to filter products. Returns products that belong to this category (products can belong to multiple categories).") String categoryId)
+            @Name("filterRequest") FilterRequest filterRequest)
     {
-        FilterRequest resolvedFilterRequest = filterRequest != null ? filterRequest : new FilterRequest();
+        return productService.getAllProducts(pageRequest, filterRequest);
+    }
 
-        if (categoryId != null && !categoryId.isBlank() && !"ALL".equalsIgnoreCase(categoryId)) {
-            List<Filter> filters = resolvedFilterRequest.getFilters() != null
-                    ? resolvedFilterRequest.getFilters()
-                    : new ArrayList<>();
-            filters.add(new Filter("category.id", FilterOperator.EQUALS, categoryId));
-            resolvedFilterRequest.setFilters(filters);
+    @Query("productListByCategory")
+    @Description("Returns a paged list of products for a mandatory category. Optionally includes categories under the same parent scope.")
+    @Transactional(value = TxType.SUPPORTS)
+    public List<ProductListItemDto> getProductsListByCategory(
+            @Name("categoryId") @Description("Required category UUID.") String categoryId,
+            @Name("includeSubCategories") @DefaultValue("true") @Description("When true, products in the selected category and related parent-scope categories are included.") boolean includeSubCategories,
+            @Name("pageRequest") PageRequest pageRequest,
+            @Name("filterRequest") FilterRequest filterRequest)
+    {
+        if (categoryId == null || categoryId.isBlank()) {
+            throw new IllegalArgumentException("categoryId is required and must reference a main category");
         }
 
-        return productService.getAllProducts(pageRequest, resolvedFilterRequest);
+        final UUID parsedCategoryId;
+        try {
+            parsedCategoryId = UUID.fromString(categoryId);
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("categoryId must be a valid UUID for a main category", e);
+        }
+
+        if (categoryRepository.findById(parsedCategoryId) == null) {
+            throw new IllegalArgumentException("Category not found for id: " + categoryId);
+        }
+
+        return productService.getProductsByCategory(categoryId, includeSubCategories, pageRequest, filterRequest);
     }
 
     @Query("shoppingProductList")
