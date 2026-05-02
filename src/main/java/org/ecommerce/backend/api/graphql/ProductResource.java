@@ -79,7 +79,7 @@ public class ProductResource
             List<Filter> filters = resolvedFilterRequest.getFilters() != null
                     ? resolvedFilterRequest.getFilters()
                     : new ArrayList<>();
-            filters.add(new Filter("category.id", FilterOperator.EQUALS, categoryId));
+            filters.add(new Filter("c.id", FilterOperator.EQUALS, categoryId));
             resolvedFilterRequest.setFilters(filters);
         }
 
