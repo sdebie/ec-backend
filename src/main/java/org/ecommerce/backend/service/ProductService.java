@@ -12,8 +12,10 @@ import org.ecommerce.common.entity.ProductImageEntity;
 import org.ecommerce.common.entity.ProductVariantEntity;
 import org.ecommerce.common.entity.CategoryEntity;
 import org.ecommerce.common.enums.ProductTypeEn;
+import org.ecommerce.common.query.Filter;
 import org.ecommerce.common.query.FilterRequest;
 import org.ecommerce.common.query.PageRequest;
+import org.ecommerce.common.query.enums.FilterOperator;
 import org.ecommerce.common.repository.ProductImageRepository;
 import org.ecommerce.common.repository.ProductRepository;
 import org.ecommerce.common.repository.ProductVariantRepository;
@@ -74,6 +76,39 @@ public class ProductService
 
         return enrichProductListItems(
                 productRepository.findProductListItemsByCategoryIds(pageRequest, filterRequest, categoryIds)
+        );
+    }
+
+    @Transactional(value = TxType.SUPPORTS)
+    public List<ProductListItemDto> getProductsByBrand(String brandId, PageRequest pageRequest, FilterRequest filterRequest)
+    {
+        if (brandId == null || brandId.isBlank()) {
+            throw new IllegalArgumentException("Brand id is required");
+        }
+
+        final UUID parsedBrandId;
+        try {
+            parsedBrandId = UUID.fromString(brandId);
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("Brand id must be a valid UUID", e);
+        }
+
+        if (brandRepository.findById(parsedBrandId) == null) {
+            throw new IllegalArgumentException("Brand not found with id: " + brandId);
+        }
+
+        FilterRequest effectiveFilterRequest = new FilterRequest();
+        effectiveFilterRequest.setSort(filterRequest != null ? filterRequest.getSort() : null);
+        effectiveFilterRequest.setFilterGroups(filterRequest != null ? filterRequest.getFilterGroups() : null);
+
+        List<Filter> filters = filterRequest != null && filterRequest.getFilters() != null
+                ? new ArrayList<>(filterRequest.getFilters())
+                : new ArrayList<>();
+        filters.add(new Filter("brand.id", FilterOperator.EQUALS, brandId));
+        effectiveFilterRequest.setFilters(filters);
+
+        return enrichProductListItems(
+                productRepository.findAllProductListItems(pageRequest, effectiveFilterRequest)
         );
     }
 

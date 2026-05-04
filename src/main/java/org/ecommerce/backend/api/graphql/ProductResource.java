@@ -9,6 +9,7 @@ import org.ecommerce.common.query.Filter;
 import org.ecommerce.common.query.FilterRequest;
 import org.ecommerce.common.query.PageRequest;
 import org.ecommerce.common.query.enums.FilterOperator;
+import org.ecommerce.common.repository.BrandRepository;
 import org.ecommerce.common.repository.CategoryRepository;
 
 import jakarta.transaction.Transactional;
@@ -29,6 +30,9 @@ public class ProductResource
 
     @Inject
     CategoryRepository categoryRepository;
+
+    @Inject
+    BrandRepository brandRepository;
 
     @Query("productList")
     @Description("Returns a paged list of products with active retail or wholesale pricing. Category scoping is not applied in this endpoint.")
@@ -65,6 +69,32 @@ public class ProductResource
         }
 
         return productService.getProductsByCategory(categoryId, includeSubCategories, pageRequest, filterRequest);
+    }
+
+    @Query("productListByBrand")
+    @Description("Returns a paged list of products linked to a mandatory brand.")
+    @Transactional(value = TxType.SUPPORTS)
+    public List<ProductListItemDto> getProductsListByBrand(
+            @Name("brandId") @Description("Required brand UUID.") String brandId,
+            @Name("pageRequest") PageRequest pageRequest,
+            @Name("filterRequest") FilterRequest filterRequest)
+    {
+        if (brandId == null || brandId.isBlank()) {
+            throw new IllegalArgumentException("brandId is required and must reference a brand");
+        }
+
+        final UUID parsedBrandId;
+        try {
+            parsedBrandId = UUID.fromString(brandId);
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("brandId must be a valid UUID for a brand", e);
+        }
+
+        if (brandRepository.findById(parsedBrandId) == null) {
+            throw new IllegalArgumentException("Brand not found for id: " + brandId);
+        }
+
+        return productService.getProductsByBrand(brandId, pageRequest, filterRequest);
     }
 
     @Query("shoppingProductList")

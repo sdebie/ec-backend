@@ -7,17 +7,22 @@ import org.ecommerce.backend.mapper.ProductMapper;
 import org.ecommerce.common.dto.ProductInformationDto;
 import org.ecommerce.common.dto.ProductListItemDto;
 import org.ecommerce.common.dto.ProductShoppingListItemDto;
+import org.ecommerce.common.entity.BrandEntity;
 import org.ecommerce.common.entity.ProductEntity;
 import org.ecommerce.common.entity.ProductImageEntity;
 import org.ecommerce.common.entity.ProductVariantEntity;
 import org.ecommerce.common.entity.CategoryEntity;
+import org.ecommerce.common.query.Filter;
 import org.ecommerce.common.query.FilterRequest;
 import org.ecommerce.common.query.PageRequest;
+import org.ecommerce.common.query.enums.FilterOperator;
+import org.ecommerce.common.repository.BrandRepository;
 import org.ecommerce.common.repository.CategoryRepository;
 import org.ecommerce.common.repository.ProductImageRepository;
 import org.ecommerce.common.repository.ProductRepository;
 import org.ecommerce.common.repository.ProductVariantRepository;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 import java.util.List;
 import java.util.UUID;
@@ -49,6 +54,9 @@ class ProductServiceTest
 
     @InjectMock
     CategoryRepository categoryRepository;
+
+    @InjectMock
+    BrandRepository brandRepository;
 
     @Test
     void getAllProducts_shouldEnrichRepositoryDtosWithoutUsingEntitiesInService()
@@ -254,5 +262,57 @@ class ProductServiceTest
 
         assertEquals(1, result.size());
         verify(productRepository).findProductListItemsByCategoryIds(pageRequest, filterRequest, List.of(selectedCategoryId, siblingCategoryId));
+    }
+
+    @Test
+    void getProductsByBrand_shouldRequireExistingBrand()
+    {
+        PageRequest pageRequest = new PageRequest();
+        FilterRequest filterRequest = new FilterRequest();
+        UUID brandId = UUID.randomUUID();
+
+        when(brandRepository.findById(brandId)).thenReturn(null);
+
+        IllegalArgumentException ex = assertThrows(
+                IllegalArgumentException.class,
+                () -> productService.getProductsByBrand(brandId.toString(), pageRequest, filterRequest)
+        );
+
+        assertEquals("Brand not found with id: " + brandId, ex.getMessage());
+    }
+
+    @Test
+    void getProductsByBrand_shouldAppendBrandFilterAndReturnPagedList()
+    {
+        PageRequest pageRequest = new PageRequest();
+        UUID brandId = UUID.randomUUID();
+
+        FilterRequest filterRequest = new FilterRequest();
+        filterRequest.setFilters(List.of(new Filter("name", FilterOperator.ILIKE, "mask")));
+
+        BrandEntity brand = new BrandEntity();
+        brand.id = brandId;
+
+        ProductListItemDto repositoryDto = new ProductListItemDto();
+        repositoryDto.id = null;
+        repositoryDto.name = "Mask Product";
+
+        when(brandRepository.findById(brandId)).thenReturn(brand);
+        when(productRepository.findAllProductListItems(org.mockito.ArgumentMatchers.eq(pageRequest), org.mockito.ArgumentMatchers.any(FilterRequest.class)))
+                .thenReturn(List.of(repositoryDto));
+
+        List<ProductListItemDto> result = productService.getProductsByBrand(brandId.toString(), pageRequest, filterRequest);
+
+        assertEquals(1, result.size());
+
+        ArgumentCaptor<FilterRequest> filterCaptor = ArgumentCaptor.forClass(FilterRequest.class);
+        verify(productRepository).findAllProductListItems(org.mockito.ArgumentMatchers.eq(pageRequest), filterCaptor.capture());
+
+        List<Filter> sentFilters = filterCaptor.getValue().getFilters();
+        assertEquals(2, sentFilters.size());
+        assertEquals("name", sentFilters.get(0).getKey());
+        assertEquals("brand.id", sentFilters.get(1).getKey());
+        assertEquals(FilterOperator.EQUALS, sentFilters.get(1).getOperator());
+        assertEquals(brandId.toString(), sentFilters.get(1).getValue());
     }
 }
