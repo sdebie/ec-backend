@@ -11,6 +11,7 @@ import org.ecommerce.backend.service.SettingsService;
 import org.ecommerce.common.dto.SettingsDto;
 import org.ecommerce.common.dto.ShippingMethodDto;
 import org.ecommerce.common.dto.StoreSettingsDto;
+import org.ecommerce.common.dto.CountrySettingsDto;
 
 import java.util.List;
 import java.util.Collections;
@@ -40,6 +41,13 @@ public class SettingsResource
     public List<ShippingMethodDto> getShippingMethods()
     {
         return settingsService.getShippingMethods();
+    }
+
+    @Query("countrySettings")
+    @Description("Get all country settings used for locale/currency formatting")
+    public List<CountrySettingsDto> getCountrySettings()
+    {
+        return settingsService.getCountrySettings();
     }
 
     @Mutation("updateSetting")
