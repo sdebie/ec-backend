@@ -11,7 +11,9 @@ import org.ecommerce.common.entity.ProductEntity;
 import org.ecommerce.common.entity.ProductImageEntity;
 import org.ecommerce.common.entity.ProductVariantEntity;
 import org.ecommerce.common.entity.CategoryEntity;
+import org.ecommerce.common.entity.VariantPricesEntity;
 import org.ecommerce.common.enums.ProductTypeEn;
+import org.ecommerce.common.enums.PriceTypeEn;
 import org.ecommerce.common.query.Filter;
 import org.ecommerce.common.query.FilterRequest;
 import org.ecommerce.common.query.PageRequest;
@@ -21,6 +23,7 @@ import org.ecommerce.common.repository.ProductRepository;
 import org.ecommerce.common.repository.ProductVariantRepository;
 import org.ecommerce.common.repository.CategoryRepository;
 import org.ecommerce.common.repository.BrandRepository;
+import org.ecommerce.common.repository.VariantPricesRepository;
 
 import java.util.List;
 import java.util.ArrayList;
@@ -47,6 +50,9 @@ public class ProductService
 
     @Inject
     BrandRepository brandRepository;
+
+    @Inject
+    VariantPricesRepository variantPricesRepository;
 
     @Inject
     ProductMapper productMapper;
@@ -418,12 +424,48 @@ public class ProductService
                 variant.persist();
                 log.info("Updated variant with SKU: {}", variantDto.sku);
             }
+
+            if (variantDto.prices != null && !variantDto.prices.isEmpty()) {
+                updateVariantPrices(variant, variantDto.prices);
+            }
             //TODO:: Update Pricing
         }
 
         // Optionally delete variants not in the new list
         // For now, we'll keep this as a TODO to preserve existing data
         // TODO: Implement logic to delete variants not provided in the update
+    }
+
+    private void updateVariantPrices(ProductVariantEntity variant, List<VariantPriceDto> newPrices) {
+        if (variant == null || variant.id == null || newPrices == null || newPrices.isEmpty()) {
+            return;
+        }
+
+        for (VariantPriceDto priceDto : newPrices) {
+            if (priceDto == null || priceDto.priceType == null || priceDto.price == null) {
+                continue;
+            }
+
+            final PriceTypeEn priceType;
+            try {
+                priceType = PriceTypeEn.valueOf(priceDto.priceType);
+            } catch (IllegalArgumentException ex) {
+                log.warn("Skipping unsupported price type '{}' for variant {}", priceDto.priceType, variant.id);
+                continue;
+            }
+
+            VariantPricesEntity price = variantPricesRepository.findLatestByVariantAndType(variant.id, priceType);
+            if (price == null) {
+                price = new VariantPricesEntity();
+                price.variant = variant;
+                price.priceType = priceType;
+            }
+
+            price.price = priceDto.price;
+            price.priceStartDate = priceDto.priceStartDate;
+            price.priceEndDate = priceDto.priceEndDate;
+            price.persist();
+        }
     }
 
 }
