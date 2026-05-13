@@ -5,6 +5,7 @@ import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import org.ecommerce.common.enums.CustomerTypeEn;
+import org.ecommerce.common.enums.CustomerStatusEn;
 import org.ecommerce.common.dto.CustomerProfileDto;
 import org.ecommerce.common.entity.CustomerEntity;
 
@@ -50,6 +51,12 @@ public class CustomerResource
         if (ce == null || ce.passwordHash == null) {
             return Response.status(Response.Status.UNAUTHORIZED).entity("Invalid credentials").build();
         }
+        if (ce.status == CustomerStatusEn.DISABLED) {
+            return Response.status(Response.Status.FORBIDDEN).entity("Customer account is disabled").build();
+        }
+        if (ce.status == null) {
+            ce.status = CustomerStatusEn.REGISTERING;
+        }
         boolean ok;
         try {
             ok = verifyPassword(req.password, ce.passwordHash);
@@ -91,6 +98,7 @@ public class CustomerResource
         if (ce == null) {
             ce = new CustomerEntity();
             ce.email = email;
+            ce.status = CustomerStatusEn.REGISTERING;
         }
 
         if (req.firstName != null) ce.firstName = req.firstName;
@@ -104,10 +112,14 @@ public class CustomerResource
 
         if (req.password != null && !req.password.isBlank()) {
             ce.passwordHash = hashPassword(req.password);
-            ce.shopperType = CustomerTypeEn.REGISTERED;
+            ce.shopperType = CustomerTypeEn.RETAILER;
             ce.passwordUpdatedAt = LocalDateTime.now();
         } else if (ce.shopperType == null) {
             ce.shopperType = CustomerTypeEn.GUEST;
+        }
+
+        if (ce.status == null) {
+            ce.status = CustomerStatusEn.REGISTERING;
         }
 
         CustomerEntity.persist(ce);
@@ -149,6 +161,9 @@ public class CustomerResource
         dto.setPostalCode(ce.postalCode);
         if (ce.shopperType != null) {
             dto.setShopperType(ce.shopperType.name());
+        }
+        if (ce.status != null) {
+            dto.setStatus(ce.status.name());
         }
         dto.setHasPassword(ce.passwordHash != null && !ce.passwordHash.isBlank());
         return dto;

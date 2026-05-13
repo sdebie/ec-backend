@@ -4,6 +4,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import org.ecommerce.common.entity.CustomerEntity;
+import org.ecommerce.common.enums.CustomerStatusEn;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -50,6 +51,9 @@ public class CustomerPasswordResetService {
 
         customer.passwordHash = hashPassword(newPassword);
         customer.passwordUpdatedAt = LocalDateTime.now();
+        if (customer.status == null || customer.status == CustomerStatusEn.REGISTERING) {
+            customer.status = CustomerStatusEn.ACTIVE;
+        }
         customer.resetToken = null;
         customer.resetTokenExpiry = null;
     }

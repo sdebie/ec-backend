@@ -12,6 +12,7 @@ import org.ecommerce.common.dto.OrderItemDto;
 import org.ecommerce.common.dto.OrderResponseDto;
 import org.ecommerce.common.entity.*;
 import org.ecommerce.common.enums.OrderStatusEn;
+import org.ecommerce.common.enums.CustomerStatusEn;
 import org.ecommerce.common.query.FilterRequest;
 import org.ecommerce.common.query.PageRequest;
 import org.ecommerce.common.repository.OrderRepository;
@@ -187,6 +188,7 @@ public class OrderService
         if (customer == null) {
             customer = new CustomerEntity();
             customer.email = email;
+            customer.status = CustomerStatusEn.REGISTERING;
             CustomerEntity.persist(customer);
         }
 
