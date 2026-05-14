@@ -186,9 +186,17 @@ public class OrderService
         String email = customerDto.getEmail().trim();
         CustomerEntity customer = CustomerEntity.findByEmail(email);
         if (customer == null) {
+            // Create a linked user + customer pair for guest checkout
+            org.ecommerce.common.entity.UserEntity user = org.ecommerce.common.entity.UserEntity.findByEmail(email);
+            if (user == null) {
+                user = new org.ecommerce.common.entity.UserEntity();
+                user.email = email;
+                user.passwordHash = "";
+                org.ecommerce.common.entity.UserEntity.persist(user);
+            }
             customer = new CustomerEntity();
-            customer.email = email;
-            customer.status = CustomerStatusEn.REGISTERING;
+            customer.user = user;
+            customer.status = CustomerStatusEn.PENDING;
             CustomerEntity.persist(customer);
         }
 
@@ -198,7 +206,7 @@ public class OrderService
 
         // Return only customer information (currently email)
         CustomerDto result = new CustomerDto();
-        result.setEmail(customer.email);
+        result.setEmail(customer.user != null ? customer.user.email : null);
         return result;
     }
 
@@ -244,7 +252,8 @@ public class OrderService
     public void sendConfirmationEmail(OrderEntity order)
     {
         String firstName = (order.customerEntity.firstName != null && !order.customerEntity.firstName.isBlank()) ? order.customerEntity.firstName : "Guest";
-        order_confirmation.to(order.customerEntity.email)
+        String customerEmail = order.customerEntity.user != null ? order.customerEntity.user.email : null;
+        order_confirmation.to(customerEmail)
                 .from("shawn.debie@gmail.com")
                 .subject("Your Order #" + order.id)
                 .data("order", order)

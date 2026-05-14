@@ -4,11 +4,12 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import org.ecommerce.common.entity.CustomerEntity;
+import org.ecommerce.common.entity.UserEntity;
 import org.ecommerce.common.enums.CustomerStatusEn;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 @ApplicationScoped
@@ -23,14 +24,14 @@ public class CustomerPasswordResetService {
             return;
         }
 
-        CustomerEntity customer = CustomerEntity.findByEmail(email.trim());
-        if (customer != null) {
+        UserEntity user = UserEntity.findByEmail(email.trim());
+        if (user != null) {
             String token = UUID.randomUUID().toString();
-            customer.resetToken = token;
-            customer.resetTokenExpiry = LocalDateTime.now().plusMinutes(20);
+            user.resetToken = token;
+            user.resetTokenExpiry = OffsetDateTime.now().plusMinutes(20);
 
             // Keep generic caller response; notification transport can be upgraded later.
-            passwordResetNotificationService.sendResetLink(customer.email, token);
+            passwordResetNotificationService.sendResetLink(user.email, token);
         }
     }
 
@@ -44,18 +45,22 @@ public class CustomerPasswordResetService {
             throw new IllegalArgumentException("New password is required");
         }
 
-        CustomerEntity customer = CustomerEntity.find("resetToken", token).firstResult();
-        if (customer == null || customer.resetTokenExpiry == null || customer.resetTokenExpiry.isBefore(LocalDateTime.now())) {
+        UserEntity user = UserEntity.findByResetToken(token);
+        if (user == null || user.resetTokenExpiry == null || user.resetTokenExpiry.isBefore(OffsetDateTime.now())) {
             throw new IllegalArgumentException("Invalid or expired reset token");
         }
 
-        customer.passwordHash = hashPassword(newPassword);
-        customer.passwordUpdatedAt = LocalDateTime.now();
-        if (customer.status == null || customer.status == CustomerStatusEn.REGISTERING) {
+        user.passwordHash = hashPassword(newPassword);
+        user.lastLogin = OffsetDateTime.now();
+
+        // Activate the linked customer profile if still in REGISTERING state
+        CustomerEntity customer = user.customer;
+        if (customer != null && (customer.status == null || customer.status == CustomerStatusEn.PENDING)) {
             customer.status = CustomerStatusEn.ACTIVE;
         }
-        customer.resetToken = null;
-        customer.resetTokenExpiry = null;
+
+        user.resetToken = null;
+        user.resetTokenExpiry = null;
     }
 
     private static String hashPassword(String password) {
@@ -72,4 +77,3 @@ public class CustomerPasswordResetService {
         }
     }
 }
-

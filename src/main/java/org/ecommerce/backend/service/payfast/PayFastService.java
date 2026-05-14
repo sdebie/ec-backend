@@ -141,7 +141,7 @@ public class PayFastService
         input.put("amount", quote.totalAmount.setScale(2, java.math.RoundingMode.HALF_UP).toPlainString());
         input.put("m_payment_id", quote.id.toString());
         input.put("item_name", quote.id.toString());
-        input.put("email_address", quote.customerEntity.email);
+        input.put("email_address", quote.customerEntity.user != null ? quote.customerEntity.user.email : "");
 
         input.put("payment_method", "dc");
 

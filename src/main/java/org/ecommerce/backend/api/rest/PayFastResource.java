@@ -39,7 +39,8 @@ public class PayFastResource
         List<String> orderId = formParams.get("id");
         java.util.UUID orderUuid = java.util.UUID.fromString(orderId.getFirst());
         OrderEntity quote = OrderEntity.findById(orderUuid);
-        if (quote == null || quote.customerEntity == null || quote.customerEntity.email == null || quote.customerEntity.email.isBlank()) {
+        if (quote == null || quote.customerEntity == null || quote.customerEntity.user == null
+                || quote.customerEntity.user.email == null || quote.customerEntity.user.email.isBlank()) {
             System.out.println("DEBUG: Invalid Order information");
             return Response.status(Response.Status.EXPECTATION_FAILED)
                     .entity("{\"Error\": \"Request could not be processed. Please contact Admin\"}").build();
