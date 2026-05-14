@@ -16,10 +16,10 @@ public class ProductExportService {
     ProductImportRepository productImportRepository;
 
     private static final String CSV_INFO_HEADER =
-            "product_slug,sku,name,description,short_description,category_slug,brand_slug,retail_price,retail_sale_price,wholesale_price,wholesale_sale_price,stock,images,attributes";
+            "product_id,sku,name,description,short_description,product_categories,product_type,brand_slug,retail_price,wholesale_price,stock,images,attributes";
 
     private static final String CSV_LIST_HEADER =
-            "product_slug,sku,name,description,short_description,category_slug,brand_slug,stock,images,attributes";
+            "product_id,sku,name,description,short_description,product_categories,product_type,brand_slug,stock,images,attributes";
 
     private static final String CSV_PRICE_HEADER =
             "sku,retail_price,wholesale_price";
@@ -27,24 +27,24 @@ public class ProductExportService {
 
     private static final String EXPORT_PRD_DETAIL_SQL = """
             SELECT
-                p.slug AS product_slug,
+                p.id AS product_id,
                 v.sku,
                 p.name,
                 p.description,
                 p.short_description,
-                c.slug AS category_slug,
+                (SELECT STRING_AGG(c2.slug, '|' ORDER BY c2.slug)
+                 FROM product_categories pc2
+                 JOIN categories c2 ON pc2.category_id = c2.id
+                 WHERE pc2.product_id = p.id) AS product_categories,
+                p.product_type,
                 b.slug AS brand_slug,
                 (SELECT price FROM variant_prices WHERE variant_id = v.id AND price_type = 'RETAIL_PRICE' ORDER BY created_at DESC LIMIT 1) as retail_price,
-                (SELECT price FROM variant_prices WHERE variant_id = v.id AND price_type = 'RETAIL_SALE_PRICE' ORDER BY created_at DESC LIMIT 1) as retail_sale_price,
                 (SELECT price FROM variant_prices WHERE variant_id = v.id AND price_type = 'WHOLESALE_PRICE' ORDER BY created_at DESC LIMIT 1) as wholesale_price,
-                (SELECT price FROM variant_prices WHERE variant_id = v.id AND price_type = 'WHOLESALE_SALE_PRICE' ORDER BY created_at DESC LIMIT 1) as wholesale_sale_price,
                 v.stock_quantity as stock,
                 (SELECT STRING_AGG(image_url, ',') FROM product_images WHERE variant_id = v.id) as images,
                 v.attributes
             FROM product_variants v
             JOIN products p ON v.product_id = p.id
-            LEFT JOIN product_categories pc ON p.id = pc.product_id
-            LEFT JOIN categories c ON pc.category_id = c.id
             LEFT JOIN brands b ON p.brand_id = b.id
             """;
 
@@ -59,20 +59,28 @@ public class ProductExportService {
 
     private static final String EXPORT_PRD_LIST_SQL = """
             SELECT
-                p.slug AS product_slug,
+                p.slug AS product_id,
                 v.sku,
                 p.name,
                 p.description,
                 p.short_description,
-                c.slug AS category_slug,
+                (SELECT c1.slug
+                 FROM product_categories pc1
+                 JOIN categories c1 ON pc1.category_id = c1.id
+                 WHERE pc1.product_id = p.id
+                 ORDER BY c1.slug
+                 LIMIT 1) AS category_slug,
+                (SELECT STRING_AGG(c2.slug, '|' ORDER BY c2.slug)
+                 FROM product_categories pc2
+                 JOIN categories c2 ON pc2.category_id = c2.id
+                 WHERE pc2.product_id = p.id) AS product_categories,
+                p.product_type,
                 b.slug AS brand_slug,
                 v.stock_quantity as stock,
                 (SELECT STRING_AGG(image_url, ',') FROM product_images WHERE variant_id = v.id) as images,
                 v.attributes
             FROM product_variants v
             JOIN products p ON v.product_id = p.id
-            LEFT JOIN product_categories pc ON p.id = pc.product_id
-            LEFT JOIN categories c ON pc.category_id = c.id
             LEFT JOIN brands b ON p.brand_id = b.id
             """;
 

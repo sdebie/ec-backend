@@ -8,6 +8,7 @@ import org.ecommerce.common.enums.CustomerTypeEn;
 import org.ecommerce.common.enums.CustomerStatusEn;
 import org.ecommerce.common.dto.CustomerProfileDto;
 import org.ecommerce.common.entity.CustomerEntity;
+import org.ecommerce.backend.util.JsonConverter;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -78,11 +79,19 @@ public class CustomerResource
         public String firstName;
         public String lastName;
         public String phone;
-        public String addressLine1;
-        public String addressLine2;
-        public String city;
-        public String province;
-        public String postalCode;
+        public String physicalAddressLine1;
+        public String physicalAddressLine2;
+        public String physicalSuburb;
+        public String physicalCity;
+        public String physicalProvince;
+        public String physicalPostalCode;
+        public String postalAddressLine1;
+        public String postalAddressLine2;
+        public String postalSuburb;
+        public String postalCity;
+        public String postalProvince;
+        public String postalPostalCode;
+        public String additionalInfo;
     }
 
     @POST
@@ -104,11 +113,20 @@ public class CustomerResource
         if (req.firstName != null) ce.firstName = req.firstName;
         if (req.lastName != null) ce.lastName = req.lastName;
         if (req.phone != null) ce.phone = req.phone;
-        if (req.addressLine1 != null) ce.addressLine1 = req.addressLine1;
-        if (req.addressLine2 != null) ce.addressLine2 = req.addressLine2;
-        if (req.city != null) ce.city = req.city;
-        if (req.province != null) ce.province = req.province;
-        if (req.postalCode != null) ce.postalCode = req.postalCode;
+        if (req.physicalAddressLine1 != null) ce.physicalAddressLine1 = req.physicalAddressLine1;
+        if (req.physicalAddressLine2 != null) ce.physicalAddressLine2 = req.physicalAddressLine2;
+        if (req.physicalSuburb != null) ce.physicalSuburb = req.physicalSuburb;
+        if (req.physicalCity != null) ce.physicalCity = req.physicalCity;
+        if (req.physicalProvince != null) ce.physicalProvince = req.physicalProvince;
+        if (req.physicalPostalCode != null) ce.physicalPostalCode = req.physicalPostalCode;
+
+        if (req.postalAddressLine1 != null) ce.postalAddressLine1 = req.postalAddressLine1;
+        if (req.postalAddressLine2 != null) ce.postalAddressLine2 = req.postalAddressLine2;
+        if (req.postalSuburb != null) ce.postalSuburb = req.postalSuburb;
+        if (req.postalCity != null) ce.postalCity = req.postalCity;
+        if (req.postalProvince != null) ce.postalProvince = req.postalProvince;
+        if (req.postalPostalCode != null) ce.postalPostalCode = req.postalPostalCode;
+        if (req.additionalInfo != null) ce.additionalInfo = JsonConverter.toJsonString(req.additionalInfo);
 
         if (req.password != null && !req.password.isBlank()) {
             ce.passwordHash = hashPassword(req.password);
@@ -154,17 +172,25 @@ public class CustomerResource
         dto.setFirstName(ce.firstName);
         dto.setLastName(ce.lastName);
         dto.setPhone(ce.phone);
-        dto.setAddressLine1(ce.addressLine1);
-        dto.setAddressLine2(ce.addressLine2);
-        dto.setCity(ce.city);
-        dto.setProvince(ce.province);
-        dto.setPostalCode(ce.postalCode);
+        dto.setPhysicalAddressLine1(ce.physicalAddressLine1);
+        dto.setPhysicalAddressLine2(ce.physicalAddressLine2);
+        dto.setPhysicalSuburb(ce.physicalSuburb);
+        dto.setPhysicalCity(ce.physicalCity);
+        dto.setPhysicalProvince(ce.physicalProvince);
+        dto.setPhysicalPostalCode(ce.physicalPostalCode);
+        dto.setPostalAddressLine1(ce.postalAddressLine1);
+        dto.setPostalAddressLine2(ce.postalAddressLine2);
+        dto.setPostalSuburb(ce.postalSuburb);
+        dto.setPostalCity(ce.postalCity);
+        dto.setPostalProvince(ce.postalProvince);
+        dto.setPostalPostalCode(ce.postalPostalCode);
         if (ce.shopperType != null) {
             dto.setShopperType(ce.shopperType.name());
         }
         if (ce.status != null) {
             dto.setStatus(ce.status.name());
         }
+        dto.setAdditionalInfo(ce.additionalInfo);
         dto.setHasPassword(ce.passwordHash != null && !ce.passwordHash.isBlank());
         return dto;
     }

@@ -2,6 +2,7 @@ package org.ecommerce.backend.service;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.transaction.Transactional;
+import org.ecommerce.backend.util.JsonConverter;
 import org.ecommerce.common.dto.WholesaleCustomerDto;
 import org.ecommerce.common.entity.CustomerEntity;
 import org.ecommerce.common.enums.CustomerStatusEn;
@@ -84,11 +85,22 @@ public class WholesaleCustomerService {
         if (customerDto.getFirstName() != null) customerEntity.firstName = customerDto.getFirstName();
         if (customerDto.getLastName() != null) customerEntity.lastName = customerDto.getLastName();
         if (customerDto.getPhone() != null) customerEntity.phone = customerDto.getPhone();
-        if (customerDto.getAddressLine1() != null) customerEntity.addressLine1 = customerDto.getAddressLine1();
-        if (customerDto.getAddressLine2() != null) customerEntity.addressLine2 = customerDto.getAddressLine2();
-        if (customerDto.getCity() != null) customerEntity.city = customerDto.getCity();
-        if (customerDto.getProvince() != null) customerEntity.province = customerDto.getProvince();
-        if (customerDto.getPostalCode() != null) customerEntity.postalCode = customerDto.getPostalCode();
+        if (customerDto.getPhysicalAddressLine1() != null) customerEntity.physicalAddressLine1 = customerDto.getPhysicalAddressLine1();
+        if (customerDto.getPhysicalAddressLine2() != null) customerEntity.physicalAddressLine2 = customerDto.getPhysicalAddressLine2();
+        if (customerDto.getPhysicalSuburb() != null) customerEntity.physicalSuburb = customerDto.getPhysicalSuburb();
+        if (customerDto.getPhysicalCity() != null) customerEntity.physicalCity = customerDto.getPhysicalCity();
+        if (customerDto.getPhysicalProvince() != null) customerEntity.physicalProvince = customerDto.getPhysicalProvince();
+        if (customerDto.getPhysicalPostalCode() != null) customerEntity.physicalPostalCode = customerDto.getPhysicalPostalCode();
+
+        if (customerDto.getPostalAddressLine1() != null) customerEntity.postalAddressLine1 = customerDto.getPostalAddressLine1();
+        if (customerDto.getPostalAddressLine2() != null) customerEntity.postalAddressLine2 = customerDto.getPostalAddressLine2();
+        if (customerDto.getPostalSuburb() != null) customerEntity.postalSuburb = customerDto.getPostalSuburb();
+        if (customerDto.getPostalCity() != null) customerEntity.postalCity = customerDto.getPostalCity();
+        if (customerDto.getPostalProvince() != null) customerEntity.postalProvince = customerDto.getPostalProvince();
+        if (customerDto.getPostalPostalCode() != null) customerEntity.postalPostalCode = customerDto.getPostalPostalCode();
+        if (customerDto.getAdditionalInfo() != null) {
+            customerEntity.additionalInfo = JsonConverter.toJsonString(customerDto.getAdditionalInfo());
+        }
     }
 
     private String normalizeEmail(String email) {
@@ -122,11 +134,20 @@ public class WholesaleCustomerService {
         dto.setFirstName(customerEntity.firstName);
         dto.setLastName(customerEntity.lastName);
         dto.setPhone(customerEntity.phone);
-        dto.setAddressLine1(customerEntity.addressLine1);
-        dto.setAddressLine2(customerEntity.addressLine2);
-        dto.setCity(customerEntity.city);
-        dto.setProvince(customerEntity.province);
-        dto.setPostalCode(customerEntity.postalCode);
+        dto.setPhysicalAddressLine1(customerEntity.physicalAddressLine1);
+        dto.setPhysicalAddressLine2(customerEntity.physicalAddressLine2);
+        dto.setPhysicalSuburb(customerEntity.physicalSuburb);
+        dto.setPhysicalCity(customerEntity.physicalCity);
+        dto.setPhysicalProvince(customerEntity.physicalProvince);
+        dto.setPhysicalPostalCode(customerEntity.physicalPostalCode);
+
+        dto.setPostalAddressLine1(customerEntity.postalAddressLine1);
+        dto.setPostalAddressLine2(customerEntity.postalAddressLine2);
+        dto.setPostalSuburb(customerEntity.postalSuburb);
+        dto.setPostalCity(customerEntity.postalCity);
+        dto.setPostalProvince(customerEntity.postalProvince);
+        dto.setPostalPostalCode(customerEntity.postalPostalCode);
+        dto.setAdditionalInfo(customerEntity.additionalInfo);
         if (customerEntity.status != null) {
             dto.setStatus(customerEntity.status.name());
         }
