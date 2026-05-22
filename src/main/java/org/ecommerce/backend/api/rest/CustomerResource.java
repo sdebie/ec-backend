@@ -1,9 +1,11 @@
 package org.ecommerce.backend.api.rest;
 
+import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
+import org.ecommerce.backend.service.CustomerPasswordResetService;
 import org.ecommerce.common.dto.CustomerProfileDto;
 import org.ecommerce.common.entity.CustomerAddressEntity;
 import org.ecommerce.common.entity.CustomerEntity;
@@ -23,6 +25,9 @@ import java.util.Optional;
 @Consumes(MediaType.APPLICATION_JSON)
 public class CustomerResource {
 
+    @Inject
+    CustomerPasswordResetService customerPasswordResetService;
+
     @GET
     @Path("/lookup")
     public Response lookup(@QueryParam("email") String email) {
@@ -39,6 +44,95 @@ public class CustomerResource {
     public static class LoginRequest {
         public String email;
         public String password;
+    }
+
+    public static class PasswordResetRequest {
+        public String email;
+    }
+
+    public static class PasswordResetVerifyRequest {
+        public String email;
+        public String code;
+    }
+
+    public static class PasswordResetCompleteRequest {
+        public String email;
+        public String code;
+        public String newPassword;
+        public String confirmPassword;
+    }
+
+    @POST
+    @Path("/password-reset/request")
+    @Transactional
+    public Response requestPasswordResetCode(PasswordResetRequest req) {
+        if (req == null || req.email == null || req.email.isBlank()) {
+            return Response.status(Response.Status.BAD_REQUEST).entity("email is required").build();
+        }
+
+        customerPasswordResetService.initiatePasswordResetCode(req.email);
+        return Response.ok("If an account exists, a reset code has been sent.").build();
+    }
+
+    @POST
+    @Path("/password-reset/verify")
+    @Transactional
+    public Response verifyPasswordResetCode(
+            PasswordResetVerifyRequest req,
+            @HeaderParam("X-Forwarded-For") String xForwardedFor,
+            @HeaderParam("X-Real-IP") String xRealIp
+    ) {
+        if (req == null || req.email == null || req.email.isBlank() || req.code == null || req.code.isBlank()) {
+            return Response.status(Response.Status.BAD_REQUEST).entity("email and code are required").build();
+        }
+
+        try {
+            customerPasswordResetService.verifyPasswordResetCode(req.email, req.code, resolveClientIp(xForwardedFor, xRealIp));
+            return Response.ok("Code verified.").build();
+        } catch (CustomerPasswordResetService.PasswordResetLockedException ex) {
+            return Response.status(Response.Status.TOO_MANY_REQUESTS)
+                    .entity("Too many incorrect attempts. Locked for 15 minutes.")
+                    .build();
+        } catch (CustomerPasswordResetService.InvalidPasswordResetCodeException ex) {
+            return Response.status(Response.Status.BAD_REQUEST).entity("Invalid or expired reset code").build();
+        }
+    }
+
+    @POST
+    @Path("/password-reset/complete")
+    @Transactional
+    public Response completePasswordReset(
+            PasswordResetCompleteRequest req,
+            @HeaderParam("X-Forwarded-For") String xForwardedFor,
+            @HeaderParam("X-Real-IP") String xRealIp
+    ) {
+        if (req == null || req.email == null || req.email.isBlank() || req.code == null || req.code.isBlank()) {
+            return Response.status(Response.Status.BAD_REQUEST).entity("email and code are required").build();
+        }
+        if (req.newPassword == null || req.newPassword.isBlank()) {
+            return Response.status(Response.Status.BAD_REQUEST).entity("newPassword is required").build();
+        }
+        if (req.confirmPassword == null || !req.newPassword.equals(req.confirmPassword)) {
+            return Response.status(Response.Status.BAD_REQUEST).entity("Passwords do not match").build();
+        }
+
+        try {
+            customerPasswordResetService.completePasswordResetWithCode(
+                    req.email,
+                    req.code,
+                    req.newPassword,
+                    resolveClientIp(xForwardedFor, xRealIp)
+            );
+            return Response.ok("Password reset complete.").build();
+        } catch (CustomerPasswordResetService.PasswordResetLockedException ex) {
+            return Response.status(Response.Status.TOO_MANY_REQUESTS)
+                    .entity("Too many incorrect attempts. Locked for 15 minutes.")
+                    .build();
+        } catch (CustomerPasswordResetService.InvalidPasswordResetCodeException ex) {
+            return Response.status(Response.Status.BAD_REQUEST).entity("Invalid or expired reset code").build();
+        } catch (IllegalArgumentException ex) {
+            return Response.status(Response.Status.BAD_REQUEST).entity(ex.getMessage()).build();
+        }
     }
 
     @POST
@@ -254,5 +348,19 @@ public class CustomerResource {
                 && ce.user.passwordHash != null
                 && !ce.user.passwordHash.isBlank());
         return dto;
+    }
+
+    private static String resolveClientIp(String xForwardedFor, String xRealIp) {
+        if (xForwardedFor != null && !xForwardedFor.isBlank()) {
+            int commaIndex = xForwardedFor.indexOf(',');
+            if (commaIndex > -1) {
+                return xForwardedFor.substring(0, commaIndex).trim();
+            }
+            return xForwardedFor.trim();
+        }
+        if (xRealIp != null && !xRealIp.isBlank()) {
+            return xRealIp.trim();
+        }
+        return "unknown";
     }
 }

@@ -12,5 +12,10 @@ public class PasswordResetNotificationService {
         // Placeholder transport; avoid logging secrets like raw tokens.
         LOG.infof("Password reset requested for %s", email);
     }
+
+    public void sendResetCode(String email, String code, int expiresInMinutes) {
+        // Placeholder transport. Integrate mail/SMS provider here and avoid logging raw code.
+        LOG.infof("Password reset code requested for %s (expires in %d minutes)", email, expiresInMinutes);
+    }
 }
 
