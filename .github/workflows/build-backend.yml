@@ -68,5 +68,5 @@ jobs:
           file: ./Dockerfile.runtime
           push: true
           tags: |
-            ${{ secrets.DOCKERHUB_USERNAME }}/storefront-api:latest
-            ${{ secrets.DOCKERHUB_USERNAME }}/storefront-api:${{ github.sha }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/ec-backend:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/ec-backend:${{ github.sha }}
