@@ -31,18 +31,25 @@ jobs:
           distribution: 'temurin'
           cache: 'maven'
 
-      # 3. Inject authentication credentials into Maven so it can download your common-lib
+      # 3. Inject authentication credentials into Maven so it can download parent/common packages
       - name: Configure Maven for GitHub Packages Auth
-        uses: s4u/maven-settings-action@v3.1.0  # <-- Changed from @v3 to @v3.1.0
+        uses: s4u/maven-settings-action@v3.1.0
         with:
           servers: |
-            [{
-              "id": "github",
-              "username": "${{ github.actor }}",
-              "password": "${{ secrets.GITHUB_TOKEN }}"
-            }]
+            [
+              {
+                "id": "github-parent",
+                "username": "${{ github.actor }}",
+                "password": "${{ secrets.GITHUB_TOKEN }}"
+              },
+              {
+                "id": "github-common",
+                "username": "${{ github.actor }}",
+                "password": "${{ secrets.GITHUB_TOKEN }}"
+              }
+            ]
 
-      # 4. Compile the backend application. Maven will safely pull common-lib from your registry.
+      # 4. Compile the backend application. Maven will safely pull parent/common packages from GitHub Packages.
       - name: Compile Application with Maven
         run: mvn clean package -DskipTests
 
