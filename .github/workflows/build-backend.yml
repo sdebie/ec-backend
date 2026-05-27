@@ -1,0 +1,65 @@
+name: Build and Push Quarkus Backend
+
+on:
+  push:
+    branches:
+      - main  # Automatically compiles and ships your code every time you push to main
+
+# Force JavaScript actions to use Node.js 24 to silence deprecation warnings in 2026
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  compile-and-ship:
+    runs-on: ubuntu-latest
+
+    # Essential permissions to allow this repo to pull down packages from your other repo
+    permissions:
+      contents: read
+      packages: read
+
+    steps:
+      # 1. Download the backend source code
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      # 2. Setup Java 21 with automatic Maven build caching
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'maven'
+
+      # 3. Authenticate Maven so it has permission to download your private common-lib
+      - name: Configure Maven Settings for GitHub Packages Auth
+        uses: s4u/maven-settings-action@v3
+        with:
+          servers: |
+            [{
+              "id": "github",
+              "username": "${{ github.actor }}",
+              "password": "${{ secrets.GITHUB_TOKEN }}"
+            }]
+
+      # 4. Compile the backend application. Maven will safely pull common-lib from your registry.
+      - name: Compile Application with Maven
+        run: mvn clean package -DskipTests
+
+      # 5. Log in securely to your Docker Hub account
+      - name: Authenticate with Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # 6. Build the lightweight production image and push it to Docker Hub
+      - name: Build and Push Final Docker Image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile.runtime
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/storefront-api:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/storefront-api:${{ github.sha }}
