@@ -129,16 +129,14 @@
 
     <repositories>
         <repository>
-            <id>github</id>
-            <name>GitHub Packages</name>
+            <id>github-parent</id> <name>GitHub Packages - Parent</name>
             <url>https://maven.pkg.github.com/sdebie/ec-parent</url>
             <snapshots>
                 <enabled>true</enabled>
             </snapshots>
         </repository>
         <repository>
-            <id>github</id>
-            <name>GitHub Packages</name>
+            <id>github-common</id> <name>GitHub Packages - Common</name>
             <url>https://maven.pkg.github.com/sdebie/ec-common</url>
             <snapshots>
                 <enabled>true</enabled>
