@@ -5,6 +5,7 @@ import jakarta.validation.Valid;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
+import lombok.extern.slf4j.Slf4j;
 import org.ecommerce.common.dto.LoginRequestDto;
 import org.ecommerce.common.dto.TokenResponseDto;
 import org.ecommerce.common.entity.StaffUserEntity;
@@ -12,6 +13,7 @@ import org.ecommerce.backend.service.AdminAuthService;
 import org.ecommerce.backend.service.StaffService;
 
 @Path("/api/admin/auth")
+@Slf4j
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
 public class StaffResource
@@ -28,6 +30,7 @@ public class StaffResource
     @Path("/login")
     public Response login(@Valid LoginRequestDto loginDto)
     {
+        log.debug("Login Request received");
         String token = authService.authenticate(loginDto);
 
         if (token != null) {
