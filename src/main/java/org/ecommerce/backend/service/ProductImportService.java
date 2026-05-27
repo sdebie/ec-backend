@@ -239,7 +239,7 @@ public class ProductImportService implements ImportBatchService<ProductCompariso
                 getValue(record, "sku", "SKU"),
                 getValue(record, "name", "Name"),
                 getValue(record, "description", "description"),
-                getValue(record, "category_slug", "Category", "category_name"),
+                getValue(record, "categories_slug", "Category", "category_name"),
                 getValue(record, "short_description", "short_description"),
                 stock,
                 getValue(record, "brand_slug", "brand_name", "Brand"),

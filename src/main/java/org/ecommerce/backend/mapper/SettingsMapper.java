@@ -2,6 +2,8 @@ package org.ecommerce.backend.mapper;
 
 import org.ecommerce.common.dto.ShippingMethodDto;
 import org.ecommerce.common.dto.StoreSettingsDto;
+import org.ecommerce.common.dto.CountrySettingsDto;
+import org.ecommerce.common.entity.CountrySettingsEntity;
 import org.ecommerce.common.entity.ShippingMethodEntity;
 import org.ecommerce.common.entity.StoreSettingsEntity;
 import org.mapstruct.Mapper;
@@ -28,4 +30,8 @@ public interface SettingsMapper {
     List<ShippingMethodDto> mapShippingMethodEntityToDtoList(List<ShippingMethodEntity> entities);
 
     ShippingMethodEntity mapShippingMethodDtoToEntity(ShippingMethodDto dto, @MappingTarget ShippingMethodEntity entity);
+
+    CountrySettingsDto mapCountrySettingsEntityToDto(CountrySettingsEntity entity);
+
+    List<CountrySettingsDto> mapCountrySettingsEntityToDtoList(List<CountrySettingsEntity> entities);
 }

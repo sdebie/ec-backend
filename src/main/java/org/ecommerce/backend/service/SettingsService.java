@@ -6,6 +6,7 @@ import org.ecommerce.backend.mapper.SettingsMapper;
 import org.ecommerce.common.dto.SettingsDto;
 import org.ecommerce.common.dto.ShippingMethodDto;
 import org.ecommerce.common.dto.StoreSettingsDto;
+import org.ecommerce.common.dto.CountrySettingsDto;
 import org.ecommerce.common.entity.ShippingMethodEntity;
 import org.ecommerce.common.entity.StoreSettingsEntity;
 import org.ecommerce.common.repository.SettingsRepository;
@@ -26,6 +27,7 @@ public class SettingsService {
         SettingsDto settingsDto = new SettingsDto();
         settingsDto.storeSettings = getAllSettings();
         settingsDto.shippingMethods = getShippingMethods();
+        settingsDto.countrySettings = getCountrySettings();
         return settingsDto;
     }
 
@@ -35,6 +37,10 @@ public class SettingsService {
 
     public List<ShippingMethodDto> getShippingMethods() {
         return settingsMapper.mapShippingMethodEntityToDtoList(settingsRepository.getAllShippingMethods());
+    }
+
+    public List<CountrySettingsDto> getCountrySettings() {
+        return settingsMapper.mapCountrySettingsEntityToDtoList(settingsRepository.getAllCountrySettings());
     }
 
     public List<StoreSettingsDto> saveStoreSettings(List<StoreSettingsDto> settings) {

@@ -117,7 +117,7 @@ public class OrderMapper
         }
 
         CustomerDto dto = new CustomerDto();
-        dto.setEmail(customer.email);
+        dto.setEmail(customer.user != null ? customer.user.email : null);
         return dto;
     }
 }
