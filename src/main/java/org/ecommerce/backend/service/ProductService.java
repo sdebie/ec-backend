@@ -11,16 +11,24 @@ import org.ecommerce.common.entity.ProductEntity;
 import org.ecommerce.common.entity.ProductImageEntity;
 import org.ecommerce.common.entity.ProductVariantEntity;
 import org.ecommerce.common.entity.CategoryEntity;
+import org.ecommerce.common.entity.VariantPricesEntity;
 import org.ecommerce.common.enums.ProductTypeEn;
+import org.ecommerce.common.enums.PriceTypeEn;
+import org.ecommerce.common.query.Filter;
 import org.ecommerce.common.query.FilterRequest;
 import org.ecommerce.common.query.PageRequest;
+import org.ecommerce.common.query.enums.FilterOperator;
 import org.ecommerce.common.repository.ProductImageRepository;
 import org.ecommerce.common.repository.ProductRepository;
 import org.ecommerce.common.repository.ProductVariantRepository;
 import org.ecommerce.common.repository.CategoryRepository;
 import org.ecommerce.common.repository.BrandRepository;
+import org.ecommerce.common.repository.VariantPricesRepository;
 
 import java.util.List;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -44,12 +52,70 @@ public class ProductService
     BrandRepository brandRepository;
 
     @Inject
+    VariantPricesRepository variantPricesRepository;
+
+    @Inject
     ProductMapper productMapper;
 
     @Transactional(value = TxType.SUPPORTS)
     public List<ProductListItemDto> getAllProducts(PageRequest pageRequest, FilterRequest filterRequest)
     {
         return enrichProductListItems(productRepository.findAllProductListItems(pageRequest, filterRequest));
+    }
+
+    @Transactional(value = TxType.SUPPORTS)
+    public List<ProductListItemDto> getProductsByCategory(String categoryId, boolean includeSubCategories, PageRequest pageRequest, FilterRequest filterRequest)
+    {
+        if (categoryId == null || categoryId.isBlank()) {
+            throw new IllegalArgumentException("Category id is required");
+        }
+
+        UUID selectedCategoryId = UUID.fromString(categoryId);
+        CategoryEntity selectedCategory = categoryRepository.findById(selectedCategoryId);
+        if (selectedCategory == null) {
+            throw new IllegalArgumentException("Category not found with id: " + categoryId);
+        }
+
+        List<UUID> categoryIds = includeSubCategories
+                ? resolveCategoryScopeIds(selectedCategory)
+                : List.of(selectedCategoryId);
+
+        return enrichProductListItems(
+                productRepository.findProductListItemsByCategoryIds(pageRequest, filterRequest, categoryIds)
+        );
+    }
+
+    @Transactional(value = TxType.SUPPORTS)
+    public List<ProductListItemDto> getProductsByBrand(String brandId, PageRequest pageRequest, FilterRequest filterRequest)
+    {
+        if (brandId == null || brandId.isBlank()) {
+            throw new IllegalArgumentException("Brand id is required");
+        }
+
+        final UUID parsedBrandId;
+        try {
+            parsedBrandId = UUID.fromString(brandId);
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("Brand id must be a valid UUID", e);
+        }
+
+        if (brandRepository.findById(parsedBrandId) == null) {
+            throw new IllegalArgumentException("Brand not found with id: " + brandId);
+        }
+
+        FilterRequest effectiveFilterRequest = new FilterRequest();
+        effectiveFilterRequest.setSort(filterRequest != null ? filterRequest.getSort() : null);
+        effectiveFilterRequest.setFilterGroups(filterRequest != null ? filterRequest.getFilterGroups() : null);
+
+        List<Filter> filters = filterRequest != null && filterRequest.getFilters() != null
+                ? new ArrayList<>(filterRequest.getFilters())
+                : new ArrayList<>();
+        filters.add(new Filter("brand.id", FilterOperator.EQUALS, brandId));
+        effectiveFilterRequest.setFilters(filters);
+
+        return enrichProductListItems(
+                productRepository.findAllProductListItems(pageRequest, effectiveFilterRequest)
+        );
     }
 
     @Transactional(value = TxType.SUPPORTS)
@@ -87,6 +153,22 @@ public class ProductService
 
             return product;
         }).collect(Collectors.toList());
+    }
+
+    private List<UUID> resolveCategoryScopeIds(CategoryEntity selectedCategory)
+    {
+        Set<UUID> scopedIds = new LinkedHashSet<>();
+        scopedIds.add(selectedCategory.id);
+
+        UUID groupParentId = selectedCategory.parent != null ? selectedCategory.parent.id : selectedCategory.id;
+        List<CategoryEntity> groupedCategories = categoryRepository.list("parent.id", groupParentId);
+        for (CategoryEntity category : groupedCategories) {
+            if (category != null && category.id != null) {
+                scopedIds.add(category.id);
+            }
+        }
+
+        return new ArrayList<>(scopedIds);
     }
 
     @Transactional(value = TxType.SUPPORTS)
@@ -342,12 +424,48 @@ public class ProductService
                 variant.persist();
                 log.info("Updated variant with SKU: {}", variantDto.sku);
             }
+
+            if (variantDto.prices != null && !variantDto.prices.isEmpty()) {
+                updateVariantPrices(variant, variantDto.prices);
+            }
             //TODO:: Update Pricing
         }
 
         // Optionally delete variants not in the new list
         // For now, we'll keep this as a TODO to preserve existing data
         // TODO: Implement logic to delete variants not provided in the update
+    }
+
+    private void updateVariantPrices(ProductVariantEntity variant, List<VariantPriceDto> newPrices) {
+        if (variant == null || variant.id == null || newPrices == null || newPrices.isEmpty()) {
+            return;
+        }
+
+        for (VariantPriceDto priceDto : newPrices) {
+            if (priceDto == null || priceDto.priceType == null || priceDto.price == null) {
+                continue;
+            }
+
+            final PriceTypeEn priceType;
+            try {
+                priceType = PriceTypeEn.valueOf(priceDto.priceType);
+            } catch (IllegalArgumentException ex) {
+                log.warn("Skipping unsupported price type '{}' for variant {}", priceDto.priceType, variant.id);
+                continue;
+            }
+
+            VariantPricesEntity price = variantPricesRepository.findLatestByVariantAndType(variant.id, priceType);
+            if (price == null) {
+                price = new VariantPricesEntity();
+                price.variant = variant;
+                price.priceType = priceType;
+            }
+
+            price.price = priceDto.price;
+            price.priceStartDate = priceDto.priceStartDate;
+            price.priceEndDate = priceDto.priceEndDate;
+            price.persist();
+        }
     }
 
 }

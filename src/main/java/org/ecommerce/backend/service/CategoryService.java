@@ -6,8 +6,10 @@ import org.ecommerce.common.dto.CategoryDto;
 import org.ecommerce.common.entity.CategoryEntity;
 import org.ecommerce.common.exception.CategoryAlreadyExistsException;
 import org.ecommerce.common.exception.CategoryNotFoundException;
+import org.ecommerce.common.query.Filter;
 import org.ecommerce.common.query.FilterRequest;
 import org.ecommerce.common.query.PageRequest;
+import org.ecommerce.common.query.enums.FilterOperator;
 import org.ecommerce.common.repository.CategoryRepository;
 
 import jakarta.enterprise.context.ApplicationScoped;
@@ -15,6 +17,7 @@ import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 
 import java.util.List;
+import java.util.ArrayList;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -30,7 +33,32 @@ public class CategoryService
 
     public List<CategoryDto> getAllCategories(PageRequest pageRequest, FilterRequest filterRequest)
     {
-        List<CategoryEntity> categoryEntities = categoryRepository.findAll(pageRequest, filterRequest);
+        return getAllCategories(pageRequest, filterRequest, false);
+    }
+
+    public List<CategoryDto> getAllCategories(PageRequest pageRequest, FilterRequest filterRequest, boolean includeSubCategories)
+    {
+        FilterRequest resolvedFilterRequest = new FilterRequest();
+        if (filterRequest != null) {
+            resolvedFilterRequest.setSort(filterRequest.getSort());
+            resolvedFilterRequest.setFilterGroups(filterRequest.getFilterGroups());
+            resolvedFilterRequest.setFilters(filterRequest.getFilters() != null
+                    ? new ArrayList<>(filterRequest.getFilters())
+                    : new ArrayList<>());
+        } else {
+            resolvedFilterRequest.setFilters(new ArrayList<>());
+        }
+
+        if (!includeSubCategories) {
+            boolean alreadyFilteredToRoots = resolvedFilterRequest.getFilters().stream()
+                    .anyMatch(filter -> "parent.id".equals(filter.getKey()) && filter.getOperator() == FilterOperator.IS_NULL);
+
+            if (!alreadyFilteredToRoots) {
+                resolvedFilterRequest.getFilters().add(new Filter("parent.id", FilterOperator.IS_NULL, (String) null));
+            }
+        }
+
+        List<CategoryEntity> categoryEntities = categoryRepository.findAll(pageRequest, resolvedFilterRequest);
         return categoryMapper.mapEntityToDto(categoryEntities);
     }
 
