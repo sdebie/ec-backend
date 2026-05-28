@@ -163,18 +163,16 @@ public class ImageService
         }
 
         try (Stream<Path> paths = Files.walk(root)) {
-            log.debug("Current directory: {}", paths.count());
-            return paths
+            List<String> directories = paths
                     .filter(Files::isDirectory)
-                    .filter(path -> {
-                        log.debug("Found directory: {}", path); // Log the found directory
-                        return !path.equals(root);
-                    })
+                    .filter(path -> !path.equals(root))
                     .map(root::relativize)
                     .map(this::normalizeRelativePath)
                     .filter(relativePath -> !relativePath.equals("thumbnails") && !relativePath.startsWith("thumbnails/"))
                     .sorted()
                     .collect(Collectors.toList());
+            log.debug("Found {} destination directories.", directories.size());
+            return directories;
         } catch (IOException e) {
             log.error("Unable to list image destination directories", e);
             return Collections.emptyList();
