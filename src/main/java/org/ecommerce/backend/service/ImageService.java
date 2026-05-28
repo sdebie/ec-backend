@@ -1,8 +1,8 @@
 package org.ecommerce.backend.service;
 
 import jakarta.transaction.Transactional;
+import lombok.extern.slf4j.Slf4j;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
-import org.jboss.logging.Logger;
 import org.jboss.resteasy.reactive.multipart.FileUpload;
 import org.ecommerce.common.enums.ImageTypeEn;
 import org.ecommerce.common.entity.ProductImageEntity;
@@ -23,10 +23,11 @@ import java.util.UUID;
 import java.util.stream.Stream;
 import java.util.stream.Collectors;
 
+@Slf4j
 @ApplicationScoped
 public class ImageService
 {
-    private static final Logger LOG = Logger.getLogger(ImageService.class);
+    //private static final Logger LOG = Logger.getLogger(ImageService.class);
     private static final int DEFAULT_PAGE_SIZE = 30;
     private static final int MAX_PAGE_SIZE = 200;
 
@@ -79,7 +80,7 @@ public class ImageService
 
         // 4. If image type is PRODUCT and entityId is provided, create ProductImageEntity
         if (imageType == ImageTypeEn.PRODUCT && entityId != null) {
-            LOG.debugf("Creating ProductImageEntity for product=%s url=%s", entityId, newFileName);
+            log.debug("Creating ProductImageEntity for product={} url={}", entityId, newFileName);
             createProductImage(newFileName, entityId);
         }
 
@@ -127,7 +128,7 @@ public class ImageService
                 }
             } catch (Exception e) {
                 // Log error for specific file but continue the loop
-                LOG.errorf(e, "Error saving file: %s", file.fileName());
+                log.error("Error saving file: {}", file.fileName());
             }
         }
 
@@ -148,7 +149,7 @@ public class ImageService
                     .toFile(thumbPath.toFile());
         } catch (Exception e) {
             // Some formats (e.g. WEBP without an ImageIO reader plugin) cannot be resized.
-            LOG.warnf("Thumbnail resize failed for %s, using direct copy fallback. Reason: %s", fileName, e.getMessage());
+            log.warn("Thumbnail resize failed for {}, using direct copy fallback. Reason: {}", fileName, e.getMessage());
             Files.copy(sourcePath, thumbPath, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
         }
     }
@@ -157,22 +158,27 @@ public class ImageService
         Path root = Paths.get(storagePath);
 
         if (Files.notExists(root)) {
+            log.error("Unable to list image destination directories for path:{}", root);
             return Collections.emptyList();
         }
 
         try (Stream<Path> paths = Files.walk(root)) {
             return paths
                     .filter(Files::isDirectory)
-                    .filter(path -> !path.equals(root))
+                    .filter(path -> {
+                        log.debug("Found directory: {}", path); // Log the found directory
+                        return !path.equals(root);
+                    })
                     .map(root::relativize)
                     .map(this::normalizeRelativePath)
                     .filter(relativePath -> !relativePath.equals("thumbnails") && !relativePath.startsWith("thumbnails/"))
                     .sorted()
                     .collect(Collectors.toList());
         } catch (IOException e) {
-            LOG.error("Unable to list image destination directories", e);
+            log.error("Unable to list image destination directories", e);
             return Collections.emptyList();
         }
+
     }
 
     public List<String> listImages() {
@@ -191,7 +197,7 @@ public class ImageService
                     .sorted()
                     .collect(Collectors.toList());
         } catch (IOException e) {
-            LOG.error("Unable to list images from thumbnail storage", e);
+            log.error("Unable to list images from thumbnail storage", e);
             return Collections.emptyList();
         }
     }
