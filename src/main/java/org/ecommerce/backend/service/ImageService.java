@@ -163,6 +163,7 @@ public class ImageService
         }
 
         try (Stream<Path> paths = Files.walk(root)) {
+            log.debug("Current directory: {}", paths);
             return paths
                     .filter(Files::isDirectory)
                     .filter(path -> {
