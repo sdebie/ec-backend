@@ -46,10 +46,12 @@ public class SettingsService {
     public List<StoreSettingsDto> saveStoreSettings(List<StoreSettingsDto> settings) {
         return settings.stream().map(dto -> {
             StoreSettingsEntity entity = StoreSettingsEntity.findById(dto.key);
-            if (entity != null) {
-                settingsMapper.mapStoreSettingsDtoToEntity(dto, entity);
-                settingsRepository.saveStoreSettings(entity);
+            if (entity == null) {
+                entity = new StoreSettingsEntity();
+                entity.key = dto.key;
             }
+            settingsMapper.mapStoreSettingsDtoToEntity(dto, entity);
+            settingsRepository.saveStoreSettings(entity);
             return settingsMapper.mapStoreSettingsEntityToDto(entity);
         }).collect(Collectors.toList());
     }

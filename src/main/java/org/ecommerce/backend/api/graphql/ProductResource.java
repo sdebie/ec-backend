@@ -184,11 +184,63 @@ public class ProductResource
     }
 
     @Query("productCount")
-    @Description("Returns the total number of products matching the given filter.")
+    @Description("Returns the total number of products matching the given filter, optionally scoped to a category (including subcategories) and/or a brand.")
     @Transactional(value = TxType.SUPPORTS)
-    public long productCount(@Name("filterRequest") FilterRequest filterRequest)
+    public long productCount(
+            @Name("filterRequest") FilterRequest filterRequest,
+            @Name("categoryId") @Description("Optional category UUID. Includes products in this category and all subcategories. Pass null or omit for all categories.") String categoryId,
+            @Name("brandId") @Description("Optional brand UUID. Restricts count to products linked to this brand.") String brandId)
     {
-        return productService.productCount(filterRequest);
+        FilterRequest resolvedFilterRequest = filterRequest != null ? filterRequest : new FilterRequest();
+
+        if (categoryId != null && !categoryId.isBlank() && !"ALL".equalsIgnoreCase(categoryId)) {
+            final UUID parsedCategoryId;
+            try {
+                parsedCategoryId = UUID.fromString(categoryId);
+            } catch (IllegalArgumentException e) {
+                throw new IllegalArgumentException("categoryId must be a valid UUID", e);
+            }
+
+            if (categoryRepository.findById(parsedCategoryId) == null) {
+                throw new IllegalArgumentException("Category not found for id: " + categoryId);
+            }
+
+            List<Filter> filters = resolvedFilterRequest.getFilters() != null
+                    ? resolvedFilterRequest.getFilters()
+                    : new ArrayList<>();
+            List<String> scopedCategoryIds = resolveCategoryAndDescendantIds(parsedCategoryId)
+                    .stream()
+                    .map(UUID::toString)
+                    .toList();
+            filters.add(new Filter("category.id", FilterOperator.IN, scopedCategoryIds));
+            resolvedFilterRequest.setFilters(filters);
+        }
+
+        if (brandId != null && !brandId.isBlank()) {
+            final UUID parsedBrandId;
+            try {
+                parsedBrandId = UUID.fromString(brandId);
+            } catch (IllegalArgumentException e) {
+                throw new IllegalArgumentException("brandId must be a valid UUID", e);
+            }
+
+            if (brandRepository.findById(parsedBrandId) == null) {
+                throw new IllegalArgumentException("Brand not found for id: " + brandId);
+            }
+
+            List<Filter> filters = resolvedFilterRequest.getFilters() != null
+                    ? resolvedFilterRequest.getFilters()
+                    : new ArrayList<>();
+            filters.add(new Filter("brand.id", FilterOperator.EQUALS, brandId));
+            resolvedFilterRequest.setFilters(filters);
+        }
+
+        boolean isScoped = (categoryId != null && !categoryId.isBlank() && !"ALL".equalsIgnoreCase(categoryId))
+                || (brandId != null && !brandId.isBlank());
+
+        return isScoped
+                ? productService.countShoppingProducts(resolvedFilterRequest)
+                : productService.productCount(resolvedFilterRequest);
     }
 
     @Query("variantsByIds")
