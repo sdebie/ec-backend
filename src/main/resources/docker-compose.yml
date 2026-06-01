@@ -73,6 +73,7 @@ services:
     environment:
       - VITE_API_URL=http://192.168.1.16:8080/api/
       - REACT_APP_API_URL=http://192.168.1.16:8080/api/graphql
+      - VITE_IMAGE_BASE_URL=http://192.168.1.16:8080/static/images/
     depends_on:
       - backend
 
