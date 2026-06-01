@@ -24,9 +24,7 @@ public class ImageStaticResourceConfig
 
         // Map the URL /static/images/ to your Mac folder
         router.route("/static/images/*")
-                .handler(StaticHandler.create()
-                        .setAllowRootFileSystemAccess(true)
-                        .setWebRoot(storagePath)
+                .handler(StaticHandler.create(storagePath)
                         .setCachingEnabled(false)); // Disable cache for dev
     }
 }

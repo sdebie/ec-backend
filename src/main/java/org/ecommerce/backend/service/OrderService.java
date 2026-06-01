@@ -5,11 +5,16 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import org.eclipse.microprofile.graphql.GraphQLException;
+import org.ecommerce.common.dto.CustomerDetailDto;
 import org.ecommerce.common.dto.CustomerDto;
+import org.ecommerce.common.dto.ImageDetailDto;
 import org.ecommerce.common.dto.OrderDetailRespDto;
 import org.ecommerce.common.dto.OrderDto;
+import org.ecommerce.common.dto.OrderItemDetailDto;
 import org.ecommerce.common.dto.OrderItemDto;
 import org.ecommerce.common.dto.OrderResponseDto;
+import org.ecommerce.common.dto.ProductDetailDto;
+import org.ecommerce.common.dto.ProductVariantDetailDto;
 import org.ecommerce.common.entity.*;
 import org.ecommerce.common.enums.OrderStatusEn;
 import org.ecommerce.common.enums.CustomerStatusEn;
@@ -291,7 +296,12 @@ public class OrderService
 
         // Map all OrderEntity fields
         detail.id = order.id;
-        detail.customerEntity = order.customerEntity;
+        // Populate the CustomerDetailDto
+        if (order.customerEntity != null && order.customerEntity.user != null) {
+            CustomerDetailDto customerDetail = new CustomerDetailDto();
+            customerDetail.email = order.customerEntity.user.email;
+            detail.customerEntity = customerDetail;
+        }
         detail.totalAmount = order.totalAmount;
         detail.sessionId = order.sessionId;
         detail.status = order.status;
@@ -301,10 +311,46 @@ public class OrderService
         detail.shippingCity = order.shippingCity;
         detail.shippingProvince = order.shippingProvince;
         detail.shippingPostalCode = order.shippingPostalCode;
-        if (order.items != null) {
-            detail.items = new ArrayList<>(order.items);
-        }
         detail.createdAt = order.createdAt;
+
+        // Populate items
+        if (order.items != null) {
+            detail.items = new ArrayList<>();
+            for (OrderItemEntity orderItemEntity : order.items) {
+                OrderItemDetailDto itemDetailDto = new OrderItemDetailDto();
+                itemDetailDto.id = orderItemEntity.id;
+                itemDetailDto.unitPrice = orderItemEntity.unitPrice;
+                itemDetailDto.quantity = orderItemEntity.quantity;
+
+                if (orderItemEntity.variant != null) {
+                    ProductVariantDetailDto variantDetailDto = new ProductVariantDetailDto();
+                    variantDetailDto.id = orderItemEntity.variant.id;
+                    variantDetailDto.stockQuantity = orderItemEntity.variant.stockQuantity;
+                    variantDetailDto.attributesJson = orderItemEntity.variant.attributesJson;
+                    variantDetailDto.weightKg = orderItemEntity.variant.weightKg;
+
+                    if (orderItemEntity.variant.product != null) {
+                        ProductDetailDto productDetailDto = new ProductDetailDto();
+                        productDetailDto.name = orderItemEntity.variant.product.name;
+                        variantDetailDto.product = productDetailDto;
+                    }
+
+                    if (orderItemEntity.variant.images != null) {
+                        List<ImageDetailDto> imageDetailDtos = new ArrayList<>();
+                        for (ProductImageEntity imageEntity : orderItemEntity.variant.images) {
+                            ImageDetailDto imageDetailDto = new ImageDetailDto();
+                            imageDetailDto.id = imageEntity.id;
+                            imageDetailDto.imageUrl = imageEntity.imageUrl;
+                            imageDetailDto.sortOrder = imageEntity.sortOrder;
+                            imageDetailDtos.add(imageDetailDto);
+                        }
+                        variantDetailDto.images = imageDetailDtos;
+                    }
+                    itemDetailDto.variant = variantDetailDto;
+                }
+                detail.items.add(itemDetailDto);
+            }
+        }
 
         // Map all OrderStatusHistoryEntity fields
         List<OrderStatusHistoryEntity> histories = OrderStatusHistoryEntity
