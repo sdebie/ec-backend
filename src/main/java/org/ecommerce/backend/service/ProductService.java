@@ -178,6 +178,12 @@ public class ProductService
     }
 
     @Transactional(value = TxType.SUPPORTS)
+    public long countShoppingProducts(FilterRequest filterRequest)
+    {
+        return productRepository.countShoppingProducts(filterRequest);
+    }
+
+    @Transactional(value = TxType.SUPPORTS)
     public List<ProductShoppingListItemDto> getTopBestSellers()
     {
         return productRepository.findTopBestSellers();
