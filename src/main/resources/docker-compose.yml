@@ -49,7 +49,7 @@ services:
       - QUARKUS_DATASOURCE_USERNAME=postgres
       - QUARKUS_DATASOURCE_PASSWORD=postgres
       - QUARKUS_HTTP_HOST=0.0.0.0
-      - CORS_ORIGINS=http://localhost:3001,http://127.0.0.1:3001,http://192.168.1.16:3001
+      - CORS_ORIGINS=http://localhost:3001,http://127.0.0.1:3001,http://192.168.1.16:3001,https://ec.sdebiehome.co.za
 
       - SMALLRYE_JWT_SIGN_KEY_LOCATION=/deployments/secrets/privateKey.pem
       - SMALLRYE_JWT_VERIFY_KEY_LOCATION=/deployments/secrets/publicKey.pem
