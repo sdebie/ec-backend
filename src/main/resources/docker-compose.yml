@@ -49,7 +49,7 @@ services:
       - QUARKUS_DATASOURCE_USERNAME=postgres
       - QUARKUS_DATASOURCE_PASSWORD=postgres
       - QUARKUS_HTTP_HOST=0.0.0.0
-      - CORS_ORIGINS=http://localhost:3001,http://127.0.0.1:3001,http://192.168.1.16:3001,https://ec.sdebiehome.co.za
+      - CORS_ORIGINS=http://localhost:3001,http://127.0.0.1:3001,http://192.168.1.16:3001
 
       - SMALLRYE_JWT_SIGN_KEY_LOCATION=/deployments/secrets/privateKey.pem
       - SMALLRYE_JWT_VERIFY_KEY_LOCATION=/deployments/secrets/publicKey.pem
@@ -62,22 +62,27 @@ services:
       flyway:
         condition: service_completed_successfully
 
-    frontend:
-      build:
-        context: ./ec-frontend
-        dockerfile: Dockerfile.jvm
-      container_name: ec-frontend
-      ports:
-        - "3001:3000"
-      environment:
-        # USE RELATIVE PATHS FOR THE BROWSER (Crucial for production/Docker)
-        - VITE_API_URL=/api/
-        - REACT_APP_API_URL=/api/graphql
-        - VITE_IMAGE_BASE_URL=/static/images/
-        - VITE_PROXY_TARGET=http://ec-backend:8080
-        - VITE_API_BASE_URL=/api
-      depends_on:
-        - backend
+  frontend:
+    build:
+      context: ./ec-frontend
+      dockerfile: Dockerfile.jvm
+    container_name: ec-frontend
+    ports:
+      - "3001:3000"
+    environment:
+      # USE RELATIVE PATHS FOR THE BROWSER (Crucial for production/Docker)
+      #- VITE_API_URL=https://ecapi.sdebiehome.co.za/api/
+      #- REACT_APP_API_URL=https://ecapi.sdebiehome.co.za/api/graphql
+      #- VITE_IMAGE_BASE_URL=https://ecapi.sdebiehome.co.za/static/images/
+      #- VITE_PROXY_TARGET=https://ecapi.sdebiehome.co.za
+      #- VITE_API_BASE_URL=https://ecapi.sdebiehome.co.za/api
+      - VITE_API_URL=/api/
+      - REACT_APP_API_URL=/api/graphql
+      - VITE_IMAGE_BASE_URL=/static/images/
+      - VITE_API_BASE_URL=/api
+      - VITE_PROXY_TARGET=http://ec-backend:8080
+    depends_on:
+      - backend
 
 volumes:
   db_data:
