@@ -50,6 +50,7 @@ public class ProductResource
     public List<ProductListItemDto> getProductsListByCategory(
             @Name("categoryId") @Description("Required category UUID.") String categoryId,
             @Name("includeSubCategories") @DefaultValue("true") @Description("When true, products in the selected category and related parent-scope categories are included.") boolean includeSubCategories,
+            @Name("ignoreStatus") @DefaultValue("false") @Description("When true, skips the default ACTIVE product and variant status restriction.") boolean ignoreStatus,
             @Name("pageRequest") PageRequest pageRequest,
             @Name("filterRequest") FilterRequest filterRequest)
     {
@@ -68,7 +69,7 @@ public class ProductResource
             throw new IllegalArgumentException("Category not found for id: " + categoryId);
         }
 
-        return productService.getProductsByCategory(categoryId, includeSubCategories, pageRequest, filterRequest);
+        return productService.getProductsByCategory(categoryId, includeSubCategories, pageRequest, filterRequest, ignoreStatus);
     }
 
     @Query("productListByBrand")
@@ -76,6 +77,7 @@ public class ProductResource
     @Transactional(value = TxType.SUPPORTS)
     public List<ProductListItemDto> getProductsListByBrand(
             @Name("brandId") @Description("Required brand UUID.") String brandId,
+            @Name("ignoreStatus") @DefaultValue("false") @Description("When true, skips the default ACTIVE product and variant status restriction.") boolean ignoreStatus,
             @Name("pageRequest") PageRequest pageRequest,
             @Name("filterRequest") FilterRequest filterRequest)
     {
@@ -94,7 +96,7 @@ public class ProductResource
             throw new IllegalArgumentException("Brand not found for id: " + brandId);
         }
 
-        return productService.getProductsByBrand(brandId, pageRequest, filterRequest);
+        return productService.getProductsByBrand(brandId, pageRequest, filterRequest, ignoreStatus);
     }
 
     @Query("shoppingProductList")
@@ -104,6 +106,7 @@ public class ProductResource
             @Name("pageRequest") PageRequest pageRequest,
             @Name("filterRequest") FilterRequest filterRequest,
             @Name("categoryId") @Description("Optional main category UUID. If omitted or ALL, returns products across all categories.") String categoryId,
+            @Name("ignoreStatus") @DefaultValue("false") @Description("When true, skips the default ACTIVE product and variant status restriction.") boolean ignoreStatus,
             @Name("includeSubCategories") @DefaultValue("true") @Description("When true, includes products linked to the selected category and all descendant categories. When false, only products linked directly to the selected category are returned.") boolean includeSubCategories)
     {
         FilterRequest resolvedFilterRequest = filterRequest != null ? filterRequest : new FilterRequest();
@@ -137,7 +140,7 @@ public class ProductResource
             resolvedFilterRequest.setFilters(filters);
         }
 
-        return productService.getShoppingProducts(pageRequest, resolvedFilterRequest);
+        return productService.getShoppingProducts(pageRequest, resolvedFilterRequest, ignoreStatus);
     }
 
     private List<UUID> resolveCategoryAndDescendantIds(UUID rootCategoryId)
@@ -169,9 +172,11 @@ public class ProductResource
     @Query("saleProductList")
     @Description("Returns shopping product cards that currently have active RETAIL_SALE_PRICE or WHOLESALE_SALE_PRICE values only.")
     @Transactional(value = TxType.SUPPORTS)
-    public List<ProductShoppingListItemDto> getProductsOnSaleList(@Name("pageRequest") PageRequest pageRequest)
+    public List<ProductShoppingListItemDto> getProductsOnSaleList(
+            @Name("pageRequest") PageRequest pageRequest,
+            @Name("ignoreStatus") @DefaultValue("false") @Description("When true, skips the default ACTIVE product and variant status restriction.") boolean ignoreStatus)
     {
-        return productService.getProductsOnSale(pageRequest);
+        return productService.getProductsOnSale(pageRequest, ignoreStatus);
     }
 
     @Query("topBestSellers")
@@ -189,7 +194,8 @@ public class ProductResource
     public long productCount(
             @Name("filterRequest") FilterRequest filterRequest,
             @Name("categoryId") @Description("Optional category UUID. Includes products in this category and all subcategories. Pass null or omit for all categories.") String categoryId,
-            @Name("brandId") @Description("Optional brand UUID. Restricts count to products linked to this brand.") String brandId)
+            @Name("brandId") @Description("Optional brand UUID. Restricts count to products linked to this brand.") String brandId,
+            @Name("ignoreStatus") @DefaultValue("false") @Description("When true, skips the default ACTIVE product and variant status restriction.") boolean ignoreStatus)
     {
         FilterRequest resolvedFilterRequest = filterRequest != null ? filterRequest : new FilterRequest();
 
@@ -239,8 +245,8 @@ public class ProductResource
                 || (brandId != null && !brandId.isBlank());
 
         return isScoped
-                ? productService.countShoppingProducts(resolvedFilterRequest)
-                : productService.productCount(resolvedFilterRequest);
+                ? productService.countShoppingProducts(resolvedFilterRequest, ignoreStatus)
+                : productService.productCount(resolvedFilterRequest, ignoreStatus);
     }
 
     @Query("variantsByIds")

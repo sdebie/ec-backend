@@ -13,6 +13,11 @@ import org.ecommerce.common.entity.UserEntity;
 import org.ecommerce.common.enums.AddressTypeEn;
 import org.ecommerce.common.enums.CustomerStatusEn;
 import org.ecommerce.common.enums.CustomerTypeEn;
+import com.google.api.client.googleapis.auth.oauth2.GoogleIdToken;
+import com.google.api.client.googleapis.auth.oauth2.GoogleIdTokenVerifier;
+import com.google.api.client.http.javanet.NetHttpTransport;
+import com.google.api.client.json.gson.GsonFactory;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -27,6 +32,9 @@ public class CustomerResource {
 
     @Inject
     CustomerPasswordResetService customerPasswordResetService;
+
+    @ConfigProperty(name = "google.client.id", defaultValue = "5598643375-sooimltbseub586f1pucut2fut95dnbl.apps.googleusercontent.com")
+    String googleClientId;
 
     @GET
     @Path("/lookup")
@@ -60,6 +68,10 @@ public class CustomerResource {
         public String code;
         public String newPassword;
         public String confirmPassword;
+    }
+
+    public static class GoogleLoginRequest {
+        public String idToken;
     }
 
     @POST
@@ -175,6 +187,66 @@ public class CustomerResource {
         user.lastLogin = OffsetDateTime.now();
         user.persist();
         return Response.ok(toProfileDto(ce)).build();
+    }
+
+    @POST
+    @Path("/login/google")
+    @Transactional
+    public Response loginWithGoogle(GoogleLoginRequest req) {
+        if (req == null || req.idToken == null || req.idToken.isBlank()) {
+            return Response.status(Response.Status.BAD_REQUEST).entity("idToken is required").build();
+        }
+
+        try {
+            GoogleIdTokenVerifier verifier = new GoogleIdTokenVerifier.Builder(new NetHttpTransport(), GsonFactory.getDefaultInstance())
+                    .setAudience(java.util.Collections.singletonList(googleClientId))
+                    .build();
+
+            GoogleIdToken idToken = verifier.verify(req.idToken);
+            if (idToken == null) {
+                return Response.status(Response.Status.UNAUTHORIZED).entity("Invalid Google ID Token").build();
+            }
+
+            GoogleIdToken.Payload payload = idToken.getPayload();
+            String email = payload.getEmail();
+            String firstName = (String) payload.get("given_name");
+            String lastName = (String) payload.get("family_name");
+
+            UserEntity user = UserEntity.findByEmail(email);
+            if (user == null) {
+                user = new UserEntity();
+                user.email = email;
+                user.passwordHash = ""; // Google users might not have a local password initially
+                user.persist();
+            }
+
+            CustomerEntity ce = user.customer;
+            if (ce == null) {
+                ce = new CustomerEntity();
+                ce.user = user;
+                ce.firstName = firstName;
+                ce.lastName = lastName;
+                ce.status = CustomerStatusEn.ACTIVE; // Auto-activate Google users
+                ce.shopperType = CustomerTypeEn.RETAILER;
+                ce.persist();
+            } else {
+                if (ce.status == CustomerStatusEn.DISABLED) {
+                    return Response.status(Response.Status.FORBIDDEN).entity("Customer account is disabled").build();
+                }
+                // Update names if missing
+                if (ce.firstName == null) ce.firstName = firstName;
+                if (ce.lastName == null) ce.lastName = lastName;
+                if (ce.status == CustomerStatusEn.PENDING) ce.status = CustomerStatusEn.ACTIVE;
+                ce.persist();
+            }
+
+            user.lastLogin = OffsetDateTime.now();
+            user.persist();
+
+            return Response.ok(toProfileDto(ce)).build();
+        } catch (Exception e) {
+            return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity("Google authentication failed: " + e.getMessage()).build();
+        }
     }
 
     public static class RegisterOrUpdateRequest {

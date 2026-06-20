@@ -13,6 +13,7 @@ import org.ecommerce.common.entity.ProductVariantEntity;
 import org.ecommerce.common.entity.CategoryEntity;
 import org.ecommerce.common.entity.VariantPricesEntity;
 import org.ecommerce.common.enums.ProductTypeEn;
+import org.ecommerce.common.enums.ProductStatusEn;
 import org.ecommerce.common.enums.PriceTypeEn;
 import org.ecommerce.common.query.Filter;
 import org.ecommerce.common.query.FilterRequest;
@@ -60,11 +61,11 @@ public class ProductService
     @Transactional(value = TxType.SUPPORTS)
     public List<ProductListItemDto> getAllProducts(PageRequest pageRequest, FilterRequest filterRequest)
     {
-        return enrichProductListItems(productRepository.findAllProductListItems(pageRequest, filterRequest));
+        return enrichProductListItems(productRepository.findAllProductListItems(pageRequest, filterRequest, true));
     }
 
     @Transactional(value = TxType.SUPPORTS)
-    public List<ProductListItemDto> getProductsByCategory(String categoryId, boolean includeSubCategories, PageRequest pageRequest, FilterRequest filterRequest)
+    public List<ProductListItemDto> getProductsByCategory(String categoryId, boolean includeSubCategories, PageRequest pageRequest, FilterRequest filterRequest, boolean ignoreStatus)
     {
         if (categoryId == null || categoryId.isBlank()) {
             throw new IllegalArgumentException("Category id is required");
@@ -80,13 +81,15 @@ public class ProductService
                 ? resolveCategoryScopeIds(selectedCategory)
                 : List.of(selectedCategoryId);
 
+        FilterRequest effectiveFilterRequest = applyActiveProductStatusFilter(filterRequest, ignoreStatus);
+
         return enrichProductListItems(
-                productRepository.findProductListItemsByCategoryIds(pageRequest, filterRequest, categoryIds)
+                productRepository.findProductListItemsByCategoryIds(pageRequest, effectiveFilterRequest, categoryIds, ignoreStatus)
         );
     }
 
     @Transactional(value = TxType.SUPPORTS)
-    public List<ProductListItemDto> getProductsByBrand(String brandId, PageRequest pageRequest, FilterRequest filterRequest)
+    public List<ProductListItemDto> getProductsByBrand(String brandId, PageRequest pageRequest, FilterRequest filterRequest, boolean ignoreStatus)
     {
         if (brandId == null || brandId.isBlank()) {
             throw new IllegalArgumentException("Brand id is required");
@@ -103,31 +106,27 @@ public class ProductService
             throw new IllegalArgumentException("Brand not found with id: " + brandId);
         }
 
-        FilterRequest effectiveFilterRequest = new FilterRequest();
-        effectiveFilterRequest.setSort(filterRequest != null ? filterRequest.getSort() : null);
-        effectiveFilterRequest.setFilterGroups(filterRequest != null ? filterRequest.getFilterGroups() : null);
-
-        List<Filter> filters = filterRequest != null && filterRequest.getFilters() != null
-                ? new ArrayList<>(filterRequest.getFilters())
-                : new ArrayList<>();
+        FilterRequest effectiveFilterRequest = applyActiveProductStatusFilter(filterRequest, ignoreStatus);
+        List<Filter> filters = mutableFilters(effectiveFilterRequest);
         filters.add(new Filter("brand.id", FilterOperator.EQUALS, brandId));
         effectiveFilterRequest.setFilters(filters);
 
         return enrichProductListItems(
-                productRepository.findAllProductListItems(pageRequest, effectiveFilterRequest)
+                productRepository.findAllProductListItems(pageRequest, effectiveFilterRequest, ignoreStatus)
         );
     }
 
     @Transactional(value = TxType.SUPPORTS)
-    public List<ProductShoppingListItemDto> getShoppingProducts(PageRequest pageRequest, FilterRequest filterRequest)
+    public List<ProductShoppingListItemDto> getShoppingProducts(PageRequest pageRequest, FilterRequest filterRequest, boolean ignoreStatus)
     {
-        return productRepository.findShoppingProductList(pageRequest, filterRequest);
+        FilterRequest effectiveFilterRequest = applyActiveProductStatusFilter(filterRequest, ignoreStatus);
+        return productRepository.findShoppingProductList(pageRequest, effectiveFilterRequest, ignoreStatus);
     }
 
     @Transactional(value = TxType.SUPPORTS)
-    public List<ProductShoppingListItemDto> getProductsOnSale(PageRequest pageRequest)
+    public List<ProductShoppingListItemDto> getProductsOnSale(PageRequest pageRequest, boolean ignoreStatus)
     {
-        return productRepository.findOnSaleShoppingProductList(pageRequest);
+        return productRepository.findOnSaleShoppingProductList(pageRequest, ignoreStatus);
     }
 
 
@@ -172,15 +171,49 @@ public class ProductService
     }
 
     @Transactional(value = TxType.SUPPORTS)
-    public long productCount(FilterRequest filterRequest)
+    public long productCount(FilterRequest filterRequest, boolean ignoreStatus)
     {
-        return productRepository.count(filterRequest);
+        return productRepository.count(applyActiveProductStatusFilter(filterRequest, ignoreStatus));
     }
 
     @Transactional(value = TxType.SUPPORTS)
-    public long countShoppingProducts(FilterRequest filterRequest)
+    public long countShoppingProducts(FilterRequest filterRequest, boolean ignoreStatus)
     {
-        return productRepository.countShoppingProducts(filterRequest);
+        FilterRequest effectiveFilterRequest = applyActiveProductStatusFilter(filterRequest, ignoreStatus);
+        return productRepository.countShoppingProducts(effectiveFilterRequest, ignoreStatus);
+    }
+
+    private FilterRequest applyActiveProductStatusFilter(FilterRequest filterRequest, boolean ignoreStatus)
+    {
+        FilterRequest effectiveFilterRequest = copyFilterRequest(filterRequest);
+        if (ignoreStatus) {
+            return effectiveFilterRequest;
+        }
+
+        List<Filter> filters = mutableFilters(effectiveFilterRequest);
+        filters.add(new Filter("status", FilterOperator.EQUALS, ProductStatusEn.ACTIVE.name()));
+        effectiveFilterRequest.setFilters(filters);
+        return effectiveFilterRequest;
+    }
+
+    private FilterRequest copyFilterRequest(FilterRequest filterRequest)
+    {
+        FilterRequest copy = new FilterRequest();
+        if (filterRequest == null) {
+            return copy;
+        }
+
+        copy.setSort(filterRequest.getSort());
+        copy.setFilterGroups(filterRequest.getFilterGroups());
+        copy.setFilters(filterRequest.getFilters() != null ? new ArrayList<>(filterRequest.getFilters()) : new ArrayList<>());
+        return copy;
+    }
+
+    private List<Filter> mutableFilters(FilterRequest filterRequest)
+    {
+        return filterRequest.getFilters() != null
+                ? new ArrayList<>(filterRequest.getFilters())
+                : new ArrayList<>();
     }
 
     @Transactional(value = TxType.SUPPORTS)
@@ -228,6 +261,7 @@ public class ProductService
         product.description = input.product.description;
         product.shorDescription = input.product.shortDescription;
         product.productType = input.product.productType != null ? ProductTypeEn.valueOf(input.product.productType) : ProductTypeEn.SIMPLE;
+        product.status = input.product.status != null ? ProductStatusEn.valueOf(input.product.status) : ProductStatusEn.ACTIVE;
 
         // Link categories if provided
         if (input.product.categories != null && !input.product.categories.isEmpty()) {
@@ -309,6 +343,10 @@ public class ProductService
         }
         if (input.product.productType != null && !input.product.productType.isBlank()) {
             product.productType = ProductTypeEn.valueOf(input.product.productType);
+        }
+
+        if (input.product.status != null && !input.product.status.isBlank()) {
+            product.status = ProductStatusEn.valueOf(input.product.status);
         }
 
         // Update categories if provided
@@ -414,6 +452,7 @@ public class ProductService
                 variant.stockQuantity = variantDto.stockQuantity;
                 variant.attributesJson = variantDto.attributesJson;
                 variant.weightKg = variantDto.weightKg;
+                variant.status = variantDto.status != null ? ProductStatusEn.valueOf(variantDto.status) : ProductStatusEn.ACTIVE;
                 variant.persist();
                 log.info("Created new variant with SKU: {}", variantDto.sku);
             } else {
@@ -426,6 +465,9 @@ public class ProductService
                 }
                 if (variantDto.weightKg != null) {
                     variant.weightKg = variantDto.weightKg;
+                }
+                if (variantDto.status != null) {
+                    variant.status = ProductStatusEn.valueOf(variantDto.status);
                 }
                 variant.persist();
                 log.info("Updated variant with SKU: {}", variantDto.sku);
