@@ -81,6 +81,24 @@ public class WholesaleCustomerResource {
         }
     }
 
+    @Mutation("approveWholesaleApplication")
+    public WholesaleApplicationDetailsDto approveWholesaleApplication(@Name("id") UUID id) {
+        try {
+            return wholesaleCustomerService.approveWholesaleApplication(id);
+        } catch (RuntimeException ex) {
+            throw toGraphQlException(ex);
+        }
+    }
+
+    @Mutation("rejectWholesaleApplication")
+    public WholesaleApplicationDetailsDto rejectWholesaleApplication(@Name("id") UUID id) {
+        try {
+            return wholesaleCustomerService.rejectWholesaleApplication(id);
+        } catch (RuntimeException ex) {
+            throw toGraphQlException(ex);
+        }
+    }
+
     private RuntimeException toGraphQlException(RuntimeException ex) {
         Throwable current = ex;
         while (current.getCause() != null && current.getCause() != current) {

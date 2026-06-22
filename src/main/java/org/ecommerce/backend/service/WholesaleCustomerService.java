@@ -1,5 +1,6 @@
 package org.ecommerce.backend.service;
 
+import io.quarkus.mailer.MailTemplate;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
@@ -19,6 +20,7 @@ import org.ecommerce.common.enums.WholesaleCustomerStatusEn;
 import org.ecommerce.common.query.FilterRequest;
 import org.ecommerce.common.query.PageRequest;
 import org.ecommerce.common.repository.WholesaleApplicationRepository;
+import org.jboss.logging.Logger;
 
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -29,7 +31,12 @@ import java.util.UUID;
 public class WholesaleCustomerService {
 
     @Inject
+    MailTemplate wholesale_status;
+
+    @Inject
     WholesaleApplicationRepository wholesaleApplicationRepository;
+
+    private static final Logger LOG = Logger.getLogger(WholesaleCustomerService.class);
 
     public List<WholesaleApplicationListItemDto> getWholesaleApplications(PageRequest pageRequest, FilterRequest filterRequest) {
         return wholesaleApplicationRepository.findAll(pageRequest, filterRequest).stream()
@@ -204,6 +211,54 @@ public class WholesaleCustomerService {
         customerEntity.persist();
 
         return toDto(customerEntity);
+    }
+
+    @Transactional
+    public WholesaleApplicationDetailsDto approveWholesaleApplication(UUID id) {
+        if (id == null) {
+            throw new IllegalArgumentException("id is required");
+        }
+
+        WholesaleApplicationEntity application = WholesaleApplicationEntity.findById(id);
+        if (application == null) {
+            throw new IllegalArgumentException("wholesale application not found: " + id);
+        }
+
+        if (application.status != WholesaleApplicationStatusEn.PENDING) {
+            throw new IllegalArgumentException("application must be in PENDING status to approve");
+        }
+
+        application.status = WholesaleApplicationStatusEn.APPROVED;
+        application.processedAt = OffsetDateTime.now();
+        application.persist();
+
+        sendApprovalEmail(application);
+
+        return toDetailsDto(application);
+    }
+
+    @Transactional
+    public WholesaleApplicationDetailsDto rejectWholesaleApplication(UUID id) {
+        if (id == null) {
+            throw new IllegalArgumentException("id is required");
+        }
+
+        WholesaleApplicationEntity application = WholesaleApplicationEntity.findById(id);
+        if (application == null) {
+            throw new IllegalArgumentException("wholesale application not found: " + id);
+        }
+
+        if (application.status != WholesaleApplicationStatusEn.PENDING) {
+            throw new IllegalArgumentException("application must be in PENDING status to reject");
+        }
+
+        application.status = WholesaleApplicationStatusEn.REJECTED;
+        application.processedAt = OffsetDateTime.now();
+        application.persist();
+
+        sendRejectionEmail(application);
+
+        return toDetailsDto(application);
     }
 
     // ── Private helpers ──────────────────────────────────────────────────────
@@ -391,6 +446,9 @@ public class WholesaleCustomerService {
         dto.setId(application.id);
         dto.setCreatedAt(application.createdAt);
         dto.setStatus(application.status);
+        dto.setFirstName(application.firstName);
+        dto.setLastName(application.lastName);
+        dto.setEmail(application.accountEmail);
         return dto;
     }
 
@@ -425,6 +483,38 @@ public class WholesaleCustomerService {
         dto.setProcessedAt(application.processedAt);
         dto.setCustomerId(application.customer != null ? application.customer.id : null);
         return dto;
+    }
+
+    private void sendApprovalEmail(WholesaleApplicationEntity application) {
+        String firstName = (application.firstName != null && !application.firstName.isBlank()) ? application.firstName : "Wholesale Customer";
+        String customerEmail = application.accountEmail;
+        wholesale_status.to(customerEmail)
+                .from("shawn.debie@gmail.com")
+                .subject("Wholesale Application Approved - " + application.companyName)
+                .data("application", application)
+                .data("customerName", firstName)
+                .data("status", application.status)
+                .send()
+                .subscribe().with(
+                        success -> LOG.info("Wholesale approval email sent to: " + customerEmail),
+                        failure -> LOG.error("Wholesale approval email failed for: " + customerEmail, failure)
+                );
+    }
+
+    private void sendRejectionEmail(WholesaleApplicationEntity application) {
+        String firstName = (application.firstName != null && !application.firstName.isBlank()) ? application.firstName : "Wholesale Customer";
+        String customerEmail = application.accountEmail;
+        wholesale_status.to(customerEmail)
+                .from("shawn.debie@gmail.com")
+                .subject("Wholesale Application Status - " + application.companyName)
+                .data("application", application)
+                .data("customerName", firstName)
+                .data("status", application.status)
+                .send()
+                .subscribe().with(
+                        success -> LOG.info("Wholesale rejection email sent to: " + customerEmail),
+                        failure -> LOG.error("Wholesale rejection email failed for: " + customerEmail, failure)
+                );
     }
 }
 
