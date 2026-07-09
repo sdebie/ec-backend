@@ -113,9 +113,16 @@ public class PayFastService
 
     public List<HtmlFormField> generateHiddenHTMLForm(OrderEntity quote)
     {
+        String email = (quote.customerEntity != null && quote.customerEntity.user != null)
+                ? quote.customerEntity.user.email : "";
+        return generateHiddenHTMLForm(quote, email);
+    }
+
+    public List<HtmlFormField> generateHiddenHTMLForm(OrderEntity quote, String email)
+    {
 
         try {
-            TreeMap<String, String> stringTreeMap = getStringTreeMap(quote);
+            TreeMap<String, String> stringTreeMap = getStringTreeMap(quote, email);
             Map<String, String> sortedData = PayFastUtils.sortByPredefinedOrder(stringTreeMap);
             String joinedNameValuePair = PayFastUtils.concatenateNonEmptyNameValuePairs(sortedData);
             String signature = PayFastUtils.generateSecuritySignature(joinedNameValuePair);
@@ -127,7 +134,7 @@ public class PayFastService
         return Collections.emptyList();
     }
 
-    private TreeMap<String, String> getStringTreeMap(OrderEntity quote)
+    private TreeMap<String, String> getStringTreeMap(OrderEntity quote, String email)
     {
 
         TreeMap<String, String> input = new TreeMap<>();
@@ -141,7 +148,7 @@ public class PayFastService
         input.put("amount", quote.totalAmount.setScale(2, java.math.RoundingMode.HALF_UP).toPlainString());
         input.put("m_payment_id", quote.id.toString());
         input.put("item_name", quote.id.toString());
-        input.put("email_address", quote.customerEntity.user != null ? quote.customerEntity.user.email : "");
+        input.put("email_address", email != null ? email : "");
 
         input.put("payment_method", "dc");
 

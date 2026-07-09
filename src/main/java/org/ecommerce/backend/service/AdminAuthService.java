@@ -3,16 +3,21 @@ package org.ecommerce.backend.service;
 import io.quarkus.elytron.security.common.BcryptUtil;
 import io.smallrye.jwt.build.Jwt;
 import jakarta.enterprise.context.ApplicationScoped;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.ecommerce.common.dto.LoginRequestDto;
 import org.ecommerce.common.entity.StaffUserEntity;
 
 import java.time.Duration;
 import java.util.HashSet;
 import java.util.Arrays;
+import java.util.List;
 
 @ApplicationScoped
 public class AdminAuthService
 {
+    @ConfigProperty(name = "mp.jwt.verify.issuer")
+    String issuer;
+
     public String authenticate(LoginRequestDto loginDto)
     {
         // 1. Fetch user from DB (assuming Panache)
@@ -28,9 +33,9 @@ public class AdminAuthService
     private String generateToken(StaffUserEntity user)
     {
         // 3. Map the Enum role to the JWT 'groups' claim for RBAC
-        return Jwt.issuer("https://localhost:8080")
+        return Jwt.issuer(issuer)
                 .upn(user.email)
-                .groups(new HashSet<>(Arrays.asList(user.role.name())))
+                .groups(new HashSet<>(List.of(user.role.name())))
                 .claim("full_name", user.fullName)
                 .expiresIn(Duration.ofHours(8))
                 .sign();

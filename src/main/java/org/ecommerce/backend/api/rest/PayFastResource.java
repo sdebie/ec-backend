@@ -6,27 +6,35 @@ import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.MultivaluedMap;
 import jakarta.ws.rs.core.Response;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.ecommerce.backend.service.payfast.HtmlFormField;
 import org.ecommerce.common.enums.OrderStatusEn;
 import org.ecommerce.common.entity.OrderEntity;
 import org.ecommerce.common.entity.PaymentLogEntity;
 import org.ecommerce.backend.service.OrderService;
 import org.ecommerce.backend.service.payfast.PayFastService;
+import org.jboss.logging.Logger;
 
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Path("/api/payments")
 @Produces(MediaType.APPLICATION_JSON)
 public class PayFastResource
 {
+    private static final Logger LOG = Logger.getLogger(PayFastResource.class);
+
     @Inject
     PayFastService payFastService;
 
     @Inject
     OrderService orderService;
+
+    @ConfigProperty(name = "payfast.gateway.url")
+    String gatewayUrl;
 
     @POST
     @Path("/checkout")
@@ -34,22 +42,53 @@ public class PayFastResource
     @Transactional
     public Response checkout(MultivaluedMap<String, String> formParams)
     {
-        System.out.println("DEBUG: Checkout received: " + formParams);
+        LOG.debug("Checkout received: " + formParams);
 
-        List<String> orderId = formParams.get("id");
-        java.util.UUID orderUuid = java.util.UUID.fromString(orderId.getFirst());
-        OrderEntity quote = OrderEntity.findById(orderUuid);
-        if (quote == null || quote.customerEntity == null || quote.customerEntity.user == null
-                || quote.customerEntity.user.email == null || quote.customerEntity.user.email.isBlank()) {
-            System.out.println("DEBUG: Invalid Order information");
-            return Response.status(Response.Status.EXPECTATION_FAILED)
-                    .entity("{\"Error\": \"Request could not be processed. Please contact Admin\"}").build();
+        String orderIdParam = formParams.getFirst("id");
+        if (orderIdParam == null || orderIdParam.isBlank()) {
+            return Response.status(Response.Status.BAD_REQUEST)
+                    .entity(Map.of("error", "Order ID is required")).build();
         }
-        System.out.println("DEBUG: Got Order from DB with ID: " + quote.id);
 
-        List<HtmlFormField> hiddenHTMLFormFields = payFastService.generateHiddenHTMLForm(quote);
+        UUID orderUuid = UUID.fromString(orderIdParam);
+        OrderEntity quote = OrderEntity.findById(orderUuid);
+        if (quote == null) {
+            return Response.status(Response.Status.NOT_FOUND)
+                    .entity(Map.of("error", "Order not found")).build();
+        }
 
-        return Response.accepted().entity(hiddenHTMLFormFields).build();
+        // Resolve email: form param takes priority, then fall back to customerEntity.user.email
+        String formEmail = formParams.getFirst("email");
+        String email = resolveEmail(formEmail, quote);
+
+        if (email == null || email.isBlank()) {
+            return Response.status(Response.Status.BAD_REQUEST)
+                    .entity(Map.of("error", "Email is required")).build();
+        }
+
+        LOG.debug("Got Order from DB with ID: " + quote.id);
+
+        List<HtmlFormField> hiddenHTMLFormFields = payFastService.generateHiddenHTMLForm(quote, email);
+
+        return Response.accepted()
+                .entity(Map.of("gatewayUrl", gatewayUrl, "fields", hiddenHTMLFormFields))
+                .build();
+    }
+
+    /**
+     * Resolves the email to use for checkout.
+     * Prefers the form-param email; falls back to the customer entity user email.
+     */
+    private String resolveEmail(String formEmail, OrderEntity order)
+    {
+        if (formEmail != null && !formEmail.isBlank()) {
+            return formEmail.trim();
+        }
+        if (order.customerEntity != null && order.customerEntity.user != null
+                && order.customerEntity.user.email != null && !order.customerEntity.user.email.isBlank()) {
+            return order.customerEntity.user.email;
+        }
+        return null;
     }
 
     /**
@@ -61,13 +100,13 @@ public class PayFastResource
     @Transactional
     public Response handleITN(MultivaluedMap<String, String> formParams)
     {
-        System.out.println("DEBUG: ITN callback received");
+        LOG.debug("ITN callback received");
 
         // Convert to standard Map
         Map<String, String> params = formParams.entrySet().stream()
                 .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().getFirst()));
 
-        System.out.println("DEBUG: Received Signature: " + params.get("signature"));
+        LOG.debug("Received Signature: " + params.get("signature"));
 
         // 1. Security Check
 //        if (!payFastService.verifySignature(params)) {
@@ -86,29 +125,29 @@ public class PayFastResource
             log.rawResponse = params.toString();
             log.persist();
         } catch (Exception e) {
-            System.out.println("DEBUG: Error logging payment: " + e.getMessage());
+            LOG.error("Error logging payment: " + e.getMessage());
         }
 
         // 3. Logic: If payment is complete, update Order
         if ("COMPLETE".equalsIgnoreCase(params.get("payment_status"))) {
             String orderIdStr = params.get("m_payment_id");
             try {
-                java.util.UUID orderId = java.util.UUID.fromString(orderIdStr);
+                UUID orderId = UUID.fromString(orderIdStr);
                 OrderEntity order = OrderEntity.findById(orderId);
                 if (order != null) {
                     order.status = OrderStatusEn.PAID;
                     // Panache will auto-dirty-check within @Transactional, but call persist() to be explicit
                     order.persist();
-                    System.out.println("DEBUG: Updated Order " + orderId + " to PAID (entity update)");
+                    LOG.debug("Updated Order " + orderId + " to PAID (entity update)");
 
                     orderService.sendConfirmationEmail(order);
                 } else {
-                    System.out.println("DEBUG: Order not found for m_payment_id=" + orderId + "; no update performed");
+                    LOG.warn("Order not found for m_payment_id=" + orderId + "; no update performed");
                 }
             } catch (IllegalArgumentException nfe) {
-                System.out.println("DEBUG: Invalid m_payment_id received: '" + orderIdStr + "'");
+                LOG.warn("Invalid m_payment_id received: '" + orderIdStr + "'");
             } catch (Exception ex) {
-                System.out.println("DEBUG: Failed to update Order status to PAID due to: " + ex.getMessage());
+                LOG.error("Failed to update Order status to PAID due to: " + ex.getMessage());
             }
         }
 

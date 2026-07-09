@@ -16,6 +16,7 @@ import org.ecommerce.common.dto.ProductUploadBatchDto;
 import org.ecommerce.common.dto.ProductUploadBatchProcessStatusDto;
 import org.ecommerce.common.entity.*;
 import org.ecommerce.common.enums.ProductImportValidationStatusEn;
+import org.ecommerce.common.enums.ProductStatusEn;
 import org.ecommerce.common.enums.ProductTypeEn;
 import org.ecommerce.common.enums.ProductUploadStatusEn;
 import org.ecommerce.common.repository.*;
@@ -400,12 +401,14 @@ public class ProductImportService implements ImportBatchService<ProductCompariso
                 product.description = staged.description;
                 product.shorDescription = staged.shortDescription;
                 product.productType = ProductTypeEn.VARIABLE;
+                product.status = ProductStatusEn.ACTIVE;
                 productRepository.persist(product);
             }
 
             variant = new ProductVariantEntity();
             variant.product = product;
             variant.sku = staged.sku;
+            variant.status = ProductStatusEn.ACTIVE;
             productVariantRepository.persist(variant);
         }
 

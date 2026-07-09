@@ -121,8 +121,10 @@ public class ProductUploadResource {
     @Path("/price/batches/{batchId}/staged/async")
     @Consumes(MediaType.APPLICATION_JSON)
     public Response startProcessProductPriceImportBatch(@PathParam("batchId") UUID batchId) {
+        //TODO::SDB Fix Hardcoded admin — replace with JWT identity when auth hardening spec is implemented
+        StaffUserEntity approvedBy = StaffUserEntity.findByEmail("admin@gmail.com");
         try {
-            priceImportService.markProductPriceImportBatchAsProcessing(batchId);
+            priceImportService.markProductPriceImportBatchAsProcessing(batchId, approvedBy);
         } catch (NotFoundException ex) {
             return Response.status(Response.Status.NOT_FOUND).entity(ex.getMessage()).build();
         } catch (IllegalStateException ex) {

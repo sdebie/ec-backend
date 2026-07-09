@@ -8,13 +8,12 @@ import org.ecommerce.common.entity.CustomerEntity;
 import org.ecommerce.common.entity.UserEntity;
 import org.ecommerce.common.enums.CustomerStatusEn;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.time.OffsetDateTime;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import org.ecommerce.backend.utils.PasswordHashUtil;
 
 @Slf4j
 @ApplicationScoped
@@ -88,7 +87,7 @@ public class CustomerPasswordResetService {
         OffsetDateTime now = OffsetDateTime.now();
 
         log.debug("Password Reset {}", rawCode);
-        user.passwordResetCodeHash = hashPassword(rawCode);
+        user.passwordResetCodeHash = PasswordHashUtil.hash(rawCode);
         user.passwordResetCodeExpiry = now.plusMinutes(RESET_CODE_EXPIRY_MINUTES);
         user.passwordResetCodeAttempts = 0;
         user.passwordResetCodeLockedUntil = null;
@@ -108,7 +107,7 @@ public class CustomerPasswordResetService {
         }
 
         UserEntity user = verifyCodeInternal(email, code, clientIp);
-        user.passwordHash = hashPassword(newPassword);
+        user.passwordHash = PasswordHashUtil.hash(newPassword);
         user.lastLogin = OffsetDateTime.now();
 
         CustomerEntity customer = user.customer;
@@ -137,7 +136,7 @@ public class CustomerPasswordResetService {
             throw new IllegalArgumentException("Invalid or expired reset token");
         }
 
-        user.passwordHash = hashPassword(newPassword);
+        user.passwordHash = PasswordHashUtil.hash(newPassword);
         user.lastLogin = OffsetDateTime.now();
 
         // Activate the linked customer profile if still in REGISTERING state
@@ -169,7 +168,7 @@ public class CustomerPasswordResetService {
                 && user.passwordResetCodeHash != null
                 && user.passwordResetCodeExpiry != null
                 && !user.passwordResetCodeExpiry.isBefore(now)
-                && hashPassword(code.trim()).equals(user.passwordResetCodeHash);
+                && PasswordHashUtil.hash(code.trim()).equals(user.passwordResetCodeHash);
 
         if (!validCode) {
             registerFailure(user, normalizedIp, now);
@@ -264,17 +263,4 @@ public class CustomerPasswordResetService {
         return true;
     }
 
-    private static String hashPassword(String password) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] hashed = digest.digest(password.getBytes(StandardCharsets.UTF_8));
-            StringBuilder sb = new StringBuilder();
-            for (byte b : hashed) {
-                sb.append(String.format("%02x", b));
-            }
-            return sb.toString();
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to hash password", e);
-        }
-    }
 }

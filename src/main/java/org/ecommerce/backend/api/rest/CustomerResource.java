@@ -1,12 +1,17 @@
 package org.ecommerce.backend.api.rest;
 
+import jakarta.annotation.security.RolesAllowed;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
+import org.ecommerce.backend.service.CustomerAuthService;
 import org.ecommerce.backend.service.CustomerPasswordResetService;
+import org.ecommerce.backend.service.CustomerPortalService;
+import org.ecommerce.common.dto.CustomerLoginResponseDto;
 import org.ecommerce.common.dto.CustomerProfileDto;
+import org.ecommerce.common.dto.PasswordChangeRequestDto;
 import org.ecommerce.common.entity.CustomerAddressEntity;
 import org.ecommerce.common.entity.CustomerEntity;
 import org.ecommerce.common.entity.UserEntity;
@@ -18,11 +23,11 @@ import com.google.api.client.googleapis.auth.oauth2.GoogleIdTokenVerifier;
 import com.google.api.client.http.javanet.NetHttpTransport;
 import com.google.api.client.json.gson.GsonFactory;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.eclipse.microprofile.jwt.JsonWebToken;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
 import java.time.OffsetDateTime;
 import java.util.Optional;
+import org.ecommerce.backend.utils.PasswordHashUtil;
 
 // Minimal REST API to support checkout UX (lookup, login, register/update)
 @Path("/api/customers")
@@ -31,7 +36,16 @@ import java.util.Optional;
 public class CustomerResource {
 
     @Inject
+    CustomerAuthService customerAuthService;
+
+    @Inject
     CustomerPasswordResetService customerPasswordResetService;
+
+    @Inject
+    CustomerPortalService customerPortalService;
+
+    @Inject
+    JsonWebToken jwt;
 
     @ConfigProperty(name = "google.client.id", defaultValue = "5598643375-sooimltbseub586f1pucut2fut95dnbl.apps.googleusercontent.com")
     String googleClientId;
@@ -176,7 +190,7 @@ public class CustomerResource {
 
         boolean ok;
         try {
-            ok = verifyPassword(req.password, user.passwordHash);
+            ok = PasswordHashUtil.verify(req.password, user.passwordHash);
         } catch (Throwable t) {
             ok = false;
         }
@@ -186,7 +200,7 @@ public class CustomerResource {
 
         user.lastLogin = OffsetDateTime.now();
         user.persist();
-        return Response.ok(toProfileDto(ce)).build();
+        return Response.ok(toLoginResponseDto(ce)).build();
     }
 
     @POST
@@ -243,7 +257,7 @@ public class CustomerResource {
             user.lastLogin = OffsetDateTime.now();
             user.persist();
 
-            return Response.ok(toProfileDto(ce)).build();
+            return Response.ok(toLoginResponseDto(ce)).build();
         } catch (Exception e) {
             return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity("Google authentication failed: " + e.getMessage()).build();
         }
@@ -288,7 +302,7 @@ public class CustomerResource {
 
         boolean settingPassword = req.password != null && !req.password.isBlank();
         if (settingPassword) {
-            user.passwordHash = hashPassword(req.password);
+            user.passwordHash = PasswordHashUtil.hash(req.password);
         } else if (user.passwordHash == null) {
             // Guest: set a dummy non-null hash to satisfy NOT NULL in DB
             user.passwordHash = "";
@@ -309,12 +323,13 @@ public class CustomerResource {
 
         if (settingPassword) {
             ce.shopperType = CustomerTypeEn.RETAILER;
-        } else if (ce.shopperType == null) {
-            ce.shopperType = CustomerTypeEn.GUEST;
-        }
-
-        if (ce.status == null) {
-            ce.status = CustomerStatusEn.PENDING;
+            // Password-based registration: activate immediately so the customer can log in
+            if (ce.status == null || ce.status == CustomerStatusEn.PENDING) {
+                ce.status = CustomerStatusEn.ACTIVE;
+            }
+        } else {
+            if (ce.shopperType == null) ce.shopperType = CustomerTypeEn.GUEST;
+            if (ce.status == null) ce.status = CustomerStatusEn.PENDING;
         }
         CustomerEntity.persist(ce);
 
@@ -329,10 +344,20 @@ public class CustomerResource {
                 req.postalSuburb, req.postalCity,
                 req.postalProvince, req.postalPostalCode);
 
-        return Response.ok(toProfileDto(ce)).build();
+        return Response.ok(toLoginResponseDto(ce)).build();
     }
 
     // ── Private helpers ──────────────────────────────────────────────────────
+
+    @PATCH
+    @Path("/password")
+    @RolesAllowed("customer")
+    @Consumes(MediaType.APPLICATION_JSON)
+    public Response changePassword(PasswordChangeRequestDto request) {
+        String email = jwt.getSubject();
+        customerPortalService.changePassword(email, request.currentPassword, request.newPassword);
+        return Response.ok().build();
+    }
 
     /**
      * Creates or updates a single typed address on the customer.
@@ -365,23 +390,15 @@ public class CustomerResource {
         if (postalCode != null) addr.postalCode  = postalCode;
     }
 
-    private static String hashPassword(String password) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] hashed = digest.digest(password.getBytes(StandardCharsets.UTF_8));
-            StringBuilder sb = new StringBuilder();
-            for (byte b : hashed) {
-                sb.append(String.format("%02x", b));
-            }
-            return sb.toString();
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to hash password", e);
-        }
-    }
-
-    private static boolean verifyPassword(String plain, String storedHash) {
-        if (plain == null || storedHash == null) return false;
-        return hashPassword(plain).equals(storedHash);
+    private CustomerLoginResponseDto toLoginResponseDto(CustomerEntity ce) {
+        CustomerLoginResponseDto dto = new CustomerLoginResponseDto();
+        dto.token = customerAuthService.generateToken(ce);
+        dto.email = ce.user != null ? ce.user.email : null;
+        dto.firstName = ce.firstName;
+        dto.lastName = ce.lastName;
+        dto.shopperType = ce.shopperType != null ? ce.shopperType.name() : null;
+        dto.status = ce.status != null ? ce.status.name() : null;
+        return dto;
     }
 
     private static CustomerProfileDto toProfileDto(CustomerEntity ce) {

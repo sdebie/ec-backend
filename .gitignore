@@ -23,3 +23,6 @@ buildNumber.properties
 
 # JDT-specific (Eclipse Java Development Tools)
 .classpath
+
+# jqwik property-based test database
+.jqwik-database

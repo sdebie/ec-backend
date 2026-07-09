@@ -36,11 +36,17 @@ public class StorefrontConfigResource {
     public Response getConfig() {
         List<StoreSettingsEntity> rows = settingsRepository.getAllStoreSettings();
 
-        Map<String, JsonNode> sections = rows.stream()
+        Map<String, String> rawSettings = rows.stream()
                 .filter(r -> r.key.startsWith("storefront."))
                 .collect(Collectors.toMap(
                         r -> r.key,
-                        r -> parseJson(r.value)
+                        r -> r.value
+                ));
+
+        Map<String, JsonNode> sections = rawSettings.entrySet().stream()
+                .collect(Collectors.toMap(
+                        Map.Entry::getKey,
+                        e -> parseJson(e.getValue())
                 ));
 
         ObjectNode config = objectMapper.createObjectNode();
@@ -50,7 +56,9 @@ public class StorefrontConfigResource {
         applyTheme(config, sections.get("storefront.theme"));
         applyNavigation(config, sections.get("storefront.navigation"));
         applyFooter(config, sections.get("storefront.footer"));
+        applyHeader(config, sections.get("storefront.header"));
         applyHomeSections(config, sections.get("storefront.home_sections"));
+        applyAuth(config, rawSettings.get("storefront.auth.login_style"));
 
         return Response.ok(config).build();
     }
@@ -59,14 +67,12 @@ public class StorefrontConfigResource {
 
     private void applyConfigSection(ObjectNode out, JsonNode section) {
         if (section == null) return;
-        // slug is stored as the machine id — map to "id" for StorefrontClientConfig
-        if (section.has("slug"))              out.put("id", section.get("slug").asText());
-        if (section.has("displayName"))       out.put("displayName", section.get("displayName").asText());
-        if (section.has("locale"))            out.put("locale", section.get("locale").asText());
-        if (section.has("defaultCountryCode"))out.put("defaultCountryCode", section.get("defaultCountryCode").asText());
-        if (section.has("stickyHeader"))      out.put("stickyHeader", section.get("stickyHeader").asBoolean());
-        // hostnames not managed through settings — provide empty array so shape is valid
-        out.putArray("hostnames");
+        if (section.has("clientId"))    out.put("clientId", section.get("clientId").asText());
+        if (section.has("clientName"))  out.put("clientName", section.get("clientName").asText());
+        if (section.has("currency"))    out.put("currency", section.get("currency").asText());
+        else                            out.put("currency", "ZAR");
+        if (section.has("locale"))      out.put("locale", section.get("locale").asText());
+        if (section.has("stickyHeader"))out.put("stickyHeader", section.get("stickyHeader").asBoolean());
     }
 
     private void applyBranding(ObjectNode out, JsonNode section) {
@@ -96,29 +102,21 @@ public class StorefrontConfigResource {
 
     private void applyNavigation(ObjectNode out, JsonNode section) {
         if (section == null) return;
-        ObjectNode navigation = objectMapper.createObjectNode();
-
-        // productsLabel sits on the top-level config but logically belongs with navigation
-        if (out.has("productsLabel")) {
-            navigation.put("productsLabel", out.get("productsLabel").asText());
-            out.remove("productsLabel");
-        }
-
-        // Remap items[].path → menuItems[].to (NavMenuItem contract)
-        ArrayNode menuItems = objectMapper.createArrayNode();
+        ArrayNode nav = objectMapper.createArrayNode();
         JsonNode items = section.get("items");
         if (items != null && items.isArray()) {
-            for (JsonNode item : items) {
-                ObjectNode menuItem = objectMapper.createObjectNode();
-                if (item.has("id"))       menuItem.put("id", item.get("id").asText());
-                if (item.has("label"))    menuItem.put("label", item.get("label").asText());
-                if (item.has("path"))     menuItem.put("to", item.get("path").asText());
-                if (item.has("external")) menuItem.put("external", item.get("external").asBoolean());
-                menuItems.add(menuItem);
+            for (int i = 0; i < items.size(); i++) {
+                JsonNode item = items.get(i);
+                ObjectNode navItem = objectMapper.createObjectNode();
+                if (item.has("id"))        navItem.put("id", item.get("id").asText());
+                if (item.has("label"))     navItem.put("label", item.get("label").asText());
+                if (item.has("path"))      navItem.put("path", item.get("path").asText());
+                navItem.put("external",    item.has("external") && item.get("external").asBoolean());
+                navItem.put("sortOrder",   item.has("sortOrder") ? item.get("sortOrder").asInt() : i);
+                nav.add(navItem);
             }
         }
-        navigation.set("menuItems", menuItems);
-        out.set("navigation", navigation);
+        out.set("nav", nav);
     }
 
     private void applyFooter(ObjectNode out, JsonNode section) {
@@ -155,18 +153,44 @@ public class StorefrontConfigResource {
         out.set("footer", footer);
     }
 
+    private void applyHeader(ObjectNode out, JsonNode section) {
+        String headerJson;
+        if (section != null) {
+            headerJson = section.toString();
+        } else {
+            headerJson = "{\"announcement\":{\"enabled\":false,\"text\":\"\",\"backgroundColor\":\"#1a1f35\",\"textColor\":\"#ffffff\"}}";
+        }
+        try {
+            ObjectNode headerNode = (ObjectNode) objectMapper.readTree(headerJson);
+            out.set("header", headerNode);
+        } catch (Exception e) {
+            // Fallback to safe default if parsing fails
+            ObjectNode defaultHeader = objectMapper.createObjectNode();
+            ObjectNode announcement = objectMapper.createObjectNode();
+            announcement.put("enabled", false);
+            announcement.put("text", "");
+            announcement.put("backgroundColor", "#1a1f35");
+            announcement.put("textColor", "#ffffff");
+            defaultHeader.set("announcement", announcement);
+            out.set("header", defaultHeader);
+        }
+    }
+
+    private void applyAuth(ObjectNode out, String loginStyle) {
+        ObjectNode auth = objectMapper.createObjectNode();
+        auth.put("loginStyle", loginStyle != null ? loginStyle : "page");
+        out.set("auth", auth);
+    }
+
     private void applyHomeSections(ObjectNode out, JsonNode section) {
         if (section == null || !section.isArray() || section.isEmpty()) return;
-        ObjectNode home = objectMapper.createObjectNode();
-        // Filter to enabled sections, preserve sortOrder ordering
-        ArrayNode enabled = objectMapper.createArrayNode();
+        ArrayNode sections = objectMapper.createArrayNode();
         section.forEach(s -> {
             if (s.has("enabled") && s.get("enabled").asBoolean(true)) {
-                enabled.add(s);
+                sections.add(s);
             }
         });
-        home.set("sections", enabled);
-        out.set("home", home);
+        out.set("sections", sections);
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────

@@ -66,7 +66,7 @@ public class ProductPriceImportService implements ImportBatchService<ProductPric
 
     @Override
     public void markImportBatchAsProcessing(UUID batchId) {
-        markProductPriceImportBatchAsProcessing(batchId);
+        markProductPriceImportBatchAsProcessing(batchId, null);
     }
 
     @Override
@@ -151,7 +151,7 @@ public class ProductPriceImportService implements ImportBatchService<ProductPric
     }
 
     @Transactional
-    public void markProductPriceImportBatchAsProcessing(UUID batchId) {
+    public void markProductPriceImportBatchAsProcessing(UUID batchId, StaffUserEntity approvedBy) {
         ProductPriceUploadBatchEntity batch = productPriceUploadBatchRepository.findById(batchId);
         if (batch == null) {
             throw new NotFoundException("Price Batch not found: " + batchId);
@@ -165,6 +165,7 @@ public class ProductPriceImportService implements ImportBatchService<ProductPric
         batch.totalRows = (int) totalRows;
         batch.processedRows = 0;
         batch.skippedRows = 0;
+        batch.approvedBy = approvedBy;
     }
 
     @Transactional
@@ -188,6 +189,7 @@ public class ProductPriceImportService implements ImportBatchService<ProductPric
             throw new NotFoundException("Price Batch not found: " + batchId);
         }
         batch.productUploadStatusEn = ProductUploadStatusEn.FAILED;
+        batch.completedAt = LocalDateTime.now();
     }
 
     @Transactional
@@ -197,6 +199,7 @@ public class ProductPriceImportService implements ImportBatchService<ProductPric
             throw new NotFoundException("Price Batch not found: " + batchId);
         }
         batch.productUploadStatusEn = ProductUploadStatusEn.PROCESSED;
+        batch.completedAt = LocalDateTime.now();
     }
 
     @Transactional(value = Transactional.TxType.SUPPORTS)

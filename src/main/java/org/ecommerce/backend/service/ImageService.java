@@ -7,6 +7,7 @@ import org.jboss.resteasy.reactive.multipart.FileUpload;
 import org.ecommerce.common.enums.ImageTypeEn;
 import org.ecommerce.common.entity.ProductImageEntity;
 import org.ecommerce.common.entity.ProductVariantEntity;
+import org.ecommerce.common.repository.ProductVariantRepository;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
@@ -39,6 +40,9 @@ public class ImageService
 
     @Inject
     EntityManager entityManager;
+
+    @Inject
+    ProductVariantRepository productVariantRepository;
 
     /**
      * Generic upload method that saves the file and optionally creates database records
@@ -123,6 +127,9 @@ public class ImageService
                     Files.copy(file.filePath(), targetPath);
                     createThumbnail(targetPath, relativeFilePath);
                     uploadedCount++;
+                    // Link to product variant when filename matches a known SKU
+                    String sku = stripExtension(justTheFileName);
+                    tryLinkBulkImageToVariant(relativeFilePath, sku);
                 } else {
                     skippedCount++;
                 }
@@ -216,6 +223,20 @@ public class ImageService
         return new PaginatedImagesResponse(imagesPage, filteredImages.size(), safePage, safePageSize);
     }
 
+    @Transactional
+    public void tryLinkBulkImageToVariant(String relativeFilePath, String sku)
+    {
+        try {
+            ProductVariantEntity variant = productVariantRepository.findBySku(sku);
+            if (variant != null) {
+                createProductImage(relativeFilePath, variant.id);
+                log.debug("Linked bulk image {} to variant SKU={}", relativeFilePath, sku);
+            }
+        } catch (Exception e) {
+            log.warn("Could not link bulk image {} to SKU={}: {}", relativeFilePath, sku, e.getMessage());
+        }
+    }
+
     /**
      * Create a ProductImageEntity record in the database for the uploaded image.
      * The image will have the highest sort order.
@@ -246,6 +267,12 @@ public class ImageService
     {
         if (fileName == null || !fileName.contains(".")) return ".jpg";
         return fileName.substring(fileName.lastIndexOf("."));
+    }
+
+    private String stripExtension(String fileName)
+    {
+        if (fileName == null || !fileName.contains(".")) return fileName;
+        return fileName.substring(0, fileName.lastIndexOf("."));
     }
 
     String normalizeDestinationDirectory(String destinationDirectory) {

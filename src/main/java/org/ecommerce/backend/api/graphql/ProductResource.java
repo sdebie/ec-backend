@@ -1,5 +1,6 @@
 package org.ecommerce.backend.api.graphql;
 
+import jakarta.annotation.security.RolesAllowed;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import org.eclipse.microprofile.graphql.*;
@@ -100,10 +101,11 @@ public class ProductResource
     }
 
     @Query("shoppingProductList")
-    @Description("Returns shopping product cards with variant count, image list, and active lowest prices by type. Products can belong to multiple categories. Supports optional category scope and includeSubCategories.")
+    @Description("Returns paginated shopping product cards with variant count, image list, and active lowest prices by type. Products can belong to multiple categories. Supports optional category scope and includeSubCategories.")
     @Transactional(value = TxType.SUPPORTS)
-    public List<ProductShoppingListItemDto> getShoppingProductsList(
-            @Name("pageRequest") PageRequest pageRequest,
+    public PageResponse<ProductShoppingListItemDto> getShoppingProductsList(
+            @Name("pageIndex") @DefaultValue("0") int pageIndex,
+            @Name("pageSize") @DefaultValue("20") int pageSize,
             @Name("filterRequest") FilterRequest filterRequest,
             @Name("categoryId") @Description("Optional main category UUID. If omitted or ALL, returns products across all categories.") String categoryId,
             @Name("ignoreStatus") @DefaultValue("false") @Description("When true, skips the default ACTIVE product and variant status restriction.") boolean ignoreStatus,
@@ -140,7 +142,16 @@ public class ProductResource
             resolvedFilterRequest.setFilters(filters);
         }
 
-        return productService.getShoppingProducts(pageRequest, resolvedFilterRequest, ignoreStatus);
+        int effectivePageSize = Math.min(pageSize, 50);
+        PageRequest pageRequest = new PageRequest();
+        pageRequest.setPageIndex(pageIndex);
+        pageRequest.setPageSize(effectivePageSize);
+
+        List<ProductShoppingListItemDto> content = productService.getShoppingProducts(pageRequest, resolvedFilterRequest, ignoreStatus);
+        long totalElements = productService.countShoppingProducts(resolvedFilterRequest, ignoreStatus);
+        int totalPages = (int) Math.ceil((double) totalElements / effectivePageSize);
+
+        return new PageResponse<>(content, totalElements, totalPages, pageIndex, effectivePageSize);
     }
 
     private List<UUID> resolveCategoryAndDescendantIds(UUID rootCategoryId)
@@ -181,7 +192,7 @@ public class ProductResource
 
     @Query("topBestSellers")
     @Description("Returns the top 10 best-selling products ranked by units sold in DELIVERED orders. Products can belong to multiple categories. " +
-                 "If fewer than 10 delivered-order products exist, the list is padded with random products.")
+            "If fewer than 10 delivered-order products exist, the list is padded with random products.")
     @Transactional(value = TxType.SUPPORTS)
     public List<ProductShoppingListItemDto> getTopBestSellers()
     {
@@ -252,21 +263,24 @@ public class ProductResource
     @Query("variantsByIds")
     @Description("Fetch product variants by a list of ids, including product relation and prices for the selected category")
     @Transactional(value = TxType.SUPPORTS)
-    public List<ProductVariantDto> variantsByIds(@Name("ids") List<String> ids) {
+    public List<ProductVariantDto> variantsByIds(@Name("ids") List<String> ids)
+    {
         return productService.getVariantsByIds(ids);
     }
 
     @Query("getProductInformation")
     @Description("Fetch a product with all variants, categories, and images for a given product id. Products can belong to multiple categories which are returned in the response.")
     @Transactional(value = TxType.SUPPORTS)
-    public ProductInformationDto getProductInformation(@Name("productId") String productId) {
+    public ProductInformationDto getProductInformation(@Name("productId") String productId)
+    {
         return productService.getProductInformationDto(productId);
     }
 
     @Mutation("addProductInformation")
     @Description("Create a new product with variants, images, and multiple categories. Products can be assigned to one or more categories.")
     @Transactional(value = TxType.REQUIRED)
-    public ProductInformationDto addProductInformation(@Name("input") ProductInformationDto input) {
+    public ProductInformationDto addProductInformation(@Name("input") ProductInformationDto input)
+    {
         return productService.addProductInformation(input);
     }
 
@@ -275,9 +289,60 @@ public class ProductResource
     @Transactional(value = TxType.REQUIRED)
     public ProductInformationDto updateProductInformation(
             @Name("productId") String productId,
-            @Name("input") ProductInformationDto input) {
+            @Name("input") ProductInformationDto input)
+    {
         return productService.updateProductInformation(productId, input);
     }
 
+    @Query("getProductInformationBySlug")
+    @Description("Fetch a product with all variants by slug.")
+    @Transactional(value = TxType.SUPPORTS)
+    public ProductInformationDto getProductInformationBySlug(@Name("slug") String slug)
+    {
+        return productService.getProductInformationBySlug(slug);
+    }
 
+    @Query("adminProductList")
+    @Description("Admin paginated product list with SKU, stock, and price. Staff JWT required.")
+    @RolesAllowed({"SUPER_ADMIN", "CATALOG_MANAGER", "ORDER_MANAGER", "VIEWER"})
+    @Transactional(value = TxType.SUPPORTS)
+    public PageResponse<AdminProductListItemDto> adminProductList(
+            @Name("pageIndex") @DefaultValue("0") int pageIndex,
+            @Name("pageSize") @DefaultValue("10") int pageSize,
+            @Name("status") String status,
+            @Name("categoryId") String categoryId,
+            @Name("brandId") String brandId,
+            @Name("search") String search)
+    {
+        return productService.getAdminProductList(pageIndex, pageSize, status, categoryId, brandId, search);
+    }
+
+    @Query("adminProductStats")
+    @Description("Product count breakdown by status. Staff JWT required.")
+    @RolesAllowed({"SUPER_ADMIN", "CATALOG_MANAGER", "ORDER_MANAGER", "VIEWER"})
+    @Transactional(value = TxType.SUPPORTS)
+    public AdminProductStatsDto adminProductStats()
+    {
+        return productService.getProductStats();
+    }
+
+    @Mutation("updateProductStatus")
+    @Description("Update a product's status. SUPER_ADMIN only.")
+    @RolesAllowed("SUPER_ADMIN")
+    @Transactional(value = TxType.REQUIRED)
+    public void updateProductStatus(
+            @Name("id") String id,
+            @Name("status") String status)
+    {
+        productService.updateProductStatus(id, status);
+    }
+
+    @Mutation("deleteProduct")
+    @Description("Delete a product and all its variants. SUPER_ADMIN only.")
+    @RolesAllowed("SUPER_ADMIN")
+    @Transactional(value = TxType.REQUIRED)
+    public void deleteProduct(@Name("id") String id)
+    {
+        productService.deleteProduct(id);
+    }
 }
