@@ -22,18 +22,24 @@ public class ImageResource
     ImageService imageService;
 
     /**
-     * Generic upload endpoint - saves file without creating database records
+     * Generic upload endpoint - saves file without creating database records.
+     * Accepts an optional destinationDirectory to place the file in a subdirectory (e.g. "brands").
      */
     @POST
     @Path("/upload")
     @Consumes(MediaType.MULTIPART_FORM_DATA)
     @Produces(MediaType.APPLICATION_JSON)
-    public Response upload(@RestForm("file") FileUpload file)
+    public Response upload(
+            @RestForm("file") FileUpload file,
+            @RestForm("destinationDirectory") String destinationDirectory)
     {
         try {
-            String fileName = imageService.uploadImage(file);
-            // Return the filename so React can save it in the Brand/Category record
+            String fileName = (destinationDirectory != null && !destinationDirectory.isBlank())
+                    ? imageService.uploadImageToDirectory(file, destinationDirectory)
+                    : imageService.uploadImage(file);
             return Response.ok(new ImageResponseDto(fileName)).build();
+        } catch (IllegalArgumentException e) {
+            return Response.status(Response.Status.BAD_REQUEST).entity(e.getMessage()).build();
         } catch (IOException e) {
             return Response.serverError().entity("Failed to save image").build();
         }

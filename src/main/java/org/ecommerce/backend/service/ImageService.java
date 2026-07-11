@@ -45,12 +45,35 @@ public class ImageService
     ProductVariantRepository productVariantRepository;
 
     /**
-     * Generic upload method that saves the file and optionally creates database records
-     * for product images.
+     * Generic upload method that saves the file to root storage.
      */
     public String uploadImage(FileUpload file) throws IOException
     {
         return uploadImage(file, null, null);
+    }
+
+    /**
+     * Upload a single file to a specific subdirectory within storage.
+     * Uses the same path-traversal guards as bulk upload.
+     */
+    public String uploadImageToDirectory(FileUpload file, String destinationDirectory) throws IOException
+    {
+        String normalizedDirectory = normalizeDestinationDirectory(destinationDirectory);
+        Path destinationRoot = resolveStorageDirectory(normalizedDirectory);
+
+        if (!Files.exists(destinationRoot)) {
+            Files.createDirectories(destinationRoot);
+        }
+
+        String extension = getFileExtension(file.fileName());
+        String newFileName = UUID.randomUUID() + extension;
+        Path targetPath = destinationRoot.resolve(newFileName);
+        Files.copy(file.filePath(), targetPath);
+
+        createThumbnail(targetPath, newFileName);
+
+        // Return path relative to storage root so resolveImageUrl() builds the correct URL
+        return normalizedDirectory.isBlank() ? newFileName : normalizedDirectory + "/" + newFileName;
     }
 
     /**
