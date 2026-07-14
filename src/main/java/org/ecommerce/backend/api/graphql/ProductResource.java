@@ -4,6 +4,7 @@ import jakarta.annotation.security.RolesAllowed;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import org.eclipse.microprofile.graphql.*;
+import org.ecommerce.backend.service.FeaturedProductService;
 import org.ecommerce.backend.service.ProductService;
 import org.ecommerce.common.dto.*;
 import org.ecommerce.common.query.Filter;
@@ -28,6 +29,9 @@ public class ProductResource
 {
     @Inject
     ProductService productService;
+
+    @Inject
+    FeaturedProductService featuredProductService;
 
     @Inject
     CategoryRepository categoryRepository;
@@ -344,5 +348,35 @@ public class ProductResource
     public void deleteProduct(@Name("id") String id)
     {
         productService.deleteProduct(id);
+    }
+
+    @Query("featuredProductList")
+    @Description("Returns all featured products for admin management, ordered by name ascending.")
+    @RolesAllowed({"SUPER_ADMIN", "VIEWER"})
+    @Transactional(value = TxType.SUPPORTS)
+    public List<AdminProductListItemDto> featuredProductList()
+    {
+        return featuredProductService.getFeaturedProductsForAdmin();
+    }
+
+    @Mutation("setProductFeatured")
+    @Description("Toggle the featured flag on a product. SUPER_ADMIN only.")
+    @RolesAllowed("SUPER_ADMIN")
+    @Transactional(value = TxType.REQUIRED)
+    public FeaturedProductResultDto setProductFeatured(
+            @Name("productId") String productId,
+            @Name("featured") boolean featured)
+    {
+        return featuredProductService.setFeatured(UUID.fromString(productId), featured);
+    }
+
+    @Query("shoppingFeaturedProductList")
+    @Description("Returns featured ACTIVE products as shopping DTOs for the storefront. Publicly accessible.")
+    @Transactional(value = TxType.SUPPORTS)
+    public List<ProductShoppingListItemDto> shoppingFeaturedProductList(
+            @Name("limit") @DefaultValue("8") int limit,
+            @Name("categorySlug") String categorySlug)
+    {
+        return featuredProductService.getFeaturedShoppingProducts(limit, categorySlug);
     }
 }
