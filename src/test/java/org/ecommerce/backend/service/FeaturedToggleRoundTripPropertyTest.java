@@ -2,184 +2,83 @@ package org.ecommerce.backend.service;
 
 // Feature: featured-products-list, Property 1: Featured Toggle Round-Trip
 
-import net.jqwik.api.*;
+import io.quarkus.panache.mock.PanacheMock;
+import io.quarkus.test.InjectMock;
+import io.quarkus.test.junit.QuarkusTest;
+import jakarta.inject.Inject;
+import org.ecommerce.common.dto.FeaturedProductResultDto;
 import org.ecommerce.common.entity.ProductEntity;
 import org.ecommerce.common.enums.ProductStatusEn;
+import org.ecommerce.common.repository.ProductRepository;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
-import java.util.*;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
 
 /**
- * Property 1: Featured Toggle Round-Trip
+ * Feature: featured-products-list, Property 1: Featured Toggle Round-Trip
  *
- * For any product that is not featured, calling setFeatured(id, true) followed by
- * setFeatured(id, false) should leave is_featured = false, and the product should
- * not appear in the featured list.
+ * For any product that is not featured, setFeatured(id, true) then setFeatured(id, false)
+ * on the REAL {@link FeaturedProductService} leaves is_featured = false, and each step's
+ * DTO reflects the new state.
  *
- * This test verifies the round-trip property by simulating the FeaturedProductService
- * logic with an in-memory store that mirrors the Panache entity behavior.
+ * Exercises the real service via @QuarkusTest + PanacheMock. The property is quantified by
+ * iterating every product status and a range of pre-existing featured counts (kept below
+ * the cap so the featuring step succeeds).
  *
  * Validates: Requirements 1.4, 2.1, 2.2
  */
+@QuarkusTest
 class FeaturedToggleRoundTripPropertyTest {
 
-    private static final int FEATURED_CAP = 50;
+    @Inject
+    FeaturedProductService service;
 
-    /**
-     * Simulates FeaturedProductService behavior with an in-memory store.
-     * Mirrors the exact logic of the service without requiring Panache/DB.
-     */
-    private static class FeaturedProductSimulator {
-        private final Map<UUID, SimProduct> products = new HashMap<>();
+    @InjectMock
+    ProductRepository productRepository;
 
-        static class SimProduct {
-            UUID id;
-            String name;
-            boolean isFeatured;
-            ProductStatusEn status;
+    @BeforeEach
+    void setUp() {
+        PanacheMock.mock(ProductEntity.class);
+    }
 
-            SimProduct(UUID id, String name, boolean isFeatured, ProductStatusEn status) {
-                this.id = id;
-                this.name = name;
-                this.isFeatured = isFeatured;
-                this.status = status;
+    /** Property: true-then-false leaves the product not featured, for any status / below-cap count. */
+    @Test
+    void toggleTrueThenFalseLeavesProductNotFeatured() {
+        long[] existingCounts = {0L, 1L, 25L, 49L};
+        for (ProductStatusEn status : ProductStatusEn.values()) {
+            for (long existingCount : existingCounts) {
+                UUID productId = UUID.randomUUID();
+                ProductEntity product = spy(product(productId, "Toggle Product", status));
+                doNothing().when(product).persist();
+                when(productRepository.findById(productId)).thenReturn(product);
+                // Count is only read on the featuring step; keep below cap.
+                when(ProductEntity.count("isFeatured", true)).thenReturn(existingCount);
+
+                assertFalse(product.isFeatured, "Precondition: product starts not featured");
+
+                FeaturedProductResultDto featured = service.setFeatured(productId, true);
+                assertTrue(featured.featured, "setFeatured(true) should report featured");
+                assertTrue(product.isFeatured, "Product should be featured after step 1");
+
+                FeaturedProductResultDto unfeatured = service.setFeatured(productId, false);
+                assertFalse(unfeatured.featured, "setFeatured(false) should report not featured");
+                assertFalse(product.isFeatured, "Product must be not featured after round-trip");
+                assertEquals(productId.toString(), unfeatured.productId);
             }
         }
-
-        void addProduct(UUID id, String name, boolean isFeatured, ProductStatusEn status) {
-            products.put(id, new SimProduct(id, name, isFeatured, status));
-        }
-
-        /**
-         * Replicates FeaturedProductService.setFeatured logic:
-         * 1. Find product by id → NotFoundException if absent
-         * 2. If featuring: check cap → FeaturedCapExceededException if count >= 50
-         * 3. Set is_featured flag
-         * 4. Return result with productId and new featured state
-         */
-        SetFeaturedResult setFeatured(UUID productId, boolean featured) {
-            SimProduct product = products.get(productId);
-            if (product == null) {
-                throw new NoSuchElementException("Product not found with id: " + productId);
-            }
-
-            if (featured) {
-                long currentCount = products.values().stream()
-                        .filter(p -> p.isFeatured)
-                        .count();
-                if (currentCount >= FEATURED_CAP) {
-                    throw new IllegalStateException("Featured limit of 50 reached.");
-                }
-                product.isFeatured = true;
-            } else {
-                product.isFeatured = false;
-            }
-
-            return new SetFeaturedResult(productId.toString(), product.isFeatured);
-        }
-
-        /**
-         * Returns all products where isFeatured = true, ordered by name ascending.
-         * Mirrors getFeaturedProductsForAdmin behavior.
-         */
-        List<SimProduct> getFeaturedProducts() {
-            return products.values().stream()
-                    .filter(p -> p.isFeatured)
-                    .sorted(Comparator.comparing(p -> p.name))
-                    .toList();
-        }
-
-        boolean isProductFeatured(UUID productId) {
-            SimProduct product = products.get(productId);
-            return product != null && product.isFeatured;
-        }
     }
 
-    private record SetFeaturedResult(String productId, boolean featured) {}
-
-    /**
-     * Property: For any product not featured, setFeatured(id, true) then
-     * setFeatured(id, false) leaves is_featured = false and the product
-     * absent from the featured list.
-     */
-    @Property(tries = 100)
-    void toggleRoundTripLeavesProductUnfeaturedAndAbsentFromList(
-            @ForAll("randomUUID") UUID productId,
-            @ForAll("productName") String productName,
-            @ForAll("productStatus") ProductStatusEn status,
-            @ForAll("existingFeaturedCount") int existingFeaturedCount
-    ) {
-        FeaturedProductSimulator simulator = new FeaturedProductSimulator();
-
-        // Seed existing featured products (to verify cap is not affected by round-trip)
-        for (int i = 0; i < existingFeaturedCount; i++) {
-            UUID existingId = UUID.nameUUIDFromBytes(("existing-" + i).getBytes());
-            simulator.addProduct(existingId, "Existing Product " + i, true, ProductStatusEn.ACTIVE);
-        }
-
-        // Add the target product as NOT featured
-        simulator.addProduct(productId, productName, false, status);
-
-        // Verify product starts as not featured
-        assertFalse(simulator.isProductFeatured(productId),
-                "Product should start as NOT featured");
-
-        // Step 1: setFeatured(id, true) — should succeed (cap not reached)
-        SetFeaturedResult featureResult = simulator.setFeatured(productId, true);
-        assertTrue(featureResult.featured(),
-                "setFeatured(id, true) should return featured = true");
-        assertTrue(simulator.isProductFeatured(productId),
-                "Product should be featured after setFeatured(id, true)");
-
-        // Step 2: setFeatured(id, false) — completes the round-trip
-        SetFeaturedResult unfeatureResult = simulator.setFeatured(productId, false);
-        assertFalse(unfeatureResult.featured(),
-                "setFeatured(id, false) should return featured = false");
-
-        // Assert: is_featured = false after round-trip
-        assertFalse(simulator.isProductFeatured(productId),
-                "Product's is_featured must be false after toggle round-trip");
-
-        // Assert: product is absent from the featured list
-        List<FeaturedProductSimulator.SimProduct> featuredList = simulator.getFeaturedProducts();
-        boolean productInList = featuredList.stream()
-                .anyMatch(p -> p.id.equals(productId));
-        assertFalse(productInList,
-                "Product must NOT appear in the featured list after toggle round-trip");
-
-        // Assert: existing featured products are unaffected
-        long featuredCount = featuredList.size();
-        assertEquals(existingFeaturedCount, (int) featuredCount,
-                "Existing featured products should remain unchanged after round-trip");
-    }
-
-    // ── Generators ──────────────────────────────────────────────────────────────
-
-    @Provide
-    Arbitrary<UUID> randomUUID() {
-        return Combinators.combine(
-                Arbitraries.longs(),
-                Arbitraries.longs()
-        ).as(UUID::new);
-    }
-
-    @Provide
-    Arbitrary<String> productName() {
-        return Arbitraries.strings()
-                .alpha()
-                .ofMinLength(1)
-                .ofMaxLength(50);
-    }
-
-    @Provide
-    Arbitrary<ProductStatusEn> productStatus() {
-        return Arbitraries.of(ProductStatusEn.ACTIVE, ProductStatusEn.PENDING, ProductStatusEn.DISABLED);
-    }
-
-    @Provide
-    Arbitrary<Integer> existingFeaturedCount() {
-        // 0 to 49 — must leave room for the round-trip product to be featured
-        return Arbitraries.integers().between(0, 49);
+    private ProductEntity product(UUID id, String name, ProductStatusEn status) {
+        ProductEntity product = new ProductEntity();
+        product.id = id;
+        product.name = name;
+        product.slug = "p-" + id;
+        product.status = status;
+        product.isFeatured = false;
+        return product;
     }
 }
