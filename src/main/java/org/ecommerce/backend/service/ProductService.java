@@ -125,10 +125,10 @@ public class ProductService
     }
 
     @Transactional(value = TxType.SUPPORTS)
-    public List<ProductShoppingListItemDto> getShoppingProducts(PageRequest pageRequest, FilterRequest filterRequest, boolean ignoreStatus)
+    public List<ProductShoppingListItemDto> getShoppingProducts(PageRequest pageRequest, FilterRequest filterRequest, boolean onSale, boolean ignoreStatus)
     {
         FilterRequest effectiveFilterRequest = applyActiveProductStatusFilter(filterRequest, ignoreStatus);
-        return productRepository.findShoppingProductList(pageRequest, effectiveFilterRequest, ignoreStatus);
+        return productRepository.findShoppingProductList(pageRequest, effectiveFilterRequest, onSale, ignoreStatus);
     }
 
     @Transactional(value = TxType.SUPPORTS)
@@ -371,10 +371,10 @@ public class ProductService
     }
 
     @Transactional(value = TxType.SUPPORTS)
-    public long countShoppingProducts(FilterRequest filterRequest, boolean ignoreStatus)
+    public long countShoppingProducts(FilterRequest filterRequest, boolean onSale, boolean ignoreStatus)
     {
         FilterRequest effectiveFilterRequest = applyActiveProductStatusFilter(filterRequest, ignoreStatus);
-        return productRepository.countShoppingProducts(effectiveFilterRequest, ignoreStatus);
+        return productRepository.countShoppingProducts(effectiveFilterRequest, onSale, ignoreStatus);
     }
 
     private FilterRequest applyActiveProductStatusFilter(FilterRequest filterRequest, boolean ignoreStatus)

@@ -112,6 +112,7 @@ public class ProductResource
             @Name("pageSize") @DefaultValue("20") int pageSize,
             @Name("filterRequest") FilterRequest filterRequest,
             @Name("categoryId") @Description("Optional main category UUID. If omitted or ALL, returns products across all categories.") String categoryId,
+            @Name("onSale") @DefaultValue("false") boolean onSale,
             @Name("ignoreStatus") @DefaultValue("false") @Description("When true, skips the default ACTIVE product and variant status restriction.") boolean ignoreStatus,
             @Name("includeSubCategories") @DefaultValue("true") @Description("When true, includes products linked to the selected category and all descendant categories. When false, only products linked directly to the selected category are returned.") boolean includeSubCategories)
     {
@@ -151,8 +152,8 @@ public class ProductResource
         pageRequest.setPageIndex(pageIndex);
         pageRequest.setPageSize(effectivePageSize);
 
-        List<ProductShoppingListItemDto> content = productService.getShoppingProducts(pageRequest, resolvedFilterRequest, ignoreStatus);
-        long totalElements = productService.countShoppingProducts(resolvedFilterRequest, ignoreStatus);
+        List<ProductShoppingListItemDto> content = productService.getShoppingProducts(pageRequest, resolvedFilterRequest, onSale, ignoreStatus);
+        long totalElements = productService.countShoppingProducts(resolvedFilterRequest, onSale, ignoreStatus);
         int totalPages = (int) Math.ceil((double) totalElements / effectivePageSize);
 
         return new PageResponse<>(content, totalElements, totalPages, pageIndex, effectivePageSize);
@@ -260,7 +261,7 @@ public class ProductResource
                 || (brandId != null && !brandId.isBlank());
 
         return isScoped
-                ? productService.countShoppingProducts(resolvedFilterRequest, ignoreStatus)
+                ? productService.countShoppingProducts(resolvedFilterRequest, false, ignoreStatus)
                 : productService.productCount(resolvedFilterRequest, ignoreStatus);
     }
 
