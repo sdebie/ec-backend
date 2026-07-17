@@ -1,4 +1,4 @@
-package org.ecommerce.backend.service;
+package org.ecommerce.backend.mapper;
 
 import org.ecommerce.common.dto.ProductUploadBatchDto;
 import org.ecommerce.common.entity.ProductPriceUploadBatchEntity;
@@ -87,4 +87,3 @@ public final class UploadBatchDtoMapper
         return dto;
     }
 }
-

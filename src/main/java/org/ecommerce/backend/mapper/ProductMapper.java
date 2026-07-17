@@ -13,6 +13,8 @@ import org.ecommerce.common.entity.ProductImageEntity;
 import org.ecommerce.common.entity.ProductVariantEntity;
 import org.ecommerce.common.entity.VariantPricesEntity;
 import org.ecommerce.common.enums.PriceTypeEn;
+import org.ecommerce.common.enums.ProductStatusEn;
+import org.ecommerce.common.enums.ProductTypeEn;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 
@@ -77,6 +79,28 @@ public interface ProductMapper
     @Mapping(target = "brand", source = "brand")
     @Mapping(target = "variants", ignore = true)
     ProductDto mapProductEntityToDto(ProductEntity entity);
+
+    // ── ProductDto → ProductEntity scalar copy (create vs patch) ──────────────
+
+    /** Copy scalar fields for a NEW product, applying SIMPLE/ACTIVE defaults. */
+    default void applyCreatableFields(ProductDto src, ProductEntity target) {
+        target.name = src.name;
+        target.slug = src.slug;
+        target.description = src.description;
+        target.shorDescription = src.shortDescription;
+        target.productType = src.productType != null ? ProductTypeEn.valueOf(src.productType) : ProductTypeEn.SIMPLE;
+        target.status = src.status != null ? ProductStatusEn.valueOf(src.status) : ProductStatusEn.ACTIVE;
+    }
+
+    /** Patch scalar fields on an EXISTING product — only non-blank values are applied. */
+    default void applyEditableFields(ProductDto src, ProductEntity target) {
+        if (src.name != null && !src.name.isBlank()) target.name = src.name;
+        if (src.slug != null && !src.slug.isBlank()) target.slug = src.slug;
+        if (src.description != null && !src.description.isBlank()) target.description = src.description;
+        if (src.shortDescription != null && !src.shortDescription.isBlank()) target.shorDescription = src.shortDescription;
+        if (src.productType != null && !src.productType.isBlank()) target.productType = ProductTypeEn.valueOf(src.productType);
+        if (src.status != null && !src.status.isBlank()) target.status = ProductStatusEn.valueOf(src.status);
+    }
 
     // ── Composite: product + variants → ProductInformationDto ─────────────
 

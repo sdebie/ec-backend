@@ -5,6 +5,7 @@ import io.quarkus.hibernate.orm.panache.PanacheQuery;
 import io.quarkus.panache.mock.PanacheMock;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
+import org.ecommerce.backend.mapper.ProductImportValidator;
 import org.ecommerce.common.entity.*;
 import org.ecommerce.common.enums.ProductImportValidationStatusEn;
 import org.ecommerce.common.enums.ProductUploadStatusEn;
@@ -14,7 +15,6 @@ import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
-import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Optional;
@@ -32,6 +32,9 @@ class ProductImportServiceTest {
 
     @Inject
     ProductImportService productImportService;
+
+    @Inject
+    ProductImportValidator productImportValidator;
 
     @BeforeEach
     void setUp() {
@@ -240,13 +243,7 @@ class ProductImportServiceTest {
         validationErrors.add("Unknown category: apparel");
         validationErrors.add("Unknown brand: nike");
 
-        Method applyValidationResults = ProductImportService.class.getDeclaredMethod(
-                "applyValidationResults",
-                ProductUploadStagedEntity.class,
-                java.util.List.class
-        );
-        applyValidationResults.setAccessible(true);
-        applyValidationResults.invoke(productImportService, staged, validationErrors);
+        productImportValidator.applyValidationResults(staged, validationErrors);
 
         assertEquals(ProductImportValidationStatusEn.INVALID, staged.validationStatus);
         assertEquals("Unknown category: apparel; Unknown brand: nike", staged.validationErrors);
@@ -260,16 +257,6 @@ class ProductImportServiceTest {
             String imagesValue,
             String attributesJson
     ) throws Exception {
-        Method validateAndDiff = ProductImportService.class.getDeclaredMethod(
-                "validateAndDiff",
-                ProductUploadStagedEntity.class,
-                java.util.List.class,
-                Integer.class,
-                String.class,
-                String.class,
-                String.class
-        );
-        validateAndDiff.setAccessible(true);
-        validateAndDiff.invoke(productImportService, staged, validationErrors, stock, brandSlug, imagesValue, attributesJson);
+        productImportValidator.validateAndDiff(staged, validationErrors, stock, brandSlug, imagesValue, attributesJson);
     }
 }

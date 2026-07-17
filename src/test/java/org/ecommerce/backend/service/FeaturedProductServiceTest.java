@@ -17,6 +17,7 @@ import org.ecommerce.common.entity.ProductEntity;
 import org.ecommerce.common.entity.ProductVariantEntity;
 import org.ecommerce.common.entity.ProductImageEntity;
 import org.ecommerce.common.entity.VariantPricesEntity;
+import org.ecommerce.backend.exception.FeaturedCapExceededException;
 import org.ecommerce.common.enums.ProductStatusEn;
 import org.ecommerce.common.repository.CategoryRepository;
 import org.ecommerce.common.repository.ProductRepository;
@@ -48,9 +49,35 @@ class FeaturedProductServiceTest {
     @InjectMock
     CategoryRepository categoryRepository;
 
+    @InjectMock
+    org.ecommerce.backend.assembler.ProductListItemAssembler productListItemAssembler;
+
     @BeforeEach
     void setUp() {
         PanacheMock.mock(ProductEntity.class);
+
+        // List-item DTO assembly now lives in ProductRepository (data layer) and is
+        // tested there (ProductListItemMappingCharacterizationIT / DedupProofIT). These
+        // service unit tests only verify delegation + ordering, so stub the build
+        // methods to echo id/name/status from the passed entity.
+        lenient().when(productListItemAssembler.buildAdminListItem(any(ProductEntity.class), any()))
+                .thenAnswer(inv -> {
+                    ProductEntity p = inv.getArgument(0);
+                    AdminProductListItemDto dto = new AdminProductListItemDto();
+                    dto.id = p.id == null ? null : p.id.toString();
+                    dto.name = p.name;
+                    dto.status = p.status == null ? null : p.status.name();
+                    return dto;
+                });
+        lenient().when(productListItemAssembler.buildShoppingListItem(any(ProductEntity.class), any(), anyBoolean()))
+                .thenAnswer(inv -> {
+                    ProductEntity p = inv.getArgument(0);
+                    ProductShoppingListItemDto dto = new ProductShoppingListItemDto();
+                    dto.id = p.id == null ? null : p.id.toString();
+                    dto.name = p.name;
+                    dto.status = p.status == null ? null : p.status.name();
+                    return dto;
+                });
     }
 
     // ── setFeatured: happy path ─────────────────────────────────────────────

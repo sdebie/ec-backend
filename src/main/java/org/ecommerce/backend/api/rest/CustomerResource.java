@@ -6,6 +6,8 @@ import jakarta.transaction.Transactional;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
+import org.ecommerce.backend.exception.InvalidPasswordResetCodeException;
+import org.ecommerce.backend.exception.PasswordResetLockedException;
 import org.ecommerce.backend.service.CustomerAuthService;
 import org.ecommerce.backend.service.CustomerPasswordResetService;
 import org.ecommerce.backend.service.CustomerPortalService;
@@ -115,11 +117,11 @@ public class CustomerResource {
         try {
             customerPasswordResetService.verifyPasswordResetCode(req.email, req.code, resolveClientIp(xForwardedFor, xRealIp));
             return Response.ok("Code verified.").build();
-        } catch (CustomerPasswordResetService.PasswordResetLockedException ex) {
+        } catch (PasswordResetLockedException ex) {
             return Response.status(Response.Status.TOO_MANY_REQUESTS)
                     .entity("Too many incorrect attempts. Locked for 15 minutes.")
                     .build();
-        } catch (CustomerPasswordResetService.InvalidPasswordResetCodeException ex) {
+        } catch (InvalidPasswordResetCodeException ex) {
             return Response.status(Response.Status.BAD_REQUEST).entity("Invalid or expired reset code").build();
         }
     }
@@ -150,11 +152,11 @@ public class CustomerResource {
                     resolveClientIp(xForwardedFor, xRealIp)
             );
             return Response.ok("Password reset complete.").build();
-        } catch (CustomerPasswordResetService.PasswordResetLockedException ex) {
+        } catch (PasswordResetLockedException ex) {
             return Response.status(Response.Status.TOO_MANY_REQUESTS)
                     .entity("Too many incorrect attempts. Locked for 15 minutes.")
                     .build();
-        } catch (CustomerPasswordResetService.InvalidPasswordResetCodeException ex) {
+        } catch (InvalidPasswordResetCodeException ex) {
             return Response.status(Response.Status.BAD_REQUEST).entity("Invalid or expired reset code").build();
         } catch (IllegalArgumentException ex) {
             return Response.status(Response.Status.BAD_REQUEST).entity(ex.getMessage()).build();

@@ -1,25 +1,20 @@
 package org.ecommerce.backend.service;
 
-import io.quarkus.mailer.MailTemplate;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import org.eclipse.microprofile.graphql.GraphQLException;
 import org.ecommerce.backend.exception.UnavailableVariantsException;
-import org.ecommerce.common.dto.CustomerDetailDto;
 import org.ecommerce.common.dto.CustomerDto;
-import org.ecommerce.common.dto.ImageDetailDto;
 import org.ecommerce.common.dto.OrderCheckoutLineDto;
 import org.ecommerce.common.dto.OrderCheckoutResponseDto;
 import org.ecommerce.common.dto.OrderCreationItemDto;
 import org.ecommerce.common.dto.OrderCreationRequestDto;
 import org.ecommerce.common.dto.OrderDetailRespDto;
 import org.ecommerce.common.dto.OrderDto;
-import org.ecommerce.common.dto.OrderItemDetailDto;
 import org.ecommerce.common.dto.OrderItemDto;
 import org.ecommerce.common.dto.OrderResponseDto;
-import org.ecommerce.common.dto.ProductDetailDto;
-import org.ecommerce.common.dto.ProductVariantDetailDto;
+import org.ecommerce.common.dto.OrderSummaryDto;
 import org.ecommerce.common.entity.*;
 import org.ecommerce.common.enums.CustomerTypeEn;
 import org.ecommerce.common.enums.OrderStatusEn;
@@ -31,18 +26,16 @@ import org.ecommerce.common.repository.OrderRepository;
 import org.ecommerce.backend.mapper.OrderMapper;
 
 import java.math.BigDecimal;
-import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.stream.Collectors;
 
-import org.ecommerce.common.dto.OrderSummaryDto;
 import org.jboss.logging.Logger;
 
 @ApplicationScoped
 public class OrderService
 {
     @Inject
-    MailTemplate order_confirmation;
+    OrderNotificationService orderNotificationService;
 
     @Inject
     OrderRepository orderRepository;
@@ -180,7 +173,7 @@ public class OrderService
         OrderEntity order = orderRepository.findLatestOrderInfoBySessionId(session);
         boolean isNew = false;
         if (order == null) {
-            System.out.println("DEBUG: Creating new Order for sessionId=" + session);
+            LOG.debugf("Creating new order for sessionId=%s", session);
             order = new OrderEntity();
             order.sessionId = session;
             isNew = true;
@@ -290,7 +283,7 @@ public class OrderService
     {
         try {
             UUID sid = UUID.fromString(sessionId);
-            System.out.println("DEBUG: getLatestOrderBySessionId for sessionId=" + sid);
+            LOG.debugf("getLatestOrderBySessionId for sessionId=%s", sid);
             return orderRepository.findLatestOrderInfoBySessionId(sid);
         } catch (Exception e) {
             return null;
@@ -307,13 +300,13 @@ public class OrderService
             throw new GraphQLException("customer email is required");
         }
 
-        System.out.println("DEBUG: Updating customer info for sessionId=" + sessionId + " email=" + customerDto.getEmail());
+        LOG.debugf("Updating customer info for sessionId=%s email=%s", sessionId, customerDto.getEmail());
         OrderEntity order = findLatestOrderEntityBySessionId(sessionId);
         if (order == null) {
             throw new GraphQLException("Order not found for sessionId");
         }
 
-        System.out.println("DEBUG: Found Order with Items=" + order.items);
+        LOG.debugf("Found order with items=%s", order.items);
 
         String email = customerDto.getEmail().trim();
         CustomerEntity customer = CustomerEntity.findByEmail(email);
@@ -333,13 +326,10 @@ public class OrderService
         }
 
         order.customerEntity = customer;
-        System.out.println("DEBUG: Updating Order with customer info=" + order.customerEntity.id);
+        LOG.debugf("Updated order %s with customer %s", order.id, order.customerEntity.id);
         // no explicit persist needed; managed entity will be updated on commit
 
-        // Return only customer information (currently email)
-        CustomerDto result = new CustomerDto();
-        result.setEmail(customer.user != null ? customer.user.email : null);
-        return result;
+        return orderMapper.toCustomerDto(customer);
     }
 
     @Transactional
@@ -351,7 +341,7 @@ public class OrderService
         if (newStatus == null || newStatus.isBlank()) {
             throw new GraphQLException("status is required");
         }
-        System.out.println("DEBUG: Updating order status for sessionId=" + sessionId + " to status=" + newStatus);
+        LOG.debugf("Updating order status for sessionId=%s to status=%s", sessionId, newStatus);
         OrderEntity order = findLatestOrderEntityBySessionId(sessionId);
         if (order == null) {
             throw new GraphQLException("Order not found for sessionId");
@@ -376,26 +366,9 @@ public class OrderService
 
         //Order Created In store Payment
         if (order.status.equals(OrderStatusEn.IN_STORE_PAYMENT)) {
-            sendConfirmationEmail(order);
+            orderNotificationService.sendConfirmationEmail(order);
         }
         return orderMapper.toResponseDto(order);
-    }
-
-    public void sendConfirmationEmail(OrderEntity order)
-    {
-        String firstName = (order.customerEntity.firstName != null && !order.customerEntity.firstName.isBlank()) ? order.customerEntity.firstName : "Guest";
-        String customerEmail = order.customerEntity.user != null ? order.customerEntity.user.email : null;
-        order_confirmation.to(customerEmail)
-                .from("shawn.debie@gmail.com")
-                .subject("Your Order #" + order.id)
-                .data("order", order)
-                .data("orderItems", order.items)
-                .data("customerName", firstName)
-                .send()
-                .subscribe().with(
-                        success -> LOG.info("Order email sent!"),
-                        failure -> LOG.error("Order email failed", failure)
-                );
     }
 
     public List<OrderResponseDto> getAllOrders(PageRequest pageRequest, FilterRequest filterRequest)
@@ -419,89 +392,7 @@ public class OrderService
             return null;
         }
 
-        OrderDetailRespDto detail = new OrderDetailRespDto();
-
-        // Map all OrderEntity fields
-        detail.id = order.id;
-        // Populate the CustomerDetailDto
-        if (order.customerEntity != null && order.customerEntity.user != null) {
-            CustomerDetailDto customerDetail = new CustomerDetailDto();
-            customerDetail.email = order.customerEntity.user.email;
-            detail.customerEntity = customerDetail;
-        }
-        detail.totalAmount = order.totalAmount;
-        detail.sessionId = order.sessionId;
-        detail.status = order.status;
-        detail.shippingPhone = null; // Legacy field — no longer on OrderEntity
-        detail.shippingAddressLine1 = order.streetAddress;
-        detail.shippingAddressLine2 = null; // Legacy field — merged into streetAddress
-        detail.shippingCity = order.city;
-        detail.shippingProvince = order.province;
-        detail.shippingPostalCode = order.postalCode;
-        detail.createdAt = order.createdAt;
-
-        // Populate items
-        if (order.items != null) {
-            detail.items = new ArrayList<>();
-            for (OrderItemEntity orderItemEntity : order.items) {
-                OrderItemDetailDto itemDetailDto = new OrderItemDetailDto();
-                itemDetailDto.id = orderItemEntity.id;
-                itemDetailDto.unitPrice = orderItemEntity.unitPrice;
-                itemDetailDto.quantity = orderItemEntity.quantity;
-
-                if (orderItemEntity.variant != null) {
-                    ProductVariantDetailDto variantDetailDto = new ProductVariantDetailDto();
-                    variantDetailDto.id = orderItemEntity.variant.id;
-                    variantDetailDto.stockQuantity = orderItemEntity.variant.stockQuantity;
-                    variantDetailDto.attributesJson = orderItemEntity.variant.attributesJson;
-                    variantDetailDto.weightKg = orderItemEntity.variant.weightKg;
-
-                    if (orderItemEntity.variant.product != null) {
-                        ProductDetailDto productDetailDto = new ProductDetailDto();
-                        productDetailDto.name = orderItemEntity.variant.product.name;
-                        variantDetailDto.product = productDetailDto;
-                    }
-
-                    if (orderItemEntity.variant.images != null) {
-                        List<ImageDetailDto> imageDetailDtos = new ArrayList<>();
-                        for (ProductImageEntity imageEntity : orderItemEntity.variant.images) {
-                            ImageDetailDto imageDetailDto = new ImageDetailDto();
-                            imageDetailDto.id = imageEntity.id;
-                            imageDetailDto.imageUrl = imageEntity.imageUrl;
-                            imageDetailDto.sortOrder = imageEntity.sortOrder;
-                            imageDetailDtos.add(imageDetailDto);
-                        }
-                        variantDetailDto.images = imageDetailDtos;
-                    }
-                    itemDetailDto.variant = variantDetailDto;
-                }
-                detail.items.add(itemDetailDto);
-            }
-        }
-
-        // Map all OrderStatusHistoryEntity fields
-        List<OrderStatusHistoryEntity> histories = OrderStatusHistoryEntity
-                .find("select h from OrderStatusHistoryEntity h where h.order.id = ?1 order by h.createdAt desc", orderId)
-                .list();
-
-        if (histories != null) {
-            for (OrderStatusHistoryEntity history : histories) {
-                if (history == null) {
-                    continue;
-                }
-                OrderDetailRespDto.OrderStatusHistoryDetailRespDto historyDto =
-                        new OrderDetailRespDto.OrderStatusHistoryDetailRespDto();
-                historyDto.id = history.id;
-                historyDto.order = history.order;
-                historyDto.status = history.status;
-                historyDto.comment = history.comment;
-                historyDto.changedBy = history.changedBy;
-                historyDto.createdAt = history.createdAt;
-                detail.statusHistory.add(historyDto);
-            }
-        }
-
-        return detail;
+        return orderMapper.toDetailDto(order);
     }
 
     public List<OrderSummaryDto> getMyOrders(UUID customerId) {
@@ -509,23 +400,9 @@ public class OrderService
                 .find("customerEntity.id = ?1 order by createdAt desc", customerId)
                 .list();
 
-        return orders.stream().map(order -> {
-            OrderSummaryDto dto = new OrderSummaryDto();
-            dto.id = order.id.toString();
-            dto.orderDate = order.createdAt != null
-                    ? order.createdAt.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
-                    : null;
-            dto.status = order.status != null ? order.status.name() : null;
-            dto.itemCount = order.items != null
-                    ? order.items.stream()
-                        .mapToInt(item -> item.quantity != null ? item.quantity : 0)
-                        .sum()
-                    : 0;
-            dto.totalAmount = order.totalAmount != null
-                    ? order.totalAmount.doubleValue()
-                    : 0.0;
-            return dto;
-        }).collect(Collectors.toList());
+        return orders.stream()
+                .map(orderMapper::toSummaryDto)
+                .collect(Collectors.toList());
     }
 
 }

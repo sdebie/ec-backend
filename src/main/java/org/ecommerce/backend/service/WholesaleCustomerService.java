@@ -4,6 +4,7 @@ import io.quarkus.mailer.MailTemplate;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
+import org.ecommerce.backend.mapper.WholesaleMapper;
 import org.ecommerce.common.dto.WholesaleApplicationDetailsDto;
 import org.ecommerce.common.dto.WholesaleApplicationListItemDto;
 import org.ecommerce.common.dto.WholesaleCustomerDto;
@@ -36,6 +37,9 @@ public class WholesaleCustomerService {
     @Inject
     WholesaleApplicationRepository wholesaleApplicationRepository;
 
+    @Inject
+    WholesaleMapper wholesaleMapper;
+
     private static final Logger LOG = Logger.getLogger(WholesaleCustomerService.class);
 
     public List<WholesaleApplicationListItemDto> getWholesaleApplications(PageRequest pageRequest, FilterRequest filterRequest) {
@@ -58,7 +62,7 @@ public class WholesaleCustomerService {
             throw new IllegalArgumentException("wholesale application not found: " + id);
         }
 
-        return toDetailsDto(application);
+        return wholesaleMapper.toDetailsDto(application);
     }
 
     @Transactional
@@ -186,7 +190,7 @@ public class WholesaleCustomerService {
         application.postalPostalCode = normalizeText(customerDto.getPostalPostalCode());
 
         WholesaleApplicationEntity.persist(application);
-        return toDto(application);
+        return wholesaleMapper.toDto(application);
     }
 
     @Transactional
@@ -300,7 +304,7 @@ public class WholesaleCustomerService {
 
         sendApprovalEmail(application);
 
-        return toDetailsDto(application);
+        return wholesaleMapper.toDetailsDto(application);
     }
 
     @Transactional
@@ -324,7 +328,7 @@ public class WholesaleCustomerService {
 
         sendRejectionEmail(application);
 
-        return toDetailsDto(application);
+        return wholesaleMapper.toDetailsDto(application);
     }
 
     // ── Private helpers ──────────────────────────────────────────────────────
@@ -475,38 +479,6 @@ public class WholesaleCustomerService {
         return dto;
     }
 
-    private WholesaleCustomerDto toDto(WholesaleApplicationEntity application) {
-        WholesaleCustomerDto dto = new WholesaleCustomerDto();
-        dto.setId(application.id);
-        dto.setEmail(application.accountEmail);
-        dto.setFirstName(application.firstName);
-        dto.setLastName(application.lastName);
-        dto.setPhone(application.phone);
-
-        dto.setPhysicalAddressLine1(application.physicalAddressLine1);
-        dto.setPhysicalAddressLine2(application.physicalAddressLine2);
-        dto.setPhysicalSuburb(application.physicalSuburb);
-        dto.setPhysicalCity(application.physicalCity);
-        dto.setPhysicalProvince(application.physicalProvince);
-        dto.setPhysicalPostalCode(application.physicalPostalCode);
-
-        dto.setPostalAddressLine1(application.postalAddressLine1);
-        dto.setPostalAddressLine2(application.postalAddressLine2);
-        dto.setPostalSuburb(application.postalSuburb);
-        dto.setPostalCity(application.postalCity);
-        dto.setPostalProvince(application.postalProvince);
-        dto.setPostalPostalCode(application.postalPostalCode);
-
-        dto.setCompanyName(application.companyName);
-        dto.setVatNumber(application.vatNumber);
-        dto.setRegNumber(application.regNumber);
-        dto.setNotes(application.notes);
-        if (application.status != null) {
-            dto.setStatus(WholesaleCustomerStatusEn.valueOf(application.status.name()));
-        }
-        return dto;
-    }
-
     private WholesaleApplicationListItemDto toListItemDto(WholesaleApplicationEntity application) {
         WholesaleApplicationListItemDto dto = new WholesaleApplicationListItemDto();
         dto.setId(application.id);
@@ -515,47 +487,6 @@ public class WholesaleCustomerService {
         dto.setFirstName(application.firstName);
         dto.setLastName(application.lastName);
         dto.setEmail(application.accountEmail);
-        return dto;
-    }
-
-    private WholesaleApplicationDetailsDto toDetailsDto(WholesaleApplicationEntity application) {
-        WholesaleApplicationDetailsDto dto = new WholesaleApplicationDetailsDto();
-        dto.setId(application.id);
-        dto.setEmail(application.accountEmail);
-        dto.setApplicantEmail(application.applicantEmail);
-        dto.setFirstName(application.firstName);
-        dto.setLastName(application.lastName);
-        dto.setPhone(application.phone);
-
-        dto.setPhysicalAddressLine1(application.physicalAddressLine1);
-        dto.setPhysicalAddressLine2(application.physicalAddressLine2);
-        dto.setPhysicalSuburb(application.physicalSuburb);
-        dto.setPhysicalCity(application.physicalCity);
-        dto.setPhysicalProvince(application.physicalProvince);
-        dto.setPhysicalPostalCode(application.physicalPostalCode);
-
-        dto.setPostalAddressLine1(application.postalAddressLine1);
-        dto.setPostalAddressLine2(application.postalAddressLine2);
-        dto.setPostalSuburb(application.postalSuburb);
-        dto.setPostalCity(application.postalCity);
-        dto.setPostalProvince(application.postalProvince);
-        dto.setPostalPostalCode(application.postalPostalCode);
-
-        dto.setCompanyName(application.companyName);
-        dto.setTradingName(application.tradingName);
-        dto.setCompanyPhone(application.companyPhone);
-        dto.setCompanyEmail(application.companyEmail);
-        dto.setVatNumber(application.vatNumber);
-        dto.setRegNumber(application.regNumber);
-        dto.setFinanceContactName(application.financeContactName);
-        dto.setFinanceContactEmail(application.financeContactEmail);
-        dto.setFinanceContactPhone(application.financeContactPhone);
-        dto.setPurchaseOrderRequired(application.purchaseOrderRequired);
-        dto.setNotes(application.notes);
-        dto.setStatus(application.status);
-        dto.setCreatedAt(application.createdAt);
-        dto.setProcessedAt(application.processedAt);
-        dto.setCustomerId(application.customer != null ? application.customer.id : null);
         return dto;
     }
 

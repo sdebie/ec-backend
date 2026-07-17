@@ -12,6 +12,7 @@ import org.ecommerce.common.enums.OrderStatusEn;
 import org.ecommerce.common.entity.OrderEntity;
 import org.ecommerce.common.entity.PaymentLogEntity;
 import org.ecommerce.backend.service.OrderService;
+import org.ecommerce.backend.service.OrderNotificationService;
 import org.ecommerce.backend.service.payfast.PayFastService;
 import org.jboss.logging.Logger;
 
@@ -32,6 +33,9 @@ public class PayFastResource
 
     @Inject
     OrderService orderService;
+
+    @Inject
+    OrderNotificationService orderNotificationService;
 
     @ConfigProperty(name = "payfast.gateway.url")
     String gatewayUrl;
@@ -140,7 +144,7 @@ public class PayFastResource
                     order.persist();
                     LOG.debug("Updated Order " + orderId + " to PAID (entity update)");
 
-                    orderService.sendConfirmationEmail(order);
+                    orderNotificationService.sendConfirmationEmail(order);
                 } else {
                     LOG.warn("Order not found for m_payment_id=" + orderId + "; no update performed");
                 }

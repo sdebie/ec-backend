@@ -32,6 +32,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -43,6 +45,9 @@ class ProductServiceTest
 
     @InjectMock
     ProductRepository productRepository;
+
+    @InjectMock
+    org.ecommerce.backend.assembler.ProductListItemAssembler productListItemAssembler;
 
     @InjectMock
     ProductVariantRepository productVariantRepository;
@@ -130,15 +135,21 @@ class ProductServiceTest
     void getProductsOnSale_shouldReturnShoppingProductCardsFromRepository()
     {
         PageRequest pageRequest = new PageRequest();
-        ProductShoppingListItemDto first = new ProductShoppingListItemDto();
-        first.id = UUID.randomUUID().toString();
-        first.name = "Promo Lamp";
+        ProductEntity p1 = new ProductEntity();
+        p1.id = UUID.randomUUID();
+        p1.name = "Promo Lamp";
+        ProductEntity p2 = new ProductEntity();
+        p2.id = UUID.randomUUID();
+        p2.name = "Promo Chair";
 
+        ProductShoppingListItemDto first = new ProductShoppingListItemDto();
+        first.name = "Promo Lamp";
         ProductShoppingListItemDto second = new ProductShoppingListItemDto();
-        second.id = UUID.randomUUID().toString();
         second.name = "Promo Chair";
 
-        when(productRepository.findOnSaleShoppingProductList(pageRequest, false)).thenReturn(List.of(first, second));
+        when(productRepository.findOnSaleProductEntities(pageRequest, false)).thenReturn(List.of(p1, p2));
+        when(productListItemAssembler.buildShoppingListItem(eq(p1), any(), eq(false))).thenReturn(first);
+        when(productListItemAssembler.buildShoppingListItem(eq(p2), any(), eq(false))).thenReturn(second);
 
         List<ProductShoppingListItemDto> result = productService.getProductsOnSale(pageRequest, false);
 
@@ -146,7 +157,7 @@ class ProductServiceTest
         assertSame(first, result.get(0));
         assertSame(second, result.get(1));
 
-        verify(productRepository).findOnSaleShoppingProductList(pageRequest, false);
+        verify(productRepository).findOnSaleProductEntities(pageRequest, false);
     }
 
     @Test

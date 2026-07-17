@@ -4,6 +4,9 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import lombok.extern.slf4j.Slf4j;
+import org.ecommerce.backend.exception.InvalidPasswordResetCodeException;
+import org.ecommerce.backend.exception.PasswordResetLockedException;
+import org.ecommerce.backend.utils.PasswordHashUtil;
 import org.ecommerce.common.entity.CustomerEntity;
 import org.ecommerce.common.entity.UserEntity;
 import org.ecommerce.common.enums.CustomerStatusEn;
@@ -13,7 +16,6 @@ import java.time.OffsetDateTime;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
-import org.ecommerce.backend.utils.PasswordHashUtil;
 
 @Slf4j
 @ApplicationScoped
@@ -29,25 +31,6 @@ public class CustomerPasswordResetService {
 
     @Inject
     PasswordResetNotificationService passwordResetNotificationService;
-
-    public static class InvalidPasswordResetCodeException extends RuntimeException {
-        public InvalidPasswordResetCodeException() {
-            super("Invalid or expired reset code");
-        }
-    }
-
-    public static class PasswordResetLockedException extends RuntimeException {
-        private final OffsetDateTime lockedUntil;
-
-        public PasswordResetLockedException(OffsetDateTime lockedUntil) {
-            super("Too many invalid code attempts. Try again later.");
-            this.lockedUntil = lockedUntil;
-        }
-
-        public OffsetDateTime getLockedUntil() {
-            return lockedUntil;
-        }
-    }
 
     private static class IpAttemptState {
         int failedAttempts;

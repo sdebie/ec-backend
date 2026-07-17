@@ -13,7 +13,6 @@ import org.ecommerce.common.entity.ProductImageEntity;
 import org.ecommerce.common.entity.ProductVariantEntity;
 import org.ecommerce.common.entity.CategoryEntity;
 import org.ecommerce.common.entity.VariantPricesEntity;
-import org.ecommerce.common.enums.ProductTypeEn;
 import org.ecommerce.common.enums.ProductStatusEn;
 import org.ecommerce.common.enums.PriceTypeEn;
 import org.ecommerce.common.query.Filter;
@@ -27,16 +26,11 @@ import org.ecommerce.common.repository.CategoryRepository;
 import org.ecommerce.common.repository.BrandRepository;
 import org.ecommerce.common.repository.VariantPricesRepository;
 
-import jakarta.persistence.EntityManager;
-import jakarta.persistence.TypedQuery;
 
-import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
-import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -47,6 +41,9 @@ public class ProductService
 {
     @Inject
     ProductRepository productRepository;
+
+    @Inject
+    org.ecommerce.backend.assembler.ProductListItemAssembler productListItemAssembler;
 
     @Inject
     ProductVariantRepository productVariantRepository;
@@ -65,7 +62,6 @@ public class ProductService
 
     @Inject
     ProductMapper productMapper;
-
     @Transactional(value = TxType.SUPPORTS)
     public List<ProductListItemDto> getAllProducts(PageRequest pageRequest, FilterRequest filterRequest)
     {
@@ -128,13 +124,19 @@ public class ProductService
     public List<ProductShoppingListItemDto> getShoppingProducts(PageRequest pageRequest, FilterRequest filterRequest, boolean onSale, boolean ignoreStatus)
     {
         FilterRequest effectiveFilterRequest = applyActiveProductStatusFilter(filterRequest, ignoreStatus);
-        return productRepository.findShoppingProductList(pageRequest, effectiveFilterRequest, onSale, ignoreStatus);
+        LocalDateTime now = LocalDateTime.now();
+        return productRepository.findShoppingProductEntities(pageRequest, effectiveFilterRequest, onSale, ignoreStatus).stream()
+                .map(p -> productListItemAssembler.buildShoppingListItem(p, now, ignoreStatus))
+                .toList();
     }
 
     @Transactional(value = TxType.SUPPORTS)
     public List<ProductShoppingListItemDto> getProductsOnSale(PageRequest pageRequest, boolean ignoreStatus)
     {
-        return productRepository.findOnSaleShoppingProductList(pageRequest, ignoreStatus);
+        LocalDateTime now = LocalDateTime.now();
+        return productRepository.findOnSaleProductEntities(pageRequest, ignoreStatus).stream()
+                .map(p -> productListItemAssembler.buildShoppingListItem(p, now, ignoreStatus))
+                .toList();
     }
 
     /**
@@ -152,165 +154,16 @@ public class ProductService
             String brandId,
             String search)
     {
-        int effectivePageSize = Math.min(Math.max(pageSize, 1), 100);
-        int effectivePageIndex = Math.max(pageIndex, 0);
-
-        EntityManager em = productRepository.getEntityManager();
         LocalDateTime now = LocalDateTime.now();
+        PageResponse<ProductEntity> page = productRepository.findAdminProductPage(
+                pageIndex, pageSize, status, categoryId, brandId, search);
 
-        // Build dynamic WHERE clause
-        StringBuilder whereClause = new StringBuilder("WHERE 1=1");
-        Map<String, Object> params = new LinkedHashMap<>();
-
-        if (status != null && !status.isBlank()) {
-            whereClause.append(" AND p.status = :status");
-            params.put("status", ProductStatusEn.valueOf(status));
-        }
-
-        if (categoryId != null && !categoryId.isBlank()) {
-            whereClause.append(" AND EXISTS (SELECT 1 FROM p.categories c WHERE c.id = :categoryId)");
-            params.put("categoryId", UUID.fromString(categoryId));
-        }
-
-        if (brandId != null && !brandId.isBlank()) {
-            whereClause.append(" AND p.brand.id = :brandId");
-            params.put("brandId", UUID.fromString(brandId));
-        }
-
-        if (search != null && !search.isBlank()) {
-            String searchPattern = "%" + search.trim().toLowerCase() + "%";
-            whereClause.append(" AND (LOWER(p.name) LIKE :search")
-                    .append(" OR EXISTS (SELECT 1 FROM ProductVariantEntity sv WHERE sv.product = p AND LOWER(sv.sku) LIKE :search)")
-                    .append(")");
-            params.put("search", searchPattern);
-        }
-
-        // Count query
-        String countHql = "SELECT COUNT(p) FROM ProductEntity p " + whereClause;
-        TypedQuery<Long> countQuery = em.createQuery(countHql, Long.class);
-        for (Map.Entry<String, Object> entry : params.entrySet()) {
-            countQuery.setParameter(entry.getKey(), entry.getValue());
-        }
-        long totalElements = countQuery.getSingleResult();
-        int totalPages = effectivePageSize > 0
-                ? (int) Math.ceil((double) totalElements / effectivePageSize)
-                : 0;
-
-        // Fetch products query
-        String fetchHql = "SELECT DISTINCT p FROM ProductEntity p " +
-                "LEFT JOIN FETCH p.categories " +
-                "LEFT JOIN FETCH p.brand " +
-                whereClause +
-                " ORDER BY p.name ASC";
-        TypedQuery<ProductEntity> fetchQuery = em.createQuery(fetchHql, ProductEntity.class);
-        for (Map.Entry<String, Object> entry : params.entrySet()) {
-            fetchQuery.setParameter(entry.getKey(), entry.getValue());
-        }
-        fetchQuery.setFirstResult(effectivePageIndex * effectivePageSize);
-        fetchQuery.setMaxResults(effectivePageSize);
-
-        List<ProductEntity> products = fetchQuery.getResultList();
-
-        // Map products to admin DTOs
-        List<AdminProductListItemDto> content = products.stream()
-                .map(product -> toAdminProductListItemDto(product, now))
+        List<AdminProductListItemDto> content = page.getContent().stream()
+                .map(product -> productListItemAssembler.buildAdminListItem(product, now))
                 .collect(Collectors.toList());
 
-        return new PageResponse<>(content, totalElements, totalPages, effectivePageIndex, effectivePageSize);
-    }
-
-    private AdminProductListItemDto toAdminProductListItemDto(ProductEntity product, LocalDateTime now)
-    {
-        AdminProductListItemDto dto = new AdminProductListItemDto();
-        dto.id = product.id != null ? product.id.toString() : null;
-        dto.name = product.name;
-        dto.slug = product.slug;
-        dto.status = product.status != null ? product.status.name() : null;
-
-        // Category — use first category
-        CategoryEntity cat = product.getCategory();
-        if (cat != null) {
-            CategoryDto catDto = new CategoryDto();
-            catDto.setId(cat.id);
-            catDto.setName(cat.name);
-            dto.category = catDto;
-        }
-
-        if (product.id == null) {
-            return dto;
-        }
-
-        UUID productId = product.id;
-        EntityManager em = productRepository.getEntityManager();
-
-        // Primary variant (first by id ASC) — resolve SKU and thumbnail
-        List<ProductVariantEntity> variants = em.createQuery(
-                        "SELECT v FROM ProductVariantEntity v WHERE v.product.id = :productId ORDER BY v.id ASC",
-                        ProductVariantEntity.class)
-                .setParameter("productId", productId)
-                .getResultList();
-
-        if (!variants.isEmpty()) {
-            ProductVariantEntity primaryVariant = variants.get(0);
-            dto.sku = primaryVariant.sku;
-
-            // Thumbnail from primary variant's first image
-            List<ProductImageEntity> images = em.createQuery(
-                            "SELECT pi FROM ProductImageEntity pi WHERE pi.productVariant.id = :variantId " +
-                                    "ORDER BY CASE WHEN pi.isFeatured = true THEN 0 ELSE 1 END ASC, pi.sortOrder ASC, pi.id ASC",
-                            ProductImageEntity.class)
-                    .setParameter("variantId", primaryVariant.id)
-                    .setMaxResults(1)
-                    .getResultList();
-            if (!images.isEmpty()) {
-                dto.thumbnailUrl = images.get(0).imageUrl;
-            }
-        }
-
-        // Aggregated stock count across all variants
-        Long totalStock = em.createQuery(
-                        "SELECT COALESCE(SUM(v.stockQuantity), 0) FROM ProductVariantEntity v WHERE v.product.id = :productId",
-                        Long.class)
-                .setParameter("productId", productId)
-                .getSingleResult();
-        dto.stockCount = totalStock != null ? totalStock.intValue() : 0;
-
-        // Derive stock level
-        dto.stockLevel = deriveStockLevel(dto.stockCount);
-
-        // Lowest active retail price across active variants
-        List<VariantPricesEntity> retailPrices = em.createQuery(
-                        "SELECT vp FROM VariantPricesEntity vp JOIN vp.variant v " +
-                                "WHERE v.product.id = :productId " +
-                                "AND v.status = :activeStatus " +
-                                "AND vp.priceType = :priceType " +
-                                "AND (vp.priceStartDate IS NULL OR vp.priceStartDate <= :now) " +
-                                "AND (vp.priceEndDate IS NULL OR vp.priceEndDate >= :now) " +
-                                "ORDER BY vp.price ASC",
-                        VariantPricesEntity.class)
-                .setParameter("productId", productId)
-                .setParameter("activeStatus", ProductStatusEn.ACTIVE)
-                .setParameter("priceType", PriceTypeEn.RETAIL_PRICE)
-                .setParameter("now", now)
-                .setMaxResults(1)
-                .getResultList();
-
-        if (!retailPrices.isEmpty()) {
-            dto.retailPrice = retailPrices.get(0).price.toPlainString();
-        }
-
-        return dto;
-    }
-
-    private String deriveStockLevel(int stockCount)
-    {
-        if (stockCount <= 0) {
-            return "OUT_OF_STOCK";
-        } else if (stockCount <= 10) {
-            return "LOW_STOCK";
-        } else {
-            return "IN_STOCK";
-        }
+        return new PageResponse<>(content, page.getTotalElements(), page.getTotalPages(),
+                page.getPageIndex(), page.getPageSize());
     }
 
 
@@ -413,7 +266,10 @@ public class ProductService
     @Transactional(value = TxType.SUPPORTS)
     public List<ProductShoppingListItemDto> getTopBestSellers()
     {
-        return productRepository.findTopBestSellers();
+        LocalDateTime now = LocalDateTime.now();
+        return productRepository.findTopBestSellerEntities().stream()
+                .map(p -> productListItemAssembler.buildShoppingListItem(p, now, true))
+                .toList();
     }
 
     @Transactional(value = TxType.SUPPORTS)
@@ -450,12 +306,7 @@ public class ProductService
 
         // Create new product entity
         ProductEntity product = new ProductEntity();
-        product.name = input.product.name;
-        product.slug = input.product.slug;
-        product.description = input.product.description;
-        product.shorDescription = input.product.shortDescription;
-        product.productType = input.product.productType != null ? ProductTypeEn.valueOf(input.product.productType) : ProductTypeEn.SIMPLE;
-        product.status = input.product.status != null ? ProductStatusEn.valueOf(input.product.status) : ProductStatusEn.ACTIVE;
+        productMapper.applyCreatableFields(input.product, product);
 
         // Link categories if provided
         if (input.product.categories != null && !input.product.categories.isEmpty()) {
@@ -522,26 +373,8 @@ public class ProductService
             throw new IllegalArgumentException("Product not found");
         }
 
-        // Update product information
-        if (input.product.name != null && !input.product.name.isBlank()) {
-            product.name = input.product.name;
-        }
-        if (input.product.slug != null && !input.product.slug.isBlank()) {
-            product.slug = input.product.slug;
-        }
-        if (input.product.description != null && !input.product.description.isBlank()) {
-            product.description = input.product.description;
-        }
-        if (input.product.shortDescription != null && !input.product.shortDescription.isBlank()) {
-            product.shorDescription = input.product.shortDescription;
-        }
-        if (input.product.productType != null && !input.product.productType.isBlank()) {
-            product.productType = ProductTypeEn.valueOf(input.product.productType);
-        }
-
-        if (input.product.status != null && !input.product.status.isBlank()) {
-            product.status = ProductStatusEn.valueOf(input.product.status);
-        }
+        // Update product information (patch: only non-blank scalar fields)
+        productMapper.applyEditableFields(input.product, product);
 
         // Update categories if provided
         if (input.product.categories != null && !input.product.categories.isEmpty()) {

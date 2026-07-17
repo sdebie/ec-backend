@@ -1,26 +1,21 @@
 package org.ecommerce.backend.service;
 
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
+import org.ecommerce.backend.mapper.CustomerAdminMapper;
+import org.ecommerce.common.repository.CustomerRepository;
 import org.ecommerce.common.dto.AdminCustomerDetailDto;
 import org.ecommerce.common.dto.AdminCustomerListItemDto;
-import org.ecommerce.common.dto.AdminOrderRefDto;
-import org.ecommerce.common.dto.WholesaleApplicationDetailsDto;
 import org.ecommerce.common.entity.CustomerEntity;
 import org.ecommerce.common.entity.OrderEntity;
 import org.ecommerce.common.entity.WholesaleApplicationEntity;
 import org.ecommerce.common.enums.CustomerStatusEn;
-import org.ecommerce.common.enums.CustomerTypeEn;
-import org.ecommerce.common.enums.WholesaleApplicationStatusEn;
-import org.ecommerce.common.query.Filter;
 import org.ecommerce.common.query.FilterRequest;
 import org.ecommerce.common.query.PageRequest;
 import org.jboss.logging.Logger;
 
-import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 
 @ApplicationScoped
@@ -28,22 +23,20 @@ public class CustomerAdminService {
 
     private static final Logger LOG = Logger.getLogger(CustomerAdminService.class);
 
-    public List<AdminCustomerListItemDto> allCustomers(PageRequest pageRequest, FilterRequest filterRequest) {
-        QuerySpec spec = buildQuery(filterRequest);
-        int pageIndex = pageRequest != null ? pageRequest.getPageIndex() : 0;
-        int pageSize  = pageRequest != null ? pageRequest.getPageSize()  : 10;
+    @Inject
+    CustomerAdminMapper customerAdminMapper;
 
-        List<CustomerEntity> customers = CustomerEntity.find(spec.query, spec.params)
-                .page(pageIndex, pageSize)
-                .<CustomerEntity>list();
-        return customers.stream()
-                .map(c -> toListItemDto(c))
+    @Inject
+    CustomerRepository customerRepository;
+
+    public List<AdminCustomerListItemDto> allCustomers(PageRequest pageRequest, FilterRequest filterRequest) {
+        return customerRepository.findForAdmin(filterRequest, pageRequest).stream()
+                .map(c -> customerAdminMapper.toListItemDto(c))
                 .toList();
     }
 
     public long customerCount(FilterRequest filterRequest) {
-        QuerySpec spec = buildQuery(filterRequest);
-        return CustomerEntity.count(spec.query, spec.params);
+        return customerRepository.countForAdmin(filterRequest);
     }
 
     public AdminCustomerDetailDto adminCustomer(UUID id) {
@@ -65,7 +58,7 @@ public class CustomerAdminService {
                 .page(0, 10)
                 .list();
 
-        return toDetailDto(customer, app, orders);
+        return customerAdminMapper.toDetailDto(customer, app, orders);
     }
 
     @Transactional
@@ -94,57 +87,10 @@ public class CustomerAdminService {
         customer.status = newStatus;
         customer.persist();
 
-        return toListItemDto(customer);
+        return customerAdminMapper.toListItemDto(customer);
     }
 
     // ── Private helpers ──────────────────────────────────────────────────────
-
-    private static class QuerySpec {
-        final String query;
-        final Map<String, Object> params;
-
-        QuerySpec(String query, Map<String, Object> params) {
-            this.query = query;
-            this.params = params;
-        }
-    }
-
-    private QuerySpec buildQuery(FilterRequest filterRequest) {
-        StringBuilder query = new StringBuilder("1=1");
-        Map<String, Object> params = new HashMap<>();
-
-        if (filterRequest != null && filterRequest.getFilters() != null) {
-            for (Filter f : filterRequest.getFilters()) {
-                if (f.getKey() == null || f.getValue() == null) continue;
-
-                switch (f.getKey()) {
-                    case "shopperType" -> {
-                        try {
-                            params.put("shopperType", CustomerTypeEn.valueOf(f.getValue()));
-                            query.append(" and shopperType = :shopperType");
-                        } catch (IllegalArgumentException e) {
-                            LOG.warnf("Invalid shopperType filter value: %s", f.getValue());
-                        }
-                    }
-                    case "status" -> {
-                        try {
-                            params.put("status", CustomerStatusEn.valueOf(f.getValue()));
-                            query.append(" and status = :status");
-                        } catch (IllegalArgumentException e) {
-                            LOG.warnf("Invalid status filter value: %s", f.getValue());
-                        }
-                    }
-                    case "search" -> {
-                        String term = "%" + f.getValue().toLowerCase() + "%";
-                        params.put("search", term);
-                        query.append(" and (lower(firstName) like :search or lower(lastName) like :search or lower(user.email) like :search)");
-                    }
-                }
-            }
-        }
-
-        return new QuerySpec(query.toString(), params);
-    }
 
     private void validateStatusTransition(CustomerStatusEn current, CustomerStatusEn next) {
         boolean valid = switch (current) {
@@ -156,103 +102,5 @@ public class CustomerAdminService {
             throw new IllegalArgumentException(
                     "invalid status transition: " + current + " → " + next);
         }
-    }
-
-    private AdminCustomerListItemDto toListItemDto(CustomerEntity c) {
-        WholesaleApplicationEntity app = WholesaleApplicationEntity
-                .find("customer.id = ?1", c.id)
-                .firstResult();
-        return toListItemDto(c, app);
-    }
-
-    private AdminCustomerListItemDto toListItemDto(CustomerEntity c, WholesaleApplicationEntity app) {
-        AdminCustomerListItemDto dto = new AdminCustomerListItemDto();
-        dto.id         = c.id.toString();
-        dto.firstName  = c.firstName;
-        dto.lastName   = c.lastName;
-        dto.email      = c.user != null ? c.user.email : null;
-        dto.status     = c.status != null ? c.status.name() : null;
-        dto.shopperType = c.shopperType != null ? c.shopperType.name() : null;
-        dto.registeredAt = c.user != null && c.user.createdAt != null
-                ? c.user.createdAt.toString()
-                : null;
-        dto.wholesaleApplicationStatus = app != null && app.status != null
-                ? app.status.name()
-                : null;
-        return dto;
-    }
-
-    private AdminCustomerDetailDto toDetailDto(CustomerEntity c,
-                                               WholesaleApplicationEntity app,
-                                               List<OrderEntity> orders) {
-        AdminCustomerDetailDto dto = new AdminCustomerDetailDto();
-        dto.id          = c.id.toString();
-        dto.firstName   = c.firstName;
-        dto.lastName    = c.lastName;
-        dto.email       = c.user != null ? c.user.email : null;
-        dto.phone       = c.phone;
-        dto.status      = c.status != null ? c.status.name() : null;
-        dto.shopperType = c.shopperType != null ? c.shopperType.name() : null;
-        dto.registeredAt = c.user != null && c.user.createdAt != null
-                ? c.user.createdAt.toString()
-                : null;
-
-        dto.wholesaleApplication = app != null ? toApplicationDetailsDto(app) : null;
-
-        dto.recentOrders = orders.stream()
-                .map(this::toOrderRefDto)
-                .toList();
-
-        return dto;
-    }
-
-    private WholesaleApplicationDetailsDto toApplicationDetailsDto(WholesaleApplicationEntity app) {
-        WholesaleApplicationDetailsDto dto = new WholesaleApplicationDetailsDto();
-        dto.setId(app.id);
-        dto.setEmail(app.accountEmail);
-        dto.setApplicantEmail(app.applicantEmail);
-        dto.setFirstName(app.firstName);
-        dto.setLastName(app.lastName);
-        dto.setPhone(app.phone);
-        dto.setCompanyName(app.companyName);
-        dto.setTradingName(app.tradingName);
-        dto.setCompanyPhone(app.companyPhone);
-        dto.setCompanyEmail(app.companyEmail);
-        dto.setVatNumber(app.vatNumber);
-        dto.setRegNumber(app.regNumber);
-        dto.setFinanceContactName(app.financeContactName);
-        dto.setFinanceContactEmail(app.financeContactEmail);
-        dto.setFinanceContactPhone(app.financeContactPhone);
-        dto.setPurchaseOrderRequired(app.purchaseOrderRequired);
-        dto.setNotes(app.notes);
-        dto.setStatus(app.status);
-        dto.setCreatedAt(app.createdAt);
-        dto.setProcessedAt(app.processedAt);
-        dto.setCustomerId(app.customer != null ? app.customer.id : null);
-
-        dto.setPhysicalAddressLine1(app.physicalAddressLine1);
-        dto.setPhysicalAddressLine2(app.physicalAddressLine2);
-        dto.setPhysicalSuburb(app.physicalSuburb);
-        dto.setPhysicalCity(app.physicalCity);
-        dto.setPhysicalProvince(app.physicalProvince);
-        dto.setPhysicalPostalCode(app.physicalPostalCode);
-
-        dto.setPostalAddressLine1(app.postalAddressLine1);
-        dto.setPostalAddressLine2(app.postalAddressLine2);
-        dto.setPostalSuburb(app.postalSuburb);
-        dto.setPostalCity(app.postalCity);
-        dto.setPostalProvince(app.postalProvince);
-        dto.setPostalPostalCode(app.postalPostalCode);
-        return dto;
-    }
-
-    private AdminOrderRefDto toOrderRefDto(OrderEntity o) {
-        AdminOrderRefDto dto = new AdminOrderRefDto();
-        dto.id        = o.id.toString();
-        dto.reference = "ORD-" + o.id.toString().substring(0, 8).toUpperCase();
-        dto.placedAt  = o.createdAt != null ? o.createdAt.toString() : null;
-        dto.total     = o.totalAmount != null ? o.totalAmount.doubleValue() : 0.0;
-        dto.status    = o.status != null ? o.status.name() : null;
-        return dto;
     }
 }

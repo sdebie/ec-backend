@@ -1,4 +1,4 @@
-package org.ecommerce.backend.service;
+package org.ecommerce.backend.exception;
 
 public class FeaturedCapExceededException extends RuntimeException
 {

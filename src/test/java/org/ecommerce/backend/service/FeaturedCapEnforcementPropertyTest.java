@@ -6,6 +6,7 @@ import io.quarkus.panache.mock.PanacheMock;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
+import org.ecommerce.backend.exception.FeaturedCapExceededException;
 import org.ecommerce.common.dto.FeaturedProductResultDto;
 import org.ecommerce.common.entity.ProductEntity;
 import org.ecommerce.common.enums.ProductStatusEn;
