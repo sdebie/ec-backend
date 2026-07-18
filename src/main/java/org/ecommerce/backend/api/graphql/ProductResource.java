@@ -16,6 +16,7 @@ import org.ecommerce.common.repository.CategoryRepository;
 
 import jakarta.transaction.Transactional;
 import jakarta.transaction.Transactional.TxType;
+import io.micrometer.core.annotation.Timed;
 
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -106,6 +107,7 @@ public class ProductResource
 
     @Query("shoppingProductList")
     @Description("Returns paginated shopping product cards with variant count, image list, and active lowest prices by type. Products can belong to multiple categories. Supports optional category scope and includeSubCategories.")
+    @Timed(value = "ecommerce.catalog.shopping_product_list", description = "Shopping catalogue list resolver duration")
     @Transactional(value = TxType.SUPPORTS)
     public PageResponse<ProductShoppingListItemDto> getShoppingProductsList(
             @Name("pageIndex") @DefaultValue("0") int pageIndex,
@@ -312,6 +314,7 @@ public class ProductResource
     @Query("adminProductList")
     @Description("Admin paginated product list with SKU, stock, and price. Staff JWT required.")
     @RolesAllowed({"SUPER_ADMIN", "CATALOG_MANAGER", "ORDER_MANAGER", "VIEWER"})
+    @Timed(value = "ecommerce.catalog.admin_product_list", description = "Admin catalogue list resolver duration")
     @Transactional(value = TxType.SUPPORTS)
     public PageResponse<AdminProductListItemDto> adminProductList(
             @Name("pageIndex") @DefaultValue("0") int pageIndex,
