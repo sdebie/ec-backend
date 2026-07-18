@@ -30,7 +30,9 @@ import org.ecommerce.common.repository.VariantPricesRepository;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -62,6 +64,9 @@ public class ProductService
 
     @Inject
     ProductMapper productMapper;
+
+    @Inject
+    ProductWriteValidator productWriteValidator;
     @Transactional(value = TxType.SUPPORTS)
     public List<ProductListItemDto> getAllProducts(PageRequest pageRequest, FilterRequest filterRequest)
     {
@@ -291,18 +296,17 @@ public class ProductService
             return null;
         }
 
+        // Active-only read: exclude DISABLED variants so soft-deleted variants are absent
         return productMapper.mapToProductInformationDto(
                 product,
-                productVariantRepository.findByVariantsForProductId(pid));
+                productVariantRepository.findActiveVariantsForProductId(pid));
     }
 
     @Transactional(value = TxType.REQUIRED)
     public ProductInformationDto addProductInformation(ProductInformationDto input)
     {
-        if (input == null) {
-            log.error("ProductInformationDto is null");
-            throw new IllegalArgumentException("Product information cannot be null");
-        }
+        // Validate the complete aggregate before any persistence
+        productWriteValidator.validateForCreate(input);
 
         // Create new product entity
         ProductEntity product = new ProductEntity();
@@ -349,23 +353,29 @@ public class ProductService
         product.persist();
         log.info("Created new product with ID: {}", product.id);
 
-        // TODO: Handle product images and variants creation
-        // This would require additional repository methods or separate transactions
+        // Persist variants and their prices
+        if (input.variants != null && !input.variants.isEmpty()) {
+            persistVariantsWithPrices(product, input.variants);
+        }
 
+        // Persist images: extract manifest from payload variant index 0
+        List<ProductImageDto> imageManifest = extractImageManifest(input);
+        updateProductImages(product.id, imageManifest);
+
+        // Return the full aggregate via the active-only read path
         return productMapper.mapToProductInformationDto(
                 product,
-                List.of());
+                productVariantRepository.findActiveVariantsForProductId(product.id));
     }
 
     @Transactional(value = TxType.REQUIRED)
     public ProductInformationDto updateProductInformation(String productId, ProductInformationDto input)
     {
-        if (input == null) {
-            log.error("ProductInformationDto is null");
-            throw new IllegalArgumentException("Product information cannot be null");
-        }
-
         UUID pid = UUID.fromString(productId);
+
+        // Validate the complete aggregate before any persistence
+        productWriteValidator.validateForUpdate(pid, input);
+
         ProductEntity product = productRepository.findByIdWithCategoryAndBrand(pid);
 
         if (product == null) {
@@ -424,49 +434,218 @@ public class ProductService
             updateProductVariants(pid, input.variants);
         }
 
+        // Persist images: extract manifest from payload variant index 0 (after variant upsert)
+        List<ProductImageDto> imageManifest = extractImageManifest(input);
+        updateProductImages(pid, imageManifest);
+
+        // Active-only read: exclude DISABLED variants from the returned aggregate
         return productMapper.mapToProductInformationDto(
                 product,
-                productVariantRepository.findByVariantsForProductId(pid));
+                productVariantRepository.findActiveVariantsForProductId(pid));
     }
 
     /**
-     * Updates product images by replacing existing images with new ones
+     * Extracts the product-level image manifest from the payload.
+     * By convention, the frontend carries the manifest on variant index 0's images[].
+     * This is a transport convention only — it does NOT define persistence ownership.
      */
-    private void updateProductImages(UUID productId, List<ProductImageDto> newImages) {
+    private List<ProductImageDto> extractImageManifest(ProductInformationDto input) {
+        if (input.variants == null || input.variants.isEmpty()) {
+            return List.of();
+        }
+        ProductVariantDto firstVariant = input.variants.get(0);
+        if (firstVariant.images == null || firstVariant.images.isEmpty()) {
+            return List.of();
+        }
+        return firstVariant.images;
+    }
+
+    /**
+     * Reconciles the product-wide image manifest against existing product image associations.
+     *
+     * The manifest is a single ordered list of images that the product editor carries on
+     * payload variant index 0 (transport convention only). After all variant upserts, this
+     * method determines the "owner variant" — the ACTIVE variant with the lowest UUID
+     * (sorted by UUID.toString()) — and persists the manifest on it.
+     *
+     * Steps:
+     * 1. Determine the owner variant (active, lowest UUID).
+     * 2. Load all existing ProductImageEntity rows for this product (across all variants).
+     * 3. Reconcile: add new images, remove images not in the manifest, update sortOrder/isFeatured.
+     * 4. Normalise: move any existing images on a non-owner variant to the owner variant.
+     */
+    private void updateProductImages(UUID productId, List<ProductImageDto> manifest) {
         log.info("Updating images for product ID: {}", productId);
 
-        // Delete all existing images for this product
-        List<ProductImageEntity> existingImages = productImageRepository.findByProductId(productId);
-        for (ProductImageEntity image : existingImages) {
-            image.delete();
+        if (manifest == null) {
+            manifest = List.of();
         }
 
-        // Note: ProductImageEntity requires a ProductVariantEntity relationship
-        // Images are typically linked to variants, not directly to products
-        // This is a limitation of the current schema - would need product variants to exist first
-        // TODO: Once variants are created, associate images with the appropriate variant
+        // 1. Determine the owner variant: active variant with the lowest UUID (string sort)
+        List<ProductVariantEntity> allVariants = productVariantRepository.findByVariantsForProductId(productId);
+        ProductVariantEntity ownerVariant = allVariants.stream()
+                .filter(v -> v.status == ProductStatusEn.ACTIVE)
+                .min((a, b) -> a.id.toString().compareTo(b.id.toString()))
+                .orElse(null);
+
+        if (ownerVariant == null) {
+            // No active variant — cannot persist images; remove all existing
+            List<ProductImageEntity> existingImages = productImageRepository.findByProductId(productId);
+            for (ProductImageEntity image : existingImages) {
+                if (image.productVariant != null && image.productVariant.images != null) {
+                    image.productVariant.images.remove(image);
+                }
+                image.delete();
+            }
+            log.warn("No active variant found for product {}; removed all image associations", productId);
+            return;
+        }
+
+        // 2. Load all existing images for this product (across all variants)
+        List<ProductImageEntity> existingImages = productImageRepository.findByProductId(productId);
+
+        // Build a lookup of existing images by id for reconciliation
+        Map<UUID, ProductImageEntity> existingById = new LinkedHashMap<>();
+        for (ProductImageEntity img : existingImages) {
+            existingById.put(img.id, img);
+        }
+
+        // 3. Reconcile: track which existing image ids are still in the manifest
+        Set<UUID> manifestImageIds = new LinkedHashSet<>();
+
+        for (int i = 0; i < manifest.size(); i++) {
+            ProductImageDto imgDto = manifest.get(i);
+
+            if (imgDto.id != null && !imgDto.id.isBlank()) {
+                // Existing image — update sortOrder, isFeatured, and normalise to owner
+                UUID imageId = UUID.fromString(imgDto.id);
+                manifestImageIds.add(imageId);
+
+                ProductImageEntity existing = existingById.get(imageId);
+                if (existing != null) {
+                    existing.sortOrder = i;
+                    existing.isFeatured = imgDto.isFeatured;
+                    // Normalise: move to owner variant if not already there
+                    if (!ownerVariant.id.equals(existing.productVariant.id)) {
+                        existing.productVariant = ownerVariant;
+                    }
+                    existing.persist();
+                }
+            } else {
+                // New image — create entity on the owner variant
+                ProductImageEntity newImage = new ProductImageEntity();
+                newImage.productVariant = ownerVariant;
+                newImage.imageUrl = imgDto.imageUrl;
+                newImage.sortOrder = i;
+                newImage.isFeatured = imgDto.isFeatured;
+                newImage.persist();
+                log.info("Created new image association for product {}: {}", productId, imgDto.imageUrl);
+            }
+        }
+
+        // 4. Remove images not in the manifest
+        for (ProductImageEntity existing : existingImages) {
+            if (!manifestImageIds.contains(existing.id)) {
+                // Remove from variant's managed collection to prevent orphanRemoval conflicts
+                if (existing.productVariant != null && existing.productVariant.images != null) {
+                    existing.productVariant.images.remove(existing);
+                }
+                existing.delete();
+                log.info("Removed image association {} from product {}", existing.id, productId);
+            }
+        }
     }
 
     /**
-     * Updates product variants and their prices
+     * Updates product variants and their prices, then removes variants absent from
+     * the payload per the Deletion Policy (Req 9).
      */
     private void updateProductVariants(UUID productId, List<ProductVariantDto> newVariants) {
         log.info("Updating variants for product ID: {}", productId);
 
-        // Get existing variants for this product
+        ProductEntity product = productRepository.findByIdWithCategoryAndBrand(productId);
+        if (product == null) {
+            throw new IllegalArgumentException("Product not found for variant update: " + productId);
+        }
+
+        // Load existing variants BEFORE upserting so we can detect removals
         List<ProductVariantEntity> existingVariants = productVariantRepository.findByVariantsForProductId(productId);
 
-        // Update existing variants or create new ones
-        for (ProductVariantDto variantDto : newVariants) {
+        // Persist (create or upsert) each variant and its prices via the shared helper
+        persistVariantsWithPrices(product, newVariants);
+
+        // Determine which variant ids are present in the update payload
+        Set<UUID> payloadVariantIds = newVariants.stream()
+                .filter(v -> v.id != null && !v.id.isBlank())
+                .map(v -> UUID.fromString(v.id))
+                .collect(Collectors.toSet());
+
+        // Also include variants that were matched by SKU (newly created variants won't be in existing list)
+        Set<String> payloadSkus = newVariants.stream()
+                .filter(v -> v.sku != null)
+                .map(v -> v.sku.trim())
+                .collect(Collectors.toSet());
+
+        // Remove variants absent from the payload per the Deletion Policy
+        for (ProductVariantEntity existing : existingVariants) {
+            boolean inPayloadById = payloadVariantIds.contains(existing.id);
+            boolean inPayloadBySku = payloadSkus.contains(existing.sku);
+
+            if (!inPayloadById && !inPayloadBySku) {
+                // This variant was removed from the editor — apply Deletion Policy
+                boolean isDraft = product.status == ProductStatusEn.PENDING;
+                boolean isOrderReferenced = productVariantRepository.isReferencedByOrders(existing.id);
+
+                if (isDraft && !isOrderReferenced) {
+                    // Hard-delete: product is draft and variant is not order-referenced
+                    log.info("Hard-deleting variant {} (SKU: {}) — draft product, no order references",
+                            existing.id, existing.sku);
+                    existing.delete();
+                } else {
+                    // Soft-delete: set status to DISABLED
+                    log.info("Soft-deleting variant {} (SKU: {}) — setting status to DISABLED (draft={}, orderRef={})",
+                            existing.id, existing.sku, isDraft, isOrderReferenced);
+                    existing.status = ProductStatusEn.DISABLED;
+                    existing.persist();
+                }
+            }
+        }
+    }
+
+    /**
+     * Shared validate-and-persist helper for variants and their price rows.
+     * Used by both addProductInformation (create) and updateProductVariants (update).
+     *
+     * For each variant DTO:
+     * - If it carries an id, look it up and verify it belongs to this product (cross-product guard).
+     * - If it carries no id, try to match by SKU against existing variants for this product.
+     * - Create or update the variant entity accordingly.
+     * - Persist each price via upsert, preventing duplicate price rows for the same type.
+     *
+     * Assumptions: the ProductWriteValidator has already validated the aggregate
+     * (non-blank SKUs, request-unique SKUs, exactly one positive RETAIL_PRICE, ownership).
+     */
+    private void persistVariantsWithPrices(ProductEntity product, List<ProductVariantDto> variantDtos) {
+        // Load existing variants for SKU-based matching on create
+        List<ProductVariantEntity> existingVariants = productVariantRepository.findByVariantsForProductId(product.id);
+
+        for (ProductVariantDto variantDto : variantDtos) {
             ProductVariantEntity variant = null;
 
-            // Check if variant with this SKU already exists
+            // Resolve existing variant by id or SKU
             if (variantDto.id != null && !variantDto.id.isBlank()) {
-                variant = productVariantRepository.findByIdWithProduct(UUID.fromString(variantDto.id));
+                UUID variantId = UUID.fromString(variantDto.id);
+                variant = productVariantRepository.findByIdWithProduct(variantId);
+
+                // Cross-product guard: reject if this variant belongs to another product
+                if (variant != null && !product.id.equals(variant.product.id)) {
+                    throw new IllegalArgumentException(
+                            "Variant id " + variantDto.id + " does not belong to product " + product.id);
+                }
             } else if (variantDto.sku != null) {
-                // Try to find by SKU
+                // Try to find by SKU within this product's existing variants
                 variant = existingVariants.stream()
-                        .filter(v -> v.sku.equals(variantDto.sku))
+                        .filter(v -> v.sku.equals(variantDto.sku.trim()))
                         .findFirst()
                         .orElse(null);
             }
@@ -474,16 +653,21 @@ public class ProductService
             if (variant == null) {
                 // Create new variant
                 variant = new ProductVariantEntity();
-                variant.product = productRepository.findByIdWithCategoryAndBrand(productId);
-                variant.sku = variantDto.sku;
+                variant.product = product;
+                variant.sku = variantDto.sku.trim();
                 variant.stockQuantity = variantDto.stockQuantity;
                 variant.attributesJson = variantDto.attributesJson;
                 variant.weightKg = variantDto.weightKg;
-                variant.status = variantDto.status != null ? ProductStatusEn.valueOf(variantDto.status) : ProductStatusEn.ACTIVE;
+                variant.status = variantDto.status != null
+                        ? ProductStatusEn.valueOf(variantDto.status)
+                        : ProductStatusEn.ACTIVE;
                 variant.persist();
-                log.info("Created new variant with SKU: {}", variantDto.sku);
+                log.info("Created new variant with SKU: {} for product: {}", variantDto.sku, product.id);
             } else {
-                // Update existing variant
+                // Update existing variant fields (patch: only non-null values applied)
+                if (variantDto.sku != null && !variantDto.sku.isBlank()) {
+                    variant.sku = variantDto.sku.trim();
+                }
                 if (variantDto.stockQuantity != null) {
                     variant.stockQuantity = variantDto.stockQuantity;
                 }
@@ -497,26 +681,30 @@ public class ProductService
                     variant.status = ProductStatusEn.valueOf(variantDto.status);
                 }
                 variant.persist();
-                log.info("Updated variant with SKU: {}", variantDto.sku);
+                log.info("Updated variant with SKU: {} for product: {}", variant.sku, product.id);
             }
 
+            // Persist price rows via upsert (no duplicate rows per type)
             if (variantDto.prices != null && !variantDto.prices.isEmpty()) {
-                updateVariantPrices(variant, variantDto.prices);
+                persistVariantPrices(variant, variantDto.prices);
             }
-            //TODO:: Update Pricing
         }
-
-        // Optionally delete variants not in the new list
-        // For now, we'll keep this as a TODO to preserve existing data
-        // TODO: Implement logic to delete variants not provided in the update
     }
 
-    private void updateVariantPrices(ProductVariantEntity variant, List<VariantPriceDto> newPrices) {
-        if (variant == null || variant.id == null || newPrices == null || newPrices.isEmpty()) {
+    /**
+     * Upserts price rows for a variant. For each price DTO:
+     * - If a price id is supplied, update that specific row (already ownership-validated).
+     * - Otherwise find existing row by (variant, priceType) and update it — no duplicate.
+     * - If no existing row exists, create one.
+     *
+     * This prevents duplicate price rows for the same price type on a variant.
+     */
+    private void persistVariantPrices(ProductVariantEntity variant, List<VariantPriceDto> priceDtos) {
+        if (variant == null || variant.id == null || priceDtos == null || priceDtos.isEmpty()) {
             return;
         }
 
-        for (VariantPriceDto priceDto : newPrices) {
+        for (VariantPriceDto priceDto : priceDtos) {
             if (priceDto == null || priceDto.priceType == null || priceDto.price == null) {
                 continue;
             }
@@ -529,7 +717,19 @@ public class ProductService
                 continue;
             }
 
-            VariantPricesEntity price = variantPricesRepository.findLatestByVariantAndType(variant.id, priceType);
+            VariantPricesEntity price = null;
+
+            // If the DTO carries a price id, update that specific row
+            if (priceDto.id != null && !priceDto.id.isBlank()) {
+                price = VariantPricesEntity.findById(UUID.fromString(priceDto.id));
+            }
+
+            // Otherwise, find by variant + priceType to prevent duplicates
+            if (price == null) {
+                price = variantPricesRepository.findLatestByVariantAndType(variant.id, priceType);
+            }
+
+            // If still null, create a new row
             if (price == null) {
                 price = new VariantPricesEntity();
                 price.variant = variant;
@@ -577,14 +777,41 @@ public class ProductService
             throw new NotFoundException("Product not found with id: " + id);
         }
 
-        product.delete();
-        log.info("Deleted product with id: {}", id);
+        // Load all child variants (including DISABLED) for reference check
+        List<ProductVariantEntity> allVariants = productVariantRepository.findByVariantsForProductId(pid);
+
+        // Check if ANY variant is referenced by orders
+        boolean anyOrderReferenced = allVariants.stream()
+                .anyMatch(v -> productVariantRepository.isReferencedByOrders(v.id));
+
+        boolean isDraft = product.status == ProductStatusEn.PENDING;
+
+        if (isDraft && !anyOrderReferenced) {
+            // Hard-delete: product is PENDING and no child variant is order-referenced.
+            // CascadeType.ALL + orphanRemoval on ProductEntity.variants handles
+            // cascading removal of variants, their prices, and their images.
+            product.delete();
+            log.info("Hard-deleted product {} — draft with no order references", id);
+        } else {
+            // Soft-delete: set product status to DISABLED, and disable all ACTIVE child variants
+            product.status = ProductStatusEn.DISABLED;
+            product.persist();
+
+            for (ProductVariantEntity variant : allVariants) {
+                if (variant.status == ProductStatusEn.ACTIVE) {
+                    variant.status = ProductStatusEn.DISABLED;
+                    variant.persist();
+                }
+            }
+            log.info("Soft-deleted product {} — set to DISABLED (draft={}, orderRef={})",
+                    id, isDraft, anyOrderReferenced);
+        }
     }
 
     public ProductInformationDto getProductInformationBySlug(String slug)
     {
         ProductEntity product = productRepository.findBySlugIgnoreCase(slug);
-        if (product == null) {
+        if (product == null || product.status != ProductStatusEn.ACTIVE) {
             return null;
         }
         UUID pid = product.id;
@@ -593,8 +820,9 @@ public class ProductService
         if (product == null) {
             return null;
         }
+        // Active-only read: exclude DISABLED variants for storefront detail
         return productMapper.mapToProductInformationDto(
                 product,
-                productVariantRepository.findByVariantsForProductId(pid));
+                productVariantRepository.findActiveVariantsForProductId(pid));
     }
 }

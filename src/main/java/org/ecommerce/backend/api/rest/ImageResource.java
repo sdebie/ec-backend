@@ -5,6 +5,7 @@ import org.ecommerce.common.dto.ImageResponseDto;
 import org.ecommerce.backend.service.ImageService;
 import org.jboss.resteasy.reactive.RestForm;
 import org.jboss.resteasy.reactive.multipart.FileUpload;
+import jakarta.annotation.security.RolesAllowed;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
@@ -27,6 +28,7 @@ public class ImageResource
      */
     @POST
     @Path("/upload")
+    @RolesAllowed({"SUPER_ADMIN", "CATALOG_MANAGER"})
     @Consumes(MediaType.MULTIPART_FORM_DATA)
     @Produces(MediaType.APPLICATION_JSON)
     public Response upload(
@@ -44,6 +46,42 @@ public class ImageResource
             return Response.serverError().entity("Failed to save image").build();
         }
     }
+
+    /**
+     * Cleanup endpoint for abandoned product image uploads.
+     * Verifies the file path is not path-traversal-vulnerable, checks if any
+     * ProductImageEntity still references it, and only deletes the physical file
+     * if no association remains.
+     */
+    @DELETE
+    @Path("/cleanup")
+    @RolesAllowed({"SUPER_ADMIN", "CATALOG_MANAGER"})
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response cleanup(CleanupRequest request)
+    {
+        if (request == null || request.filePath() == null || request.filePath().isBlank()) {
+            return Response.status(Response.Status.BAD_REQUEST)
+                    .entity(Map.of("message", "filePath is required"))
+                    .build();
+        }
+
+        try {
+            boolean deleted = imageService.cleanupUnassociatedFile(request.filePath());
+            if (deleted) {
+                return Response.ok(Map.of("deleted", true)).build();
+            } else {
+                return Response.ok(Map.of("deleted", false, "reason", "File is still associated with a product image"))
+                        .build();
+            }
+        } catch (IllegalArgumentException e) {
+            return Response.status(Response.Status.BAD_REQUEST)
+                    .entity(Map.of("message", e.getMessage()))
+                    .build();
+        }
+    }
+
+    public record CleanupRequest(String filePath) {}
 
     /**
      * Upload product variant image - saves file and creates ProductImageEntity record.

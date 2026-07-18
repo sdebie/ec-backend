@@ -175,14 +175,14 @@ class ProductServiceTest
         ProductInformationDto mappedDto = new ProductInformationDto();
 
         when(productRepository.findByIdWithCategoryAndBrand(productId)).thenReturn(product);
-        when(productVariantRepository.findByVariantsForProductId(productId)).thenReturn(variants);
+        when(productVariantRepository.findActiveVariantsForProductId(productId)).thenReturn(variants);
         when(productMapper.mapToProductInformationDto(product, variants)).thenReturn(mappedDto);
 
         ProductInformationDto result = productService.getProductInformationDto(productId.toString());
 
         assertSame(mappedDto, result);
         verify(productRepository).findByIdWithCategoryAndBrand(productId);
-        verify(productVariantRepository).findByVariantsForProductId(productId);
+        verify(productVariantRepository).findActiveVariantsForProductId(productId);
         verify(productMapper).mapToProductInformationDto(product, variants);
     }
 

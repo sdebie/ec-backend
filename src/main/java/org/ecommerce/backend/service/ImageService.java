@@ -21,6 +21,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.Comparator;
 import java.util.stream.Stream;
 import java.util.stream.Collectors;
 
@@ -43,6 +44,9 @@ public class ImageService
 
     @Inject
     ProductVariantRepository productVariantRepository;
+
+    @Inject
+    org.ecommerce.common.repository.ProductImageRepository productImageRepository;
 
     /**
      * Generic upload method that saves the file to root storage.
@@ -108,7 +112,7 @@ public class ImageService
         // 4. If image type is PRODUCT and entityId is provided, create ProductImageEntity
         if (imageType == ImageTypeEn.PRODUCT && entityId != null) {
             log.debug("Creating ProductImageEntity for product={} url={}", entityId, newFileName);
-            createProductImage(newFileName, entityId);
+            createProductImageIfAbsent(newFileName, entityId);
         }
 
         // 5. Return the filename (or relative path) to store in the DB
@@ -252,7 +256,7 @@ public class ImageService
         try {
             ProductVariantEntity variant = productVariantRepository.findBySku(sku);
             if (variant != null) {
-                createProductImage(relativeFilePath, variant.id);
+                createProductImageIfAbsent(relativeFilePath, variant.id);
                 log.debug("Linked bulk image {} to variant SKU={}", relativeFilePath, sku);
             }
         } catch (Exception e) {
@@ -261,14 +265,65 @@ public class ImageService
     }
 
     /**
+     * Retries SKU-based bulk-image association after a product CSV creates the
+     * variant. Bulk image upload is allowed to precede product import.
+     */
+    @Transactional
+    public void linkExistingBulkImagesForVariant(ProductVariantEntity variant)
+    {
+        if (variant == null || variant.id == null || variant.sku == null || variant.sku.isBlank()) {
+            return;
+        }
+
+        for (String imagePath : findBulkImagePathsForSku(variant.sku)) {
+            createProductImageIfAbsent(imagePath, variant.id);
+        }
+    }
+
+    List<String> findBulkImagePathsForSku(String sku)
+    {
+        if (sku == null || sku.isBlank()) {
+            return List.of();
+        }
+
+        Path root = Paths.get(storagePath);
+        if (Files.notExists(root)) {
+            return List.of();
+        }
+
+        try (Stream<Path> paths = Files.walk(root)) {
+            return paths
+                    .filter(Files::isRegularFile)
+                    .map(root::relativize)
+                    .map(this::normalizeRelativePath)
+                    .filter(path -> !path.startsWith("thumbnails/"))
+                    .filter(path -> sku.equals(stripExtension(Paths.get(path).getFileName().toString())))
+                    .sorted(Comparator.naturalOrder())
+                    .toList();
+        } catch (IOException e) {
+            log.warn("Could not scan bulk images for SKU {}: {}", sku, e.getMessage());
+            return List.of();
+        }
+    }
+
+    /**
      * Create a ProductImageEntity record in the database for the uploaded image.
      * The image will have the highest sort order.
      */
-    private void createProductImage(String imageUrl, UUID productVariantId)
+    private void createProductImageIfAbsent(String imageUrl, UUID productVariantId)
     {
         ProductVariantEntity productVariant = entityManager.find(ProductVariantEntity.class, productVariantId);
         if (productVariant == null) {
             throw new IllegalArgumentException("Product variant not found with id: " + productVariantId);
+        }
+
+        Long existingCount = entityManager
+                .createQuery("SELECT COUNT(pi) FROM ProductImageEntity pi WHERE pi.productVariant.id = :productVariantId AND pi.imageUrl = :imageUrl", Long.class)
+                .setParameter("productVariantId", productVariantId)
+                .setParameter("imageUrl", imageUrl)
+                .getSingleResult();
+        if (existingCount != null && existingCount > 0) {
+            return;
         }
 
         // Keep ordering within a variant-specific image list.
@@ -284,6 +339,69 @@ public class ImageService
         productImage.isFeatured = maxSortOrder == 0; // First image is featured by default
 
         productImage.persist();
+    }
+
+    /**
+     * Safely delete an uploaded file if no ProductImageEntity references it.
+     * Validates the path is not traversal-vulnerable before checking associations.
+     *
+     * @param filePath storage-relative path (e.g. "abc123.jpg" or "products/abc123.jpg")
+     * @return true if the file was deleted, false if it is still associated
+     * @throws IllegalArgumentException if the path is invalid or traversal-vulnerable
+     */
+    @Transactional
+    public boolean cleanupUnassociatedFile(String filePath)
+    {
+        if (filePath == null || filePath.isBlank()) {
+            throw new IllegalArgumentException("File path must not be blank");
+        }
+
+        // Validate path safety — reject traversal attempts
+        Path normalized = Paths.get(filePath).normalize();
+        if (normalized.isAbsolute() || normalized.startsWith("..")) {
+            throw new IllegalArgumentException("Invalid file path: traversal detected");
+        }
+        String safePath = normalized.toString().replace(File.separatorChar, '/');
+        if (safePath.contains("..")) {
+            throw new IllegalArgumentException("Invalid file path: traversal detected");
+        }
+
+        // Check if any ProductImageEntity references this path
+        Long refCount = entityManager
+                .createQuery("SELECT COUNT(pi) FROM ProductImageEntity pi WHERE pi.imageUrl = :path", Long.class)
+                .setParameter("path", safePath)
+                .getSingleResult();
+
+        if (refCount != null && refCount > 0) {
+            log.debug("Cannot cleanup file {} — still referenced by {} product image(s)", safePath, refCount);
+            return false;
+        }
+
+        // Delete the physical file and its thumbnail
+        Path storageRoot = Paths.get(storagePath).toAbsolutePath().normalize();
+        Path targetFile = storageRoot.resolve(safePath).normalize();
+
+        // Final safety check — must stay within storage root
+        if (!targetFile.startsWith(storageRoot)) {
+            throw new IllegalArgumentException("Invalid file path: outside storage root");
+        }
+
+        boolean deleted = false;
+        try {
+            if (Files.exists(targetFile)) {
+                Files.delete(targetFile);
+                deleted = true;
+            }
+            // Also clean up thumbnail
+            Path thumbnailFile = storageRoot.resolve("thumbnails").resolve(safePath).normalize();
+            if (Files.exists(thumbnailFile)) {
+                Files.delete(thumbnailFile);
+            }
+        } catch (IOException e) {
+            log.warn("Failed to delete file {}: {}", safePath, e.getMessage());
+        }
+
+        return deleted;
     }
 
     private String getFileExtension(String fileName)

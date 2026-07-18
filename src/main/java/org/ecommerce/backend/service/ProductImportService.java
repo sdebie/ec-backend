@@ -71,6 +71,9 @@ public class ProductImportService implements ImportBatchService<ProductCompariso
     ProductImageRepository productImageRepository;
 
     @Inject
+    ImageService imageService;
+
+    @Inject
     ProductImportParser productImportParser;
 
     @Inject
@@ -411,9 +414,16 @@ public class ProductImportService implements ImportBatchService<ProductCompariso
     }
 
     private void upsertVariantImages(ProductVariantEntity variant, String stagedImages) {
-        productImageRepository.deleteByVariantId(variant.id);
-
         List<String> imageNames = splitImageNames(stagedImages);
+        if (imageNames.isEmpty()) {
+            // An empty CSV cell means "leave images unchanged". Bulk image uploads may
+            // already have linked images, or may have run before this variant existed.
+            // In the latter case retry SKU-based linking now that the variant is present.
+            imageService.linkExistingBulkImagesForVariant(variant);
+            return;
+        }
+
+        productImageRepository.deleteByVariantId(variant.id);
         for (int i = 0; i < imageNames.size(); i++) {
             ProductImageEntity image = new ProductImageEntity();
             image.productVariant = variant;

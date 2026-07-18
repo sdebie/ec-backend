@@ -51,6 +51,7 @@ class ProductImportCharacterizationTest {
     private ProductRepository productRepository;
     private ProductVariantRepository variantRepository;
     private ProductImageRepository imageRepository;
+    private ImageService imageService;
     private EntityManager entityManager;
 
     @BeforeEach
@@ -66,6 +67,7 @@ class ProductImportCharacterizationTest {
         productRepository = mock(ProductRepository.class);
         variantRepository = mock(ProductVariantRepository.class);
         imageRepository = mock(ProductImageRepository.class);
+        imageService = mock(ImageService.class);
         entityManager = mock(EntityManager.class);
 
         // Wire up the service
@@ -76,6 +78,7 @@ class ProductImportCharacterizationTest {
         setField(service, "productRepository", productRepository);
         setField(service, "productVariantRepository", variantRepository);
         setField(service, "productImageRepository", imageRepository);
+        setField(service, "imageService", imageService);
         setField(service, "entityManager", entityManager);
         setField(service, "productImportParser", parser);
         setField(service, "productImportValidator", validator);
@@ -196,6 +199,23 @@ class ProductImportCharacterizationTest {
         assertTrue(staged.isValidCategory);
         assertTrue(staged.isValidBrand);
         assertTrue(staged.hasChanges, "New product always has changes");
+    }
+
+    @Test
+    @DisplayName("blank images cell preserves existing associations and retries delayed bulk-image linking")
+    void upsertVariantImages_blankImages_preservesAssociationsAndRetriesBulkLinking() throws Exception {
+        ProductVariantEntity variant = new ProductVariantEntity();
+        variant.id = UUID.randomUUID();
+        variant.sku = "SKU-001";
+
+        Method method = ProductImportService.class.getDeclaredMethod(
+                "upsertVariantImages", ProductVariantEntity.class, String.class);
+        method.setAccessible(true);
+        method.invoke(service, variant, "   ");
+
+        verify(imageRepository, never()).deleteByVariantId(variant.id);
+        verify(imageRepository, never()).persist(any(ProductImageEntity.class));
+        verify(imageService).linkExistingBulkImagesForVariant(variant);
     }
 
     @Test

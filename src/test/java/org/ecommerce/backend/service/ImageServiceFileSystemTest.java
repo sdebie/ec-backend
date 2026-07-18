@@ -73,5 +73,22 @@ class ImageServiceFileSystemTest {
         assertEquals(1, searchResult.totalCount());
         assertEquals(List.of("archived/SKU-002.png"), searchResult.images());
     }
-}
 
+    @Test
+    void findBulkImagePathsForSku_shouldFindRootAndNestedImagesButNeverThumbnails() throws IOException {
+        ImageService imageService = new ImageService();
+        imageService.storagePath = tempDir.toString();
+
+        Files.createDirectories(tempDir.resolve("supplier"));
+        Files.createDirectories(tempDir.resolve("thumbnails/supplier"));
+        Files.writeString(tempDir.resolve("SKU-001.jpg"), "image");
+        Files.writeString(tempDir.resolve("supplier/SKU-001.png"), "image");
+        Files.writeString(tempDir.resolve("thumbnails/supplier/SKU-001.jpg"), "thumbnail");
+        Files.writeString(tempDir.resolve("supplier/SKU-001-extra.jpg"), "image");
+
+        assertEquals(
+                List.of("SKU-001.jpg", "supplier/SKU-001.png"),
+                imageService.findBulkImagePathsForSku("SKU-001")
+        );
+    }
+}

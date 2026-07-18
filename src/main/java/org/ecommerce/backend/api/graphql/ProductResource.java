@@ -283,6 +283,7 @@ public class ProductResource
 
     @Mutation("addProductInformation")
     @Description("Create a new product with variants, images, and multiple categories. Products can be assigned to one or more categories.")
+    @RolesAllowed({"SUPER_ADMIN", "CATALOG_MANAGER"})
     @Transactional(value = TxType.REQUIRED)
     public ProductInformationDto addProductInformation(@Name("input") ProductInformationDto input)
     {
@@ -291,6 +292,7 @@ public class ProductResource
 
     @Mutation("updateProductInformation")
     @Description("Update an existing product with variants, images, and multiple categories. When updating categories, all previous category assignments are replaced with the new ones provided.")
+    @RolesAllowed({"SUPER_ADMIN", "CATALOG_MANAGER"})
     @Transactional(value = TxType.REQUIRED)
     public ProductInformationDto updateProductInformation(
             @Name("productId") String productId,
