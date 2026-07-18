@@ -19,7 +19,6 @@ import org.jboss.logging.Logger;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 @ApplicationScoped
 public class FeaturedProductService {
@@ -75,13 +74,12 @@ public class FeaturedProductService {
     @Transactional(value = TxType.SUPPORTS)
     public List<AdminProductListItemDto> getFeaturedProductsForAdmin() {
         List<ProductEntity> featuredProducts = ProductEntity.find(
-                "isFeatured = true order by name asc"
+                "select distinct p from ProductEntity p left join fetch p.categories " +
+                        "where p.isFeatured = true order by p.name asc"
         ).list();
 
         LocalDateTime now = LocalDateTime.now();
-        return featuredProducts.stream()
-                .map(product -> productListItemAssembler.buildAdminListItem(product, now))
-                .collect(Collectors.toList());
+        return productListItemAssembler.buildAdminListItems(featuredProducts, now);
     }
 
     /**
@@ -112,9 +110,7 @@ public class FeaturedProductService {
         }
 
         LocalDateTime now = LocalDateTime.now();
-        return products.stream()
-                .map(product -> productListItemAssembler.buildShoppingListItem(product, now, false))
-                .collect(Collectors.toList());
+        return productListItemAssembler.buildShoppingListItems(products, now, false);
     }
 
     private int resolveLimit(Integer limit) {

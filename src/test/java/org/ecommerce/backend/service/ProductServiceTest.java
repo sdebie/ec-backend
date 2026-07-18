@@ -33,6 +33,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -148,8 +149,7 @@ class ProductServiceTest
         second.name = "Promo Chair";
 
         when(productRepository.findOnSaleProductEntities(pageRequest, false)).thenReturn(List.of(p1, p2));
-        when(productListItemAssembler.buildShoppingListItem(eq(p1), any(), eq(false))).thenReturn(first);
-        when(productListItemAssembler.buildShoppingListItem(eq(p2), any(), eq(false))).thenReturn(second);
+        when(productListItemAssembler.buildShoppingListItems(anyList(), any(), eq(false))).thenReturn(List.of(first, second));
 
         List<ProductShoppingListItemDto> result = productService.getProductsOnSale(pageRequest, false);
 
@@ -158,6 +158,7 @@ class ProductServiceTest
         assertSame(second, result.get(1));
 
         verify(productRepository).findOnSaleProductEntities(pageRequest, false);
+        verify(productListItemAssembler).buildShoppingListItems(eq(List.of(p1, p2)), org.mockito.ArgumentMatchers.any(), eq(false));
     }
 
     @Test

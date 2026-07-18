@@ -20,15 +20,21 @@ import org.ecommerce.common.repository.VariantPricesRepository;
 
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
+import java.util.Comparator;
+import java.util.EnumMap;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * Read-model assembler for product list-item DTOs (admin + shopping).
  * <p>
- * These DTOs need per-row lookups (lowest active price, images, stock), so this
- * collaborator coordinates the relevant <em>repositories</em> — it does not open
- * queries itself, and it is not a pure mapper. Repositories own the queries;
- * services orchestrate repository → assembler. Pure field copying lives here.
+ * These DTOs need related prices, images, and variants, so this collaborator
+ * coordinates page-level repository preloads — it does not open queries itself,
+ * and it is not a pure mapper. Repositories own the queries; services orchestrate
+ * repository → assembler. Pure field copying lives here.
  * <p>
  * Replaces the former query-bearing {@code ProductListItemMapper} and the DTO
  * assembly that briefly lived inside {@code ProductRepository}.
@@ -49,6 +55,39 @@ public class ProductListItemAssembler {
     ProductMapper productMapper;
 
     public AdminProductListItemDto buildAdminListItem(ProductEntity product, LocalDateTime now) {
+        return buildAdminListItems(List.of(product), now).getFirst();
+    }
+
+    /**
+     * Builds an admin product page using three bounded preload queries (variants,
+     * primary-variant images, and retail prices), rather than querying per row.
+     */
+    public List<AdminProductListItemDto> buildAdminListItems(List<ProductEntity> products, LocalDateTime now) {
+        if (products == null || products.isEmpty()) {
+            return List.of();
+        }
+        Map<UUID, List<ProductVariantEntity>> variantsByProduct = variantsByProduct(products, true);
+        List<UUID> primaryVariantIds = variantsByProduct.values().stream()
+                .filter(variants -> !variants.isEmpty())
+                .map(variants -> variants.getFirst().id)
+                .toList();
+        Map<UUID, ProductImageEntity> thumbnailByVariant = imageRepository.findForVariantIds(primaryVariantIds).stream()
+                .collect(Collectors.groupingBy(image -> image.productVariant.id,
+                        Collectors.collectingAndThen(Collectors.toList(), List::getFirst)));
+        Map<UUID, Map<PriceTypeEn, VariantPricesEntity>> pricesByProduct = pricesByProduct(
+                products, List.of(PriceTypeEn.RETAIL_PRICE), now, false);
+
+        return products.stream()
+                .map(product -> buildAdminListItem(product, variantsByProduct.getOrDefault(product.id, List.of()),
+                        thumbnailByVariant, pricesByProduct.getOrDefault(product.id, Map.of())))
+                .toList();
+    }
+
+    private AdminProductListItemDto buildAdminListItem(
+            ProductEntity product,
+            List<ProductVariantEntity> variants,
+            Map<UUID, ProductImageEntity> thumbnailByVariant,
+            Map<PriceTypeEn, VariantPricesEntity> prices) {
         AdminProductListItemDto dto = new AdminProductListItemDto();
         dto.id = product.id != null ? product.id.toString() : null;
         dto.name = product.name;
@@ -63,24 +102,19 @@ public class ProductListItemAssembler {
             dto.category = catDto;
         }
 
-        if (product.id == null) {
-            return dto;
-        }
-
-        List<ProductVariantEntity> variants = variantRepository.findByVariantsForProductId(product.id);
         if (!variants.isEmpty()) {
             ProductVariantEntity primaryVariant = variants.get(0);
             dto.sku = primaryVariant.sku;
-            ProductImageEntity thumb = imageRepository.findThumbnailForVariant(primaryVariant.id);
+            ProductImageEntity thumb = thumbnailByVariant.get(primaryVariant.id);
             if (thumb != null) {
                 dto.thumbnailUrl = thumb.imageUrl;
             }
         }
 
-        dto.stockCount = variantRepository.sumStock(product.id);
+        dto.stockCount = variants.stream().mapToInt(variant -> variant.stockQuantity == null ? 0 : variant.stockQuantity).sum();
         dto.stockLevel = deriveStockLevel(dto.stockCount);
 
-        VariantPricesEntity retail = variantPricesRepository.findLowestActiveRetailForAdmin(product.id, now);
+        VariantPricesEntity retail = prices.get(PriceTypeEn.RETAIL_PRICE);
         if (retail != null) {
             dto.retailPrice = retail.price.toPlainString();
         }
@@ -89,6 +123,40 @@ public class ProductListItemAssembler {
     }
 
     public ProductShoppingListItemDto buildShoppingListItem(ProductEntity product, LocalDateTime now, boolean ignoreStatus) {
+        return buildShoppingListItems(List.of(product), now, ignoreStatus).getFirst();
+    }
+
+    /**
+     * Builds a shopping product page using one bulk query each for variants,
+     * images, and active price candidates. This is deliberately page-scoped so
+     * query count is constant as the page size grows.
+     */
+    public List<ProductShoppingListItemDto> buildShoppingListItems(
+            List<ProductEntity> products, LocalDateTime now, boolean ignoreStatus) {
+        if (products == null || products.isEmpty()) {
+            return List.of();
+        }
+        Map<UUID, List<ProductVariantEntity>> variantsByProduct = variantsByProduct(products, ignoreStatus);
+        Map<UUID, List<ProductImageEntity>> imagesByProduct = imageRepository.findForListingProductIds(productIds(products)).stream()
+                .collect(Collectors.groupingBy(image -> image.productVariant.product.id));
+        Map<UUID, Map<PriceTypeEn, VariantPricesEntity>> pricesByProduct = pricesByProduct(products,
+                List.of(PriceTypeEn.RETAIL_PRICE, PriceTypeEn.WHOLESALE_PRICE,
+                        PriceTypeEn.RETAIL_SALE_PRICE, PriceTypeEn.WHOLESALE_SALE_PRICE), now, ignoreStatus);
+
+        return products.stream()
+                .map(product -> buildShoppingListItem(product,
+                        variantsByProduct.getOrDefault(product.id, List.of()),
+                        imagesByProduct.getOrDefault(product.id, List.of()),
+                        pricesByProduct.getOrDefault(product.id, Map.of()), now))
+                .toList();
+    }
+
+    private ProductShoppingListItemDto buildShoppingListItem(
+            ProductEntity product,
+            List<ProductVariantEntity> variants,
+            List<ProductImageEntity> images,
+            Map<PriceTypeEn, VariantPricesEntity> prices,
+            LocalDateTime now) {
         ProductShoppingListItemDto dto = new ProductShoppingListItemDto();
         dto.id = product.id == null ? null : product.id.toString();
         dto.name = product.name;
@@ -97,24 +165,48 @@ public class ProductListItemAssembler {
         dto.productType = product.productType == null ? null : product.productType.name();
         dto.status = product.status == null ? null : product.status.name();
 
-        if (product.id == null) {
-            dto.variantCount = 0;
-            dto.images = List.of();
-            return dto;
-        }
-
-        dto.variantCount = variantRepository.countForProduct(product.id, ignoreStatus);
+        dto.variantCount = variants.size();
         dto.variantId = product.productType != ProductTypeEn.SIMPLE
                 ? null
-                : variantRepository.findFirstVariantId(product.id, ignoreStatus);
-        dto.images = imageRepository.findForListing(product.id).stream()
+                : variants.isEmpty() ? null : variants.getFirst().id.toString();
+        dto.images = images.stream()
                 .map(productMapper::mapImageEntityToDto)
                 .toList();
-        dto.retailPrice = toVariantPriceDto(variantPricesRepository.findLowestActive(product.id, PriceTypeEn.RETAIL_PRICE, now, ignoreStatus), now);
-        dto.wholesalePrice = toVariantPriceDto(variantPricesRepository.findLowestActive(product.id, PriceTypeEn.WHOLESALE_PRICE, now, ignoreStatus), now);
-        dto.retailSalePrice = toVariantPriceDto(variantPricesRepository.findLowestActive(product.id, PriceTypeEn.RETAIL_SALE_PRICE, now, ignoreStatus), now);
-        dto.wholesaleSalePrice = toVariantPriceDto(variantPricesRepository.findLowestActive(product.id, PriceTypeEn.WHOLESALE_SALE_PRICE, now, ignoreStatus), now);
+        dto.retailPrice = toVariantPriceDto(prices.get(PriceTypeEn.RETAIL_PRICE), now);
+        dto.wholesalePrice = toVariantPriceDto(prices.get(PriceTypeEn.WHOLESALE_PRICE), now);
+        dto.retailSalePrice = toVariantPriceDto(prices.get(PriceTypeEn.RETAIL_SALE_PRICE), now);
+        dto.wholesaleSalePrice = toVariantPriceDto(prices.get(PriceTypeEn.WHOLESALE_SALE_PRICE), now);
         return dto;
+    }
+
+    private Map<UUID, List<ProductVariantEntity>> variantsByProduct(List<ProductEntity> products, boolean ignoreStatus) {
+        return variantRepository.findForProductIds(productIds(products), ignoreStatus).stream()
+                .collect(Collectors.groupingBy(variant -> variant.product.id));
+    }
+
+    private Map<UUID, Map<PriceTypeEn, VariantPricesEntity>> pricesByProduct(
+            List<ProductEntity> products, List<PriceTypeEn> priceTypes, LocalDateTime now, boolean ignoreStatus) {
+        Comparator<VariantPricesEntity> priceOrder = Comparator
+                .comparing((VariantPricesEntity price) -> price.price)
+                .thenComparing(price -> price.priceStartDate, Comparator.nullsFirst(Comparator.naturalOrder()))
+                .thenComparing(price -> price.createdAt, Comparator.nullsFirst(Comparator.naturalOrder()));
+
+        Map<UUID, Map<PriceTypeEn, VariantPricesEntity>> result = new HashMap<>();
+        for (VariantPricesEntity price : variantPricesRepository.findActiveForProductIds(
+                productIds(products), priceTypes, now, ignoreStatus)) {
+            UUID productId = price.variant.product.id;
+            result.computeIfAbsent(productId, unused -> new EnumMap<>(PriceTypeEn.class))
+                    .merge(price.priceType, price, (current, candidate) -> priceOrder.compare(current, candidate) <= 0 ? current : candidate);
+        }
+        return result;
+    }
+
+    private List<UUID> productIds(List<ProductEntity> products) {
+        return products.stream()
+                .map(product -> product.id)
+                .filter(java.util.Objects::nonNull)
+                .distinct()
+                .toList();
     }
 
     // ─── Pure field mapping (no queries) ────────────────────────────────────

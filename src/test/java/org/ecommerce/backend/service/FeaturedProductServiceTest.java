@@ -56,28 +56,30 @@ class FeaturedProductServiceTest {
     void setUp() {
         PanacheMock.mock(ProductEntity.class);
 
-        // List-item DTO assembly now lives in ProductRepository (data layer) and is
-        // tested there (ProductListItemMappingCharacterizationIT / DedupProofIT). These
-        // service unit tests only verify delegation + ordering, so stub the build
-        // methods to echo id/name/status from the passed entity.
-        lenient().when(productListItemAssembler.buildAdminListItem(any(ProductEntity.class), any()))
-                .thenAnswer(inv -> {
-                    ProductEntity p = inv.getArgument(0);
-                    AdminProductListItemDto dto = new AdminProductListItemDto();
-                    dto.id = p.id == null ? null : p.id.toString();
-                    dto.name = p.name;
-                    dto.status = p.status == null ? null : p.status.name();
-                    return dto;
-                });
-        lenient().when(productListItemAssembler.buildShoppingListItem(any(ProductEntity.class), any(), anyBoolean()))
-                .thenAnswer(inv -> {
-                    ProductEntity p = inv.getArgument(0);
-                    ProductShoppingListItemDto dto = new ProductShoppingListItemDto();
-                    dto.id = p.id == null ? null : p.id.toString();
-                    dto.name = p.name;
-                    dto.status = p.status == null ? null : p.status.name();
-                    return dto;
-                });
+        // Service tests verify delegation and ordering. The assembler's DB-backed
+        // mapping behavior is covered separately, so echo the page into DTOs here.
+        lenient().when(productListItemAssembler.buildAdminListItems(anyList(), any()))
+                .thenAnswer(invocation -> ((List<ProductEntity>) invocation.getArgument(0)).stream()
+                        .map(this::adminDto).toList());
+        lenient().when(productListItemAssembler.buildShoppingListItems(anyList(), any(), anyBoolean()))
+                .thenAnswer(invocation -> ((List<ProductEntity>) invocation.getArgument(0)).stream()
+                        .map(this::shoppingDto).toList());
+    }
+
+    private AdminProductListItemDto adminDto(ProductEntity product) {
+        AdminProductListItemDto dto = new AdminProductListItemDto();
+        dto.id = product.id == null ? null : product.id.toString();
+        dto.name = product.name;
+        dto.status = product.status == null ? null : product.status.name();
+        return dto;
+    }
+
+    private ProductShoppingListItemDto shoppingDto(ProductEntity product) {
+        ProductShoppingListItemDto dto = new ProductShoppingListItemDto();
+        dto.id = product.id == null ? null : product.id.toString();
+        dto.name = product.name;
+        dto.status = product.status == null ? null : product.status.name();
+        return dto;
     }
 
     // ── setFeatured: happy path ─────────────────────────────────────────────
@@ -215,11 +217,8 @@ class FeaturedProductServiceTest {
 
         PanacheQuery<PanacheEntityBase> query = mock(PanacheQuery.class);
         when(query.list()).thenReturn((List) featuredProducts);
-        when(ProductEntity.find("isFeatured = true order by name asc")).thenReturn(query);
-
-        // Mock EntityManager for toAdminProductListItemDto
-        EntityManager em = mockEntityManagerForAdminDto();
-        when(productRepository.getEntityManager()).thenReturn(em);
+        when(ProductEntity.find("select distinct p from ProductEntity p left join fetch p.categories " +
+                "where p.isFeatured = true order by p.name asc")).thenReturn(query);
 
         List<AdminProductListItemDto> result = featuredProductService.getFeaturedProductsForAdmin();
 
@@ -241,7 +240,8 @@ class FeaturedProductServiceTest {
     void getFeaturedProductsForAdmin_shouldReturnEmptyList_whenNoProductsFeatured() {
         PanacheQuery<PanacheEntityBase> query = mock(PanacheQuery.class);
         when(query.list()).thenReturn(Collections.emptyList());
-        when(ProductEntity.find("isFeatured = true order by name asc")).thenReturn(query);
+        when(ProductEntity.find("select distinct p from ProductEntity p left join fetch p.categories " +
+                "where p.isFeatured = true order by p.name asc")).thenReturn(query);
 
         List<AdminProductListItemDto> result = featuredProductService.getFeaturedProductsForAdmin();
 

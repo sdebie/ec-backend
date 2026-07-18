@@ -130,18 +130,16 @@ public class ProductService
     {
         FilterRequest effectiveFilterRequest = applyActiveProductStatusFilter(filterRequest, ignoreStatus);
         LocalDateTime now = LocalDateTime.now();
-        return productRepository.findShoppingProductEntities(pageRequest, effectiveFilterRequest, onSale, ignoreStatus).stream()
-                .map(p -> productListItemAssembler.buildShoppingListItem(p, now, ignoreStatus))
-                .toList();
+        return productListItemAssembler.buildShoppingListItems(
+                productRepository.findShoppingProductEntities(pageRequest, effectiveFilterRequest, onSale, ignoreStatus), now, ignoreStatus);
     }
 
     @Transactional(value = TxType.SUPPORTS)
     public List<ProductShoppingListItemDto> getProductsOnSale(PageRequest pageRequest, boolean ignoreStatus)
     {
         LocalDateTime now = LocalDateTime.now();
-        return productRepository.findOnSaleProductEntities(pageRequest, ignoreStatus).stream()
-                .map(p -> productListItemAssembler.buildShoppingListItem(p, now, ignoreStatus))
-                .toList();
+        return productListItemAssembler.buildShoppingListItems(
+                productRepository.findOnSaleProductEntities(pageRequest, ignoreStatus), now, ignoreStatus);
     }
 
     /**
@@ -163,9 +161,7 @@ public class ProductService
         PageResponse<ProductEntity> page = productRepository.findAdminProductPage(
                 pageIndex, pageSize, status, categoryId, brandId, search);
 
-        List<AdminProductListItemDto> content = page.getContent().stream()
-                .map(product -> productListItemAssembler.buildAdminListItem(product, now))
-                .collect(Collectors.toList());
+        List<AdminProductListItemDto> content = productListItemAssembler.buildAdminListItems(page.getContent(), now);
 
         return new PageResponse<>(content, page.getTotalElements(), page.getTotalPages(),
                 page.getPageIndex(), page.getPageSize());
@@ -272,9 +268,8 @@ public class ProductService
     public List<ProductShoppingListItemDto> getTopBestSellers()
     {
         LocalDateTime now = LocalDateTime.now();
-        return productRepository.findTopBestSellerEntities().stream()
-                .map(p -> productListItemAssembler.buildShoppingListItem(p, now, true))
-                .toList();
+        return productListItemAssembler.buildShoppingListItems(
+                productRepository.findTopBestSellerEntities(), now, true);
     }
 
     @Transactional(value = TxType.SUPPORTS)
