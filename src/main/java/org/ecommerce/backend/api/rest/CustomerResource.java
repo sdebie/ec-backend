@@ -29,6 +29,7 @@ import org.eclipse.microprofile.jwt.JsonWebToken;
 
 import java.time.OffsetDateTime;
 import java.util.Optional;
+import org.ecommerce.backend.utils.ClientIpUtils;
 import org.ecommerce.backend.utils.PasswordHashUtil;
 
 // Minimal REST API to support checkout UX (lookup, login, register/update)
@@ -115,7 +116,7 @@ public class CustomerResource {
         }
 
         try {
-            customerPasswordResetService.verifyPasswordResetCode(req.email, req.code, resolveClientIp(xForwardedFor, xRealIp));
+            customerPasswordResetService.verifyPasswordResetCode(req.email, req.code, ClientIpUtils.resolveClientIp(xForwardedFor, xRealIp));
             return Response.ok("Code verified.").build();
         } catch (PasswordResetLockedException ex) {
             return Response.status(Response.Status.TOO_MANY_REQUESTS)
@@ -149,7 +150,7 @@ public class CustomerResource {
                     req.email,
                     req.code,
                     req.newPassword,
-                    resolveClientIp(xForwardedFor, xRealIp)
+                    ClientIpUtils.resolveClientIp(xForwardedFor, xRealIp)
             );
             return Response.ok("Password reset complete.").build();
         } catch (PasswordResetLockedException ex) {
@@ -441,17 +442,4 @@ public class CustomerResource {
         return dto;
     }
 
-    private static String resolveClientIp(String xForwardedFor, String xRealIp) {
-        if (xForwardedFor != null && !xForwardedFor.isBlank()) {
-            int commaIndex = xForwardedFor.indexOf(',');
-            if (commaIndex > -1) {
-                return xForwardedFor.substring(0, commaIndex).trim();
-            }
-            return xForwardedFor.trim();
-        }
-        if (xRealIp != null && !xRealIp.isBlank()) {
-            return xRealIp.trim();
-        }
-        return "unknown";
-    }
 }

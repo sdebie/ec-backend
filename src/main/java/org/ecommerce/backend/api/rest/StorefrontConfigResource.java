@@ -56,6 +56,7 @@ public class StorefrontConfigResource {
         applyTheme(config, sections.get("storefront.theme"));
         applyNavigation(config, sections.get("storefront.navigation"));
         applyFooter(config, sections.get("storefront.footer"));
+        applyContact(config, sections.get("storefront.contact"));
         applyHeader(config, sections.get("storefront.header"));
         applyHomeSections(config, sections.get("storefront.home_sections"));
         applyAuth(config, rawSettings.get("storefront.auth.login_style"));
@@ -151,6 +152,11 @@ public class StorefrontConfigResource {
         footer.set("legalLinks", remapPathToTo(section.get("legalLinks")));
 
         out.set("footer", footer);
+    }
+
+    private void applyContact(ObjectNode out, JsonNode section) {
+        if (section == null || section.isNull()) return;
+        out.set("contact", section);
     }
 
     private void applyHeader(ObjectNode out, JsonNode section) {
