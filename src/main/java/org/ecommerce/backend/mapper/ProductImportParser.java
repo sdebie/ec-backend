@@ -12,6 +12,7 @@ import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.function.Consumer;
 
 import static org.ecommerce.common.util.CsvImportUtils.getValue;
 import static org.ecommerce.common.util.CsvImportUtils.isBlank;
@@ -41,15 +42,28 @@ public class ProductImportParser {
     public List<StagedProductCsvRow> parse(InputStream inputStream) throws IOException {
         List<StagedProductCsvRow> rows = new ArrayList<>();
 
+        forEachRow(inputStream, rows::add);
+
+        return rows;
+    }
+
+    /**
+     * Parses rows one at a time so callers that stage a large import can keep
+     * only their current persistence chunk in memory.
+     *
+     * @param inputStream the CSV input stream (with header row)
+     * @param rowConsumer receives rows in CSV order
+     * @throws IOException if the stream cannot be read
+     */
+    public void forEachRow(InputStream inputStream, Consumer<StagedProductCsvRow> rowConsumer) throws IOException {
+
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream));
              CSVParser csvParser = new CSVParser(reader, CSV_FORMAT)) {
 
             for (CSVRecord record : csvParser) {
-                rows.add(parseRow(record));
+                rowConsumer.accept(parseRow(record));
             }
         }
-
-        return rows;
     }
 
     /**

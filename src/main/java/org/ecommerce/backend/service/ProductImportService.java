@@ -155,30 +155,26 @@ public class ProductImportService implements ImportBatchService<ProductCompariso
      * Intended to be called from a background thread.
      */
     public void handleCsvUploadForBatch(InputStream is, UUID batchId) throws IOException {
-        List<StagedProductCsvRow> allRows = productImportParser.parse(is);
-
-        int rowCount = 0;
-        int validationErrorCount = 0;
-
-        // Process in chunks
         List<StagedProductCsvRow> chunk = new ArrayList<>(STAGING_CHUNK_SIZE);
-        for (StagedProductCsvRow row : allRows) {
+        int[] counts = new int[2];
+
+        productImportParser.forEachRow(is, row -> {
             chunk.add(row);
             if (chunk.size() == STAGING_CHUNK_SIZE) {
                 StagingChunkResult result = stageProductRowsChunk(batchId, chunk);
-                rowCount += result.rowCount();
-                validationErrorCount += result.validationErrorCount();
-                chunk = new ArrayList<>(STAGING_CHUNK_SIZE);
+                counts[0] += result.rowCount();
+                counts[1] += result.validationErrorCount();
+                chunk.clear();
             }
-        }
+        });
 
         if (!chunk.isEmpty()) {
             StagingChunkResult result = stageProductRowsChunk(batchId, chunk);
-            rowCount += result.rowCount();
-            validationErrorCount += result.validationErrorCount();
+            counts[0] += result.rowCount();
+            counts[1] += result.validationErrorCount();
         }
 
-        completeProductCsvUpload(batchId, rowCount, validationErrorCount);
+        completeProductCsvUpload(batchId, counts[0], counts[1]);
     }
 
     @Transactional

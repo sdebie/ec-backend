@@ -10,7 +10,9 @@ import org.apache.commons.csv.CSVRecord;
 import org.ecommerce.backend.mapper.ProductImportParser.StagedProductCsvRow;
 
 import java.io.IOException;
+import java.io.ByteArrayInputStream;
 import java.io.StringReader;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -174,6 +176,27 @@ public class ProductImportParserPropertyTest {
         assertEquals(1, result.validationErrors().size(), "Invalid stock should produce exactly one error");
         assertTrue(result.validationErrors().get(0).startsWith("Invalid integer value for stock:"),
                 "Error message should describe the invalid stock value");
+    }
+
+    @Example
+    void streamsMoreThanFiveThousandRowsInOrder() throws IOException {
+        int rowCount = 5_001;
+        StringBuilder csv = new StringBuilder("product_slug,sku,name,description,categories_slug,short_description,stock,brand_slug,images,attributes\n");
+        for (int index = 0; index < rowCount; index++) {
+            csv.append("product-").append(index)
+                    .append(",SKU-").append(index)
+                    .append(",Product ").append(index)
+                    .append(",Description,category,Short,1,brand,image.jpg,{}\n");
+        }
+
+        List<StagedProductCsvRow> received = new ArrayList<>();
+        parser.forEachRow(
+                new ByteArrayInputStream(csv.toString().getBytes(StandardCharsets.UTF_8)),
+                received::add);
+
+        assertEquals(rowCount, received.size());
+        assertEquals("SKU-0", received.get(0).sku());
+        assertEquals("SKU-5000", received.get(rowCount - 1).sku());
     }
 
     // ── Providers ────────────────────────────────────────────────────────────────
