@@ -4,6 +4,7 @@ import io.quarkus.mailer.MailTemplate;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.ecommerce.backend.mapper.WholesaleMapper;
 import org.ecommerce.common.dto.WholesaleApplicationDetailsDto;
 import org.ecommerce.common.dto.WholesaleApplicationListItemDto;
@@ -39,6 +40,9 @@ public class WholesaleCustomerService {
 
     @Inject
     WholesaleMapper wholesaleMapper;
+
+    @ConfigProperty(name = "quarkus.mailer.from")
+    String senderAddress;
 
     private static final Logger LOG = Logger.getLogger(WholesaleCustomerService.class);
 
@@ -494,7 +498,7 @@ public class WholesaleCustomerService {
         String firstName = (application.firstName != null && !application.firstName.isBlank()) ? application.firstName : "Wholesale Customer";
         String customerEmail = application.accountEmail;
         wholesale_status.to(customerEmail)
-                .from("shawn.debie@gmail.com")
+                .from(senderAddress)
                 .subject("Wholesale Application Approved - " + application.companyName)
                 .data("application", application)
                 .data("customerName", firstName)
@@ -510,7 +514,7 @@ public class WholesaleCustomerService {
         String firstName = (application.firstName != null && !application.firstName.isBlank()) ? application.firstName : "Wholesale Customer";
         String customerEmail = application.accountEmail;
         wholesale_status.to(customerEmail)
-                .from("shawn.debie@gmail.com")
+                .from(senderAddress)
                 .subject("Wholesale Application Status - " + application.companyName)
                 .data("application", application)
                 .data("customerName", firstName)
