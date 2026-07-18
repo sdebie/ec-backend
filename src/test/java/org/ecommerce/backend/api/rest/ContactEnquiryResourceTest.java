@@ -348,7 +348,7 @@ class ContactEnquiryResourceTest {
     // ── X-Forwarded-For header is passed to rate limiter (Req 3.3) ──────────
 
     @Test
-    @DisplayName("X-Forwarded-For header is used for rate limiting")
+    @DisplayName("X-Forwarded-For first entry is the resolved client IP passed to the rate limiter")
     void xForwardedForUsedForRateLimiting() {
         given()
                 .contentType(ContentType.JSON)
@@ -359,7 +359,23 @@ class ContactEnquiryResourceTest {
                 .then()
                 .statusCode(202);
 
-        // The rate limiter should have been called with the resolved client IP
-        verify(enquiryRateLimiter).isAllowed(anyString());
+        // Proves XFF parsing at the resource layer: the first hop, not the whole header
+        // or the proxy address, is what reaches the rate limiter.
+        verify(enquiryRateLimiter).isAllowed("203.0.113.42");
+    }
+
+    @Test
+    @DisplayName("falls back to X-Real-IP when X-Forwarded-For is absent")
+    void xRealIpUsedWhenNoForwardedFor() {
+        given()
+                .contentType(ContentType.JSON)
+                .header("X-Real-IP", "198.51.100.7")
+                .body(validPayload())
+                .when()
+                .post("/api/storefront/enquiries")
+                .then()
+                .statusCode(202);
+
+        verify(enquiryRateLimiter).isAllowed("198.51.100.7");
     }
 }
