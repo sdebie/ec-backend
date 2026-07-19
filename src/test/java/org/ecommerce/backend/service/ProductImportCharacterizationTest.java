@@ -12,6 +12,7 @@ import org.ecommerce.common.enums.ProductImportValidationStatusEn;
 import org.ecommerce.common.enums.ProductUploadStatusEn;
 import org.ecommerce.common.repository.*;
 import org.junit.jupiter.api.*;
+import org.mockito.ArgumentCaptor;
 
 import java.io.IOException;
 import java.io.StringReader;
@@ -216,6 +217,24 @@ class ProductImportCharacterizationTest {
         verify(imageRepository, never()).deleteByVariantId(variant.id);
         verify(imageRepository, never()).persist(any(ProductImageEntity.class));
         verify(imageService).linkExistingBulkImagesForVariant(variant);
+    }
+
+    @Test
+    @DisplayName("upsertVariantImages: WordPress-style leading slashes are stored as storage-relative paths")
+    void upsertVariantImages_leadingSlashes_areNormalized() throws Exception {
+        ProductVariantEntity variant = new ProductVariantEntity();
+        variant.id = UUID.randomUUID();
+
+        Method method = ProductImportService.class.getDeclaredMethod(
+                "upsertVariantImages", ProductVariantEntity.class, String.class);
+        method.setAccessible(true);
+        method.invoke(service, variant, "/04/first.jpg, /04/second.jpg");
+
+        var images = ArgumentCaptor.forClass(ProductImageEntity.class);
+        verify(imageRepository).deleteByVariantId(variant.id);
+        verify(imageRepository, times(2)).persist(images.capture());
+        assertEquals(List.of("04/first.jpg", "04/second.jpg"),
+                images.getAllValues().stream().map(image -> image.imageUrl).toList());
     }
 
     @Test

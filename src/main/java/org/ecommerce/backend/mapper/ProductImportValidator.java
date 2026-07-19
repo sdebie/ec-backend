@@ -9,9 +9,11 @@ import org.ecommerce.common.repository.*;
 import org.jboss.logging.Logger;
 
 import java.util.*;
+import java.nio.file.Path;
 import java.util.stream.Collectors;
 
 import static org.ecommerce.common.util.CsvImportUtils.isBlank;
+import static org.ecommerce.common.util.CsvImportUtils.splitImageNames;
 
 /**
  * Validates product import staged rows against business rules and detects
@@ -124,20 +126,20 @@ public class ProductImportValidator {
             return;
         }
 
-        String[] images = staged.images.split(",");
+        Path storageRoot = Path.of(storagePath).toAbsolutePath().normalize();
         List<String> missing = new ArrayList<>();
 
-        for (String fileName : images) {
-            java.io.File file = new java.io.File(storagePath, fileName.trim());
-            if (!file.exists()) {
-                LOG.warnf("Image Not Found %s%s", storagePath, fileName.trim());
-                missing.add(fileName.trim());
+        for (String imagePath : splitImageNames(staged.images)) {
+            Path file = storageRoot.resolve(imagePath).normalize();
+            if (!file.startsWith(storageRoot) || !file.toFile().isFile()) {
+                LOG.warnf("Image not found or outside storage: %s", imagePath);
+                missing.add(imagePath);
             }
         }
 
         if (!missing.isEmpty()) {
             staged.imageErrors = "Missing Images: " + String.join(", ", missing);
-            validationErrors.add("Image not foud: " + String.join(", ", missing));
+            validationErrors.add("Image not found: " + String.join(", ", missing));
         }
     }
 

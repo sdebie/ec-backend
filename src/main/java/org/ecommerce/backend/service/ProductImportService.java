@@ -2,6 +2,7 @@ package org.ecommerce.backend.service;
 
 import static org.ecommerce.common.util.CsvImportUtils.normalizeSlug;
 import static org.ecommerce.common.util.CsvImportUtils.normalizeCategorySlugs;
+import static org.ecommerce.common.util.CsvImportUtils.normalizeImagePaths;
 import static org.ecommerce.common.util.CsvImportUtils.splitCategorySlugs;
 import static org.ecommerce.common.util.CsvImportUtils.splitImageNames;
 import static org.ecommerce.common.util.CsvImportUtils.trimToNull;
@@ -249,11 +250,14 @@ public class ProductImportService implements ImportBatchService<ProductCompariso
             staged.shortDescription = row.shortDescription();
             staged.stock = row.stock();
             staged.brandSlug = row.brandSlug();
-            staged.images = row.images();
+            // CSVs exported by WordPress commonly use /04/image.jpg. Persist
+            // image paths in the one storage-relative form used everywhere:
+            // 04/image.jpg. This is also what the image validator resolves.
+            staged.images = normalizeImagePaths(row.images());
             staged.attributes = row.attributes();
 
             List<String> validationErrors = new ArrayList<>(row.validationErrors());
-            productImportValidator.validateAndDiff(staged, validationErrors, row.stock(), row.brandSlug(), row.images(), row.attributes());
+            productImportValidator.validateAndDiff(staged, validationErrors, row.stock(), row.brandSlug(), staged.images, row.attributes());
             productImportValidator.validateImages(staged, validationErrors);
             productImportValidator.applyValidationResults(staged, validationErrors);
             validationErrorCount += validationErrors.size();
