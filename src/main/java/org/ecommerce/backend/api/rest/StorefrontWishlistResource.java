@@ -1,17 +1,23 @@
 package org.ecommerce.backend.api.rest;
 
+import jakarta.annotation.security.PermitAll;
 import jakarta.annotation.security.RolesAllowed;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
+import org.ecommerce.backend.service.WishlistHydrationService;
 import org.ecommerce.backend.service.WishlistService;
+import org.ecommerce.common.dto.WishlistHydrationRequestDto;
+import org.ecommerce.common.dto.WishlistHydrationResponseDto;
+import org.ecommerce.common.dto.WishlistHydratedItemDto;
 import org.ecommerce.common.dto.WishlistResponseDto;
 import org.ecommerce.common.entity.CustomerEntity;
 import org.eclipse.microprofile.jwt.JsonWebToken;
 import org.jboss.logging.Logger;
 
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -24,6 +30,9 @@ public class StorefrontWishlistResource {
 
     @Inject
     WishlistService wishlistService;
+
+    @Inject
+    WishlistHydrationService wishlistHydrationService;
 
     @Inject
     JsonWebToken jwt;
@@ -41,6 +50,23 @@ public class StorefrontWishlistResource {
         WishlistResponseDto dto = new WishlistResponseDto();
         dto.variantIds = wishlistService.getWishlistVariantIds(customerId);
         return Response.ok(dto).build();
+    }
+
+    @POST
+    @Path("/hydrate")
+    @PermitAll
+    @Consumes(MediaType.APPLICATION_JSON)
+    public Response hydrateWishlist(WishlistHydrationRequestDto request) {
+        if (request == null || request.variantIds == null || request.variantIds.isEmpty()) {
+            return Response.ok(new WishlistHydrationResponseDto(List.of())).build();
+        }
+        if (request.variantIds.size() > 50) {
+            return Response.status(Response.Status.BAD_REQUEST)
+                    .entity(Map.of("error", "Maximum 50 variant IDs per request"))
+                    .build();
+        }
+        List<WishlistHydratedItemDto> items = wishlistHydrationService.hydrate(request.variantIds);
+        return Response.ok(new WishlistHydrationResponseDto(items)).build();
     }
 
     @POST
