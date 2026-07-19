@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body { font-family: sans-serif; color: #333; line-height: 1.6; }
+        .container { width: 100%; max-width: 600px; margin: 0 auto; border: 1px solid #eee; padding: 20px; border-radius: 10px; }
+        .header { text-align: center; border-bottom: 2px solid #3b82f6; padding-bottom: 20px; }
+        .details-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+        .details-table th { text-align: left; padding: 8px 10px; border-bottom: 1px solid #eee; color: #555; width: 140px; vertical-align: top; }
+        .details-table td { padding: 8px 10px; border-bottom: 1px solid #eee; }
+        .footer { font-size: 12px; color: #777; margin-top: 30px; text-align: center; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <h1>New Wholesale Application</h1>
+        <p>From <strong>{companyName}</strong></p>
+    </div>
+
+    <table class="details-table">
+        <tr>
+            <th>Company</th>
+            <td>{companyName}</td>
+        </tr>
+        {#if tradingName}
+        <tr>
+            <th>Trading name</th>
+            <td>{tradingName}</td>
+        </tr>
+        {/if}
+        <tr>
+            <th>Applicant</th>
+            <td>{applicantName}</td>
+        </tr>
+        <tr>
+            <th>Email</th>
+            <td><a href="mailto:{applicantEmail}">{applicantEmail}</a></td>
+        </tr>
+        {#if phone}
+        <tr>
+            <th>Phone</th>
+            <td><a href="tel:{phone}">{phone}</a></td>
+        </tr>
+        {/if}
+        {#if vatNumber}
+        <tr>
+            <th>VAT number</th>
+            <td>{vatNumber}</td>
+        </tr>
+        {/if}
+        <tr>
+            <th>Application ID</th>
+            <td>{applicationId}</td>
+        </tr>
+    </table>
+
+    <div class="footer">
+        <p>This application was submitted via the wholesale registration form on your website.</p>
+        <p>Review and approve or reject it in the admin dashboard.</p>
+    </div>
+</div>
+</body>
+</html>

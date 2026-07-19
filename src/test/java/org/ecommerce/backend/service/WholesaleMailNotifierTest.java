@@ -6,6 +6,7 @@ package org.ecommerce.backend.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.quarkus.mailer.MailTemplate;
 import io.smallrye.mutiny.Uni;
+import org.ecommerce.backend.exception.RecipientNotConfiguredException;
 import org.ecommerce.common.entity.StoreSettingsEntity;
 import org.ecommerce.common.enums.WholesaleApplicationStatusEn;
 import org.ecommerce.common.repository.SettingsRepository;
@@ -47,6 +48,12 @@ class WholesaleMailNotifierTest {
 
     @Mock
     private MailTemplate wholesale_status;
+
+    @Mock
+    private MailTemplate wholesale_application_received;
+
+    @Mock
+    private ContactEnquiryMailer contactEnquiryMailer;
 
     @Spy
     private ObjectMapper objectMapper = new ObjectMapper();
@@ -233,6 +240,96 @@ class WholesaleMailNotifierTest {
 
             verifyNoInteractions(wholesale_status);
             verifyNoInteractions(settingsRepository);
+        }
+    }
+
+    // ── Admin notification on submission ────────────────────────────────────
+
+    @Nested
+    @DisplayName("onSubmitted — admin notification to the enquiry inbox")
+    class SubmittedNotificationTests {
+
+        private WholesaleApplicationSubmittedEvent submittedEvent(String lastName) {
+            return new WholesaleApplicationSubmittedEvent(
+                    UUID.randomUUID(),
+                    "applicant@test.com",
+                    "Jane",
+                    lastName,
+                    "ACME Corp",
+                    "ACME Trading",
+                    "0821234567",
+                    "VAT123"
+            );
+        }
+
+        /**
+         * Stubs the wholesale_application_received fluent chain including replyTo.
+         */
+        private MailTemplate.MailTemplateInstance stubReceivedChain() {
+            MailTemplate.MailTemplateInstance instance = mock(MailTemplate.MailTemplateInstance.class);
+            when(wholesale_application_received.to(anyString())).thenReturn(instance);
+            when(instance.from(anyString())).thenReturn(instance);
+            when(instance.subject(anyString())).thenReturn(instance);
+            when(instance.data(anyString(), any())).thenReturn(instance);
+            when(instance.replyTo(anyString())).thenReturn(instance);
+            when(instance.send()).thenReturn(Uni.createFrom().voidItem());
+            return instance;
+        }
+
+        @Test
+        @DisplayName("delivers to the resolved enquiryEmail with applicant data and replyTo")
+        void deliversToEnquiryEmail() {
+            when(contactEnquiryMailer.resolveRecipient()).thenReturn("enquiries@store.co.za");
+            MailTemplate.MailTemplateInstance instance = stubReceivedChain();
+
+            notifier.onSubmitted(submittedEvent("Doe"));
+
+            verify(wholesale_application_received).to("enquiries@store.co.za");
+            verify(instance).from(CONFIGURED_FROM);
+            verify(instance).subject("New wholesale application from ACME Corp");
+            verify(instance).replyTo("applicant@test.com");
+            verify(instance).data("applicantName", "Jane Doe");
+            verify(instance).data("applicantEmail", "applicant@test.com");
+            verify(instance).data("companyName", "ACME Corp");
+            verify(instance).data("tradingName", "ACME Trading");
+            verify(instance).data("vatNumber", "VAT123");
+            verify(instance).send();
+        }
+
+        @Test
+        @DisplayName("null lastName → applicantName is firstName only")
+        void nullLastNameUsesFirstNameOnly() {
+            when(contactEnquiryMailer.resolveRecipient()).thenReturn("enquiries@store.co.za");
+            MailTemplate.MailTemplateInstance instance = stubReceivedChain();
+
+            notifier.onSubmitted(submittedEvent(null));
+
+            verify(instance).data("applicantName", "Jane");
+            verify(instance).send();
+        }
+
+        @Test
+        @DisplayName("enquiryEmail not configured → skips send + logs warning")
+        void recipientNotConfiguredSkipsSend() {
+            when(contactEnquiryMailer.resolveRecipient())
+                    .thenThrow(new RecipientNotConfiguredException("enquiryEmail is absent or blank in storefront.contact"));
+
+            notifier.onSubmitted(submittedEvent("Doe"));
+
+            verifyNoInteractions(wholesale_application_received);
+        }
+
+        @Test
+        @DisplayName("blank from-address → skips send without resolving recipient")
+        void blankFromSkipsSend() throws Exception {
+            var fromField = WholesaleMailNotifier.class.getDeclaredField("mailerFrom");
+            fromField.setAccessible(true);
+            fromField.set(notifier, "   ");
+
+            notifier.onSubmitted(submittedEvent("Doe"));
+
+            verifyNoInteractions(contactEnquiryMailer);
+            verifyNoInteractions(wholesale_application_received);
         }
     }
 

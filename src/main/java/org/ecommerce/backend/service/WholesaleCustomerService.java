@@ -40,6 +40,9 @@ public class WholesaleCustomerService {
     @Inject
     Event<WholesaleDecisionEvent> decisionEvent;
 
+    @Inject
+    Event<WholesaleApplicationSubmittedEvent> submittedEvent;
+
     private static final Logger LOG = Logger.getLogger(WholesaleCustomerService.class);
 
     public List<WholesaleApplicationListItemDto> getWholesaleApplications(PageRequest pageRequest, FilterRequest filterRequest) {
@@ -190,6 +193,19 @@ public class WholesaleCustomerService {
         application.postalPostalCode = normalizeText(customerDto.getPostalPostalCode());
 
         WholesaleApplicationEntity.persist(application);
+
+        // Observed AFTER_SUCCESS: the admin notification only goes out if the submission commits
+        submittedEvent.fire(new WholesaleApplicationSubmittedEvent(
+                application.id,
+                application.applicantEmail,
+                application.firstName,
+                application.lastName,
+                application.companyName,
+                application.tradingName,
+                application.phone,
+                application.vatNumber
+        ));
+
         return wholesaleMapper.toDto(application);
     }
 
