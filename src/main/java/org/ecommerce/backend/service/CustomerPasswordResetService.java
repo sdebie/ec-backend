@@ -10,6 +10,7 @@ import org.ecommerce.backend.utils.PasswordHashUtil;
 import org.ecommerce.common.entity.CustomerEntity;
 import org.ecommerce.common.entity.UserEntity;
 import org.ecommerce.common.enums.CustomerStatusEn;
+import org.ecommerce.common.enums.CustomerTypeEn;
 
 import java.security.SecureRandom;
 import java.time.OffsetDateTime;
@@ -93,10 +94,7 @@ public class CustomerPasswordResetService {
         user.passwordHash = PasswordHashUtil.hash(newPassword);
         user.lastLogin = OffsetDateTime.now();
 
-        CustomerEntity customer = user.customer;
-        if (customer != null && (customer.status == null || customer.status == CustomerStatusEn.PENDING)) {
-            customer.status = CustomerStatusEn.ACTIVE;
-        }
+        activateCustomerProfile(user.customer);
 
         user.passwordResetCodeHash = null;
         user.passwordResetCodeExpiry = null;
@@ -122,14 +120,27 @@ public class CustomerPasswordResetService {
         user.passwordHash = PasswordHashUtil.hash(newPassword);
         user.lastLogin = OffsetDateTime.now();
 
-        // Activate the linked customer profile if still in REGISTERING state
-        CustomerEntity customer = user.customer;
-        if (customer != null && (customer.status == null || customer.status == CustomerStatusEn.PENDING)) {
-            customer.status = CustomerStatusEn.ACTIVE;
-        }
+        activateCustomerProfile(user.customer);
 
         user.resetToken = null;
         user.resetTokenExpiry = null;
+    }
+
+    /**
+     * A completed reset makes the account log-in-capable, so the linked profile must
+     * leave PENDING and must not remain GUEST — that tier is anonymous-checkout only.
+     * WHOLESALER is never downgraded.
+     */
+    private static void activateCustomerProfile(CustomerEntity customer) {
+        if (customer == null) {
+            return;
+        }
+        if (customer.status == null || customer.status == CustomerStatusEn.PENDING) {
+            customer.status = CustomerStatusEn.ACTIVE;
+        }
+        if (customer.shopperType == null || customer.shopperType == CustomerTypeEn.GUEST) {
+            customer.shopperType = CustomerTypeEn.RETAILER;
+        }
     }
 
     private UserEntity verifyCodeInternal(String email, String code, String clientIp) {

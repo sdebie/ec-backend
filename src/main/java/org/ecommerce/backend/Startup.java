@@ -12,9 +12,12 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
 import jakarta.transaction.Transactional;
 import org.ecommerce.common.enums.StaffRoleEn;
 import org.ecommerce.common.entity.StaffUserEntity;
+import org.jboss.logging.Logger;
 
 @ApplicationScoped
 public class Startup {
+
+    private static final Logger LOG = Logger.getLogger(Startup.class);
 
     @ConfigProperty(name = "storage.path")
     String storagePath;
@@ -28,16 +31,14 @@ public class Startup {
         java.io.File folder = new java.io.File(storagePath);
         if (!folder.exists()) {
             boolean created = folder.mkdirs();
-            System.out.println("DEBUG:: Storage folder created: " + created);
-        } else {
-            System.out.println("DEBUG:: Storage path: " + folder);
+            LOG.info("Storage folder created (" + created + "): " + folder);
         }
 
         router.route("/static/images/*")
                 .handler(StaticHandler.create(FileSystemAccess.ROOT, storagePath)
                         .setCachingEnabled(false));
 
-        System.out.println("DEBUG:: Image server active for: " + storagePath);
+        LOG.info("Image server active for: " + storagePath);
 
         // 3. User Seed logic
         if (StaffUserEntity.count() == 0) {

@@ -6,6 +6,9 @@ import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.MultivaluedMap;
 import jakarta.ws.rs.core.Response;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
+import java.util.LinkedHashMap;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.ecommerce.backend.service.payfast.HtmlFormField;
 import org.ecommerce.common.enums.OrderStatusEn;
@@ -20,7 +23,6 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 @Path("/api/payments")
 @Produces(MediaType.APPLICATION_JSON)
@@ -97,25 +99,23 @@ public class PayFastResource
 
     /**
      * The Webhook (ITN) listener for PayFast to update order status.
+     * Takes the raw body because the signature covers the parameters in posted order.
      */
     @POST
     @Path("/itn")
     @Consumes(MediaType.APPLICATION_FORM_URLENCODED)
     @Transactional
-    public Response handleITN(MultivaluedMap<String, String> formParams)
+    public Response handleITN(String rawBody)
     {
         LOG.debug("ITN callback received");
 
-        // Convert to standard Map
-        Map<String, String> params = formParams.entrySet().stream()
-                .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().getFirst()));
-
-        LOG.debug("Received Signature: " + params.get("signature"));
-
         // 1. Security Check
-//        if (!payFastService.verifySignature(params)) {
-//            return Response.status(Response.Status.UNAUTHORIZED).build();
-//        }
+        if (!payFastService.verifyItnSignature(rawBody)) {
+            LOG.warn("ITN callback rejected: signature verification failed");
+            return Response.status(Response.Status.UNAUTHORIZED).build();
+        }
+
+        Map<String, String> params = parseFormBody(rawBody);
 
         try {
             // 2. Generic Logging
@@ -156,5 +156,26 @@ public class PayFastResource
         }
 
         return Response.ok().build();
+    }
+
+    /**
+     * Parses a form-urlencoded body into a map, keeping the first value per key.
+     */
+    private static Map<String, String> parseFormBody(String rawBody)
+    {
+        Map<String, String> params = new LinkedHashMap<>();
+        for (String pair : rawBody.split("&")) {
+            if (pair.isBlank()) {
+                continue;
+            }
+            int eq = pair.indexOf('=');
+            String key = eq < 0 ? pair : pair.substring(0, eq);
+            String value = eq < 0 ? "" : pair.substring(eq + 1);
+            params.putIfAbsent(
+                    URLDecoder.decode(key, StandardCharsets.UTF_8),
+                    URLDecoder.decode(value, StandardCharsets.UTF_8)
+            );
+        }
+        return params;
     }
 }

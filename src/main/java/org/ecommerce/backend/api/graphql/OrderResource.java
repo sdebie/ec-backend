@@ -39,16 +39,13 @@ public class OrderResource
     @Description("Create an order")
     public OrderResponseDto createOrder(@Name("order") OrderDto orderDto) throws GraphQLException
     {
-        System.out.println("DEBUG:: Received createOrder request for Items:" + orderDto.getItems().size());
-
         if (orderDto.getSessionId() == null) {
             throw new GraphQLException("Invalid Order Session info");
         }
 
-        System.out.println("DEBUG:: Received OrderDto: " + orderDto.getSessionId() + " " + (orderDto.getItems() == null ? 0 : orderDto.getItems().size()));
-        OrderResponseDto result = orderService.createOrderFromDto(orderDto);
-        System.out.println("DEBUG:: Created Order with Items=" + result.items);
-        return result;
+        LOG.debug("createOrder for sessionId=" + orderDto.getSessionId()
+                + " with " + (orderDto.getItems() == null ? 0 : orderDto.getItems().size()) + " items");
+        return orderService.createOrderFromDto(orderDto);
     }
 
     @Mutation("updateCustomerInformation")
@@ -58,7 +55,7 @@ public class OrderResource
             @Name("customer") CustomerDto customerDto
     ) throws GraphQLException
     {
-        System.out.println("DEBUG:: Received updateCustomerInformation request for sessionId=" + sessionId);
+        LOG.debug("updateCustomerInformation for sessionId=" + sessionId);
         return orderService.updateCustomerInformation(sessionId, customerDto);
     }
 
@@ -69,7 +66,7 @@ public class OrderResource
             @Name("status") String status
     ) throws GraphQLException
     {
-        System.out.println("DEBUG:: Received updateOrderStatus request for sessionId=" + sessionId + ", status=" + status);
+        LOG.debug("updateOrderStatus for sessionId=" + sessionId + ", status=" + status);
         return orderService.updateOrderStatus(sessionId, status);
     }
 
@@ -77,7 +74,7 @@ public class OrderResource
     @Description("Update an order and return")
     public OrderResponseDto getOrderById(@Name("id") String id) throws GraphQLException
     {
-        System.out.println("DEBUG:: Received getOrderById request");
+        LOG.debug("getOrderById");
         try {
             return orderService.getOrderById(UUID.fromString(id));
         } catch (IllegalArgumentException e) {
@@ -89,7 +86,7 @@ public class OrderResource
     @Description("Get the latest order for a given sessionId")
     public OrderResponseDto getOrderBySessionId(@Name("sessionId") String sessionId) throws GraphQLException
     {
-        System.out.println("DEBUG:: Received getOrderBySessionId request: " + sessionId);
+        LOG.debug("getOrderBySessionId for sessionId=" + sessionId);
         if (sessionId == null || sessionId.isBlank()) {
             throw new GraphQLException("Invalid Order Session info");
         }

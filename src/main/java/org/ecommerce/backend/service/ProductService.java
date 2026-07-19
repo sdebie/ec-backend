@@ -6,6 +6,7 @@ import jakarta.transaction.Transactional;
 import jakarta.transaction.Transactional.TxType;
 import jakarta.ws.rs.NotFoundException;
 import lombok.extern.slf4j.Slf4j;
+import org.ecommerce.backend.assembler.ProductListItemAssembler;
 import org.ecommerce.backend.mapper.ProductMapper;
 import org.ecommerce.common.dto.*;
 import org.ecommerce.common.entity.ProductEntity;
@@ -45,7 +46,7 @@ public class ProductService
     ProductRepository productRepository;
 
     @Inject
-    org.ecommerce.backend.assembler.ProductListItemAssembler productListItemAssembler;
+    ProductListItemAssembler productListItemAssembler;
 
     @Inject
     ProductVariantRepository productVariantRepository;
