@@ -162,9 +162,12 @@ class AccountSecurityIT {
         // Seed
         insertUserWithPassword(TAKEOVER_EMAIL, TAKEOVER_PASSWORD);
 
-        // Attempt to register with a new password on an existing account
+        // Attempt to register with a new password on an existing account.
+        // Distinct X-Forwarded-For per test: without it all register calls share the
+        // limiter's "unknown" IP bucket and trip the %test rate limit (3/2s).
         String responseBody = given()
                 .contentType("application/json")
+                .header("X-Forwarded-For", "198.51.100.61")
                 .body("{\"email\":\"" + TAKEOVER_EMAIL + "\",\"password\":\"NewPass123\",\"firstName\":\"Hacker\"}")
         .when()
                 .post("/api/customers/register")
@@ -198,6 +201,7 @@ class AccountSecurityIT {
 
         String responseBody = given()
                 .contentType("application/json")
+                .header("X-Forwarded-For", "198.51.100.62")
                 .body("{\"email\":\"" + OAUTH_EMAIL + "\",\"password\":\"NewPass123\",\"firstName\":\"Attacker\"}")
         .when()
                 .post("/api/customers/register")
@@ -225,6 +229,7 @@ class AccountSecurityIT {
 
         given()
                 .contentType("application/json")
+                .header("X-Forwarded-For", "198.51.100.63")
                 .body("{\"email\":\"" + UNCLAIMED_EMAIL + "\",\"password\":\"ClaimPass1\",\"firstName\":\"Claimer\"}")
         .when()
                 .post("/api/customers/register")
@@ -322,6 +327,7 @@ class AccountSecurityIT {
         // Register (claim) the account — mirrors Google login's GUEST→RETAILER upgrade
         given()
                 .contentType("application/json")
+                .header("X-Forwarded-For", "198.51.100.64")
                 .body("{\"email\":\"" + GUEST_UPGRADE_EMAIL + "\",\"password\":\"UpgradePass1\",\"firstName\":\"Upgraded\"}")
         .when()
                 .post("/api/customers/register")

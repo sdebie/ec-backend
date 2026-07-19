@@ -11,6 +11,8 @@ import org.ecommerce.backend.exception.PasswordResetLockedException;
 import org.ecommerce.backend.service.CustomerAuthService;
 import org.ecommerce.backend.service.CustomerPasswordResetService;
 import org.ecommerce.backend.service.CustomerPortalService;
+import org.ecommerce.backend.service.RateLimitDecision;
+import org.ecommerce.backend.service.RateLimiterService;
 import org.ecommerce.common.dto.CustomerLoginResponseDto;
 import org.ecommerce.common.dto.CustomerProfileDto;
 import org.ecommerce.common.dto.PasswordChangeRequestDto;
@@ -51,17 +53,34 @@ public class CustomerResource {
     CustomerPortalService customerPortalService;
 
     @Inject
+    RateLimiterService rateLimiterService;
+
+    @Inject
     JsonWebToken jwt;
 
     @ConfigProperty(name = "google.client.id", defaultValue = "5598643375-sooimltbseub586f1pucut2fut95dnbl.apps.googleusercontent.com")
     String googleClientId;
 
+    // Rate limiting reduces enumeration velocity; guarding the endpoint (not just rate
+    // limiting) is an open product decision deferred by the completed auth-hardening spec
+    // (see docs/complete-specs/auth-hardening/tasks.md).
     @GET
     @Path("/lookup")
-    public Response lookup(@QueryParam("email") String email) {
+    public Response lookup(
+            @QueryParam("email") String email,
+            @HeaderParam("X-Forwarded-For") String xForwardedFor,
+            @HeaderParam("X-Real-IP") String xRealIp
+    ) {
         if (email == null || email.isBlank()) {
             return Response.status(Response.Status.BAD_REQUEST).entity("email is required").build();
         }
+
+        String clientIp = ClientIpUtils.resolveClientIp(xForwardedFor, xRealIp);
+        RateLimitDecision decision = rateLimiterService.check("customer-lookup", clientIp, 20, 3600);
+        if (!decision.allowed()) {
+            return Response.status(429).header("Retry-After", decision.retryAfterSeconds()).build();
+        }
+
         CustomerEntity ce = CustomerEntity.findByEmail(email.trim());
         if (ce == null) {
             return Response.status(Response.Status.NO_CONTENT).build();
@@ -97,9 +116,29 @@ public class CustomerResource {
     @POST
     @Path("/password-reset/request")
     @Transactional
-    public Response requestPasswordResetCode(PasswordResetRequest req) {
+    public Response requestPasswordResetCode(
+            PasswordResetRequest req,
+            @HeaderParam("X-Forwarded-For") String xForwardedFor,
+            @HeaderParam("X-Real-IP") String xRealIp
+    ) {
         if (req == null || req.email == null || req.email.isBlank()) {
             return Response.status(Response.Status.BAD_REQUEST).entity("email is required").build();
+        }
+
+        String clientIp = ClientIpUtils.resolveClientIp(xForwardedFor, xRealIp);
+
+        // Chained-check: IP limiter first; if denied, email counter is NOT incremented.
+        // Silent denial — return the identical generic response to prevent enumeration (Req 5.2).
+        RateLimitDecision ipDecision = rateLimiterService.check("password-reset-request", clientIp, 5, 3600);
+        if (!ipDecision.allowed()) {
+            return Response.ok("If an account exists, a reset code has been sent.").build();
+        }
+
+        // Email limiter second (IP passed)
+        String emailKey = req.email.toLowerCase().trim();
+        RateLimitDecision emailDecision = rateLimiterService.check("password-reset-request-email", emailKey, 3, 3600);
+        if (!emailDecision.allowed()) {
+            return Response.ok("If an account exists, a reset code has been sent.").build();
         }
 
         customerPasswordResetService.initiatePasswordResetCode(req.email);
@@ -170,9 +209,29 @@ public class CustomerResource {
     @POST
     @Path("/login")
     @Transactional
-    public Response login(LoginRequest req) {
+    public Response login(
+            LoginRequest req,
+            @HeaderParam("X-Forwarded-For") String xForwardedFor,
+            @HeaderParam("X-Real-IP") String xRealIp
+    ) {
+        // Body-shape validation stays ahead of the limiter — guarantees email key is non-null
         if (req == null || req.email == null || req.password == null) {
             return Response.status(Response.Status.BAD_REQUEST).entity("email and password required").build();
+        }
+
+        String clientIp = ClientIpUtils.resolveClientIp(xForwardedFor, xRealIp);
+
+        // Chained-check: IP limiter first; if denied, email counter is NOT incremented
+        RateLimitDecision ipDecision = rateLimiterService.check("customer-login", clientIp, 10, 900);
+        if (!ipDecision.allowed()) {
+            return Response.status(429).header("Retry-After", ipDecision.retryAfterSeconds()).build();
+        }
+
+        // Email limiter second (IP passed)
+        String emailKey = req.email.toLowerCase().trim();
+        RateLimitDecision emailDecision = rateLimiterService.check("customer-login-email", emailKey, 5, 900);
+        if (!emailDecision.allowed()) {
+            return Response.status(429).header("Retry-After", emailDecision.retryAfterSeconds()).build();
         }
 
         UserEntity user = UserEntity.findByEmail(req.email.trim());
@@ -212,9 +271,21 @@ public class CustomerResource {
     @POST
     @Path("/login/google")
     @Transactional
-    public Response loginWithGoogle(GoogleLoginRequest req) {
+    public Response loginWithGoogle(
+            GoogleLoginRequest req,
+            @HeaderParam("X-Forwarded-For") String xForwardedFor,
+            @HeaderParam("X-Real-IP") String xRealIp
+    ) {
         if (req == null || req.idToken == null || req.idToken.isBlank()) {
             return Response.status(Response.Status.BAD_REQUEST).entity("idToken is required").build();
+        }
+
+        String clientIp = ClientIpUtils.resolveClientIp(xForwardedFor, xRealIp);
+
+        // Rate limit by IP — no per-email key because email is only known after token verification
+        RateLimitDecision ipDecision = rateLimiterService.check("google-login", clientIp, 10, 900);
+        if (!ipDecision.allowed()) {
+            return Response.status(429).header("Retry-After", ipDecision.retryAfterSeconds()).build();
         }
 
         try {
@@ -322,16 +393,31 @@ public class CustomerResource {
      * Returns 409 if the email already belongs to a claimed account (non-empty passwordHash OR ACTIVE status).
      * Only an unclaimed PENDING/GUEST record may be claimed. Token issued only on genuine creation/claim.
      * If token signing fails, the @Transactional handler rolls back — no account persists without its token.
+     *
+     * The 409 response is an account-existence oracle; rate limiting slows enumeration/mass signup
+     * but is not a fix for lookup's PII disclosure.
      */
     @POST
     @Path("/register")
     @Transactional
-    public Response register(RegisterRequest req) {
+    public Response register(
+            RegisterRequest req,
+            @HeaderParam("X-Forwarded-For") String xForwardedFor,
+            @HeaderParam("X-Real-IP") String xRealIp
+    ) {
+        // Body-shape validation first (400) — before rate limiter to avoid consuming budget on malformed requests
         if (req == null || req.email == null || req.email.isBlank()) {
             return Response.status(Response.Status.BAD_REQUEST).entity("email is required").build();
         }
         if (req.password == null || req.password.isBlank()) {
             return Response.status(Response.Status.BAD_REQUEST).entity("password is required").build();
+        }
+
+        // Rate limit check — runs after body-shape validation, before the 409 claimed-account guard
+        String clientIp = ClientIpUtils.resolveClientIp(xForwardedFor, xRealIp);
+        RateLimitDecision decision = rateLimiterService.check("register", clientIp, 10, 3600);
+        if (!decision.allowed()) {
+            return Response.status(429).header("Retry-After", decision.retryAfterSeconds()).build();
         }
 
         String email = req.email.trim();

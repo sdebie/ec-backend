@@ -8,7 +8,8 @@ import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import org.ecommerce.backend.exception.RecipientNotConfiguredException;
 import org.ecommerce.backend.service.ContactEnquiryMailer;
-import org.ecommerce.backend.service.EnquiryRateLimiter;
+import org.ecommerce.backend.service.RateLimitDecision;
+import org.ecommerce.backend.service.RateLimiterService;
 import org.ecommerce.backend.utils.ClientIpUtils;
 import org.ecommerce.common.dto.ContactEnquiryRequestDto;
 import org.jboss.logging.Logger;
@@ -47,7 +48,7 @@ public class ContactEnquiryResource {
     ContactEnquiryMailer contactEnquiryMailer;
 
     @Inject
-    EnquiryRateLimiter enquiryRateLimiter;
+    RateLimiterService rateLimiterService;
 
     @Inject
     Validator validator;
@@ -76,9 +77,9 @@ public class ContactEnquiryResource {
         }
 
         // 3. Rate-limit check
-        if (!enquiryRateLimiter.isAllowed(clientIp)) {
-            LOG.warnf("[ContactEnquiry] rate limit exceeded for IP %s", clientIp);
-            return Response.status(429).build();
+        RateLimitDecision decision = rateLimiterService.check("enquiry", clientIp, 5, 3600);
+        if (!decision.allowed()) {
+            return Response.status(429).header("Retry-After", decision.retryAfterSeconds()).build();
         }
 
         // 4. Resolve recipient + send (async fire-and-log)

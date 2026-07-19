@@ -5,15 +5,15 @@ import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.http.ContentType;
 import org.ecommerce.backend.exception.RecipientNotConfiguredException;
 import org.ecommerce.backend.service.ContactEnquiryMailer;
-import org.ecommerce.backend.service.EnquiryRateLimiter;
+import org.ecommerce.backend.service.RateLimitDecision;
+import org.ecommerce.backend.service.RateLimiterService;
 import org.ecommerce.common.dto.ContactEnquiryRequestDto;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import static io.restassured.RestAssured.given;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 /**
@@ -31,12 +31,13 @@ class ContactEnquiryResourceTest {
     ContactEnquiryMailer contactEnquiryMailer;
 
     @InjectMock
-    EnquiryRateLimiter enquiryRateLimiter;
+    RateLimiterService rateLimiterService;
 
     @BeforeEach
     void setUp() {
         // Default: allow all requests (under rate limit)
-        when(enquiryRateLimiter.isAllowed(anyString())).thenReturn(true);
+        when(rateLimiterService.check(anyString(), anyString(), anyInt(), anyLong()))
+                .thenReturn(new RateLimitDecision(true, 0));
         // Default: mailer does nothing (no throw = success)
         doNothing().when(contactEnquiryMailer).send(any(ContactEnquiryRequestDto.class));
     }
@@ -269,7 +270,8 @@ class ContactEnquiryResourceTest {
     @Test
     @DisplayName("rate limit exceeded returns 429 and does not invoke mailer")
     void rateLimitExceeded_returns429_noMail() {
-        when(enquiryRateLimiter.isAllowed(anyString())).thenReturn(false);
+        when(rateLimiterService.check(anyString(), anyString(), anyInt(), anyLong()))
+                .thenReturn(new RateLimitDecision(false, 3500));
 
         given()
                 .contentType(ContentType.JSON)
@@ -277,7 +279,8 @@ class ContactEnquiryResourceTest {
                 .when()
                 .post("/api/storefront/enquiries")
                 .then()
-                .statusCode(429);
+                .statusCode(429)
+                .header("Retry-After", "3500");
 
         verifyNoInteractions(contactEnquiryMailer);
     }
@@ -361,7 +364,7 @@ class ContactEnquiryResourceTest {
 
         // Proves XFF parsing at the resource layer: the first hop, not the whole header
         // or the proxy address, is what reaches the rate limiter.
-        verify(enquiryRateLimiter).isAllowed("203.0.113.42");
+        verify(rateLimiterService).check(eq("enquiry"), eq("203.0.113.42"), anyInt(), anyLong());
     }
 
     @Test
@@ -376,6 +379,6 @@ class ContactEnquiryResourceTest {
                 .then()
                 .statusCode(202);
 
-        verify(enquiryRateLimiter).isAllowed("198.51.100.7");
+        verify(rateLimiterService).check(eq("enquiry"), eq("198.51.100.7"), anyInt(), anyLong());
     }
 }
