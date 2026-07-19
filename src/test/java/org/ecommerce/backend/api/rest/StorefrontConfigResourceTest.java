@@ -87,6 +87,25 @@ class StorefrontConfigResourceTest {
                 .body("auth.loginStyle", equalTo("modal"));
     }
 
+    @Test
+    void getConfig_shouldAssembleNavigationWithoutRemovedItems() {
+        StoreSettingsEntity navigationSetting = new StoreSettingsEntity();
+        navigationSetting.key = "storefront.navigation";
+        navigationSetting.value = "{\"items\":[{\"id\":\"home\",\"label\":\"Home\",\"path\":\"/\",\"external\":false,\"sortOrder\":0},{\"id\":\"products\",\"label\":\"Products\",\"path\":\"/products\",\"external\":false,\"sortOrder\":1},{\"id\":\"about\",\"label\":\"About Us\",\"path\":\"/about-us\",\"external\":false,\"sortOrder\":2},{\"id\":\"contact\",\"label\":\"Contact Us\",\"path\":\"/contact-us\",\"external\":false,\"sortOrder\":3}]}";
+
+        when(settingsRepository.getAllStoreSettings()).thenReturn(List.of(navigationSetting));
+
+        given()
+                .when().get("/api/storefront/config")
+                .then()
+                .statusCode(200)
+                .body("nav", hasSize(4))
+                .body("nav[2].id", equalTo("about"))
+                .body("nav[2].sortOrder", equalTo(2))
+                .body("nav[3].id", equalTo("contact"))
+                .body("nav[3].sortOrder", equalTo(3));
+    }
+
     // ── Contact assembly tests ────────────────────────────────────────────────
 
     @Test
