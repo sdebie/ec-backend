@@ -1,5 +1,6 @@
 package org.ecommerce.backend.api.rest;
 
+import jakarta.annotation.security.RolesAllowed;
 import jakarta.inject.Inject;
 import jakarta.validation.Valid;
 import jakarta.ws.rs.*;
@@ -53,6 +54,7 @@ public class StaffResource
 
     @POST
     @Path("/reset-password")
+    @RolesAllowed("SUPER_ADMIN")
     public Response resetPassword(@Valid ResetPasswordRequest req)
     {
         if (req == null || req.email() == null || req.email().isBlank() || req.password() == null || req.password().isBlank()) {

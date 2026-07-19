@@ -1,5 +1,6 @@
 package org.ecommerce.backend.api.rest;
 
+import io.quarkus.arc.profile.IfBuildProfile;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
@@ -13,7 +14,10 @@ import java.util.Map;
 /**
  * Simple REST endpoint to verify that the PostgreSQL table "test" exists and is accessible
  * in the configured database (kw_db). Delegates the check to the JPA entity.
+ * <p>
+ * Dev-gated: unreachable in %prod. Permanent deletion is owned by backend-hygiene (post-launch).
  */
+@IfBuildProfile("dev")
 @Path("/testdb")
 public class TestDbResource
 {

@@ -42,6 +42,7 @@ public class ProductResource
 
     @Query("productList")
     @Description("Returns a paged list of products with active retail or wholesale pricing. Category scoping is not applied in this endpoint.")
+    @RolesAllowed({"SUPER_ADMIN", "CATALOG_MANAGER", "ORDER_MANAGER", "VIEWER"})
     @Transactional(value = TxType.SUPPORTS)
     public List<ProductListItemDto> getProductsList(
             @Name("pageRequest") PageRequest pageRequest,
@@ -52,6 +53,7 @@ public class ProductResource
 
     @Query("productListByCategory")
     @Description("Returns a paged list of products for a mandatory category. Optionally includes categories under the same parent scope.")
+    @RolesAllowed({"SUPER_ADMIN", "CATALOG_MANAGER", "ORDER_MANAGER", "VIEWER"})
     @Transactional(value = TxType.SUPPORTS)
     public List<ProductListItemDto> getProductsListByCategory(
             @Name("categoryId") @Description("Required category UUID.") String categoryId,
@@ -80,6 +82,7 @@ public class ProductResource
 
     @Query("productListByBrand")
     @Description("Returns a paged list of products linked to a mandatory brand.")
+    @RolesAllowed({"SUPER_ADMIN", "CATALOG_MANAGER", "ORDER_MANAGER", "VIEWER"})
     @Transactional(value = TxType.SUPPORTS)
     public List<ProductListItemDto> getProductsListByBrand(
             @Name("brandId") @Description("Required brand UUID.") String brandId,
@@ -277,6 +280,7 @@ public class ProductResource
 
     @Query("getProductInformation")
     @Description("Fetch a product with all variants, categories, and images for a given product id. Products can belong to multiple categories which are returned in the response.")
+    @RolesAllowed({"SUPER_ADMIN", "CATALOG_MANAGER", "ORDER_MANAGER", "VIEWER"})
     @Transactional(value = TxType.SUPPORTS)
     public ProductInformationDto getProductInformation(@Name("productId") String productId)
     {

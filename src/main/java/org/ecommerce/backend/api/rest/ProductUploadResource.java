@@ -1,5 +1,6 @@
 package org.ecommerce.backend.api.rest;
 
+import jakarta.annotation.security.RolesAllowed;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
@@ -37,6 +38,7 @@ public class ProductUploadResource {
 
     @POST
     @Path("/upload-csv")
+    @RolesAllowed({"SUPER_ADMIN", "CATALOG_MANAGER"})
     public Response productUploadCsv(ProductUploadFormDto form) {
         try {
             // 1. Resolve the admin user from the security context
@@ -66,6 +68,7 @@ public class ProductUploadResource {
     @POST
     @Path("/batches/{batchId}/staged/async")
     @Consumes(MediaType.APPLICATION_JSON)
+    @RolesAllowed({"SUPER_ADMIN", "CATALOG_MANAGER"})
     public Response startProcessProductImportBatch(@PathParam("batchId") UUID batchId) {
         try {
             importService.markProductImportBatchAsProcessing(batchId);
@@ -81,6 +84,7 @@ public class ProductUploadResource {
 
     @GET
     @Path("/batches/{batchId}/staged/status")
+    @RolesAllowed({"SUPER_ADMIN", "CATALOG_MANAGER"})
     public Response getProductImportStatus(@PathParam("batchId") UUID batchId) {
         try {
             return Response.ok(importService.getProductImportBatchProcessStatus(batchId)).build();
@@ -91,6 +95,7 @@ public class ProductUploadResource {
 
     @POST
     @Path("/price/upload-csv")
+    @RolesAllowed({"SUPER_ADMIN", "CATALOG_MANAGER"})
     public Response productPriceUploadCsv(ProductUploadFormDto form) {
         try {
             // 1. Resolve the admin user from the security context
@@ -120,6 +125,7 @@ public class ProductUploadResource {
     @POST
     @Path("/price/batches/{batchId}/staged/async")
     @Consumes(MediaType.APPLICATION_JSON)
+    @RolesAllowed({"SUPER_ADMIN", "CATALOG_MANAGER"})
     public Response startProcessProductPriceImportBatch(@PathParam("batchId") UUID batchId) {
         //TODO::SDB Fix Hardcoded admin — replace with JWT identity when auth hardening spec is implemented
         StaffUserEntity approvedBy = StaffUserEntity.findByEmail("admin@gmail.com");
@@ -137,6 +143,7 @@ public class ProductUploadResource {
 
     @GET
     @Path("/price/batches/{batchId}/staged/status")
+    @RolesAllowed({"SUPER_ADMIN", "CATALOG_MANAGER"})
     public Response getProductPriceImportStatus(@PathParam("batchId") UUID batchId) {
         try {
             return Response.ok(priceImportService.getProductPriceImportBatchProcessStatus(batchId)).build();

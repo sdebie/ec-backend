@@ -1,5 +1,6 @@
 package org.ecommerce.backend.api.graphql;
 
+import jakarta.annotation.security.RolesAllowed;
 import jakarta.inject.Inject;
 import org.eclipse.microprofile.graphql.*;
 import org.ecommerce.backend.service.CategoryService;
@@ -59,6 +60,7 @@ public class CategoryResource
 
     @Mutation("createCategory")
     @Description("Create a new category")
+    @RolesAllowed({"SUPER_ADMIN", "CATALOG_MANAGER"})
     public void createCategory(@Name("categoryDto") CategoryDto categoryDto)
     {
         categoryService.createCategory(categoryDto);
@@ -66,6 +68,7 @@ public class CategoryResource
 
     @Mutation("updateCategory")
     @Description("Update an existing category")
+    @RolesAllowed({"SUPER_ADMIN", "CATALOG_MANAGER"})
     public void updateCategory(@Name("id") UUID id, @Name("categoryDto") CategoryDto categoryDto)
     {
         categoryService.updateCategory(id, categoryDto);
@@ -73,6 +76,7 @@ public class CategoryResource
 
     @Mutation("deleteCategory")
     @Description("Delete a category")
+    @RolesAllowed({"SUPER_ADMIN", "CATALOG_MANAGER"})
     public void deleteCategory(@Name("id") UUID id)
     {
         categoryService.deleteCategory(id);

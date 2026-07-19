@@ -1,5 +1,6 @@
 package org.ecommerce.backend.api.rest;
 
+import jakarta.annotation.security.RolesAllowed;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.GET;
@@ -25,6 +26,7 @@ public class ProductExport {
     @GET
     @Path("/full_export")
     @Produces("text/csv")
+    @RolesAllowed({"SUPER_ADMIN", "CATALOG_MANAGER", "ORDER_MANAGER", "VIEWER"})
     public Response exportAllProducts() {
         StreamingOutput stream = output -> {
             try (PrintWriter writer = new PrintWriter(output)) {
@@ -43,6 +45,7 @@ public class ProductExport {
     @GET
     @Path("/list_export")
     @Produces("text/csv")
+    @RolesAllowed({"SUPER_ADMIN", "CATALOG_MANAGER", "ORDER_MANAGER", "VIEWER"})
     public Response exportProductsList() {
         StreamingOutput stream = output -> {
             try (PrintWriter writer = new PrintWriter(output)) {
@@ -61,6 +64,7 @@ public class ProductExport {
     @GET
     @Path("/price_export")
     @Produces("text/csv")
+    @RolesAllowed({"SUPER_ADMIN", "CATALOG_MANAGER", "ORDER_MANAGER", "VIEWER"})
     public Response exportProductsPrice() {
         StreamingOutput stream = output -> {
             try (PrintWriter writer = new PrintWriter(output)) {

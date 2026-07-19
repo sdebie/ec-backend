@@ -88,6 +88,7 @@ public class ImageResource
      */
     @POST
     @Path("/upload/product-variant/{productVariantId}")
+    @RolesAllowed({"SUPER_ADMIN", "CATALOG_MANAGER"})
     @Consumes(MediaType.MULTIPART_FORM_DATA)
     @Produces(MediaType.APPLICATION_JSON)
     public Response uploadProductVariantImage(
@@ -111,6 +112,7 @@ public class ImageResource
      */
     @POST
     @Path("/upload/category")
+    @RolesAllowed({"SUPER_ADMIN", "CATALOG_MANAGER"})
     @Consumes(MediaType.MULTIPART_FORM_DATA)
     @Produces(MediaType.APPLICATION_JSON)
     public Response uploadCategoryImage(@RestForm("file") FileUpload file)
@@ -128,6 +130,7 @@ public class ImageResource
      */
     @POST
     @Path("/upload/brand")
+    @RolesAllowed({"SUPER_ADMIN", "CATALOG_MANAGER"})
     @Consumes(MediaType.MULTIPART_FORM_DATA)
     @Produces(MediaType.APPLICATION_JSON)
     public Response uploadBrandImage(@RestForm("file") FileUpload file)
@@ -142,6 +145,7 @@ public class ImageResource
 
     @POST
     @Path("/bulk-upload")
+    @RolesAllowed({"SUPER_ADMIN", "CATALOG_MANAGER"})
     @Consumes(MediaType.MULTIPART_FORM_DATA)
     @Produces(MediaType.APPLICATION_JSON)
     public Response bulkUpload(
@@ -158,6 +162,7 @@ public class ImageResource
 
     @GET
     @Path("/directories")
+    @RolesAllowed({"SUPER_ADMIN", "CATALOG_MANAGER"})
     @Produces(MediaType.APPLICATION_JSON)
     public List<String> listDirectories() {
         return imageService.listDestinationDirectories();
@@ -165,12 +170,14 @@ public class ImageResource
 
     @GET
     @Path("/image-list")
+    @RolesAllowed({"SUPER_ADMIN", "CATALOG_MANAGER"})
     public List<String> listImages() {
         return imageService.listImages();
     }
 
     @GET
     @Path("/image-list/paginated")
+    @RolesAllowed({"SUPER_ADMIN", "CATALOG_MANAGER"})
     @Produces(MediaType.APPLICATION_JSON)
     public ImageService.PaginatedImagesResponse listImagesPaginated(
             @QueryParam("page") @DefaultValue("0") int page,

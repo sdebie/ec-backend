@@ -1,5 +1,6 @@
 package org.ecommerce.backend.api.graphql;
 
+import jakarta.annotation.security.RolesAllowed;
 import jakarta.inject.Inject;
 import org.eclipse.microprofile.graphql.GraphQLApi;
 import org.eclipse.microprofile.graphql.Mutation;
@@ -22,6 +23,7 @@ public class CustomerAdminResource
     CustomerAdminService customerAdminService;
 
     @Query("allCustomers")
+    @RolesAllowed({"SUPER_ADMIN", "ORDER_MANAGER", "VIEWER"})
     public List<AdminCustomerListItemDto> allCustomers(@Name("pageRequest") PageRequest pageRequest, @Name("filterRequest") FilterRequest filterRequest)
     {
         try {
@@ -32,6 +34,7 @@ public class CustomerAdminResource
     }
 
     @Query("customerCount")
+    @RolesAllowed({"SUPER_ADMIN", "ORDER_MANAGER", "VIEWER"})
     public long customerCount(@Name("filterRequest") FilterRequest filterRequest)
     {
         try {
@@ -42,6 +45,7 @@ public class CustomerAdminResource
     }
 
     @Query("adminCustomer")
+    @RolesAllowed({"SUPER_ADMIN", "ORDER_MANAGER", "VIEWER"})
     public AdminCustomerDetailDto adminCustomer(@Name("id") UUID id)
     {
         try {
@@ -52,6 +56,7 @@ public class CustomerAdminResource
     }
 
     @Mutation("updateCustomerStatus")
+    @RolesAllowed("SUPER_ADMIN")
     public AdminCustomerListItemDto updateCustomerStatus(@Name("id") UUID id, @Name("status") String status)
     {
         try {

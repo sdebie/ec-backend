@@ -1,5 +1,6 @@
 package org.ecommerce.backend.api.graphql;
 
+import jakarta.annotation.security.RolesAllowed;
 import jakarta.inject.Inject;
 import org.eclipse.microprofile.graphql.GraphQLApi;
 import org.eclipse.microprofile.graphql.Mutation;
@@ -22,6 +23,7 @@ public class WholesaleCustomerResource {
     WholesaleCustomerService wholesaleCustomerService;
 
     @Query("allWholesaleApplications")
+    @RolesAllowed({"SUPER_ADMIN", "ORDER_MANAGER", "VIEWER"})
     public List<WholesaleApplicationListItemDto> getAllWholesaleApplications(
             @Name("pageRequest") PageRequest pageRequest,
             @Name("filterRequest") FilterRequest filterRequest
@@ -34,6 +36,7 @@ public class WholesaleCustomerResource {
     }
 
     @Query("wholesaleApplicationCount")
+    @RolesAllowed({"SUPER_ADMIN", "ORDER_MANAGER", "VIEWER"})
     public long wholesaleApplicationCount(@Name("filterRequest") FilterRequest filterRequest) {
         try {
             return wholesaleCustomerService.wholesaleApplicationCount(filterRequest);
@@ -43,18 +46,10 @@ public class WholesaleCustomerResource {
     }
 
     @Query("wholesaleApplication")
+    @RolesAllowed({"SUPER_ADMIN", "ORDER_MANAGER", "VIEWER"})
     public WholesaleApplicationDetailsDto getWholesaleApplication(@Name("id") UUID id) {
         try {
             return wholesaleCustomerService.getWholesaleApplicationById(id);
-        } catch (RuntimeException ex) {
-            throw toGraphQlException(ex);
-        }
-    }
-
-    @Mutation("createWholesaleCustomer")
-    public WholesaleCustomerDto createWholesaleCustomer(@Name("applicationId") UUID applicationId) {
-        try {
-            return wholesaleCustomerService.createWholesaleCustomer(applicationId);
         } catch (RuntimeException ex) {
             throw toGraphQlException(ex);
         }
@@ -70,6 +65,7 @@ public class WholesaleCustomerResource {
     }
 
     @Mutation("updateWholesaleCustomer")
+    @RolesAllowed("SUPER_ADMIN")
     public WholesaleCustomerDto updateWholesaleCustomer(
             @Name("id") UUID id,
             @Name("customer") WholesaleCustomerDto customerDto
@@ -82,6 +78,7 @@ public class WholesaleCustomerResource {
     }
 
     @Mutation("approveWholesaleApplication")
+    @RolesAllowed({"SUPER_ADMIN", "ORDER_MANAGER"})
     public WholesaleApplicationDetailsDto approveWholesaleApplication(@Name("id") UUID id) {
         try {
             return wholesaleCustomerService.approveWholesaleApplication(id);
@@ -91,6 +88,7 @@ public class WholesaleCustomerResource {
     }
 
     @Mutation("rejectWholesaleApplication")
+    @RolesAllowed({"SUPER_ADMIN", "ORDER_MANAGER"})
     public WholesaleApplicationDetailsDto rejectWholesaleApplication(@Name("id") UUID id, @Name("reason") String reason) {
         try {
             return wholesaleCustomerService.rejectWholesaleApplication(id, reason);

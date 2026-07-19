@@ -1,13 +1,16 @@
 package org.ecommerce.backend;
 
 import io.quarkus.elytron.security.common.BcryptUtil;
+import io.quarkus.runtime.LaunchMode;
 import io.quarkus.runtime.StartupEvent;
-import io.vertx.ext.web.Router; // Import Router
+import io.quarkus.runtime.configuration.ConfigurationException;
+import io.vertx.ext.web.Router;
 import io.vertx.ext.web.handler.FileSystemAccess;
-import io.vertx.ext.web.handler.StaticHandler; // Import StaticHandler
+import io.vertx.ext.web.handler.StaticHandler;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
-import jakarta.inject.Inject; // Import Inject
+import jakarta.inject.Inject;
+import org.eclipse.microprofile.config.ConfigProvider;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import jakarta.transaction.Transactional;
 import org.ecommerce.common.enums.StaffRoleEn;
@@ -49,6 +52,24 @@ public class Startup {
             admin.passwordHash = BcryptUtil.bcryptHash("Admin@123");
             admin.isActive = true;
             admin.persist();
+        }
+    }
+
+    /**
+     * Validates the CORS_ORIGINS env var in production.
+     * An unset var fails to resolve on its own (${CORS_ORIGINS} with no default),
+     * but an empty or whitespace-only value resolves successfully and would boot
+     * with a zero-origin config. This guard catches that case (REQ 1.2).
+     */
+    void validateCorsOrigins(@Observes StartupEvent ev) {
+        if (LaunchMode.current() != LaunchMode.NORMAL) {
+            return; // Only enforce in %prod
+        }
+        String origins = ConfigProvider.getConfig()
+                .getOptionalValue("CORS_ORIGINS", String.class).orElse("");
+        if (origins.isBlank()) {
+            throw new ConfigurationException(
+                    "CORS_ORIGINS must be set to a non-blank origin allowlist in production");
         }
     }
 }

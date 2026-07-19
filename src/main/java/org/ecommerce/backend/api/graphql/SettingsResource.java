@@ -1,5 +1,6 @@
 package org.ecommerce.backend.api.graphql;
 
+import jakarta.annotation.security.RolesAllowed;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import org.eclipse.microprofile.graphql.Description;
@@ -24,6 +25,7 @@ public class SettingsResource
 
     @Query("settings")
     @Description("Get all settings including store settings and shipping methods")
+    @RolesAllowed("SUPER_ADMIN")
     public SettingsDto getSettings()
     {
         return settingsService.getSettings();
@@ -52,6 +54,7 @@ public class SettingsResource
 
     @Mutation("updateSetting")
     @Transactional
+    @RolesAllowed("SUPER_ADMIN")
     public StoreSettingsDto updateSetting(@Name("key") String key, @Name("value") String value)
     {
         StoreSettingsDto dto = new StoreSettingsDto();
@@ -63,6 +66,7 @@ public class SettingsResource
 
     @Mutation("saveStoreSettings")
     @Transactional
+    @RolesAllowed("SUPER_ADMIN")
     public List<StoreSettingsDto> saveStoreSettings(@Name("storeSettingsDto") List<StoreSettingsDto> storeSettingsDto)
     {
         return settingsService.saveStoreSettings(storeSettingsDto);
@@ -70,6 +74,7 @@ public class SettingsResource
 
     @Mutation("saveShippingMethod")
     @Transactional
+    @RolesAllowed("SUPER_ADMIN")
     public ShippingMethodDto saveShippingMethod(@Name("methodDto") ShippingMethodDto methodDto)
     {
         return settingsService.saveShippingMethod(methodDto);

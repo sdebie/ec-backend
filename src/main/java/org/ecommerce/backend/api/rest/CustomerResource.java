@@ -26,17 +26,20 @@ import com.google.api.client.http.javanet.NetHttpTransport;
 import com.google.api.client.json.gson.GsonFactory;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.eclipse.microprofile.jwt.JsonWebToken;
+import org.jboss.logging.Logger;
 
 import java.time.OffsetDateTime;
 import java.util.Optional;
 import org.ecommerce.backend.utils.ClientIpUtils;
 import org.ecommerce.backend.utils.PasswordHashUtil;
 
-// Minimal REST API to support checkout UX (lookup, login, register/update)
+// Minimal REST API to support checkout UX (lookup, login, register, profile)
 @Path("/api/customers")
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
 public class CustomerResource {
+
+    private static final Logger LOG = Logger.getLogger(CustomerResource.class);
 
     @Inject
     CustomerAuthService customerAuthService;
@@ -225,6 +228,13 @@ public class CustomerResource {
             }
 
             GoogleIdToken.Payload payload = idToken.getPayload();
+
+            Boolean emailVerified = payload.getEmailVerified();
+            if (!Boolean.TRUE.equals(emailVerified)) {
+                return Response.status(Response.Status.UNAUTHORIZED)
+                        .entity("Google email is not verified").build();
+            }
+
             String email = payload.getEmail();
             String firstName = (String) payload.get("given_name");
             String lastName = (String) payload.get("family_name");
@@ -254,6 +264,9 @@ public class CustomerResource {
                 if (ce.firstName == null) ce.firstName = firstName;
                 if (ce.lastName == null) ce.lastName = lastName;
                 if (ce.status == CustomerStatusEn.PENDING) ce.status = CustomerStatusEn.ACTIVE;
+                if (ce.shopperType == null || ce.shopperType == CustomerTypeEn.GUEST) {
+                    ce.shopperType = CustomerTypeEn.RETAILER;
+                }
                 ce.persist();
             }
 
@@ -266,9 +279,9 @@ public class CustomerResource {
         }
     }
 
-    public static class RegisterOrUpdateRequest {
+    public static class RegisterRequest {
         public String email;
-        public String password; // optional if only updating profile
+        public String password;
         public String firstName;
         public String lastName;
         public String phone;
@@ -286,54 +299,75 @@ public class CustomerResource {
         public String postalPostalCode;
     }
 
+    public static class ProfileUpdateRequest {
+        public String firstName;
+        public String lastName;
+        public String phone;
+        public String physicalAddressLine1;
+        public String physicalAddressLine2;
+        public String physicalSuburb;
+        public String physicalCity;
+        public String physicalProvince;
+        public String physicalPostalCode;
+        public String postalAddressLine1;
+        public String postalAddressLine2;
+        public String postalSuburb;
+        public String postalCity;
+        public String postalProvince;
+        public String postalPostalCode;
+    }
+
+    /**
+     * Public registration endpoint — create-only.
+     * Returns 409 if the email already belongs to a claimed account (non-empty passwordHash OR ACTIVE status).
+     * Only an unclaimed PENDING/GUEST record may be claimed. Token issued only on genuine creation/claim.
+     * If token signing fails, the @Transactional handler rolls back — no account persists without its token.
+     */
     @POST
-    @Path("/registerOrUpdate")
+    @Path("/register")
     @Transactional
-    public Response registerOrUpdate(RegisterOrUpdateRequest req) {
+    public Response register(RegisterRequest req) {
         if (req == null || req.email == null || req.email.isBlank()) {
             return Response.status(Response.Status.BAD_REQUEST).entity("email is required").build();
+        }
+        if (req.password == null || req.password.isBlank()) {
+            return Response.status(Response.Status.BAD_REQUEST).entity("password is required").build();
         }
 
         String email = req.email.trim();
 
-        // ── Upsert UserEntity ─────────────────────────────────────────────
+        // ── 409 guard: reject if account is already claimed by any method ──
         UserEntity user = UserEntity.findByEmail(email);
+        if (user != null && user.customer != null) {
+            CustomerEntity ec = user.customer;
+            boolean hasPassword = user.passwordHash != null && !user.passwordHash.isBlank();
+            boolean alreadyClaimed = hasPassword || ec.status == CustomerStatusEn.ACTIVE;
+            if (alreadyClaimed) {
+                return Response.status(Response.Status.CONFLICT)
+                        .entity("Account already exists").build();
+            }
+        }
+
+        // ── Create or claim the account ───────────────────────────────────
         if (user == null) {
             user = new UserEntity();
             user.email = email;
         }
-
-        boolean settingPassword = req.password != null && !req.password.isBlank();
-        if (settingPassword) {
-            user.passwordHash = PasswordHashUtil.hash(req.password);
-        } else if (user.passwordHash == null) {
-            // Guest: set a dummy non-null hash to satisfy NOT NULL in DB
-            user.passwordHash = "";
-        }
+        user.passwordHash = PasswordHashUtil.hash(req.password);
         UserEntity.persist(user);
 
-        // ── Upsert CustomerEntity ─────────────────────────────────────────
         CustomerEntity ce = user.customer;
         if (ce == null) {
             ce = new CustomerEntity();
             ce.user = user;
-            ce.status = CustomerStatusEn.PENDING;
         }
 
         if (req.firstName != null) ce.firstName = req.firstName;
         if (req.lastName  != null) ce.lastName  = req.lastName;
-        if (req.phone     != null) ce.phone      = req.phone;
+        if (req.phone     != null) ce.phone     = req.phone;
 
-        if (settingPassword) {
-            ce.shopperType = CustomerTypeEn.RETAILER;
-            // Password-based registration: activate immediately so the customer can log in
-            if (ce.status == null || ce.status == CustomerStatusEn.PENDING) {
-                ce.status = CustomerStatusEn.ACTIVE;
-            }
-        } else {
-            if (ce.shopperType == null) ce.shopperType = CustomerTypeEn.GUEST;
-            if (ce.status == null) ce.status = CustomerStatusEn.PENDING;
-        }
+        ce.shopperType = CustomerTypeEn.RETAILER;
+        ce.status = CustomerStatusEn.ACTIVE;
         CustomerEntity.persist(ce);
 
         // ── Upsert addresses ──────────────────────────────────────────────
@@ -347,10 +381,56 @@ public class CustomerResource {
                 req.postalSuburb, req.postalCity,
                 req.postalProvince, req.postalPostalCode);
 
-        return Response.ok(toLoginResponseDto(ce)).build();
+        // ── Generate token — if this throws, the transaction rolls back ───
+        try {
+            CustomerLoginResponseDto dto = toLoginResponseDto(ce);
+            return Response.ok(dto).build();
+        } catch (Exception e) {
+            LOG.error("Token generation failed during registration for " + email, e);
+            // Let the RuntimeException propagate so @Transactional rolls back
+            throw new RuntimeException("Registration failed: token generation error", e);
+        }
     }
 
-    // ── Private helpers ──────────────────────────────────────────────────────
+    /**
+     * Authenticated profile update — resolves user from jwt.getSubject().
+     * Updates name/phone/addresses only. Ignores any password or email in the body.
+     */
+    @PATCH
+    @Path("/profile")
+    @RolesAllowed("customer")
+    @Transactional
+    public Response updateProfile(ProfileUpdateRequest req) {
+        if (req == null) {
+            return Response.status(Response.Status.BAD_REQUEST).entity("request body is required").build();
+        }
+
+        String email = jwt.getSubject();
+        UserEntity user = UserEntity.findByEmail(email);
+        if (user == null || user.customer == null) {
+            return Response.status(Response.Status.NOT_FOUND).entity("Customer not found").build();
+        }
+
+        CustomerEntity ce = user.customer;
+
+        if (req.firstName != null) ce.firstName = req.firstName;
+        if (req.lastName  != null) ce.lastName  = req.lastName;
+        if (req.phone     != null) ce.phone     = req.phone;
+        ce.persist();
+
+        // ── Upsert addresses ──────────────────────────────────────────────
+        upsertAddress(ce, AddressTypeEn.PHYSICAL,
+                req.physicalAddressLine1, req.physicalAddressLine2,
+                req.physicalSuburb, req.physicalCity,
+                req.physicalProvince, req.physicalPostalCode);
+
+        upsertAddress(ce, AddressTypeEn.POSTAL,
+                req.postalAddressLine1, req.postalAddressLine2,
+                req.postalSuburb, req.postalCity,
+                req.postalProvince, req.postalPostalCode);
+
+        return Response.ok(toProfileDto(ce)).build();
+    }
 
     @PATCH
     @Path("/password")
@@ -361,6 +441,8 @@ public class CustomerResource {
         customerPortalService.changePassword(email, request.currentPassword, request.newPassword);
         return Response.ok().build();
     }
+
+    // ── Private helpers ──────────────────────────────────────────────────────
 
     /**
      * Creates or updates a single typed address on the customer.

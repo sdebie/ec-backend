@@ -1,5 +1,6 @@
 package org.ecommerce.backend.api.graphql;
 
+import io.quarkus.arc.profile.UnlessBuildProfile;
 import org.eclipse.microprofile.graphql.Description;
 import org.eclipse.microprofile.graphql.GraphQLApi;
 import org.eclipse.microprofile.graphql.Query;
@@ -13,7 +14,11 @@ import java.math.BigInteger;
 /**
  * GraphQL API that exposes a simple query to get the row count of the
  * PostgreSQL table "public.test" used by {@code TestEntity}.
+ * <p>
+ * Dev-gated: unreachable in %prod. Permanent deletion (+ SDL snapshot refresh)
+ * is owned by backend-hygiene (post-launch).
  */
+@UnlessBuildProfile("prod")
 @ApplicationScoped
 @GraphQLApi
 public class TestDbGraphQL

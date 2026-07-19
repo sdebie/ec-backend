@@ -1,5 +1,6 @@
 package org.ecommerce.backend.api.graphql;
 
+import jakarta.annotation.security.RolesAllowed;
 import jakarta.inject.Inject;
 import org.eclipse.microprofile.graphql.*;
 import org.ecommerce.backend.service.BrandService;
@@ -55,6 +56,7 @@ public class BrandResource
     }
 
     @Mutation("createBrand")
+    @RolesAllowed({"SUPER_ADMIN", "CATALOG_MANAGER"})
     public void createBrand(@Name("brandDto") BrandDto brandDto)
     {
         if (brandDto == null) {
@@ -64,6 +66,7 @@ public class BrandResource
     }
 
     @Mutation("updateBrand")
+    @RolesAllowed({"SUPER_ADMIN", "CATALOG_MANAGER"})
     public void updateBrand(@Name("id") UUID id, @Name("brandDto") BrandDto brandDto)
     {
         if (brandDto == null) {
@@ -74,6 +77,7 @@ public class BrandResource
     }
 
     @Mutation("deleteBrand")
+    @RolesAllowed({"SUPER_ADMIN", "CATALOG_MANAGER"})
     public void deleteBrand(@Name("id") UUID id)
     {
         if (id == null) {

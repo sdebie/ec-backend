@@ -15,7 +15,7 @@ public class CustomerAuthService {
     String issuer;
 
     public String generateToken(CustomerEntity ce) {
-        String shopperType = ce.shopperType != null ? ce.shopperType.name() : "GUEST";
+        String shopperType = ce.shopperType != null ? ce.shopperType.name() : "RETAILER";
         return Jwt.issuer(issuer)
                 .subject(ce.user.email)
                 .upn(ce.user.email)

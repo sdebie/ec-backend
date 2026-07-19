@@ -1,5 +1,6 @@
 package org.ecommerce.backend.api.graphql;
 
+import jakarta.annotation.security.RolesAllowed;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import io.quarkus.security.identity.SecurityIdentity;
@@ -50,6 +51,7 @@ public class OrderResource
 
     @Mutation("updateCustomerInformation")
     @Description("Update customer information for the latest order in a session. For now only email is supported.")
+    @RolesAllowed({"SUPER_ADMIN", "ORDER_MANAGER"})
     public CustomerDto updateCustomerInformation(
             @Name("sessionId") String sessionId,
             @Name("customer") CustomerDto customerDto
@@ -61,6 +63,7 @@ public class OrderResource
 
     @Mutation("updateOrderStatus")
     @Description("Update the status of the latest order for a given sessionId")
+    @RolesAllowed({"SUPER_ADMIN", "ORDER_MANAGER"})
     public OrderResponseDto updateOrderStatus(
             @Name("sessionId") String sessionId,
             @Name("status") String status
@@ -72,6 +75,7 @@ public class OrderResource
 
     @Query("orderById")
     @Description("Update an order and return")
+    @RolesAllowed({"SUPER_ADMIN", "ORDER_MANAGER", "VIEWER"})
     public OrderResponseDto getOrderById(@Name("id") String id) throws GraphQLException
     {
         LOG.debug("getOrderById");
@@ -95,6 +99,7 @@ public class OrderResource
 
     @Query("allOrders")
     @Description("Get all orders with paging, newest created orders first by default")
+    @RolesAllowed({"SUPER_ADMIN", "ORDER_MANAGER", "VIEWER"})
     public List<OrderResponseDto> getAllOrders(
             @Name("pageRequest") PageRequest pageRequest,
             @Name("filterRequest") FilterRequest filterRequest

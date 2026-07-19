@@ -69,65 +69,6 @@ public class WholesaleCustomerService {
     }
 
     @Transactional
-    public WholesaleCustomerDto createWholesaleCustomer(UUID applicationId) {
-        if (applicationId == null) {
-            throw new IllegalArgumentException("applicationId is required");
-        }
-
-        WholesaleApplicationEntity application = WholesaleApplicationEntity.findById(applicationId);
-        if (application == null) {
-            throw new IllegalArgumentException("wholesale application not found: " + applicationId);
-        }
-        if (application.customer != null) {
-            throw new IllegalArgumentException("wholesale application already converted: " + applicationId);
-        }
-
-        String email = normalizeEmail(application.accountEmail);
-        if (email == null) {
-            throw new IllegalArgumentException("application accountEmail is required");
-        }
-
-        if (UserEntity.findByEmail(email) != null) {
-            throw new IllegalArgumentException("customer already exists with email: " + email);
-        }
-
-        // ── Create user account ───────────────────────────────────────────
-        UserEntity user = new UserEntity();
-        user.email = email;
-        user.passwordHash = ""; // placeholder until the customer sets a password
-        user.roles = new String[]{"WHOLESALE"};
-        UserEntity.persist(user);
-
-        // ── Create customer profile ────────────────────────────────────────
-        CustomerEntity customerEntity = new CustomerEntity();
-        customerEntity.user = user;
-        customerEntity.shopperType = CustomerTypeEn.WHOLESALER;
-        customerEntity.status = CustomerStatusEn.PENDING;
-        customerEntity.firstName = normalizeText(application.firstName);
-        customerEntity.lastName = normalizeText(application.lastName);
-        customerEntity.phone = normalizeText(application.phone);
-        CustomerEntity.persist(customerEntity);
-
-        // ── Create wholesale profile ───────────────────────────────────────
-        WholesaleProfileEntity profile = new WholesaleProfileEntity();
-        profile.customer = customerEntity;
-        profile.companyName = firstNonBlank(normalizeText(application.companyName), customerEntity.firstName, "Unknown Company");
-        profile.vatNumber = normalizeText(application.vatNumber);
-        profile.regNumber = normalizeText(application.regNumber);
-        WholesaleProfileEntity.persist(profile);
-
-        // ── Apply addresses from application ───────────────────────────────
-        applyAddressesFromApplication(customerEntity, application);
-
-        // ── Mark application converted and link customer ───────────────────
-        application.customer = customerEntity;
-        application.status = WholesaleApplicationStatusEn.CONVERTED;
-        application.processedAt = OffsetDateTime.now();
-
-        return toDto(customerEntity);
-    }
-
-    @Transactional
     public WholesaleCustomerDto createWholesaleApplication(WholesaleCustomerDto customerDto) {
         if (customerDto == null) {
             throw new IllegalArgumentException("customer is required");
@@ -278,7 +219,6 @@ public class WholesaleCustomerService {
             UserEntity user = new UserEntity();
             user.email = email;
             user.passwordHash = ""; // placeholder until the customer sets a password
-            user.roles = new String[]{"WHOLESALE"};
             UserEntity.persist(user);
 
             // Create customer profile
