@@ -1,5 +1,7 @@
 package org.ecommerce.backend.api.rest;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
 import org.ecommerce.common.entity.StoreSettingsEntity;
@@ -13,7 +15,11 @@ import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.hasItems;
 import static org.hamcrest.Matchers.hasKey;
+import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.not;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.when;
 
 @QuarkusTest
@@ -153,5 +159,126 @@ class StorefrontConfigResourceTest {
                 .statusCode(200)
                 .body("contact.emails", hasItems("info@store.co.za"))
                 .body("contact", not(hasKey("enquiryEmail")));
+    }
+
+    // ── aboutSections tests ───────────────────────────────────────────────────
+
+    @Test
+    void getConfig_shouldReturnAboutSectionsWhenRowPresent() {
+        StoreSettingsEntity aboutSetting = new StoreSettingsEntity();
+        aboutSetting.key = "storefront.about_sections";
+        aboutSetting.value = "[{\"id\":\"s1\",\"type\":\"hero\",\"enabled\":true,\"props\":{\"title\":\"Hello\"}},{\"id\":\"s2\",\"type\":\"stats\",\"enabled\":true,\"props\":{\"items\":[]}}]";
+
+        when(settingsRepository.getAllStoreSettings()).thenReturn(List.of(aboutSetting));
+
+        given()
+                .when().get("/api/storefront/config")
+                .then()
+                .statusCode(200)
+                .body("aboutSections", hasSize(2))
+                .body("aboutSections[0].id", equalTo("s1"))
+                .body("aboutSections[0].type", equalTo("hero"))
+                .body("aboutSections[0].props.title", equalTo("Hello"))
+                .body("aboutSections[1].id", equalTo("s2"))
+                .body("aboutSections[1].type", equalTo("stats"));
+    }
+
+    @Test
+    void getConfig_shouldFilterDisabledAboutSectionsAndStripEnabledField() {
+        StoreSettingsEntity aboutSetting = new StoreSettingsEntity();
+        aboutSetting.key = "storefront.about_sections";
+        aboutSetting.value = "[{\"id\":\"s1\",\"type\":\"hero\",\"enabled\":true,\"props\":{\"title\":\"Keep\"}},{\"id\":\"s2\",\"type\":\"stats\",\"enabled\":false,\"props\":{\"items\":[]}},{\"id\":\"s3\",\"type\":\"cta\",\"props\":{\"text\":\"No enabled field\"}}]";
+
+        when(settingsRepository.getAllStoreSettings()).thenReturn(List.of(aboutSetting));
+
+        given()
+                .when().get("/api/storefront/config")
+                .then()
+                .statusCode(200)
+                // s2 (enabled:false) excluded → only s1 and s3 remain
+                .body("aboutSections", hasSize(2))
+                .body("aboutSections[0].id", equalTo("s1"))
+                .body("aboutSections[0].props.title", equalTo("Keep"))
+                .body("aboutSections[0]", not(hasKey("enabled")))
+                .body("aboutSections[1].id", equalTo("s3"))
+                .body("aboutSections[1].props.text", equalTo("No enabled field"))
+                .body("aboutSections[1]", not(hasKey("enabled")));
+    }
+
+    @Test
+    void getConfig_shouldReturnEmptyAboutSectionsWhenRowMissing() {
+        // No storefront.about_sections row at all
+        when(settingsRepository.getAllStoreSettings()).thenReturn(Collections.emptyList());
+
+        given()
+                .when().get("/api/storefront/config")
+                .then()
+                .statusCode(200)
+                .body("aboutSections", hasSize(0));
+    }
+
+    @Test
+    void getConfig_shouldReturnEmptyAboutSectionsWhenMalformedJsonWithRestOfConfigIntact() {
+        StoreSettingsEntity aboutSetting = new StoreSettingsEntity();
+        aboutSetting.key = "storefront.about_sections";
+        aboutSetting.value = "NOT VALID JSON [[[";
+
+        StoreSettingsEntity configSetting = new StoreSettingsEntity();
+        configSetting.key = "storefront.config";
+        configSetting.value = "{\"clientId\":\"test-client\",\"clientName\":\"Test Store\"}";
+
+        when(settingsRepository.getAllStoreSettings()).thenReturn(List.of(aboutSetting, configSetting));
+
+        given()
+                .when().get("/api/storefront/config")
+                .then()
+                .statusCode(200)
+                // Malformed about_sections falls back to empty array
+                .body("aboutSections", hasSize(0))
+                // Rest of config is intact
+                .body("clientId", equalTo("test-client"))
+                .body("clientName", equalTo("Test Store"));
+    }
+
+    @Test
+    void getConfig_shouldReturnHomeSectionsUnchanged_regressionPin() throws Exception {
+        // This is a regression pin: the existing `sections` (home) output must be
+        // semantically identical to its pre-refactor behaviour.
+        StoreSettingsEntity homeSetting = new StoreSettingsEntity();
+        homeSetting.key = "storefront.home_sections";
+        homeSetting.value = "[{\"id\":\"hero-1\",\"type\":\"hero\",\"enabled\":true,\"props\":{\"title\":\"Welcome\",\"subtitle\":\"Shop now\"}},{\"id\":\"feat-1\",\"type\":\"featured-products\",\"enabled\":false,\"props\":{}},{\"id\":\"cta-1\",\"type\":\"cta\",\"props\":{\"text\":\"Get started\",\"to\":\"/products\"}}]";
+
+        when(settingsRepository.getAllStoreSettings()).thenReturn(List.of(homeSetting));
+
+        String responseBody = given()
+                .when().get("/api/storefront/config")
+                .then()
+                .statusCode(200)
+                .extract().body().asString();
+
+        // Parse and verify field-by-field (JsonNode equality, not string comparison)
+        ObjectMapper mapper = new ObjectMapper();
+        JsonNode root = mapper.readTree(responseBody);
+        JsonNode sections = root.get("sections");
+
+        // enabled:false (feat-1) was filtered out, so only hero-1 and cta-1 remain
+        assertTrue(sections.isArray());
+        assertEquals(2, sections.size());
+
+        // hero-1: verify all fields present and correct
+        JsonNode hero = sections.get(0);
+        assertEquals("hero-1", hero.get("id").asText());
+        assertEquals("hero", hero.get("type").asText());
+        assertEquals("Welcome", hero.get("props").get("title").asText());
+        assertEquals("Shop now", hero.get("props").get("subtitle").asText());
+        assertFalse(hero.has("enabled"), "enabled field must be stripped");
+
+        // cta-1: verify fields (no enabled field in input either — still should not appear)
+        JsonNode cta = sections.get(1);
+        assertEquals("cta-1", cta.get("id").asText());
+        assertEquals("cta", cta.get("type").asText());
+        assertEquals("Get started", cta.get("props").get("text").asText());
+        assertEquals("/products", cta.get("props").get("to").asText());
+        assertFalse(cta.has("enabled"), "enabled field must be stripped");
     }
 }

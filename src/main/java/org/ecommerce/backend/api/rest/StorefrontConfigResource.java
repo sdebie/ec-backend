@@ -58,7 +58,8 @@ public class StorefrontConfigResource {
         applyFooter(config, sections.get("storefront.footer"));
         applyContact(config, sections.get("storefront.contact"));
         applyHeader(config, sections.get("storefront.header"));
-        applyHomeSections(config, sections.get("storefront.home_sections"));
+        applySections(config, sections, "storefront.home_sections", "sections");
+        applySections(config, sections, "storefront.about_sections", "aboutSections");
         applyAuth(config, rawSettings.get("storefront.auth.login_style"));
 
         return Response.ok(config).build();
@@ -188,15 +189,36 @@ public class StorefrontConfigResource {
         out.set("auth", auth);
     }
 
-    private void applyHomeSections(ObjectNode out, JsonNode section) {
-        if (section == null || !section.isArray() || section.isEmpty()) return;
-        ArrayNode sections = objectMapper.createArrayNode();
-        section.forEach(s -> {
-            if (s.has("enabled") && s.get("enabled").asBoolean(true)) {
-                sections.add(s);
+    /**
+     * Reads a store_settings key containing a JSON array of section objects,
+     * filters out sections where {@code enabled} is explicitly {@code false},
+     * strips the {@code enabled} field from remaining sections, and writes the
+     * result to the specified output field. Falls back to an empty array when
+     * the key is absent or the value is not a valid JSON array.
+     */
+    /**
+     * Applies a configured section array to a config response.
+     *
+     * Package visibility deliberately keeps this pure assembly seam directly
+     * testable without reproducing its behaviour in a test fixture.
+     */
+    void applySections(ObjectNode config, Map<String, JsonNode> settings,
+                       String settingKey, String outputField) {
+        JsonNode section = settings.get(settingKey);
+        if (section == null || !section.isArray()) {
+            config.set(outputField, objectMapper.createArrayNode());
+            return;
+        }
+        ArrayNode result = objectMapper.createArrayNode();
+        for (JsonNode s : section) {
+            if (s.has("enabled") && !s.get("enabled").asBoolean(true)) {
+                continue;
             }
-        });
-        out.set("sections", sections);
+            ObjectNode copy = s.deepCopy();
+            copy.remove("enabled");
+            result.add(copy);
+        }
+        config.set(outputField, result);
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
