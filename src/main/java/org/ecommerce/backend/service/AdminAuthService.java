@@ -9,7 +9,6 @@ import org.ecommerce.common.entity.StaffUserEntity;
 
 import java.time.Duration;
 import java.util.HashSet;
-import java.util.Arrays;
 import java.util.List;
 
 @ApplicationScoped
@@ -34,6 +33,7 @@ public class AdminAuthService
     {
         // 3. Map the Enum role to the JWT 'groups' claim for RBAC
         return Jwt.issuer(issuer)
+                .subject(user.email)
                 .upn(user.email)
                 .groups(new HashSet<>(List.of(user.role.name())))
                 .claim("full_name", user.fullName)
