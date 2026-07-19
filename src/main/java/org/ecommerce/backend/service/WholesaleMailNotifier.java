@@ -40,6 +40,9 @@ public class WholesaleMailNotifier {
     MailTemplate wholesale_application_received;
 
     @Inject
+    MailTemplate wholesale_registration;
+
+    @Inject
     ContactEnquiryMailer contactEnquiryMailer;
 
     @Inject
@@ -53,19 +56,29 @@ public class WholesaleMailNotifier {
 
     /**
      * Fires after a new application's submission transaction commits successfully.
-     * Notifies the admin enquiry inbox ({@code storefront.contact.enquiryEmail}) that a
-     * new wholesale application is awaiting review. If no enquiry recipient is
-     * configured, the notification is skipped with a warning — the application itself
-     * is already persisted and visible in the admin list.
+     * Sends two independent emails:
+     * <ul>
+     *   <li>Admin notification to the enquiry inbox ({@code storefront.contact.enquiryEmail}).
+     *       If no enquiry recipient is configured, this is skipped with a warning — the
+     *       application itself is already persisted and visible in the admin list.</li>
+     *   <li>Applicant confirmation ("we received your application") echoing the full
+     *       submitted details back to {@code applicantEmail}.</li>
+     * </ul>
+     * A skip or failure of one never blocks the other.
      */
     public void onSubmitted(@Observes(during = TransactionPhase.AFTER_SUCCESS) WholesaleApplicationSubmittedEvent event) {
         // Guard: blank from-address — defensive (config validation prevents it)
         if (mailerFrom == null || mailerFrom.isBlank()) {
-            LOG.errorf("[WholesaleMailNotifier] from-address is blank — skipping admin notification for application %s",
+            LOG.errorf("[WholesaleMailNotifier] from-address is blank — skipping submission emails for application %s",
                     event.applicationId());
             return;
         }
 
+        sendAdminNotification(event);
+        sendApplicantConfirmation(event);
+    }
+
+    private void sendAdminNotification(WholesaleApplicationSubmittedEvent event) {
         String enquiryEmail;
         try {
             enquiryEmail = contactEnquiryMailer.resolveRecipient();
@@ -75,23 +88,16 @@ public class WholesaleMailNotifier {
             return;
         }
 
-        String applicantName = event.lastName() != null && !event.lastName().isBlank()
-                ? event.firstName() + " " + event.lastName()
-                : event.firstName();
+        String applicantEmail = event.application().getApplicantEmail();
 
         var mail = wholesale_application_received.to(enquiryEmail)
                 .from(mailerFrom)
-                .subject("New wholesale application from " + event.companyName())
+                .subject("New wholesale application from " + event.application().getCompanyName())
                 .data("applicationId", event.applicationId())
-                .data("applicantName", applicantName)
-                .data("applicantEmail", event.applicantEmail())
-                .data("phone", event.phone())
-                .data("companyName", event.companyName())
-                .data("tradingName", event.tradingName())
-                .data("vatNumber", event.vatNumber());
+                .data("app", event.application());
 
-        if (event.applicantEmail() != null && !event.applicantEmail().isBlank()) {
-            mail = mail.replyTo(event.applicantEmail());
+        if (applicantEmail != null && !applicantEmail.isBlank()) {
+            mail = mail.replyTo(applicantEmail);
         }
 
         mail.send()
@@ -100,6 +106,31 @@ public class WholesaleMailNotifier {
                                 event.applicationId(), enquiryEmail),
                         failure -> LOG.errorf(failure, "[WholesaleMailNotifier] admin notification failed for application %s to %s",
                                 event.applicationId(), enquiryEmail)
+                );
+    }
+
+    private void sendApplicantConfirmation(WholesaleApplicationSubmittedEvent event) {
+        String applicantEmail = event.application().getApplicantEmail();
+        if (applicantEmail == null || applicantEmail.isBlank()) {
+            LOG.warnf("[WholesaleMailNotifier] applicant confirmation skipped: no valid applicantEmail for application %s",
+                    event.applicationId());
+            return;
+        }
+
+        String storeName = resolveStoreName(event.applicationId());
+
+        wholesale_registration.to(applicantEmail)
+                .from(mailerFrom)
+                .subject("Wholesale Application Received")
+                .data("applicationId", event.applicationId())
+                .data("storeName", storeName)
+                .data("app", event.application())
+                .send()
+                .subscribe().with(
+                        success -> LOG.infof("[WholesaleMailNotifier] applicant confirmation delivered for application %s to %s",
+                                event.applicationId(), applicantEmail),
+                        failure -> LOG.errorf(failure, "[WholesaleMailNotifier] applicant confirmation failed for application %s to %s",
+                                event.applicationId(), applicantEmail)
                 );
     }
 

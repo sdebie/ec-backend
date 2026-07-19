@@ -7,7 +7,7 @@
         .container { width: 100%; max-width: 600px; margin: 0 auto; border: 1px solid #eee; padding: 20px; border-radius: 10px; }
         .header { text-align: center; border-bottom: 2px solid #3b82f6; padding-bottom: 20px; }
         .details-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
-        .details-table th { text-align: left; padding: 8px 10px; border-bottom: 1px solid #eee; color: #555; width: 140px; vertical-align: top; }
+        .details-table th { text-align: left; padding: 8px 10px; border-bottom: 1px solid #eee; color: #555; width: 150px; vertical-align: top; }
         .details-table td { padding: 8px 10px; border-bottom: 1px solid #eee; }
         .footer { font-size: 12px; color: #777; margin-top: 30px; text-align: center; }
     </style>
@@ -16,49 +16,102 @@
 <div class="container">
     <div class="header">
         <h1>New Wholesale Application</h1>
-        <p>From <strong>{companyName}</strong></p>
+        <p>From <strong>{app.companyName}</strong></p>
     </div>
 
     <table class="details-table">
         <tr>
-            <th>Company</th>
-            <td>{companyName}</td>
+            <th>Reference</th>
+            <td>{applicationId}</td>
         </tr>
-        {#if tradingName}
+        <tr>
+            <th>Company</th>
+            <td>{app.companyName}</td>
+        </tr>
+        {#if app.tradingName}
         <tr>
             <th>Trading name</th>
-            <td>{tradingName}</td>
+            <td>{app.tradingName}</td>
+        </tr>
+        {/if}
+        {#if app.regNumber}
+        <tr>
+            <th>Registration no.</th>
+            <td>{app.regNumber}</td>
+        </tr>
+        {/if}
+        {#if app.vatNumber}
+        <tr>
+            <th>VAT number</th>
+            <td>{app.vatNumber}</td>
+        </tr>
+        {/if}
+        {#if app.companyEmail}
+        <tr>
+            <th>Company email</th>
+            <td>{app.companyEmail}</td>
+        </tr>
+        {/if}
+        {#if app.companyPhone}
+        <tr>
+            <th>Company phone</th>
+            <td>{app.companyPhone}</td>
         </tr>
         {/if}
         <tr>
             <th>Applicant</th>
-            <td>{applicantName}</td>
+            <td>{app.firstName}{#if app.lastName} {app.lastName}{/if}</td>
         </tr>
         <tr>
             <th>Email</th>
-            <td><a href="mailto:{applicantEmail}">{applicantEmail}</a></td>
+            <td><a href="mailto:{app.applicantEmail}">{app.applicantEmail}</a></td>
         </tr>
-        {#if phone}
+        {#if app.email}
+        <tr>
+            <th>Account email</th>
+            <td>{app.email}</td>
+        </tr>
+        {/if}
+        {#if app.phone}
         <tr>
             <th>Phone</th>
-            <td><a href="tel:{phone}">{phone}</a></td>
+            <td><a href="tel:{app.phone}">{app.phone}</a></td>
         </tr>
         {/if}
-        {#if vatNumber}
+        {#if app.financeContactName}
         <tr>
-            <th>VAT number</th>
-            <td>{vatNumber}</td>
+            <th>Finance contact</th>
+            <td>{app.financeContactName}{#if app.financeContactEmail} — {app.financeContactEmail}{/if}{#if app.financeContactPhone} — {app.financeContactPhone}{/if}</td>
         </tr>
         {/if}
         <tr>
-            <th>Application ID</th>
-            <td>{applicationId}</td>
+            <th>PO required</th>
+            <td>{#if app.purchaseOrderRequired}Yes{#else}No{/if}</td>
         </tr>
+        {#if app.physicalAddressLine1}
+        <tr>
+            <th>Physical address</th>
+            <td>{app.physicalAddressLine1}{#if app.physicalAddressLine2}, {app.physicalAddressLine2}{/if}{#if app.physicalSuburb}, {app.physicalSuburb}{/if}{#if app.physicalCity}, {app.physicalCity}{/if}{#if app.physicalProvince}, {app.physicalProvince}{/if}{#if app.physicalPostalCode}, {app.physicalPostalCode}{/if}</td>
+        </tr>
+        {/if}
+        {#if app.postalAddressLine1}
+        <tr>
+            <th>Postal address</th>
+            <td>{app.postalAddressLine1}{#if app.postalAddressLine2}, {app.postalAddressLine2}{/if}{#if app.postalSuburb}, {app.postalSuburb}{/if}{#if app.postalCity}, {app.postalCity}{/if}{#if app.postalProvince}, {app.postalProvince}{/if}{#if app.postalPostalCode}, {app.postalPostalCode}{/if}</td>
+        </tr>
+        {/if}
+        {#if app.notes}
+        <tr>
+            <th>Notes</th>
+            <td>{app.notes}</td>
+        </tr>
+        {/if}
     </table>
 
     <div class="footer">
         <p>This application was submitted via the wholesale registration form on your website.</p>
-        <p>Review and approve or reject it in the admin dashboard.</p>
+        <p>Review and approve or reject it in the admin dashboard. Reply directly to this email to
+            contact the applicant.</p>
     </div>
 </div>
 </body>

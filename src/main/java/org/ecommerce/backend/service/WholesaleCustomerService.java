@@ -194,19 +194,12 @@ public class WholesaleCustomerService {
 
         WholesaleApplicationEntity.persist(application);
 
-        // Observed AFTER_SUCCESS: the admin notification only goes out if the submission commits
-        submittedEvent.fire(new WholesaleApplicationSubmittedEvent(
-                application.id,
-                application.applicantEmail,
-                application.firstName,
-                application.lastName,
-                application.companyName,
-                application.tradingName,
-                application.phone,
-                application.vatNumber
-        ));
+        WholesaleCustomerDto result = wholesaleMapper.toDto(application);
 
-        return wholesaleMapper.toDto(application);
+        // Observed AFTER_SUCCESS: the notification emails only go out if the submission commits
+        submittedEvent.fire(new WholesaleApplicationSubmittedEvent(application.id, result));
+
+        return result;
     }
 
     @Transactional
