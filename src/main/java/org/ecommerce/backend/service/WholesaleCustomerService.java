@@ -1,10 +1,9 @@
 package org.ecommerce.backend.service;
 
-import io.quarkus.mailer.MailTemplate;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.event.Event;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
-import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.ecommerce.backend.mapper.WholesaleMapper;
 import org.ecommerce.common.dto.WholesaleApplicationDetailsDto;
 import org.ecommerce.common.dto.WholesaleApplicationListItemDto;
@@ -33,16 +32,13 @@ import java.util.UUID;
 public class WholesaleCustomerService {
 
     @Inject
-    MailTemplate wholesale_status;
-
-    @Inject
     WholesaleApplicationRepository wholesaleApplicationRepository;
 
     @Inject
     WholesaleMapper wholesaleMapper;
 
-    @ConfigProperty(name = "quarkus.mailer.from")
-    String senderAddress;
+    @Inject
+    Event<WholesaleDecisionEvent> decisionEvent;
 
     private static final Logger LOG = Logger.getLogger(WholesaleCustomerService.class);
 
@@ -306,15 +302,18 @@ public class WholesaleCustomerService {
         application.processedAt = OffsetDateTime.now();
         application.persist();
 
-        sendApprovalEmail(application);
+        decisionEvent.fire(buildDecisionEvent(application, null));
 
         return wholesaleMapper.toDetailsDto(application);
     }
 
     @Transactional
-    public WholesaleApplicationDetailsDto rejectWholesaleApplication(UUID id) {
+    public WholesaleApplicationDetailsDto rejectWholesaleApplication(UUID id, String reason) {
         if (id == null) {
             throw new IllegalArgumentException("id is required");
+        }
+        if (reason == null || reason.isBlank()) {
+            throw new IllegalArgumentException("reason is required");
         }
 
         WholesaleApplicationEntity application = WholesaleApplicationEntity.findById(id);
@@ -328,9 +327,10 @@ public class WholesaleCustomerService {
 
         application.status = WholesaleApplicationStatusEn.REJECTED;
         application.processedAt = OffsetDateTime.now();
+        application.rejectionReason = reason.trim();
         application.persist();
 
-        sendRejectionEmail(application);
+        decisionEvent.fire(buildDecisionEvent(application, reason.trim()));
 
         return wholesaleMapper.toDetailsDto(application);
     }
@@ -494,36 +494,25 @@ public class WholesaleCustomerService {
         return dto;
     }
 
-    private void sendApprovalEmail(WholesaleApplicationEntity application) {
-        String firstName = (application.firstName != null && !application.firstName.isBlank()) ? application.firstName : "Wholesale Customer";
-        String customerEmail = application.accountEmail;
-        wholesale_status.to(customerEmail)
-                .from(senderAddress)
-                .subject("Wholesale Application Approved - " + application.companyName)
-                .data("application", application)
-                .data("customerName", firstName)
-                .data("status", application.status)
-                .send()
-                .subscribe().with(
-                        success -> LOG.info("Wholesale approval email sent to: " + customerEmail),
-                        failure -> LOG.error("Wholesale approval email failed for: " + customerEmail, failure)
-                );
+    private WholesaleDecisionEvent buildDecisionEvent(WholesaleApplicationEntity application, String rejectionReason) {
+        // Recipient: applicantEmail first (nullable = false column), fallback to accountEmail if blank
+        String recipientEmail = application.applicantEmail;
+        if (recipientEmail == null || recipientEmail.isBlank()) {
+            recipientEmail = application.accountEmail;
+        }
+
+        String firstName = (application.firstName != null && !application.firstName.isBlank())
+                ? application.firstName : "Wholesale Customer";
+
+        return new WholesaleDecisionEvent(
+                application.id,
+                application.status,
+                recipientEmail,
+                firstName,
+                application.companyName,
+                rejectionReason
+        );
     }
 
-    private void sendRejectionEmail(WholesaleApplicationEntity application) {
-        String firstName = (application.firstName != null && !application.firstName.isBlank()) ? application.firstName : "Wholesale Customer";
-        String customerEmail = application.accountEmail;
-        wholesale_status.to(customerEmail)
-                .from(senderAddress)
-                .subject("Wholesale Application Status - " + application.companyName)
-                .data("application", application)
-                .data("customerName", firstName)
-                .data("status", application.status)
-                .send()
-                .subscribe().with(
-                        success -> LOG.info("Wholesale rejection email sent to: " + customerEmail),
-                        failure -> LOG.error("Wholesale rejection email failed for: " + customerEmail, failure)
-                );
-    }
 }
 

@@ -91,9 +91,9 @@ public class WholesaleCustomerResource {
     }
 
     @Mutation("rejectWholesaleApplication")
-    public WholesaleApplicationDetailsDto rejectWholesaleApplication(@Name("id") UUID id) {
+    public WholesaleApplicationDetailsDto rejectWholesaleApplication(@Name("id") UUID id, @Name("reason") String reason) {
         try {
-            return wholesaleCustomerService.rejectWholesaleApplication(id);
+            return wholesaleCustomerService.rejectWholesaleApplication(id, reason);
         } catch (RuntimeException ex) {
             throw toGraphQlException(ex);
         }

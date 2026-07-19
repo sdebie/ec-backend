@@ -76,6 +76,7 @@ public class WholesaleMapperOutputPreservationPropertyTest {
         dto.setPurchaseOrderRequired(application.purchaseOrderRequired);
         dto.setNotes(application.notes);
         dto.setApplicantEmail(application.applicantEmail);
+        dto.setRejectionReason(application.rejectionReason);
 
         dto.setStatus(application.status);
         dto.setCreatedAt(application.createdAt);
@@ -130,6 +131,7 @@ public class WholesaleMapperOutputPreservationPropertyTest {
         assertEquals(referenceResult.getPurchaseOrderRequired(), mapperResult.getPurchaseOrderRequired(), "purchaseOrderRequired mismatch");
         assertEquals(referenceResult.getNotes(), mapperResult.getNotes(), "notes mismatch");
         assertEquals(referenceResult.getApplicantEmail(), mapperResult.getApplicantEmail(), "applicantEmail mismatch");
+        assertEquals(referenceResult.getRejectionReason(), mapperResult.getRejectionReason(), "rejectionReason mismatch");
 
         assertEquals(referenceResult.getStatus(), mapperResult.getStatus(), "status mismatch");
         assertEquals(referenceResult.getCreatedAt(), mapperResult.getCreatedAt(), "createdAt mismatch");
@@ -239,13 +241,14 @@ public class WholesaleMapperOutputPreservationPropertyTest {
                             Arbitraries.just(null),
                             Arbitraries.strings().alpha().ofMinLength(1).ofMaxLength(20)
                     );
-                    return Combinators.combine(processedAts, nullableStrs, nullableStrs, nullableStrs, nullableStrs)
-                            .as((processedAt, companyPhone, companyEmail, vatNumber, regNumber) -> {
+                    return Combinators.combine(processedAts, nullableStrs, nullableStrs, nullableStrs, nullableStrs, nullableStrs)
+                            .as((processedAt, companyPhone, companyEmail, vatNumber, regNumber, rejectionReason) -> {
                                 e.processedAt = processedAt;
                                 e.companyPhone = companyPhone;
                                 e.companyEmail = companyEmail;
                                 e.vatNumber = vatNumber;
                                 e.regNumber = regNumber;
+                                e.rejectionReason = rejectionReason;
                                 return e;
                             });
                 });
