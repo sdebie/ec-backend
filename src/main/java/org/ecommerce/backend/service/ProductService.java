@@ -9,6 +9,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.ecommerce.backend.assembler.ProductListItemAssembler;
 import org.ecommerce.backend.mapper.ProductMapper;
 import org.ecommerce.common.dto.*;
+import org.ecommerce.common.dto.PageResponse;
 import org.ecommerce.common.entity.ProductEntity;
 import org.ecommerce.common.entity.ProductImageEntity;
 import org.ecommerce.common.entity.ProductVariantEntity;

@@ -19,7 +19,7 @@ import org.ecommerce.backend.mapper.ProductImportValidator;
 import org.ecommerce.backend.mapper.UploadBatchDtoMapper;
 import org.ecommerce.common.dto.ProductComparisonDto;
 import org.ecommerce.common.dto.ProductUploadBatchDto;
-import org.ecommerce.common.dto.ProductUploadBatchProcessStatusDto;
+import org.ecommerce.common.dto.UploadBatchProcessStatusDto;
 import org.ecommerce.common.entity.*;
 import org.ecommerce.common.enums.ProductImportValidationStatusEn;
 import org.ecommerce.common.enums.ProductStatusEn;
@@ -38,7 +38,7 @@ import java.util.stream.Collectors;
 import static org.ecommerce.common.util.CsvImportUtils.isBlank;
 
 @ApplicationScoped
-public class ProductImportService implements ImportBatchService<ProductComparisonDto, ProductUploadBatchProcessStatusDto, ProductUploadBatchEntity>, AsyncImportOperations {
+public class ProductImportService implements ImportBatchService<ProductComparisonDto, UploadBatchProcessStatusDto, ProductUploadBatchEntity>, AsyncImportOperations {
 
     @Inject
     ProductUploadBatchRepository productUploadBatchRepository;
@@ -99,7 +99,7 @@ public class ProductImportService implements ImportBatchService<ProductCompariso
     }
 
     @Override
-    public ProductUploadBatchProcessStatusDto getImportBatchProcessStatus(UUID batchId) {
+    public UploadBatchProcessStatusDto getImportBatchProcessStatus(UUID batchId) {
         return getProductImportBatchProcessStatus(batchId);
     }
 
@@ -326,13 +326,13 @@ public class ProductImportService implements ImportBatchService<ProductCompariso
     }
 
     @Transactional(value = TxType.SUPPORTS)
-    public ProductUploadBatchProcessStatusDto getProductImportBatchProcessStatus(UUID batchId) {
+    public UploadBatchProcessStatusDto getProductImportBatchProcessStatus(UUID batchId) {
         ProductUploadBatchEntity batch = productUploadBatchRepository.findById(batchId);
         if (batch == null) {
             throw new NotFoundException("Batch not found: " + batchId);
         }
 
-        ProductUploadBatchProcessStatusDto status = new ProductUploadBatchProcessStatusDto();
+        UploadBatchProcessStatusDto status = new UploadBatchProcessStatusDto();
         status.batchId = batch.id;
         status.status = batch.productUploadStatusEn != null ? batch.productUploadStatusEn.name() : null;
         status.totalRows = batch.totalRows;

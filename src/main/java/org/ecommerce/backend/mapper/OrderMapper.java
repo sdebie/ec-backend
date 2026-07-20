@@ -2,32 +2,24 @@ package org.ecommerce.backend.mapper;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
-import org.ecommerce.common.dto.CustomerDetailDto;
 import org.ecommerce.common.dto.CustomerDto;
-import org.ecommerce.common.dto.ImageDetailDto;
 import org.ecommerce.common.dto.OrderDetailRespDto;
 import org.ecommerce.common.dto.OrderItemDetailDto;
-import org.ecommerce.common.dto.OrderItemResponseDto;
 import org.ecommerce.common.dto.OrderResponseDto;
 import org.ecommerce.common.dto.OrderSummaryDto;
 import org.ecommerce.common.dto.ProductDetailDto;
-import org.ecommerce.common.dto.ProductDto;
 import org.ecommerce.common.dto.ProductImageDto;
 import org.ecommerce.common.dto.ProductVariantDetailDto;
-import org.ecommerce.common.dto.ProductVariantDto;
 import org.ecommerce.common.entity.CustomerEntity;
 import org.ecommerce.common.entity.OrderEntity;
 import org.ecommerce.common.entity.OrderItemEntity;
 import org.ecommerce.common.entity.OrderStatusHistoryEntity;
-import org.ecommerce.common.entity.ProductEntity;
 import org.ecommerce.common.entity.ProductImageEntity;
-import org.ecommerce.common.entity.ProductVariantEntity;
 
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.UUID;
 
 @ApplicationScoped
 public class OrderMapper
@@ -52,7 +44,7 @@ public class OrderMapper
         if (entity.items != null) {
             dto.items = new ArrayList<>(entity.items.size());
             for (OrderItemEntity item : entity.items) {
-                OrderItemResponseDto itemDto = toItemDto(item);
+                OrderItemDetailDto itemDto = toItemDetailDto(item);
                 if (itemDto != null) {
                     dto.items.add(itemDto);
                 }
@@ -64,33 +56,39 @@ public class OrderMapper
         return dto;
     }
 
-    private OrderItemResponseDto toItemDto(OrderItemEntity item)
+    /**
+     * Maps an OrderItemEntity to the canonical order-item output DTO.
+     * Uses ProductVariantDetailDto (reduced variant — no sku/status/prices)
+     * with ProductDetailDto (name only) as the nested product reference.
+     */
+    private OrderItemDetailDto toItemDetailDto(OrderItemEntity item)
     {
         if (item == null) {
             return null;
         }
 
-        OrderItemResponseDto dto = new OrderItemResponseDto();
+        OrderItemDetailDto dto = new OrderItemDetailDto();
         dto.id = item.id == null ? null : item.id.toString();
         dto.unitPrice = item.unitPrice;
         dto.quantity = item.quantity;
-        dto.variant = toVariantDto(item.variant);
-        return dto;
-    }
 
-    private ProductVariantDto toVariantDto(ProductVariantEntity variant)
-    {
-        if (variant == null) {
-            return null;
+        if (item.variant != null) {
+            ProductVariantDetailDto variantDetailDto = new ProductVariantDetailDto();
+            variantDetailDto.id = item.variant.id;
+            variantDetailDto.stockQuantity = item.variant.stockQuantity;
+            variantDetailDto.attributesJson = item.variant.attributesJson;
+            variantDetailDto.weightKg = item.variant.weightKg;
+
+            if (item.variant.product != null) {
+                ProductDetailDto productDetailDto = new ProductDetailDto();
+                productDetailDto.name = item.variant.product.name;
+                variantDetailDto.product = productDetailDto;
+            }
+
+            variantDetailDto.images = toImageDtos(item.variant.images);
+            dto.variant = variantDetailDto;
         }
 
-        ProductVariantDto dto = new ProductVariantDto();
-        dto.id = variant.id == null ? null : variant.id.toString();
-        dto.stockQuantity = variant.stockQuantity;
-        dto.attributesJson = variant.attributesJson;
-        dto.weightKg = variant.weightKg;
-        dto.product = toProductDto(variant.product);
-        dto.images = toImageDtos(variant.images);
         return dto;
     }
 
@@ -106,18 +104,6 @@ public class OrderMapper
             result.add(productMapper.mapImageEntityToDto(img));
         }
         return result;
-    }
-
-    private ProductDto toProductDto(ProductEntity product)
-    {
-        if (product == null) {
-            return null;
-        }
-
-        ProductDto dto = new ProductDto();
-        dto.id = product.id == null ? null : product.id.toString();
-        dto.name = product.name;
-        return dto;
     }
 
     public CustomerDto toCustomerDto(CustomerEntity customer)
@@ -157,14 +143,12 @@ public class OrderMapper
         detail.shippingPostalCode = order.postalCode;
         detail.createdAt = order.createdAt;
 
-        // Customer detail
+        // Customer reference — same canonical CustomerDto as toResponseDto
         if (order.customerEntity != null && order.customerEntity.user != null) {
-            CustomerDetailDto customerDetail = new CustomerDetailDto();
-            customerDetail.email = order.customerEntity.user.email;
-            detail.customerEntity = customerDetail;
+            detail.customerEntity = toCustomerDto(order.customerEntity);
         }
 
-        // Items
+        // Items — same canonical DTO as toResponseDto
         if (order.items != null) {
             detail.items = new ArrayList<>();
             for (OrderItemEntity orderItemEntity : order.items) {
@@ -188,7 +172,6 @@ public class OrderMapper
                 OrderDetailRespDto.OrderStatusHistoryDetailRespDto historyDto =
                         new OrderDetailRespDto.OrderStatusHistoryDetailRespDto();
                 historyDto.id = history.id;
-                historyDto.order = history.order;
                 historyDto.status = history.status;
                 historyDto.comment = history.comment;
                 historyDto.changedBy = history.changedBy;
@@ -198,47 +181,6 @@ public class OrderMapper
         }
 
         return detail;
-    }
-
-    private OrderItemDetailDto toItemDetailDto(OrderItemEntity item)
-    {
-        if (item == null) {
-            return null;
-        }
-
-        OrderItemDetailDto dto = new OrderItemDetailDto();
-        dto.id = item.id;
-        dto.unitPrice = item.unitPrice;
-        dto.quantity = item.quantity;
-
-        if (item.variant != null) {
-            ProductVariantDetailDto variantDetailDto = new ProductVariantDetailDto();
-            variantDetailDto.id = item.variant.id;
-            variantDetailDto.stockQuantity = item.variant.stockQuantity;
-            variantDetailDto.attributesJson = item.variant.attributesJson;
-            variantDetailDto.weightKg = item.variant.weightKg;
-
-            if (item.variant.product != null) {
-                ProductDetailDto productDetailDto = new ProductDetailDto();
-                productDetailDto.name = item.variant.product.name;
-                variantDetailDto.product = productDetailDto;
-            }
-
-            if (item.variant.images != null) {
-                List<ImageDetailDto> imageDetailDtos = new ArrayList<>();
-                for (ProductImageEntity imageEntity : item.variant.images) {
-                    ImageDetailDto imageDetailDto = new ImageDetailDto();
-                    imageDetailDto.id = imageEntity.id;
-                    imageDetailDto.imageUrl = imageEntity.imageUrl;
-                    imageDetailDto.sortOrder = imageEntity.sortOrder;
-                    imageDetailDtos.add(imageDetailDto);
-                }
-                variantDetailDto.images = imageDetailDtos;
-            }
-            dto.variant = variantDetailDto;
-        }
-
-        return dto;
     }
 
     /**

@@ -5,7 +5,6 @@ import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import org.eclipse.microprofile.graphql.GraphQLException;
 import org.ecommerce.backend.exception.UnavailableVariantsException;
-import org.ecommerce.common.dto.CustomerDto;
 import org.ecommerce.common.dto.OrderCheckoutLineDto;
 import org.ecommerce.common.dto.OrderCheckoutResponseDto;
 import org.ecommerce.common.dto.OrderCreationItemDto;
@@ -18,7 +17,6 @@ import org.ecommerce.common.dto.OrderSummaryDto;
 import org.ecommerce.common.entity.*;
 import org.ecommerce.common.enums.CustomerTypeEn;
 import org.ecommerce.common.enums.OrderStatusEn;
-import org.ecommerce.common.enums.CustomerStatusEn;
 import org.ecommerce.common.enums.ProductStatusEn;
 import org.ecommerce.common.query.FilterRequest;
 import org.ecommerce.common.query.PageRequest;
@@ -288,48 +286,6 @@ public class OrderService
         } catch (Exception e) {
             return null;
         }
-    }
-
-    @Transactional
-    public CustomerDto updateCustomerInformation(String sessionId, CustomerDto customerDto) throws GraphQLException
-    {
-        if (sessionId == null || sessionId.isBlank()) {
-            throw new GraphQLException("sessionId is required");
-        }
-        if (customerDto == null || customerDto.getEmail() == null || customerDto.getEmail().isBlank()) {
-            throw new GraphQLException("customer email is required");
-        }
-
-        LOG.debugf("Updating customer info for sessionId=%s email=%s", sessionId, customerDto.getEmail());
-        OrderEntity order = findLatestOrderEntityBySessionId(sessionId);
-        if (order == null) {
-            throw new GraphQLException("Order not found for sessionId");
-        }
-
-        LOG.debugf("Found order with items=%s", order.items);
-
-        String email = customerDto.getEmail().trim();
-        CustomerEntity customer = CustomerEntity.findByEmail(email);
-        if (customer == null) {
-            // Create a linked user + customer pair for guest checkout
-            org.ecommerce.common.entity.UserEntity user = org.ecommerce.common.entity.UserEntity.findByEmail(email);
-            if (user == null) {
-                user = new org.ecommerce.common.entity.UserEntity();
-                user.email = email;
-                user.passwordHash = "";
-                org.ecommerce.common.entity.UserEntity.persist(user);
-            }
-            customer = new CustomerEntity();
-            customer.user = user;
-            customer.status = CustomerStatusEn.PENDING;
-            CustomerEntity.persist(customer);
-        }
-
-        order.customerEntity = customer;
-        LOG.debugf("Updated order %s with customer %s", order.id, order.customerEntity.id);
-        // no explicit persist needed; managed entity will be updated on commit
-
-        return orderMapper.toCustomerDto(customer);
     }
 
     @Transactional

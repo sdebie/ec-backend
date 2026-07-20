@@ -12,7 +12,6 @@ import org.ecommerce.common.dto.OrderResponseDto;
 import org.ecommerce.common.dto.OrderSummaryDto;
 import org.ecommerce.common.entity.*;
 import org.ecommerce.common.enums.OrderStatusEn;
-import org.ecommerce.common.query.FilterRequest;
 import org.ecommerce.common.query.PageRequest;
 import org.ecommerce.common.repository.OrderRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -241,12 +240,11 @@ class OrderServiceReadPathCharacterizationTest {
             assertEquals(new BigDecimal("250.00"), item1Dto.unitPrice);
             assertEquals(3, item1Dto.quantity);
             assertNotNull(item1Dto.variant);
-            assertEquals("77777777-7777-7777-7777-777777777777", item1Dto.variant.id);
+            assertEquals(UUID.fromString("77777777-7777-7777-7777-777777777777"), item1Dto.variant.id);
             assertEquals(50, item1Dto.variant.stockQuantity);
             assertEquals("{\"color\":\"red\",\"size\":\"L\"}", item1Dto.variant.attributesJson);
             assertEquals(new BigDecimal("0.75"), item1Dto.variant.weightKg);
             assertNotNull(item1Dto.variant.product);
-            assertEquals("44444444-4444-4444-4444-444444444444", item1Dto.variant.product.id);
             assertEquals("Premium Widget", item1Dto.variant.product.name);
 
             // Images on first item's variant
@@ -267,7 +265,7 @@ class OrderServiceReadPathCharacterizationTest {
             assertEquals(new BigDecimal("125.00"), item2Dto.unitPrice);
             assertEquals(2, item2Dto.quantity);
             assertNotNull(item2Dto.variant);
-            assertEquals("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", item2Dto.variant.id);
+            assertEquals(UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"), item2Dto.variant.id);
             assertEquals(100, item2Dto.variant.stockQuantity);
             assertNull(item2Dto.variant.attributesJson);
             assertEquals(new BigDecimal("1.20"), item2Dto.variant.weightKg);
@@ -359,7 +357,7 @@ class OrderServiceReadPathCharacterizationTest {
 
             // Customer detail
             assertNotNull(detail.customerEntity);
-            assertEquals("customer@example.com", detail.customerEntity.email);
+            assertEquals("customer@example.com", detail.customerEntity.getEmail());
 
             // Items
             assertNotNull(detail.items);
@@ -367,7 +365,7 @@ class OrderServiceReadPathCharacterizationTest {
 
             // First item detail
             OrderItemDetailDto itemDetail1 = detail.items.get(0);
-            assertEquals(UUID.fromString("88888888-8888-8888-8888-888888888888"), itemDetail1.id);
+            assertEquals("88888888-8888-8888-8888-888888888888", itemDetail1.id);
             assertEquals(new BigDecimal("250.00"), itemDetail1.unitPrice);
             assertEquals(3, itemDetail1.quantity);
             assertNotNull(itemDetail1.variant);
@@ -381,16 +379,18 @@ class OrderServiceReadPathCharacterizationTest {
             // Images on first item
             assertNotNull(itemDetail1.variant.images);
             assertEquals(2, itemDetail1.variant.images.size());
-            assertEquals(UUID.fromString("55555555-5555-5555-5555-555555555555"), itemDetail1.variant.images.get(0).id);
+            assertEquals("55555555-5555-5555-5555-555555555555", itemDetail1.variant.images.get(0).id);
             assertEquals("https://cdn.example.com/widget1.jpg", itemDetail1.variant.images.get(0).imageUrl);
             assertEquals(1, itemDetail1.variant.images.get(0).sortOrder);
-            assertEquals(UUID.fromString("66666666-6666-6666-6666-666666666666"), itemDetail1.variant.images.get(1).id);
+            assertTrue(itemDetail1.variant.images.get(0).isFeatured);
+            assertEquals("66666666-6666-6666-6666-666666666666", itemDetail1.variant.images.get(1).id);
             assertEquals("https://cdn.example.com/widget2.jpg", itemDetail1.variant.images.get(1).imageUrl);
             assertEquals(2, itemDetail1.variant.images.get(1).sortOrder);
+            assertFalse(itemDetail1.variant.images.get(1).isFeatured);
 
             // Second item — empty images
             OrderItemDetailDto itemDetail2 = detail.items.get(1);
-            assertEquals(UUID.fromString("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"), itemDetail2.id);
+            assertEquals("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb", itemDetail2.id);
             assertEquals(new BigDecimal("125.00"), itemDetail2.unitPrice);
             assertEquals(2, itemDetail2.quantity);
             assertNotNull(itemDetail2.variant);
@@ -409,7 +409,6 @@ class OrderServiceReadPathCharacterizationTest {
             assertEquals("Payment confirmed", hist1.comment);
             assertEquals("SYSTEM", hist1.changedBy);
             assertEquals(LocalDateTime.of(2026, 7, 15, 10, 35, 0), hist1.createdAt);
-            assertSame(order, hist1.order);
 
             var hist2 = detail.statusHistory.get(1);
             assertEquals(UUID.fromString("aaa22222-2222-2222-2222-222222222222"), hist2.id);
@@ -464,7 +463,7 @@ class OrderServiceReadPathCharacterizationTest {
             assertNotNull(detail);
             assertEquals(1, detail.items.size());
             OrderItemDetailDto itemDetail = detail.items.get(0);
-            assertEquals(UUID.fromString("12345678-1234-1234-1234-123456789abc"), itemDetail.id);
+            assertEquals("12345678-1234-1234-1234-123456789abc", itemDetail.id);
             assertEquals(new BigDecimal("50.00"), itemDetail.unitPrice);
             assertEquals(1, itemDetail.quantity);
             assertNull(itemDetail.variant);

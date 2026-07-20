@@ -7,6 +7,7 @@ import org.eclipse.microprofile.graphql.*;
 import org.ecommerce.backend.service.FeaturedProductService;
 import org.ecommerce.backend.service.ProductService;
 import org.ecommerce.common.dto.*;
+import org.ecommerce.common.dto.PageResponse;
 import org.ecommerce.common.query.Filter;
 import org.ecommerce.common.query.FilterRequest;
 import org.ecommerce.common.query.PageRequest;

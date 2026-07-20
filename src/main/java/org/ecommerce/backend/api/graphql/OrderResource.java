@@ -6,7 +6,6 @@ import jakarta.inject.Inject;
 import io.quarkus.security.identity.SecurityIdentity;
 import org.eclipse.microprofile.graphql.*;
 import org.eclipse.microprofile.jwt.JsonWebToken;
-import org.ecommerce.common.dto.CustomerDto;
 import org.ecommerce.common.dto.OrderDetailRespDto;
 import org.ecommerce.common.dto.OrderDto;
 import org.ecommerce.common.dto.OrderResponseDto;
@@ -47,18 +46,6 @@ public class OrderResource
         LOG.debug("createOrder for sessionId=" + orderDto.getSessionId()
                 + " with " + (orderDto.getItems() == null ? 0 : orderDto.getItems().size()) + " items");
         return orderService.createOrderFromDto(orderDto);
-    }
-
-    @Mutation("updateCustomerInformation")
-    @Description("Update customer information for the latest order in a session. For now only email is supported.")
-    @RolesAllowed({"SUPER_ADMIN", "ORDER_MANAGER"})
-    public CustomerDto updateCustomerInformation(
-            @Name("sessionId") String sessionId,
-            @Name("customer") CustomerDto customerDto
-    ) throws GraphQLException
-    {
-        LOG.debug("updateCustomerInformation for sessionId=" + sessionId);
-        return orderService.updateCustomerInformation(sessionId, customerDto);
     }
 
     @Mutation("updateOrderStatus")

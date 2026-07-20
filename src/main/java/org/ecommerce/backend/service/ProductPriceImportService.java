@@ -11,7 +11,7 @@ import org.ecommerce.backend.mapper.ProductPriceImportValidator;
 import org.ecommerce.backend.mapper.ProductPriceImportValidator.ValidationResult;
 import org.ecommerce.backend.mapper.UploadBatchDtoMapper;
 import org.ecommerce.common.dto.ProductPriceComparisonDto;
-import org.ecommerce.common.dto.ProductPriceUploadBatchProcessStatusDto;
+import org.ecommerce.common.dto.UploadBatchProcessStatusDto;
 import org.ecommerce.common.dto.ProductUploadBatchDto;
 import org.ecommerce.common.entity.*;
 import org.ecommerce.common.enums.PriceTypeEn;
@@ -35,7 +35,7 @@ import java.util.stream.Collectors;
 import static java.time.LocalDateTime.now;
 
 @ApplicationScoped
-public class ProductPriceImportService implements ImportBatchService<ProductPriceComparisonDto, ProductPriceUploadBatchProcessStatusDto, ProductPriceUploadBatchEntity>, AsyncImportOperations {
+public class ProductPriceImportService implements ImportBatchService<ProductPriceComparisonDto, UploadBatchProcessStatusDto, ProductPriceUploadBatchEntity>, AsyncImportOperations {
 
     @Inject
     ProductPriceUploadBatchRepository productPriceUploadBatchRepository;
@@ -200,7 +200,7 @@ public class ProductPriceImportService implements ImportBatchService<ProductPric
     }
 
     @Override
-    public ProductPriceUploadBatchProcessStatusDto getImportBatchProcessStatus(UUID batchId) {
+    public UploadBatchProcessStatusDto getImportBatchProcessStatus(UUID batchId) {
         return getProductPriceImportBatchProcessStatus(batchId);
     }
 
@@ -333,13 +333,13 @@ public class ProductPriceImportService implements ImportBatchService<ProductPric
     }
 
     @Transactional(value = Transactional.TxType.SUPPORTS)
-    public ProductPriceUploadBatchProcessStatusDto getProductPriceImportBatchProcessStatus(UUID batchId) {
+    public UploadBatchProcessStatusDto getProductPriceImportBatchProcessStatus(UUID batchId) {
         ProductPriceUploadBatchEntity batch = productPriceUploadBatchRepository.findById(batchId);
         if (batch == null) {
             throw new NotFoundException("Price Batch not found: " + batchId);
         }
 
-        ProductPriceUploadBatchProcessStatusDto status = new ProductPriceUploadBatchProcessStatusDto();
+        UploadBatchProcessStatusDto status = new UploadBatchProcessStatusDto();
         status.batchId = batch.id;
         status.status = batch.productUploadStatusEn != null ? batch.productUploadStatusEn.name() : null;
         status.totalRows = batch.totalRows;
