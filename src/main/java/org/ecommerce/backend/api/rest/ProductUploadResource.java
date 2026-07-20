@@ -5,6 +5,7 @@ import jakarta.inject.Inject;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
+import org.eclipse.microprofile.jwt.JsonWebToken;
 import org.ecommerce.backend.service.ProductImportService;
 import org.ecommerce.backend.service.ProductPriceImportService;
 import org.ecommerce.backend.service.ProductPriceUploadAsyncService;
@@ -25,6 +26,9 @@ public class ProductUploadResource {
     private static final Logger LOG = Logger.getLogger(ProductUploadResource.class);
 
     @Inject
+    JsonWebToken jwt;
+
+    @Inject
     ProductImportService importService;
 
     @Inject
@@ -42,8 +46,7 @@ public class ProductUploadResource {
     public Response productUploadCsv(ProductUploadFormDto form) {
         try {
             // 1. Resolve the admin user from the security context
-            //TODO::SDB Fix Hardcoded admin
-            StaffUserEntity admin = StaffUserEntity.findByEmail("admin@gmail.com");
+            StaffUserEntity admin = StaffUserEntity.findByEmail(jwt.getName());
 
             if (admin == null) {
                 return Response.status(Response.Status.UNAUTHORIZED).build();
@@ -99,8 +102,7 @@ public class ProductUploadResource {
     public Response productPriceUploadCsv(ProductUploadFormDto form) {
         try {
             // 1. Resolve the admin user from the security context
-            //TODO::SDB Fix Hardcoded
-            StaffUserEntity admin = StaffUserEntity.findByEmail("admin@gmail.com");
+            StaffUserEntity admin = StaffUserEntity.findByEmail(jwt.getName());
 
             if (admin == null) {
                 return Response.status(Response.Status.UNAUTHORIZED).build();
@@ -127,8 +129,10 @@ public class ProductUploadResource {
     @Consumes(MediaType.APPLICATION_JSON)
     @RolesAllowed({"SUPER_ADMIN", "CATALOG_MANAGER"})
     public Response startProcessProductPriceImportBatch(@PathParam("batchId") UUID batchId) {
-        //TODO::SDB Fix Hardcoded admin — replace with JWT identity when auth hardening spec is implemented
-        StaffUserEntity approvedBy = StaffUserEntity.findByEmail("admin@gmail.com");
+        StaffUserEntity approvedBy = StaffUserEntity.findByEmail(jwt.getName());
+        if (approvedBy == null) {
+            return Response.status(Response.Status.UNAUTHORIZED).build();
+        }
         try {
             priceImportService.markProductPriceImportBatchAsProcessing(batchId, approvedBy);
         } catch (NotFoundException ex) {

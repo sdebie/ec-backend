@@ -1,6 +1,5 @@
 package org.ecommerce.backend.service;
 
-import jakarta.persistence.EntityManager;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;
 import org.apache.commons.csv.CSVRecord;
@@ -53,7 +52,6 @@ class ProductImportCharacterizationTest {
     private ProductVariantRepository variantRepository;
     private ProductImageRepository imageRepository;
     private ImageService imageService;
-    private EntityManager entityManager;
 
     @BeforeEach
     void setUp() throws Exception {
@@ -69,7 +67,6 @@ class ProductImportCharacterizationTest {
         variantRepository = mock(ProductVariantRepository.class);
         imageRepository = mock(ProductImageRepository.class);
         imageService = mock(ImageService.class);
-        entityManager = mock(EntityManager.class);
 
         // Wire up the service
         setField(service, "productUploadBatchRepository", batchRepository);
@@ -80,7 +77,6 @@ class ProductImportCharacterizationTest {
         setField(service, "productVariantRepository", variantRepository);
         setField(service, "productImageRepository", imageRepository);
         setField(service, "imageService", imageService);
-        setField(service, "entityManager", entityManager);
         setField(service, "productImportParser", parser);
         setField(service, "productImportValidator", validator);
 
@@ -869,12 +865,27 @@ class ProductImportCharacterizationTest {
     }
 
     private void invokeStageChunkInTransaction(UUID batchId, List<StagedProductCsvRow> rows) throws Exception {
-        Method method = ProductImportService.class.getDeclaredMethod(
-                "stageProductRowsChunkInTransaction",
-                UUID.class,
-                List.class);
-        method.setAccessible(true);
-        method.invoke(service, batchId, rows);
+        // After the state-machine refactor, stageProductRowsChunkInTransaction no longer
+        // exists on ProductImportService. The equivalent logic now lives in
+        // ChunkedImportStateMachine.stageRowsChunkInTransaction which delegates to the
+        // strategy's stageRow(). We call the service's createStrategy() and replicate
+        // the per-row staging + batch counter update that the state machine does.
+        Method createStrategyMethod = ProductImportService.class.getDeclaredMethod("createStrategy");
+        createStrategyMethod.setAccessible(true);
+        @SuppressWarnings("unchecked")
+        ChunkedImportStateMachine.ChunkImportStrategy<StagedProductCsvRow, ProductUploadStagedEntity, ProductUploadBatchEntity> strategy =
+                (ChunkedImportStateMachine.ChunkImportStrategy<StagedProductCsvRow, ProductUploadStagedEntity, ProductUploadBatchEntity>) createStrategyMethod.invoke(service);
+
+        ProductUploadBatchEntity batch = strategy.loadBatch(batchId);
+        int validationErrorCount = 0;
+        for (StagedProductCsvRow row : rows) {
+            validationErrorCount += strategy.stageRow(batch, row);
+        }
+        // Mirror the state machine's counter update logic
+        Integer currentTotal = strategy.getTotalRows(batch);
+        strategy.setTotalRows(batch, (currentTotal != null ? currentTotal : 0) + rows.size());
+        Integer currentErrors = strategy.getValidationErrorCount(batch);
+        strategy.setValidationErrorCount(batch, (currentErrors != null ? currentErrors : 0) + validationErrorCount);
     }
 
     private ProductUploadBatchEntity createBatch(UUID batchId) {

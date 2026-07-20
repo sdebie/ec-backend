@@ -11,7 +11,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class PayFastServiceItnSignatureTest {
 
-    private static final String PASSPHRASE = "testpayfast1";
+    private static final String PASSPHRASE = "test-passphrase";
 
     private PayFastService service;
 

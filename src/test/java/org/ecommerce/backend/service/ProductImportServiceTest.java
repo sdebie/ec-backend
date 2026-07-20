@@ -26,7 +26,33 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-@Disabled
+/**
+ * Assessment (backend-hygiene spec, task 5.4):
+ * <p>
+ * This test suite cannot be revived as-is for the following reasons:
+ * <ol>
+ *   <li><b>PanacheMock + QuarkusTransaction.requiringNew() conflict:</b> The refactored service
+ *       now delegates to {@link ChunkedImportStateMachine}, which opens new transactions via
+ *       {@code QuarkusTransaction.requiringNew()}. PanacheMock stubs entity static finders on the
+ *       current thread's transaction context, but {@code requiringNew()} creates an independent
+ *       context where those mocks are not propagated. The
+ *       {@code handleCsvUploadForBatch_shouldLoadExistingBatchByIdAndUpdateItsStatus} test relies
+ *       on {@code ProductUploadBatchEntity.findById(batchId)} being mocked — this would fail at
+ *       runtime because the mock is invisible inside the new transaction.</li>
+ *   <li><b>validateAndDiff tests target the validator directly:</b> Tests like
+ *       {@code validateAndDiff_shouldAddValidationErrorsWhenRequiredFieldsAreMissing} exercise
+ *       {@link org.ecommerce.backend.mapper.ProductImportValidator} via the helper method, NOT the
+ *       import service itself. These work but they don't test the service path and belong in a
+ *       dedicated validator test class.</li>
+ *   <li><b>Replacement coverage:</b> The new {@code ProductImportRealPathIT} integration test drives
+ *       the REAL service path (CSV → staged → processed) against a live database, providing stronger
+ *       behaviour-preservation guarantees than PanacheMock-based isolation.</li>
+ * </ol>
+ * <p>
+ * Recommendation: delete this class once the real-path IT proves stable, or extract the
+ * validator-only tests into a separate {@code ProductImportValidatorTest} if needed.
+ */
+@Disabled("See assessment comment above — PanacheMock does not propagate into QuarkusTransaction.requiringNew() contexts")
 @QuarkusTest
 class ProductImportServiceTest {
 

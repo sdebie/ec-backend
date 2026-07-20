@@ -25,6 +25,12 @@ public class Startup {
     @ConfigProperty(name = "storage.path")
     String storagePath;
 
+    @ConfigProperty(name = "admin.bootstrap.email")
+    String bootstrapAdminEmail;
+
+    @ConfigProperty(name = "admin.bootstrap.password")
+    String bootstrapAdminPassword;
+
     @Inject
     Router router; // Inject the Vert.x Router
 
@@ -46,10 +52,10 @@ public class Startup {
         // 3. User Seed logic
         if (StaffUserEntity.count() == 0) {
             StaffUserEntity admin = new StaffUserEntity();
-            admin.email = "admin@gmail.com";
+            admin.email = bootstrapAdminEmail;
             admin.fullName = "System Administrator";
             admin.role = StaffRoleEn.SUPER_ADMIN;
-            admin.passwordHash = BcryptUtil.bcryptHash("Admin@123");
+            admin.passwordHash = BcryptUtil.bcryptHash(bootstrapAdminPassword);
             admin.isActive = true;
             admin.persist();
         }

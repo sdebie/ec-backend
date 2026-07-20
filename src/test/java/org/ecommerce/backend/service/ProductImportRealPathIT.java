@@ -1,0 +1,416 @@
+package org.ecommerce.backend.service;
+
+import io.quarkus.test.junit.QuarkusTest;
+import jakarta.inject.Inject;
+import jakarta.transaction.Transactional;
+import org.ecommerce.common.entity.ProductPriceUploadBatchEntity;
+import org.ecommerce.common.entity.ProductPriceUploadStagedEntity;
+import org.ecommerce.common.entity.ProductUploadBatchEntity;
+import org.ecommerce.common.entity.ProductUploadStagedEntity;
+import org.ecommerce.common.entity.StaffUserEntity;
+import org.ecommerce.common.enums.ProductImportValidationStatusEn;
+import org.ecommerce.common.enums.ProductUploadStatusEn;
+import org.ecommerce.common.repository.ProductPriceUploadBatchRepository;
+import org.ecommerce.common.repository.ProductPriceUploadStagedRepository;
+import org.ecommerce.common.repository.ProductUploadBatchRepository;
+import org.ecommerce.common.repository.ProductUploadStagedRepository;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Test;
+
+import java.io.ByteArrayInputStream;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.util.List;
+import java.util.UUID;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+/**
+ * Real-path integration tests for both import types (product and price).
+ * <p>
+ * Drives each service's public path:
+ * CSV upload → staged → processed, asserting batch counter/state transitions.
+ * Tests exercise the SERVICES, NOT the ChunkedImportStateMachine class alone.
+ * <p>
+ * Note: these tests use {@code QuarkusTransaction.requiringNew()} internally via
+ * the services, so {@code @TestTransaction} would NOT roll back the inner
+ * transactions. Instead, tests create unique batches and clean up after themselves.
+ * <p>
+ * Validates: Requirements 1.4
+ */
+@QuarkusTest
+class ProductImportRealPathIT {
+
+    @Inject
+    ProductImportService productImportService;
+
+    @Inject
+    ProductPriceImportService productPriceImportService;
+
+    @Inject
+    ProductUploadBatchRepository productUploadBatchRepository;
+
+    @Inject
+    ProductUploadStagedRepository productUploadStagedRepository;
+
+    @Inject
+    ProductPriceUploadBatchRepository productPriceUploadBatchRepository;
+
+    @Inject
+    ProductPriceUploadStagedRepository productPriceUploadStagedRepository;
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Product Import Service — real path
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    @Nested
+    @DisplayName("ProductImportService — CSV upload → stage → process")
+    class ProductImportServiceTests {
+
+        @Test
+        @DisplayName("Happy path: staging a CSV transitions batch IMPORTING → PENDING with correct counters")
+        void handleCsvUploadForBatch_stagesCsvAndTransitionsToPending() throws Exception {
+            // GIVEN: a batch in IMPORTING state
+            UUID batchId = createProductBatch();
+
+            // CSV with 3 rows:
+            //   Row 1: all required fields present (will still fail validation — no matching
+            //           category/brand in DB — but it IS staged and counted)
+            //   Row 2: missing name (validation error)
+            //   Row 3: valid structure, invalid stock (parse error)
+            String csv = """
+                    sku,name,product_slug,category_slug,brand_slug,stock,images,attributes
+                    TEST-SKU-001,Blue Tee,blue-tee,apparel,nike,10,,
+                    TEST-SKU-002,,missing-name,apparel,nike,5,,
+                    TEST-SKU-003,Red Tee,red-tee,apparel,nike,INVALID_STOCK,,
+                    """;
+
+            InputStream is = new ByteArrayInputStream(csv.getBytes(StandardCharsets.UTF_8));
+
+            try {
+                // WHEN: staging the CSV
+                productImportService.handleCsvUploadForBatch(is, batchId);
+
+                // THEN: batch transitions to PENDING
+                ProductUploadBatchEntity batch = loadProductBatch(batchId);
+                assertEquals(ProductUploadStatusEn.PENDING, batch.productUploadStatusEn,
+                        "Batch should be PENDING after staging completes");
+
+                // THEN: totalRows reflects the number of CSV rows staged
+                assertEquals(3, batch.totalRows, "totalRows should equal the number of CSV rows");
+
+                // THEN: validationErrorCount > 0 (rows with validation failures)
+                assertTrue(batch.validationErrorCount > 0,
+                        "validationErrorCount should be > 0 since rows have missing fields/bad data");
+
+                // THEN: staged rows exist in the database
+                List<ProductUploadStagedEntity> stagedRows =
+                        productUploadStagedRepository.findByBatchId(batchId);
+                assertEquals(3, stagedRows.size(), "All 3 rows should be staged");
+
+            } finally {
+                cleanupProductBatch(batchId);
+            }
+        }
+
+        @Test
+        @DisplayName("Processing staged rows transitions batch through counter updates")
+        void processProductStagedRowsForBatch_updatesCounters() throws Exception {
+            // GIVEN: a batch with staged rows (all will be INVALID since no real
+            // categories/brands/products exist — but the processing still runs)
+            UUID batchId = createProductBatch();
+
+            String csv = """
+                    sku,name,product_slug,category_slug,brand_slug,stock,images,attributes
+                    TEST-PROC-001,Blue Tee,blue-tee,apparel,nike,10,,
+                    TEST-PROC-002,,missing-name,apparel,nike,5,,
+                    """;
+
+            InputStream is = new ByteArrayInputStream(csv.getBytes(StandardCharsets.UTF_8));
+
+            try {
+                // Stage the CSV first
+                productImportService.handleCsvUploadForBatch(is, batchId);
+
+                // Mark as PROCESSING (simulates the async service workflow)
+                productImportService.markProductImportBatchAsProcessing(batchId);
+
+                ProductUploadBatchEntity batchBeforeProcessing = loadProductBatch(batchId);
+                assertEquals(ProductUploadStatusEn.PROCESSING, batchBeforeProcessing.productUploadStatusEn,
+                        "Batch should be PROCESSING after markAsProcessing");
+
+                // WHEN: processing the staged rows
+                productImportService.processProductStagedRowsForBatch(batchId);
+
+                // THEN: counters are updated
+                ProductUploadBatchEntity batchAfter = loadProductBatch(batchId);
+                assertNotNull(batchAfter.totalRows, "totalRows should be set");
+                assertTrue(batchAfter.totalRows > 0, "totalRows should be > 0");
+
+                // processedRows + skippedRows should equal totalRows after processing
+                int processed = batchAfter.processedRows != null ? batchAfter.processedRows : 0;
+                int skipped = batchAfter.skippedRows != null ? batchAfter.skippedRows : 0;
+                assertEquals(batchAfter.totalRows.intValue(), processed + skipped,
+                        "processedRows + skippedRows should equal totalRows after full processing");
+
+                // All staged rows should be marked as processed
+                List<ProductUploadStagedEntity> stagedRows =
+                        productUploadStagedRepository.findByBatchId(batchId);
+                for (ProductUploadStagedEntity row : stagedRows) {
+                    assertTrue(row.processed, "Every staged row should be marked processed");
+                }
+
+            } finally {
+                cleanupProductBatch(batchId);
+            }
+        }
+
+        @Test
+        @DisplayName("Full lifecycle: IMPORTING → PENDING → PROCESSING → counters correct")
+        void fullLifecycle_stateTransitionsAndCounters() throws Exception {
+            UUID batchId = createProductBatch();
+
+            // Mix of rows: one with all fields (still invalid — no DB match), one missing required fields
+            String csv = """
+                    sku,name,product_slug,category_slug,brand_slug,stock,images,attributes
+                    TEST-FULL-001,Test Product,test-prod,electronics,sony,50,,
+                    TEST-FULL-002,,no-name,,,,BAD_STOCK,,
+                    TEST-FULL-003,Another,another-prod,food,generic,10,,
+                    """;
+
+            InputStream is = new ByteArrayInputStream(csv.getBytes(StandardCharsets.UTF_8));
+
+            try {
+                // Phase 1: Upload → PENDING
+                productImportService.handleCsvUploadForBatch(is, batchId);
+                ProductUploadBatchEntity afterStaging = loadProductBatch(batchId);
+                assertEquals(ProductUploadStatusEn.PENDING, afterStaging.productUploadStatusEn);
+                assertEquals(3, afterStaging.totalRows);
+
+                // Phase 2: Mark PROCESSING
+                productImportService.markProductImportBatchAsProcessing(batchId);
+                ProductUploadBatchEntity afterMarking = loadProductBatch(batchId);
+                assertEquals(ProductUploadStatusEn.PROCESSING, afterMarking.productUploadStatusEn);
+                assertEquals(0, afterMarking.processedRows);
+                assertEquals(0, afterMarking.skippedRows);
+
+                // Phase 3: Process
+                productImportService.processProductStagedRowsForBatch(batchId);
+                ProductUploadBatchEntity afterProcessing = loadProductBatch(batchId);
+
+                // After synchronizeBatchProgress, counters must be consistent
+                int total = afterProcessing.totalRows;
+                int proc = afterProcessing.processedRows != null ? afterProcessing.processedRows : 0;
+                int skip = afterProcessing.skippedRows != null ? afterProcessing.skippedRows : 0;
+                assertEquals(total, proc + skip,
+                        "After processing, processedRows + skippedRows must equal totalRows");
+                assertTrue(total > 0);
+
+            } finally {
+                cleanupProductBatch(batchId);
+            }
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Product Price Import Service — real path
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    @Nested
+    @DisplayName("ProductPriceImportService — CSV upload → stage → process")
+    class ProductPriceImportServiceTests {
+
+        @Test
+        @DisplayName("Happy path: staging a price CSV transitions batch IMPORTING → PENDING with correct counters")
+        void handleProductPriceCsvUploadForBatch_stagesCsvAndTransitionsToPending() throws Exception {
+            // GIVEN: a price batch in IMPORTING state
+            UUID batchId = createPriceBatch();
+
+            // CSV with 3 rows:
+            //   Row 1: valid SKU format but no matching variant in DB → validation error
+            //   Row 2: blank SKU → "sku is required" error
+            //   Row 3: another valid SKU format, no match → validation error
+            String csv = """
+                    sku,retail_price,wholesale_price
+                    TEST-PRICE-SKU-001,299.00,150.00
+                    ,199.00,99.00
+                    TEST-PRICE-SKU-003,399.00,200.00
+                    """;
+
+            InputStream is = new ByteArrayInputStream(csv.getBytes(StandardCharsets.UTF_8));
+
+            try {
+                // WHEN: staging the CSV
+                productPriceImportService.handleProductPriceCsvUploadForBatch(is, batchId);
+
+                // THEN: batch transitions to PENDING
+                ProductPriceUploadBatchEntity batch = loadPriceBatch(batchId);
+                assertEquals(ProductUploadStatusEn.PENDING, batch.productUploadStatusEn,
+                        "Batch should be PENDING after staging completes");
+
+                // THEN: totalRows reflects the number of CSV rows staged
+                assertEquals(3, batch.totalRows, "totalRows should equal the number of CSV rows");
+
+                // THEN: validationErrorCount > 0 (rows with validation failures)
+                assertTrue(batch.validationErrorCount > 0,
+                        "validationErrorCount should be > 0 since SKUs don't exist in DB");
+
+                // THEN: staged rows exist in the database
+                List<ProductPriceUploadStagedEntity> stagedRows =
+                        productPriceUploadStagedRepository.findByBatchId(batchId);
+                assertEquals(3, stagedRows.size(), "All 3 rows should be staged");
+
+            } finally {
+                cleanupPriceBatch(batchId);
+            }
+        }
+
+        @Test
+        @DisplayName("Processing staged price rows transitions batch through counter updates")
+        void processProductPriceStagedRowsForBatch_updatesCounters() throws Exception {
+            // GIVEN: a price batch with staged rows (all INVALID — no matching variants)
+            UUID batchId = createPriceBatch();
+
+            String csv = """
+                    sku,retail_price,wholesale_price
+                    TEST-PPROC-001,100.00,50.00
+                    TEST-PPROC-002,200.00,100.00
+                    """;
+
+            InputStream is = new ByteArrayInputStream(csv.getBytes(StandardCharsets.UTF_8));
+
+            try {
+                // Stage first
+                productPriceImportService.handleProductPriceCsvUploadForBatch(is, batchId);
+
+                // Mark PROCESSING
+                productPriceImportService.markProductPriceImportBatchAsProcessing(batchId, null);
+
+                ProductPriceUploadBatchEntity batchBeforeProcessing = loadPriceBatch(batchId);
+                assertEquals(ProductUploadStatusEn.PROCESSING, batchBeforeProcessing.productUploadStatusEn);
+
+                // WHEN: processing
+                productPriceImportService.processProductPriceStagedRowsForBatch(batchId);
+
+                // THEN: counters are updated
+                ProductPriceUploadBatchEntity batchAfter = loadPriceBatch(batchId);
+                assertNotNull(batchAfter.totalRows, "totalRows should be set");
+                assertTrue(batchAfter.totalRows > 0, "totalRows should be > 0");
+
+                // processedRows + skippedRows should equal totalRows
+                int processed = batchAfter.processedRows != null ? batchAfter.processedRows : 0;
+                int skipped = batchAfter.skippedRows != null ? batchAfter.skippedRows : 0;
+                assertEquals(batchAfter.totalRows.intValue(), processed + skipped,
+                        "processedRows + skippedRows should equal totalRows after full processing");
+
+                // All staged rows should be marked as processed
+                List<ProductPriceUploadStagedEntity> stagedRows =
+                        productPriceUploadStagedRepository.findByBatchId(batchId);
+                for (ProductPriceUploadStagedEntity row : stagedRows) {
+                    assertTrue(row.processed, "Every staged row should be marked processed");
+                }
+
+            } finally {
+                cleanupPriceBatch(batchId);
+            }
+        }
+
+        @Test
+        @DisplayName("Full lifecycle: IMPORTING → PENDING → PROCESSING → counters correct")
+        void fullLifecycle_stateTransitionsAndCounters() throws Exception {
+            UUID batchId = createPriceBatch();
+
+            String csv = """
+                    sku,retail_price,wholesale_price
+                    TEST-PFULL-001,500.00,250.00
+                    ,300.00,150.00
+                    TEST-PFULL-003,400.00,200.00
+                    """;
+
+            InputStream is = new ByteArrayInputStream(csv.getBytes(StandardCharsets.UTF_8));
+
+            try {
+                // Phase 1: Upload → PENDING
+                productPriceImportService.handleProductPriceCsvUploadForBatch(is, batchId);
+                ProductPriceUploadBatchEntity afterStaging = loadPriceBatch(batchId);
+                assertEquals(ProductUploadStatusEn.PENDING, afterStaging.productUploadStatusEn);
+                assertEquals(3, afterStaging.totalRows);
+
+                // Phase 2: Mark PROCESSING
+                productPriceImportService.markProductPriceImportBatchAsProcessing(batchId, null);
+                ProductPriceUploadBatchEntity afterMarking = loadPriceBatch(batchId);
+                assertEquals(ProductUploadStatusEn.PROCESSING, afterMarking.productUploadStatusEn);
+                assertEquals(0, afterMarking.processedRows);
+                assertEquals(0, afterMarking.skippedRows);
+
+                // Phase 3: Process
+                productPriceImportService.processProductPriceStagedRowsForBatch(batchId);
+                ProductPriceUploadBatchEntity afterProcessing = loadPriceBatch(batchId);
+
+                // After synchronizeBatchProgress, counters must be consistent
+                int total = afterProcessing.totalRows;
+                int proc = afterProcessing.processedRows != null ? afterProcessing.processedRows : 0;
+                int skip = afterProcessing.skippedRows != null ? afterProcessing.skippedRows : 0;
+                assertEquals(total, proc + skip,
+                        "After processing, processedRows + skippedRows must equal totalRows");
+                assertTrue(total > 0);
+
+            } finally {
+                cleanupPriceBatch(batchId);
+            }
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Helpers — batch creation and cleanup
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    @Transactional
+    UUID createProductBatch() {
+        ProductUploadBatchEntity batch = new ProductUploadBatchEntity();
+        batch.filename = "test-import-" + UUID.randomUUID() + ".csv";
+        batch.productUploadStatusEn = ProductUploadStatusEn.IMPORTING;
+        batch.totalRows = 0;
+        batch.processedRows = 0;
+        batch.skippedRows = 0;
+        batch.validationErrorCount = 0;
+        productUploadBatchRepository.persist(batch);
+        return batch.id;
+    }
+
+    @Transactional
+    UUID createPriceBatch() {
+        ProductPriceUploadBatchEntity batch = new ProductPriceUploadBatchEntity();
+        batch.filename = "test-price-import-" + UUID.randomUUID() + ".csv";
+        batch.productUploadStatusEn = ProductUploadStatusEn.IMPORTING;
+        batch.totalRows = 0;
+        batch.processedRows = 0;
+        batch.skippedRows = 0;
+        batch.validationErrorCount = 0;
+        productPriceUploadBatchRepository.persist(batch);
+        return batch.id;
+    }
+
+    @Transactional
+    ProductUploadBatchEntity loadProductBatch(UUID batchId) {
+        return productUploadBatchRepository.findById(batchId);
+    }
+
+    @Transactional
+    ProductPriceUploadBatchEntity loadPriceBatch(UUID batchId) {
+        return productPriceUploadBatchRepository.findById(batchId);
+    }
+
+    @Transactional
+    void cleanupProductBatch(UUID batchId) {
+        productUploadStagedRepository.delete("batch.id", batchId);
+        productUploadBatchRepository.delete("id", batchId);
+    }
+
+    @Transactional
+    void cleanupPriceBatch(UUID batchId) {
+        productPriceUploadStagedRepository.delete("batch.id", batchId);
+        productPriceUploadBatchRepository.delete("id", batchId);
+    }
+}
