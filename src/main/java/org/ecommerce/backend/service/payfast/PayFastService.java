@@ -1,10 +1,13 @@
 package org.ecommerce.backend.service.payfast;
 
 import jakarta.enterprise.context.ApplicationScoped;
+import org.apache.commons.codec.digest.DigestUtils;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.ecommerce.common.entity.OrderEntity;
 
-import java.security.NoSuchAlgorithmException;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.*;
 
 @ApplicationScoped
@@ -24,110 +27,62 @@ public class PayFastService
     @ConfigProperty(name = "payfast.cancel-url")
     String cancelUrl;
 
-    /*
-    private volatile String lastSignatureBaseString;
+    /**
+     * Verifies the signature of an incoming ITN callback against the raw
+     * form-urlencoded request body.
+     * <p>
+     * PayFast signs the parameters in the order they were posted, so the raw body
+     * (not a re-sorted map) is the source of truth: the {@code signature} pair is
+     * removed, the passphrase is appended, and the MD5 of the result must match
+     * the received signature.
+     */
+    public boolean verifyItnSignature(String rawBody)
+    {
+        if (rawBody == null || rawBody.isBlank()) {
+            return false;
+        }
 
-    public String getLastSignatureBaseString() {
-        return lastSignatureBaseString;
-    }
-
-    public String generateSignature(Map<String, String> data) {
-        // Inject merchant credentials from configuration (override any provided values)
-        TreeMap<String, String> input = new TreeMap<>(data);
-        input.put("merchant_id", merchantId);
-        input.put("merchant_key", merchantKey);
-
-        input.put("return_url", returnUrl);
-        input.put("cancel_url", cancelUrl);
-        input.put("notify_url", notifyUrl);
+        String receivedSignature = null;
+        StringJoiner baseString = new StringJoiner("&");
+        for (String pair : rawBody.split("&")) {
+            if (pair.startsWith("signature=")) {
+                receivedSignature = pair.substring("signature=".length());
+            } else if (!pair.isBlank()) {
+                baseString.add(pair);
+            }
+        }
+        if (receivedSignature == null || receivedSignature.isBlank()) {
+            return false;
+        }
 
         if (passphrase != null && !passphrase.isBlank()) {
-            input.put("passphrase", passphrase.trim());
-        }
-        //new fixed-order requirement.
-        String[] order = new String[]{
-                "merchant_id",
-                "merchant_key",
-                "return_url",
-                "cancel_url",
-                "notify_url",
-                "fica_idnumber",
-                "name_first",
-                "name_last",
-                "email_address",
-                "cell_number",
-                "m_payment_id",
-                "amount",
-                "item_name",
-                "item_description",
-                "email_confirmation",
-                "confirmation_address",
-                "payment_method",
-                "passphrase"
-        };
-
-        StringBuilder sb = new StringBuilder();
-        for (String key : order) {
-            String value = input.get(key);
-            if (value == null)
-                continue;
-            value = value.trim();
-            if (value.isBlank())
-                continue;
-            if (sb.length() > 0)
-                sb.append('&');
-            // URL-encode value ensuring percent-encodings use uppercase hex digits (Java URLEncoder already does this)
-            String encoded = URLEncoder.encode(value, StandardCharsets.UTF_8);
-            sb.append(key).append('=').append(encoded);
+            baseString.add("passphrase=" + URLEncoder.encode(passphrase.trim(), StandardCharsets.UTF_8));
         }
 
-        String finalString = sb.toString();
-
-        // Save the exact ordered base string so it can be reused for the POST body construction
-        this.lastSignatureBaseString = finalString;
-
-        // Generate the MD5 Hash
-        System.out.println("DEBUG: String used for signature: " + finalString);
-        String signature = DigestUtils.md5Hex(finalString.getBytes(StandardCharsets.UTF_8));
-        System.out.println("DEBUG: Signature: " + signature);
-
-        return signature;
-        return null;
+        String calculatedSignature = DigestUtils.md5Hex(baseString.toString().getBytes(StandardCharsets.UTF_8));
+        return MessageDigest.isEqual(
+                calculatedSignature.getBytes(StandardCharsets.UTF_8),
+                receivedSignature.toLowerCase(Locale.ROOT).getBytes(StandardCharsets.UTF_8)
+        );
     }
-     */
-
-    /**
-     * Verifies an incoming ITN signature.
-     * <p>
-     * public boolean verifySignature(Map<String, String> params) {
-     * String receivedSignature = params.get("signature");
-     * <p>
-     * // Remove signature to recalculate
-     * TreeMap<String, String> dataToVerify = new TreeMap<>(params);
-     * dataToVerify.remove("signature");
-     * <p>
-     * String calculatedSignature = generateSignature(dataToVerify);
-     * return calculatedSignature.equals(receivedSignature);
-     * }
-     */
 
     public List<HtmlFormField> generateHiddenHTMLForm(OrderEntity quote)
     {
-
-        try {
-            TreeMap<String, String> stringTreeMap = getStringTreeMap(quote);
-            Map<String, String> sortedData = PayFastUtils.sortByPredefinedOrder(stringTreeMap);
-            String joinedNameValuePair = PayFastUtils.concatenateNonEmptyNameValuePairs(sortedData);
-            String signature = PayFastUtils.generateSecuritySignature(joinedNameValuePair);
-            return buildFormElements(sortedData, signature);
-        } catch (NoSuchAlgorithmException e) {
-            System.out.println("Failed to create security signature" + e);
-        }
-
-        return Collections.emptyList();
+        String email = (quote.customerEntity != null && quote.customerEntity.user != null)
+                ? quote.customerEntity.user.email : "";
+        return generateHiddenHTMLForm(quote, email);
     }
 
-    private TreeMap<String, String> getStringTreeMap(OrderEntity quote)
+    public List<HtmlFormField> generateHiddenHTMLForm(OrderEntity quote, String email)
+    {
+        TreeMap<String, String> stringTreeMap = getStringTreeMap(quote, email);
+        Map<String, String> sortedData = PayFastUtils.sortByPredefinedOrder(stringTreeMap);
+        String joinedNameValuePair = PayFastUtils.concatenateNonEmptyNameValuePairs(sortedData);
+        String signature = PayFastUtils.generateSecuritySignature(joinedNameValuePair);
+        return buildFormElements(sortedData, signature);
+    }
+
+    private TreeMap<String, String> getStringTreeMap(OrderEntity quote, String email)
     {
 
         TreeMap<String, String> input = new TreeMap<>();
@@ -141,7 +96,7 @@ public class PayFastService
         input.put("amount", quote.totalAmount.setScale(2, java.math.RoundingMode.HALF_UP).toPlainString());
         input.put("m_payment_id", quote.id.toString());
         input.put("item_name", quote.id.toString());
-        input.put("email_address", quote.customerEntity.user != null ? quote.customerEntity.user.email : "");
+        input.put("email_address", email != null ? email : "");
 
         input.put("payment_method", "dc");
 

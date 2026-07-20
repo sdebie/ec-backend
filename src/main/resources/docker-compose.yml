@@ -25,13 +25,16 @@ services:
       db:
         condition: service_healthy
     volumes:
-      - ./ec-infra/src/main/resources/db/migration:/flyway/sql:ro
+      - ./ec-infra/src/main/resources/db:/flyway/db:ro
     environment:
       - FLYWAY_URL=jdbc:postgresql://db:5432/ecommerce_db
       - FLYWAY_USER=postgres
       - FLYWAY_PASSWORD=postgres
       - FLYWAY_CONNECT_RETRIES=60
-    command: -schemas=public -baselineOnMigrate=true -connectRetries=60 migrate
+      # Schema + platform defaults + client seed. Swap the last entry to
+      # deploy a different client's content.
+      - FLYWAY_LOCATIONS=filesystem:/flyway/db/migration,filesystem:/flyway/db/seed/default,filesystem:/flyway/db/seed/uvh
+    command: -schemas=public -baselineOnMigrate=true -baselineVersion=1.0.0 -connectRetries=60 migrate
 
   backend:
     image: shawndebie/ec-backend:latest

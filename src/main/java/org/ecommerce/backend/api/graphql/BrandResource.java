@@ -1,12 +1,11 @@
 package org.ecommerce.backend.api.graphql;
 
+import jakarta.annotation.security.RolesAllowed;
 import jakarta.inject.Inject;
-import org.eclipse.microprofile.graphql.GraphQLApi;
-import org.eclipse.microprofile.graphql.Mutation;
-import org.eclipse.microprofile.graphql.Name;
-import org.eclipse.microprofile.graphql.Query;
+import org.eclipse.microprofile.graphql.*;
 import org.ecommerce.backend.service.BrandService;
 import org.ecommerce.common.dto.BrandDto;
+import org.ecommerce.common.dto.PageResponse;
 import org.ecommerce.common.query.FilterRequest;
 import org.ecommerce.common.query.PageRequest;
 
@@ -25,6 +24,25 @@ public class BrandResource
         return brandService.getAllBrands(pageRequest, filterRequest);
     }
 
+    @Query("getBrands")
+    @Description("Get paginated brands for storefront filtering.")
+    public PageResponse<BrandDto> getBrands(
+            @Name("pageIndex") @DefaultValue("0") int pageIndex,
+            @Name("pageSize") @DefaultValue("500") int pageSize,
+            @Name("filterRequest") FilterRequest filterRequest)
+    {
+        int effectivePageSize = Math.min(pageSize, 500);
+        PageRequest pageRequest = new PageRequest();
+        pageRequest.setPageIndex(pageIndex);
+        pageRequest.setPageSize(effectivePageSize);
+
+        List<BrandDto> content = brandService.getAllBrands(pageRequest, filterRequest);
+        long totalElements = brandService.brandCount(filterRequest);
+        int totalPages = (int) Math.ceil((double) totalElements / effectivePageSize);
+
+        return new PageResponse<>(content, totalElements, totalPages, pageIndex, effectivePageSize);
+    }
+
     @Query("brandCount")
     public long brandCount(@Name("filterRequest") FilterRequest filterRequest)
     {
@@ -38,6 +56,7 @@ public class BrandResource
     }
 
     @Mutation("createBrand")
+    @RolesAllowed({"SUPER_ADMIN", "CATALOG_MANAGER"})
     public void createBrand(@Name("brandDto") BrandDto brandDto)
     {
         if (brandDto == null) {
@@ -47,6 +66,7 @@ public class BrandResource
     }
 
     @Mutation("updateBrand")
+    @RolesAllowed({"SUPER_ADMIN", "CATALOG_MANAGER"})
     public void updateBrand(@Name("id") UUID id, @Name("brandDto") BrandDto brandDto)
     {
         if (brandDto == null) {
@@ -57,6 +77,7 @@ public class BrandResource
     }
 
     @Mutation("deleteBrand")
+    @RolesAllowed({"SUPER_ADMIN", "CATALOG_MANAGER"})
     public void deleteBrand(@Name("id") UUID id)
     {
         if (id == null) {

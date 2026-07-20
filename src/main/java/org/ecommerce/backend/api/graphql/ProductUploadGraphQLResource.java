@@ -1,5 +1,6 @@
 package org.ecommerce.backend.api.graphql;
 
+import jakarta.annotation.security.RolesAllowed;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import org.eclipse.microprofile.graphql.*;
@@ -28,6 +29,7 @@ public class ProductUploadGraphQLResource {
     @Query("importRows")
     @Description("Returns the list of product import rows for a given batch ID")
     @Transactional(value = TxType.SUPPORTS)
+    @RolesAllowed({"SUPER_ADMIN", "CATALOG_MANAGER"})
     public List<ProductComparisonDto> getImportRows(@Name("batchId") UUID batchId) {
         // We sort by SKU or created_at to keep the list stable for the user
         return importService.getProductImportRows(batchId);
@@ -36,6 +38,7 @@ public class ProductUploadGraphQLResource {
     @Query("productUploadBatches")
     @Description("Returns the list of all product upload batches")
     @Transactional(value = TxType.SUPPORTS)
+    @RolesAllowed({"SUPER_ADMIN", "CATALOG_MANAGER"})
     public List<ProductUploadBatchDto> getProductUploadBatches() {
         return importService.getProductUploadBatches();
     }
@@ -44,6 +47,7 @@ public class ProductUploadGraphQLResource {
     @Query("getPriceImportRows")
     @Description("Returns the list of product price import rows for a given batch ID")
     @Transactional(value = TxType.SUPPORTS)
+    @RolesAllowed({"SUPER_ADMIN", "CATALOG_MANAGER"})
     public List<ProductPriceComparisonDto> getPriceImportRows(@Name("batchId") UUID batchId) {
         // We sort by SKU or created_at to keep the list stable for the user
         return productPriceImportService.getProductPriceImportRows(batchId);
@@ -52,6 +56,7 @@ public class ProductUploadGraphQLResource {
     @Query("productPriceUploadBatches")
     @Description("Returns the list of all product price upload batches")
     @Transactional(value = TxType.SUPPORTS)
+    @RolesAllowed({"SUPER_ADMIN", "CATALOG_MANAGER"})
     public List<ProductUploadBatchDto> getProductPriceUploadBatches() {
         return productPriceImportService.getProductPriceUploadBatches();
     }

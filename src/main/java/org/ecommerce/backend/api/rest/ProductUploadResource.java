@@ -1,9 +1,11 @@
 package org.ecommerce.backend.api.rest;
 
+import jakarta.annotation.security.RolesAllowed;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
+import org.eclipse.microprofile.jwt.JsonWebToken;
 import org.ecommerce.backend.service.ProductImportService;
 import org.ecommerce.backend.service.ProductPriceImportService;
 import org.ecommerce.backend.service.ProductPriceUploadAsyncService;
@@ -24,6 +26,9 @@ public class ProductUploadResource {
     private static final Logger LOG = Logger.getLogger(ProductUploadResource.class);
 
     @Inject
+    JsonWebToken jwt;
+
+    @Inject
     ProductImportService importService;
 
     @Inject
@@ -37,11 +42,11 @@ public class ProductUploadResource {
 
     @POST
     @Path("/upload-csv")
+    @RolesAllowed({"SUPER_ADMIN", "CATALOG_MANAGER"})
     public Response productUploadCsv(ProductUploadFormDto form) {
         try {
             // 1. Resolve the admin user from the security context
-            //TODO::SDB Fix Hardcoded admin
-            StaffUserEntity admin = StaffUserEntity.findByEmail("admin@gmail.com");
+            StaffUserEntity admin = StaffUserEntity.findByEmail(jwt.getName());
 
             if (admin == null) {
                 return Response.status(Response.Status.UNAUTHORIZED).build();
@@ -66,6 +71,7 @@ public class ProductUploadResource {
     @POST
     @Path("/batches/{batchId}/staged/async")
     @Consumes(MediaType.APPLICATION_JSON)
+    @RolesAllowed({"SUPER_ADMIN", "CATALOG_MANAGER"})
     public Response startProcessProductImportBatch(@PathParam("batchId") UUID batchId) {
         try {
             importService.markProductImportBatchAsProcessing(batchId);
@@ -81,6 +87,7 @@ public class ProductUploadResource {
 
     @GET
     @Path("/batches/{batchId}/staged/status")
+    @RolesAllowed({"SUPER_ADMIN", "CATALOG_MANAGER"})
     public Response getProductImportStatus(@PathParam("batchId") UUID batchId) {
         try {
             return Response.ok(importService.getProductImportBatchProcessStatus(batchId)).build();
@@ -91,11 +98,11 @@ public class ProductUploadResource {
 
     @POST
     @Path("/price/upload-csv")
+    @RolesAllowed({"SUPER_ADMIN", "CATALOG_MANAGER"})
     public Response productPriceUploadCsv(ProductUploadFormDto form) {
         try {
             // 1. Resolve the admin user from the security context
-            //TODO::SDB Fix Hardcoded
-            StaffUserEntity admin = StaffUserEntity.findByEmail("admin@gmail.com");
+            StaffUserEntity admin = StaffUserEntity.findByEmail(jwt.getName());
 
             if (admin == null) {
                 return Response.status(Response.Status.UNAUTHORIZED).build();
@@ -120,9 +127,14 @@ public class ProductUploadResource {
     @POST
     @Path("/price/batches/{batchId}/staged/async")
     @Consumes(MediaType.APPLICATION_JSON)
+    @RolesAllowed({"SUPER_ADMIN", "CATALOG_MANAGER"})
     public Response startProcessProductPriceImportBatch(@PathParam("batchId") UUID batchId) {
+        StaffUserEntity approvedBy = StaffUserEntity.findByEmail(jwt.getName());
+        if (approvedBy == null) {
+            return Response.status(Response.Status.UNAUTHORIZED).build();
+        }
         try {
-            priceImportService.markProductPriceImportBatchAsProcessing(batchId);
+            priceImportService.markProductPriceImportBatchAsProcessing(batchId, approvedBy);
         } catch (NotFoundException ex) {
             return Response.status(Response.Status.NOT_FOUND).entity(ex.getMessage()).build();
         } catch (IllegalStateException ex) {
@@ -135,6 +147,7 @@ public class ProductUploadResource {
 
     @GET
     @Path("/price/batches/{batchId}/staged/status")
+    @RolesAllowed({"SUPER_ADMIN", "CATALOG_MANAGER"})
     public Response getProductPriceImportStatus(@PathParam("batchId") UUID batchId) {
         try {
             return Response.ok(priceImportService.getProductPriceImportBatchProcessStatus(batchId)).build();

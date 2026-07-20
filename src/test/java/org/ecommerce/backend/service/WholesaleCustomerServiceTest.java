@@ -123,5 +123,92 @@ class WholesaleCustomerServiceTest {
         assertEquals(customerId, result.getCustomerId());
         assertNull(result.getNotes());
     }
+
+    @Test
+    void toDetailsDto_shouldMapAllNewFieldsFromEntity() {
+        UUID id = UUID.randomUUID();
+        UUID customerId = UUID.randomUUID();
+
+        CustomerEntity customer = new CustomerEntity();
+        customer.id = customerId;
+
+        WholesaleApplicationEntity application = new WholesaleApplicationEntity();
+        application.id = id;
+        application.applicantEmail = "applicant@example.com";
+        application.accountEmail = "account@example.com";
+        application.firstName = "John";
+        application.lastName = "Doe";
+        application.phone = "0821234567";
+        application.companyName = "Wholesale Corp";
+        application.tradingName = "WC Trading";
+        application.companyPhone = "0111234567";
+        application.companyEmail = "info@wholesalecorp.co.za";
+        application.vatNumber = "VAT123456";
+        application.regNumber = "REG789012";
+        application.financeContactName = "Jane Finance";
+        application.financeContactEmail = "jane@wholesalecorp.co.za";
+        application.financeContactPhone = "0119876543";
+        application.purchaseOrderRequired = true;
+        application.notes = "We order in bulk monthly";
+        application.status = WholesaleApplicationStatusEn.PENDING;
+        application.createdAt = OffsetDateTime.parse("2026-06-01T09:00:00Z");
+        application.processedAt = null;
+        application.physicalAddressLine1 = "10 Main Road";
+        application.physicalAddressLine2 = "Unit 5";
+        application.physicalSuburb = "Sandton";
+        application.physicalCity = "Johannesburg";
+        application.physicalProvince = "Gauteng";
+        application.physicalPostalCode = "2196";
+        application.postalAddressLine1 = "PO Box 100";
+        application.postalAddressLine2 = null;
+        application.postalSuburb = "Braamfontein";
+        application.postalCity = "Johannesburg";
+        application.postalProvince = "Gauteng";
+        application.postalPostalCode = "2001";
+        application.customer = customer;
+
+        when(wholesaleApplicationRepository.findById(id)).thenReturn(application);
+
+        WholesaleApplicationDetailsDto result = wholesaleCustomerService.getWholesaleApplicationById(id);
+
+        // New fields
+        assertEquals("applicant@example.com", result.getApplicantEmail());
+        assertEquals("WC Trading", result.getTradingName());
+        assertEquals("0111234567", result.getCompanyPhone());
+        assertEquals("info@wholesalecorp.co.za", result.getCompanyEmail());
+        assertEquals("Jane Finance", result.getFinanceContactName());
+        assertEquals("jane@wholesalecorp.co.za", result.getFinanceContactEmail());
+        assertEquals("0119876543", result.getFinanceContactPhone());
+        assertEquals(true, result.getPurchaseOrderRequired());
+
+        // Existing fields still mapped correctly
+        assertEquals(id, result.getId());
+        assertEquals("account@example.com", result.getEmail());
+        assertEquals("John", result.getFirstName());
+        assertEquals("Doe", result.getLastName());
+        assertEquals("0821234567", result.getPhone());
+        assertEquals("Wholesale Corp", result.getCompanyName());
+        assertEquals("VAT123456", result.getVatNumber());
+        assertEquals("REG789012", result.getRegNumber());
+        assertEquals("We order in bulk monthly", result.getNotes());
+        assertEquals(WholesaleApplicationStatusEn.PENDING, result.getStatus());
+        assertEquals(OffsetDateTime.parse("2026-06-01T09:00:00Z"), result.getCreatedAt());
+        assertNull(result.getProcessedAt());
+        assertEquals(customerId, result.getCustomerId());
+
+        // Address fields
+        assertEquals("10 Main Road", result.getPhysicalAddressLine1());
+        assertEquals("Unit 5", result.getPhysicalAddressLine2());
+        assertEquals("Sandton", result.getPhysicalSuburb());
+        assertEquals("Johannesburg", result.getPhysicalCity());
+        assertEquals("Gauteng", result.getPhysicalProvince());
+        assertEquals("2196", result.getPhysicalPostalCode());
+        assertEquals("PO Box 100", result.getPostalAddressLine1());
+        assertNull(result.getPostalAddressLine2());
+        assertEquals("Braamfontein", result.getPostalSuburb());
+        assertEquals("Johannesburg", result.getPostalCity());
+        assertEquals("Gauteng", result.getPostalProvince());
+        assertEquals("2001", result.getPostalPostalCode());
+    }
 }
 

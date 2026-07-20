@@ -1,4 +1,4 @@
-package org.ecommerce.backend.service;
+package org.ecommerce.backend.mapper;
 
 import org.ecommerce.common.dto.ProductUploadBatchDto;
 import org.ecommerce.common.entity.ProductPriceUploadBatchEntity;
@@ -31,7 +31,9 @@ public final class UploadBatchDtoMapper
                 batch.skippedRows,
                 batch.validationErrorCount,
                 batch.createdAt,
-                batch.uploadedBy != null ? batch.uploadedBy.email : null
+                null,
+                batch.uploadedBy != null ? batch.uploadedBy.email : null,
+                null
         );
     }
 
@@ -50,7 +52,9 @@ public final class UploadBatchDtoMapper
                 batch.skippedRows,
                 batch.validationErrorCount,
                 batch.createdAt,
-                batch.uploadedBy != null ? batch.uploadedBy.email : null
+                batch.completedAt,
+                batch.uploadedBy != null ? batch.uploadedBy.email : null,
+                batch.approvedBy != null ? batch.approvedBy.email : null
         );
     }
 
@@ -63,7 +67,9 @@ public final class UploadBatchDtoMapper
             Integer skippedRows,
             Integer validationErrorCount,
             LocalDateTime createdAt,
-            String uploadedByUsername
+            LocalDateTime completedAt,
+            String uploadedByUsername,
+            String approvedByUsername
     )
     {
         ProductUploadBatchDto dto = new ProductUploadBatchDto();
@@ -75,8 +81,9 @@ public final class UploadBatchDtoMapper
         dto.skippedRows = skippedRows;
         dto.validationErrorCount = validationErrorCount;
         dto.createdAt = createdAt;
+        dto.completedAt = completedAt;
         dto.uploadedByUsername = uploadedByUsername;
+        dto.approvedByUsername = approvedByUsername;
         return dto;
     }
 }
-

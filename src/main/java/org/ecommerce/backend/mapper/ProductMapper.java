@@ -13,6 +13,8 @@ import org.ecommerce.common.entity.ProductImageEntity;
 import org.ecommerce.common.entity.ProductVariantEntity;
 import org.ecommerce.common.entity.VariantPricesEntity;
 import org.ecommerce.common.enums.PriceTypeEn;
+import org.ecommerce.common.enums.ProductStatusEn;
+import org.ecommerce.common.enums.ProductTypeEn;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 
@@ -47,6 +49,8 @@ public interface ProductMapper
     @Mapping(target = "images",  source = "images")
     ProductVariantDto mapVariantEntityToDto(ProductVariantEntity entity);
 
+    List<ProductVariantDto> mapVariantEntitiesToDtos(List<ProductVariantEntity> entities);
+
     // ── VariantPricesEntity → VariantPriceDto ────────────────────────────
 
     @Mapping(target = "id",        expression = "java(entity.id == null ? null : entity.id.toString())")
@@ -54,8 +58,6 @@ public interface ProductMapper
     @Mapping(target = "isActive",  expression = "java(entity.isActive())")
     @Mapping(target = "saleDaysRemaining", expression = "java(calculateSaleDaysRemaining(entity))")
     org.ecommerce.common.dto.VariantPriceDto mapPriceEntityToDto(org.ecommerce.common.entity.VariantPricesEntity entity);
-
-    List<ProductVariantDto> mapVariantEntitiesToDtos(List<ProductVariantEntity> entities);
 
     // ── CategoryEntity → CategoryDto ──────────────────────────────────────
 
@@ -70,12 +72,35 @@ public interface ProductMapper
     @Mapping(target = "id", expression = "java(entity.id == null ? null : entity.id.toString())")
     @Mapping(target = "shortDescription", source = "shorDescription")
     @Mapping(target = "productType", expression = "java(entity.productType == null ? null : entity.productType.name())")
+    @Mapping(target = "status", ignore = true)
     @Mapping(target = "createdAt", expression = "java(entity.createdAt == null ? null : entity.createdAt.toString())")
     @Mapping(target = "category", expression = "java(mapPrimaryCategory(entity))")
     @Mapping(target = "categories", expression = "java(mapCategoryList(entity))")
     @Mapping(target = "brand", source = "brand")
     @Mapping(target = "variants", ignore = true)
     ProductDto mapProductEntityToDto(ProductEntity entity);
+
+    // ── ProductDto → ProductEntity scalar copy (create vs patch) ──────────────
+
+    /** Copy scalar fields for a NEW product, applying SIMPLE/ACTIVE defaults. */
+    default void applyCreatableFields(ProductDto src, ProductEntity target) {
+        target.name = src.name;
+        target.slug = src.slug;
+        target.description = src.description;
+        target.shorDescription = src.shortDescription;
+        target.productType = src.productType != null ? ProductTypeEn.valueOf(src.productType) : ProductTypeEn.SIMPLE;
+        target.status = src.status != null ? ProductStatusEn.valueOf(src.status) : ProductStatusEn.ACTIVE;
+    }
+
+    /** Patch scalar fields on an EXISTING product — only non-blank values are applied. */
+    default void applyEditableFields(ProductDto src, ProductEntity target) {
+        if (src.name != null && !src.name.isBlank()) target.name = src.name;
+        if (src.slug != null && !src.slug.isBlank()) target.slug = src.slug;
+        if (src.description != null && !src.description.isBlank()) target.description = src.description;
+        if (src.shortDescription != null && !src.shortDescription.isBlank()) target.shorDescription = src.shortDescription;
+        if (src.productType != null && !src.productType.isBlank()) target.productType = ProductTypeEn.valueOf(src.productType);
+        if (src.status != null && !src.status.isBlank()) target.status = ProductStatusEn.valueOf(src.status);
+    }
 
     // ── Composite: product + variants → ProductInformationDto ─────────────
 
@@ -84,9 +109,24 @@ public interface ProductMapper
     {
         if (product == null) return null;
 
-        List<ProductVariantDto> variantDtos = variants != null ? mapVariantEntitiesToDtos(variants) : Collections.emptyList();
+        ProductDto productDto = mapProductEntityToDto(product);
+        // Enrich product DTO with status
+        if (product.status != null) {
+            productDto.status = product.status.name();
+        }
 
-        return new ProductInformationDto(mapProductEntityToDto(product), variantDtos);
+        List<ProductVariantDto> variantDtos = variants != null
+                ? variants.stream().map(v -> {
+                    ProductVariantDto dto = mapVariantEntityToDto(v);
+                    // Enrich variant DTO with status
+                    if (v.status != null) {
+                        dto.status = v.status.name();
+                    }
+                    return dto;
+                }).toList()
+                : Collections.emptyList();
+
+        return new ProductInformationDto(productDto, variantDtos);
     }
 
      default Long calculateSaleDaysRemaining(VariantPricesEntity entity)

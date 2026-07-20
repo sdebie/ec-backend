@@ -1,5 +1,6 @@
 package org.ecommerce.backend.api.graphql;
 
+import jakarta.annotation.security.RolesAllowed;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
@@ -25,6 +26,7 @@ public class StaffResource {
     @Query("staffList")
     @Description("Returns a paged list of staff members")
     @Transactional(value = Transactional.TxType.SUPPORTS)
+    @RolesAllowed("SUPER_ADMIN")
     public List<StaffDto> getStaffList(
             @Name("pageRequest") PageRequest pageRequest,
             @Name("filterRequest") FilterRequest filterRequest)
@@ -37,6 +39,7 @@ public class StaffResource {
     @Query("staffCount")
     @Description("Returns the total number of staff matching the given filter.")
     @Transactional(value = Transactional.TxType.SUPPORTS)
+    @RolesAllowed("SUPER_ADMIN")
     public long staffCount(@Name("filterRequest") FilterRequest filterRequest)
     {
         return staffService.staffCount(filterRequest);
@@ -45,6 +48,7 @@ public class StaffResource {
     @Query("staffById")
     @Description("Returns a staff member by ID")
     @Transactional(value = Transactional.TxType.SUPPORTS)
+    @RolesAllowed("SUPER_ADMIN")
     public StaffDto getStaffById(@Name("id") UUID id)
     {
         return staffService.getStaffById(id);
@@ -52,6 +56,7 @@ public class StaffResource {
 
     @Mutation("addStaffUser")
     @Description("Creates a new staff user")
+    @RolesAllowed("SUPER_ADMIN")
     @Transactional(value = Transactional.TxType.REQUIRED)
     public void addStaffUser(@Name("staffDto") StaffDto staffDto)
     {
@@ -64,6 +69,7 @@ public class StaffResource {
 
     @Mutation("updateStaffUser")
     @Description("Updates an existing staff user")
+    @RolesAllowed("SUPER_ADMIN")
     @Transactional(value = Transactional.TxType.REQUIRED)
     public void updateStaffUser(@Name("id") UUID id, @Name("staffDto") StaffDto staffDto)
     {

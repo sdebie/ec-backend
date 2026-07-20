@@ -4,12 +4,14 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import lombok.extern.slf4j.Slf4j;
+import org.ecommerce.backend.exception.InvalidPasswordResetCodeException;
+import org.ecommerce.backend.exception.PasswordResetLockedException;
+import org.ecommerce.backend.utils.PasswordHashUtil;
 import org.ecommerce.common.entity.CustomerEntity;
 import org.ecommerce.common.entity.UserEntity;
 import org.ecommerce.common.enums.CustomerStatusEn;
+import org.ecommerce.common.enums.CustomerTypeEn;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.time.OffsetDateTime;
 import java.util.Map;
@@ -30,25 +32,6 @@ public class CustomerPasswordResetService {
 
     @Inject
     PasswordResetNotificationService passwordResetNotificationService;
-
-    public static class InvalidPasswordResetCodeException extends RuntimeException {
-        public InvalidPasswordResetCodeException() {
-            super("Invalid or expired reset code");
-        }
-    }
-
-    public static class PasswordResetLockedException extends RuntimeException {
-        private final OffsetDateTime lockedUntil;
-
-        public PasswordResetLockedException(OffsetDateTime lockedUntil) {
-            super("Too many invalid code attempts. Try again later.");
-            this.lockedUntil = lockedUntil;
-        }
-
-        public OffsetDateTime getLockedUntil() {
-            return lockedUntil;
-        }
-    }
 
     private static class IpAttemptState {
         int failedAttempts;
@@ -88,7 +71,7 @@ public class CustomerPasswordResetService {
         OffsetDateTime now = OffsetDateTime.now();
 
         log.debug("Password Reset {}", rawCode);
-        user.passwordResetCodeHash = hashPassword(rawCode);
+        user.passwordResetCodeHash = PasswordHashUtil.hash(rawCode);
         user.passwordResetCodeExpiry = now.plusMinutes(RESET_CODE_EXPIRY_MINUTES);
         user.passwordResetCodeAttempts = 0;
         user.passwordResetCodeLockedUntil = null;
@@ -108,13 +91,10 @@ public class CustomerPasswordResetService {
         }
 
         UserEntity user = verifyCodeInternal(email, code, clientIp);
-        user.passwordHash = hashPassword(newPassword);
+        user.passwordHash = PasswordHashUtil.hash(newPassword);
         user.lastLogin = OffsetDateTime.now();
 
-        CustomerEntity customer = user.customer;
-        if (customer != null && (customer.status == null || customer.status == CustomerStatusEn.PENDING)) {
-            customer.status = CustomerStatusEn.ACTIVE;
-        }
+        activateCustomerProfile(user.customer);
 
         user.passwordResetCodeHash = null;
         user.passwordResetCodeExpiry = null;
@@ -137,17 +117,30 @@ public class CustomerPasswordResetService {
             throw new IllegalArgumentException("Invalid or expired reset token");
         }
 
-        user.passwordHash = hashPassword(newPassword);
+        user.passwordHash = PasswordHashUtil.hash(newPassword);
         user.lastLogin = OffsetDateTime.now();
 
-        // Activate the linked customer profile if still in REGISTERING state
-        CustomerEntity customer = user.customer;
-        if (customer != null && (customer.status == null || customer.status == CustomerStatusEn.PENDING)) {
-            customer.status = CustomerStatusEn.ACTIVE;
-        }
+        activateCustomerProfile(user.customer);
 
         user.resetToken = null;
         user.resetTokenExpiry = null;
+    }
+
+    /**
+     * A completed reset makes the account log-in-capable, so the linked profile must
+     * leave PENDING and must not remain GUEST — that tier is anonymous-checkout only.
+     * WHOLESALER is never downgraded.
+     */
+    private static void activateCustomerProfile(CustomerEntity customer) {
+        if (customer == null) {
+            return;
+        }
+        if (customer.status == null || customer.status == CustomerStatusEn.PENDING) {
+            customer.status = CustomerStatusEn.ACTIVE;
+        }
+        if (customer.shopperType == null || customer.shopperType == CustomerTypeEn.GUEST) {
+            customer.shopperType = CustomerTypeEn.RETAILER;
+        }
     }
 
     private UserEntity verifyCodeInternal(String email, String code, String clientIp) {
@@ -169,7 +162,7 @@ public class CustomerPasswordResetService {
                 && user.passwordResetCodeHash != null
                 && user.passwordResetCodeExpiry != null
                 && !user.passwordResetCodeExpiry.isBefore(now)
-                && hashPassword(code.trim()).equals(user.passwordResetCodeHash);
+                && PasswordHashUtil.hash(code.trim()).equals(user.passwordResetCodeHash);
 
         if (!validCode) {
             registerFailure(user, normalizedIp, now);
@@ -264,17 +257,4 @@ public class CustomerPasswordResetService {
         return true;
     }
 
-    private static String hashPassword(String password) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] hashed = digest.digest(password.getBytes(StandardCharsets.UTF_8));
-            StringBuilder sb = new StringBuilder();
-            for (byte b : hashed) {
-                sb.append(String.format("%02x", b));
-            }
-            return sb.toString();
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to hash password", e);
-        }
-    }
 }

@@ -4,18 +4,15 @@ import org.apache.commons.codec.digest.DigestUtils;
 
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
-import java.security.NoSuchAlgorithmException;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.TreeMap;
 
 public class PayFastUtils
 {
-    public static String generateSecuritySignature(String joinedNameValuePair) throws NoSuchAlgorithmException
+    public static String generateSecuritySignature(String joinedNameValuePair)
     {
-        String signature = DigestUtils.md5Hex(joinedNameValuePair.getBytes(StandardCharsets.UTF_8));
-        System.out.println("DEBUG:: Generated Signature: " + signature + " for input + " + joinedNameValuePair + " using algorithm: MD5");
-        return signature;
+        return DigestUtils.md5Hex(joinedNameValuePair.getBytes(StandardCharsets.UTF_8));
     }
 
     /**

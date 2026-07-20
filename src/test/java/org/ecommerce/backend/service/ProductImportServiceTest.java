@@ -5,6 +5,7 @@ import io.quarkus.hibernate.orm.panache.PanacheQuery;
 import io.quarkus.panache.mock.PanacheMock;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
+import org.ecommerce.backend.mapper.ProductImportValidator;
 import org.ecommerce.common.entity.*;
 import org.ecommerce.common.enums.ProductImportValidationStatusEn;
 import org.ecommerce.common.enums.ProductUploadStatusEn;
@@ -14,7 +15,6 @@ import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
-import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Optional;
@@ -26,12 +26,41 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-@Disabled
+/**
+ * Assessment (backend-hygiene spec, task 5.4):
+ * <p>
+ * This test suite cannot be revived as-is for the following reasons:
+ * <ol>
+ *   <li><b>PanacheMock + QuarkusTransaction.requiringNew() conflict:</b> The refactored service
+ *       now delegates to {@link ChunkedImportStateMachine}, which opens new transactions via
+ *       {@code QuarkusTransaction.requiringNew()}. PanacheMock stubs entity static finders on the
+ *       current thread's transaction context, but {@code requiringNew()} creates an independent
+ *       context where those mocks are not propagated. The
+ *       {@code handleCsvUploadForBatch_shouldLoadExistingBatchByIdAndUpdateItsStatus} test relies
+ *       on {@code ProductUploadBatchEntity.findById(batchId)} being mocked — this would fail at
+ *       runtime because the mock is invisible inside the new transaction.</li>
+ *   <li><b>validateAndDiff tests target the validator directly:</b> Tests like
+ *       {@code validateAndDiff_shouldAddValidationErrorsWhenRequiredFieldsAreMissing} exercise
+ *       {@link org.ecommerce.backend.mapper.ProductImportValidator} via the helper method, NOT the
+ *       import service itself. These work but they don't test the service path and belong in a
+ *       dedicated validator test class.</li>
+ *   <li><b>Replacement coverage:</b> The new {@code ProductImportRealPathIT} integration test drives
+ *       the REAL service path (CSV → staged → processed) against a live database, providing stronger
+ *       behaviour-preservation guarantees than PanacheMock-based isolation.</li>
+ * </ol>
+ * <p>
+ * Recommendation: delete this class once the real-path IT proves stable, or extract the
+ * validator-only tests into a separate {@code ProductImportValidatorTest} if needed.
+ */
+@Disabled("See assessment comment above — PanacheMock does not propagate into QuarkusTransaction.requiringNew() contexts")
 @QuarkusTest
 class ProductImportServiceTest {
 
     @Inject
     ProductImportService productImportService;
+
+    @Inject
+    ProductImportValidator productImportValidator;
 
     @BeforeEach
     void setUp() {
@@ -240,13 +269,7 @@ class ProductImportServiceTest {
         validationErrors.add("Unknown category: apparel");
         validationErrors.add("Unknown brand: nike");
 
-        Method applyValidationResults = ProductImportService.class.getDeclaredMethod(
-                "applyValidationResults",
-                ProductUploadStagedEntity.class,
-                java.util.List.class
-        );
-        applyValidationResults.setAccessible(true);
-        applyValidationResults.invoke(productImportService, staged, validationErrors);
+        productImportValidator.applyValidationResults(staged, validationErrors);
 
         assertEquals(ProductImportValidationStatusEn.INVALID, staged.validationStatus);
         assertEquals("Unknown category: apparel; Unknown brand: nike", staged.validationErrors);
@@ -260,16 +283,6 @@ class ProductImportServiceTest {
             String imagesValue,
             String attributesJson
     ) throws Exception {
-        Method validateAndDiff = ProductImportService.class.getDeclaredMethod(
-                "validateAndDiff",
-                ProductUploadStagedEntity.class,
-                java.util.List.class,
-                Integer.class,
-                String.class,
-                String.class,
-                String.class
-        );
-        validateAndDiff.setAccessible(true);
-        validateAndDiff.invoke(productImportService, staged, validationErrors, stock, brandSlug, imagesValue, attributesJson);
+        productImportValidator.validateAndDiff(staged, validationErrors, stock, brandSlug, imagesValue, attributesJson);
     }
 }

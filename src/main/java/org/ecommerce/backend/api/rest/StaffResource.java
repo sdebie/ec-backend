@@ -1,5 +1,6 @@
 package org.ecommerce.backend.api.rest;
 
+import jakarta.annotation.security.RolesAllowed;
 import jakarta.inject.Inject;
 import jakarta.validation.Valid;
 import jakarta.ws.rs.*;
@@ -10,7 +11,10 @@ import org.ecommerce.common.dto.LoginRequestDto;
 import org.ecommerce.common.dto.TokenResponseDto;
 import org.ecommerce.common.entity.StaffUserEntity;
 import org.ecommerce.backend.service.AdminAuthService;
+import org.ecommerce.backend.service.RateLimitDecision;
+import org.ecommerce.backend.service.RateLimiterService;
 import org.ecommerce.backend.service.StaffService;
+import org.ecommerce.backend.utils.ClientIpUtils;
 
 @Path("/api/admin/auth")
 @Slf4j
@@ -26,11 +30,37 @@ public class StaffResource
     @Inject
     StaffService staffService;
 
+    @Inject
+    RateLimiterService rateLimiterService;
+
     @POST
     @Path("/login")
-    public Response login(@Valid LoginRequestDto loginDto)
+    public Response login(
+            @Valid LoginRequestDto loginDto,
+            @HeaderParam("X-Forwarded-For") String xForwardedFor,
+            @HeaderParam("X-Real-IP") String xRealIp)
     {
         log.debug("Login Request received");
+
+        // Body-shape validation (400) stays ahead of the limiter — @Valid ensures email/password non-blank.
+        // If we reach here, loginDto.email() is guaranteed non-null.
+
+        // Chained-check semantics: IP limiter first; if denied, return 429 immediately
+        // (email counter NOT incremented).
+        String clientIp = ClientIpUtils.resolveClientIp(xForwardedFor, xRealIp);
+        RateLimitDecision ipDecision = rateLimiterService.check("admin-login", clientIp, 10, 900);
+        if (!ipDecision.allowed()) {
+            return Response.status(429).header("Retry-After", ipDecision.retryAfterSeconds()).build();
+        }
+
+        // IP passed — now consult the per-email limiter.
+        String emailKey = loginDto.email().toLowerCase().trim();
+        RateLimitDecision emailDecision = rateLimiterService.check("admin-login-email", emailKey, 5, 900);
+        if (!emailDecision.allowed()) {
+            return Response.status(429).header("Retry-After", emailDecision.retryAfterSeconds()).build();
+        }
+
+        // Rate limits passed — evaluate credentials.
         String token = authService.authenticate(loginDto);
 
         if (token != null) {
@@ -53,6 +83,7 @@ public class StaffResource
 
     @POST
     @Path("/reset-password")
+    @RolesAllowed("SUPER_ADMIN")
     public Response resetPassword(@Valid ResetPasswordRequest req)
     {
         if (req == null || req.email() == null || req.email().isBlank() || req.password() == null || req.password().isBlank()) {
