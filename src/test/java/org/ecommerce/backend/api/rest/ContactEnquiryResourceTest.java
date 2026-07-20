@@ -351,7 +351,7 @@ class ContactEnquiryResourceTest {
     // ── X-Forwarded-For header is passed to rate limiter (Req 3.3) ──────────
 
     @Test
-    @DisplayName("X-Forwarded-For first entry is the resolved client IP passed to the rate limiter")
+    @DisplayName("X-Forwarded-For LAST entry (proxy-appended) is the resolved client IP passed to the rate limiter")
     void xForwardedForUsedForRateLimiting() {
         given()
                 .contentType(ContentType.JSON)
@@ -362,9 +362,25 @@ class ContactEnquiryResourceTest {
                 .then()
                 .statusCode(202);
 
-        // Proves XFF parsing at the resource layer: the first hop, not the whole header
-        // or the proxy address, is what reaches the rate limiter.
-        verify(rateLimiterService).check(eq("enquiry"), eq("203.0.113.42"), anyInt(), anyLong());
+        // Proves XFF parsing at the resource layer: the LAST (proxy-appended) hop —
+        // never the client-controlled first entry — is what reaches the rate limiter.
+        verify(rateLimiterService).check(eq("enquiry"), eq("10.0.0.1"), anyInt(), anyLong());
+    }
+
+    @Test
+    @DisplayName("CF-Connecting-IP takes precedence over X-Forwarded-For for the rate limiter")
+    void cfConnectingIpTakesPrecedence() {
+        given()
+                .contentType(ContentType.JSON)
+                .header("CF-Connecting-IP", "203.0.113.9")
+                .header("X-Forwarded-For", "6.6.6.6, 10.0.0.1")
+                .body(validPayload())
+                .when()
+                .post("/api/storefront/enquiries")
+                .then()
+                .statusCode(202);
+
+        verify(rateLimiterService).check(eq("enquiry"), eq("203.0.113.9"), anyInt(), anyLong());
     }
 
     @Test

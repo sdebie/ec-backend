@@ -22,8 +22,8 @@ import static org.hamcrest.Matchers.nullValue;
 class CurrentRequestClientIpIT {
 
     @Test
-    @DisplayName("resolves X-Forwarded-For first entry from a GraphQL resolver")
-    void resolve_xForwardedFor_returnsFirstEntry() {
+    @DisplayName("resolves the LAST X-Forwarded-For entry (proxy-appended; spoofed prefixes ignored)")
+    void resolve_xForwardedFor_returnsLastEntry() {
         given()
                 .contentType("application/json")
                 .header("X-Forwarded-For", "203.0.113.42, 10.0.0.1, 192.168.1.1")
@@ -32,7 +32,24 @@ class CurrentRequestClientIpIT {
                 .post("/api/graphql")
                 .then()
                 .statusCode(200)
-                .body("data.probeClientIp", equalTo("203.0.113.42"))
+                .body("data.probeClientIp", equalTo("192.168.1.1"))
+                .body("errors", nullValue());
+    }
+
+    @Test
+    @DisplayName("CF-Connecting-IP takes precedence over X-Forwarded-For")
+    void resolve_cfConnectingIp_takesPrecedence() {
+        given()
+                .contentType("application/json")
+                .header("CF-Connecting-IP", "203.0.113.7")
+                .header("X-Forwarded-For", "6.6.6.6, 10.0.0.1")
+                .header("X-Real-IP", "198.51.100.7")
+                .body("{\"query\":\"{ probeClientIp }\"}")
+                .when()
+                .post("/api/graphql")
+                .then()
+                .statusCode(200)
+                .body("data.probeClientIp", equalTo("203.0.113.7"))
                 .body("errors", nullValue());
     }
 

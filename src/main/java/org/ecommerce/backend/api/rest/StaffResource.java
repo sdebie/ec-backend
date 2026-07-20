@@ -37,6 +37,7 @@ public class StaffResource
     @Path("/login")
     public Response login(
             @Valid LoginRequestDto loginDto,
+            @HeaderParam("CF-Connecting-IP") String cfConnectingIp,
             @HeaderParam("X-Forwarded-For") String xForwardedFor,
             @HeaderParam("X-Real-IP") String xRealIp)
     {
@@ -47,7 +48,7 @@ public class StaffResource
 
         // Chained-check semantics: IP limiter first; if denied, return 429 immediately
         // (email counter NOT incremented).
-        String clientIp = ClientIpUtils.resolveClientIp(xForwardedFor, xRealIp);
+        String clientIp = ClientIpUtils.resolveClientIp(cfConnectingIp, xForwardedFor, xRealIp);
         RateLimitDecision ipDecision = rateLimiterService.check("admin-login", clientIp, 10, 900);
         if (!ipDecision.allowed()) {
             return Response.status(429).header("Retry-After", ipDecision.retryAfterSeconds()).build();

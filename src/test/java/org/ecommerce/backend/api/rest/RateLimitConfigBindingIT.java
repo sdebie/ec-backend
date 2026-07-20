@@ -98,4 +98,28 @@ class RateLimitConfigBindingIT {
                 .when().get(LOOKUP_PATH)
                 .then().statusCode(204);
     }
+
+    @Test
+    @DisplayName("spoofed XFF prefixes cannot evade the real IP's bucket — rotating fake first entries still hits 429")
+    void spoofedXffPrefix_cannotEvadeRealIpBucket() {
+        // Cloudflare APPENDS the real connecting IP to any client-supplied XFF, so the
+        // LAST entry is the trustworthy one. An attacker rotating fabricated prefixes
+        // must still land in the real IP's bucket (KNOWN-LIMITATIONS §2 remediation).
+        String realIp = "203.0.113.204"; // unique to this test
+
+        for (int i = 1; i <= 3; i++) {
+            given().header("X-Forwarded-For", "6.6.6." + i + ", " + realIp)
+                    .queryParam("email", NONEXISTENT_EMAIL)
+                    .when().get(LOOKUP_PATH)
+                    .then().statusCode(204);
+        }
+
+        // 4th request with yet another spoofed prefix: same real bucket → denied.
+        // Under the pre-fix first-entry resolution, every request above would have
+        // opened a fresh bucket and this would be ADMITTED (204).
+        given().header("X-Forwarded-For", "6.6.6.99, " + realIp)
+                .queryParam("email", NONEXISTENT_EMAIL)
+                .when().get(LOOKUP_PATH)
+                .then().statusCode(429);
+    }
 }

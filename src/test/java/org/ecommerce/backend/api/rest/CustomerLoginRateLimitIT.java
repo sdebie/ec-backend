@@ -183,8 +183,8 @@ class CustomerLoginRateLimitIT {
     // ════════════════════════════════════════════════════════════════════════
 
     @Test
-    @DisplayName("customer login: X-Forwarded-For first entry is the resolved IP for the limiter")
-    void customerLogin_xForwardedForUsedForIpLimiter() {
+    @DisplayName("customer login: X-Forwarded-For LAST entry (proxy-appended) is the resolved IP for the limiter")
+    void customerLogin_xForwardedForLastEntryUsedForIpLimiter() {
         given()
                 .contentType(ContentType.JSON)
                 .header("X-Forwarded-For", "203.0.113.42, 10.0.0.1")
@@ -194,7 +194,23 @@ class CustomerLoginRateLimitIT {
                 .then()
                 .statusCode(401);
 
-        verify(rateLimiterService).check(eq("customer-login"), eq("203.0.113.42"), anyInt(), anyLong());
+        verify(rateLimiterService).check(eq("customer-login"), eq("10.0.0.1"), anyInt(), anyLong());
+    }
+
+    @Test
+    @DisplayName("customer login: CF-Connecting-IP takes precedence over X-Forwarded-For")
+    void customerLogin_cfConnectingIpTakesPrecedence() {
+        given()
+                .contentType(ContentType.JSON)
+                .header("CF-Connecting-IP", "203.0.113.8")
+                .header("X-Forwarded-For", "6.6.6.6, 10.0.0.1")
+                .body(loginPayload("customer@test.com", "password123"))
+                .when()
+                .post("/api/customers/login")
+                .then()
+                .statusCode(401);
+
+        verify(rateLimiterService).check(eq("customer-login"), eq("203.0.113.8"), anyInt(), anyLong());
     }
 
     @Test
@@ -265,8 +281,8 @@ class CustomerLoginRateLimitIT {
     // ════════════════════════════════════════════════════════════════════════
 
     @Test
-    @DisplayName("Google login: X-Forwarded-For first entry is the resolved IP for the limiter")
-    void googleLogin_xForwardedForUsedForIpLimiter() {
+    @DisplayName("Google login: X-Forwarded-For LAST entry (proxy-appended) is the resolved IP for the limiter")
+    void googleLogin_xForwardedForLastEntryUsedForIpLimiter() {
         given()
                 .contentType(ContentType.JSON)
                 .header("X-Forwarded-For", "203.0.113.55, 10.0.0.1")
@@ -277,7 +293,7 @@ class CustomerLoginRateLimitIT {
                 // Will be 500 (Google verification fails with fake token) or 401 — not 429
                 .statusCode(anyOf(is(500), is(401)));
 
-        verify(rateLimiterService).check(eq("google-login"), eq("203.0.113.55"), anyInt(), anyLong());
+        verify(rateLimiterService).check(eq("google-login"), eq("10.0.0.1"), anyInt(), anyLong());
     }
 
     @Test

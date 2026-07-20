@@ -68,6 +68,7 @@ public class CustomerResource {
     @Path("/lookup")
     public Response lookup(
             @QueryParam("email") String email,
+            @HeaderParam("CF-Connecting-IP") String cfConnectingIp,
             @HeaderParam("X-Forwarded-For") String xForwardedFor,
             @HeaderParam("X-Real-IP") String xRealIp
     ) {
@@ -75,7 +76,7 @@ public class CustomerResource {
             return Response.status(Response.Status.BAD_REQUEST).entity("email is required").build();
         }
 
-        String clientIp = ClientIpUtils.resolveClientIp(xForwardedFor, xRealIp);
+        String clientIp = ClientIpUtils.resolveClientIp(cfConnectingIp, xForwardedFor, xRealIp);
         RateLimitDecision decision = rateLimiterService.check("customer-lookup", clientIp, 20, 3600);
         if (!decision.allowed()) {
             return Response.status(429).header("Retry-After", decision.retryAfterSeconds()).build();
@@ -118,6 +119,7 @@ public class CustomerResource {
     @Transactional
     public Response requestPasswordResetCode(
             PasswordResetRequest req,
+            @HeaderParam("CF-Connecting-IP") String cfConnectingIp,
             @HeaderParam("X-Forwarded-For") String xForwardedFor,
             @HeaderParam("X-Real-IP") String xRealIp
     ) {
@@ -125,7 +127,7 @@ public class CustomerResource {
             return Response.status(Response.Status.BAD_REQUEST).entity("email is required").build();
         }
 
-        String clientIp = ClientIpUtils.resolveClientIp(xForwardedFor, xRealIp);
+        String clientIp = ClientIpUtils.resolveClientIp(cfConnectingIp, xForwardedFor, xRealIp);
 
         // Chained-check: IP limiter first; if denied, email counter is NOT incremented.
         // Silent denial — return the identical generic response to prevent enumeration (Req 5.2).
@@ -150,6 +152,7 @@ public class CustomerResource {
     @Transactional
     public Response verifyPasswordResetCode(
             PasswordResetVerifyRequest req,
+            @HeaderParam("CF-Connecting-IP") String cfConnectingIp,
             @HeaderParam("X-Forwarded-For") String xForwardedFor,
             @HeaderParam("X-Real-IP") String xRealIp
     ) {
@@ -158,7 +161,7 @@ public class CustomerResource {
         }
 
         try {
-            customerPasswordResetService.verifyPasswordResetCode(req.email, req.code, ClientIpUtils.resolveClientIp(xForwardedFor, xRealIp));
+            customerPasswordResetService.verifyPasswordResetCode(req.email, req.code, ClientIpUtils.resolveClientIp(cfConnectingIp, xForwardedFor, xRealIp));
             return Response.ok("Code verified.").build();
         } catch (PasswordResetLockedException ex) {
             return Response.status(Response.Status.TOO_MANY_REQUESTS)
@@ -174,6 +177,7 @@ public class CustomerResource {
     @Transactional
     public Response completePasswordReset(
             PasswordResetCompleteRequest req,
+            @HeaderParam("CF-Connecting-IP") String cfConnectingIp,
             @HeaderParam("X-Forwarded-For") String xForwardedFor,
             @HeaderParam("X-Real-IP") String xRealIp
     ) {
@@ -192,7 +196,7 @@ public class CustomerResource {
                     req.email,
                     req.code,
                     req.newPassword,
-                    ClientIpUtils.resolveClientIp(xForwardedFor, xRealIp)
+                    ClientIpUtils.resolveClientIp(cfConnectingIp, xForwardedFor, xRealIp)
             );
             return Response.ok("Password reset complete.").build();
         } catch (PasswordResetLockedException ex) {
@@ -211,6 +215,7 @@ public class CustomerResource {
     @Transactional
     public Response login(
             LoginRequest req,
+            @HeaderParam("CF-Connecting-IP") String cfConnectingIp,
             @HeaderParam("X-Forwarded-For") String xForwardedFor,
             @HeaderParam("X-Real-IP") String xRealIp
     ) {
@@ -219,7 +224,7 @@ public class CustomerResource {
             return Response.status(Response.Status.BAD_REQUEST).entity("email and password required").build();
         }
 
-        String clientIp = ClientIpUtils.resolveClientIp(xForwardedFor, xRealIp);
+        String clientIp = ClientIpUtils.resolveClientIp(cfConnectingIp, xForwardedFor, xRealIp);
 
         // Chained-check: IP limiter first; if denied, email counter is NOT incremented
         RateLimitDecision ipDecision = rateLimiterService.check("customer-login", clientIp, 10, 900);
@@ -273,6 +278,7 @@ public class CustomerResource {
     @Transactional
     public Response loginWithGoogle(
             GoogleLoginRequest req,
+            @HeaderParam("CF-Connecting-IP") String cfConnectingIp,
             @HeaderParam("X-Forwarded-For") String xForwardedFor,
             @HeaderParam("X-Real-IP") String xRealIp
     ) {
@@ -280,7 +286,7 @@ public class CustomerResource {
             return Response.status(Response.Status.BAD_REQUEST).entity("idToken is required").build();
         }
 
-        String clientIp = ClientIpUtils.resolveClientIp(xForwardedFor, xRealIp);
+        String clientIp = ClientIpUtils.resolveClientIp(cfConnectingIp, xForwardedFor, xRealIp);
 
         // Rate limit by IP — no per-email key because email is only known after token verification
         RateLimitDecision ipDecision = rateLimiterService.check("google-login", clientIp, 10, 900);
@@ -402,6 +408,7 @@ public class CustomerResource {
     @Transactional
     public Response register(
             RegisterRequest req,
+            @HeaderParam("CF-Connecting-IP") String cfConnectingIp,
             @HeaderParam("X-Forwarded-For") String xForwardedFor,
             @HeaderParam("X-Real-IP") String xRealIp
     ) {
@@ -414,7 +421,7 @@ public class CustomerResource {
         }
 
         // Rate limit check — runs after body-shape validation, before the 409 claimed-account guard
-        String clientIp = ClientIpUtils.resolveClientIp(xForwardedFor, xRealIp);
+        String clientIp = ClientIpUtils.resolveClientIp(cfConnectingIp, xForwardedFor, xRealIp);
         RateLimitDecision decision = rateLimiterService.check("register", clientIp, 10, 3600);
         if (!decision.allowed()) {
             return Response.status(429).header("Retry-After", decision.retryAfterSeconds()).build();

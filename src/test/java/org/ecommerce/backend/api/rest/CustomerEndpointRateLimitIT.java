@@ -94,7 +94,7 @@ class CustomerEndpointRateLimitIT {
     }
 
     @Test
-    @DisplayName("/lookup: X-Forwarded-For first entry is used as IP key for the limiter")
+    @DisplayName("/lookup: X-Forwarded-For LAST entry (proxy-appended) is used as IP key for the limiter")
     void lookup_xForwardedForResolvedCorrectly() {
         given()
                 .contentType(ContentType.JSON)
@@ -105,7 +105,23 @@ class CustomerEndpointRateLimitIT {
                 .then()
                 .statusCode(204);
 
-        verify(rateLimiterService).check(eq("customer-lookup"), eq("203.0.113.50"), anyInt(), anyLong());
+        verify(rateLimiterService).check(eq("customer-lookup"), eq("10.0.0.1"), anyInt(), anyLong());
+    }
+
+    @Test
+    @DisplayName("/lookup: CF-Connecting-IP takes precedence over X-Forwarded-For")
+    void lookup_cfConnectingIpTakesPrecedence() {
+        given()
+                .contentType(ContentType.JSON)
+                .header("CF-Connecting-IP", "203.0.113.6")
+                .header("X-Forwarded-For", "6.6.6.6, 10.0.0.1")
+                .queryParam("email", "someone@example.com")
+                .when()
+                .get("/api/customers/lookup")
+                .then()
+                .statusCode(204);
+
+        verify(rateLimiterService).check(eq("customer-lookup"), eq("203.0.113.6"), anyInt(), anyLong());
     }
 
     @Test
@@ -198,7 +214,7 @@ class CustomerEndpointRateLimitIT {
     }
 
     @Test
-    @DisplayName("/register: X-Forwarded-For first entry is used as IP key for the limiter")
+    @DisplayName("/register: X-Forwarded-For LAST entry (proxy-appended) is used as IP key for the limiter")
     void register_xForwardedForResolvedCorrectly() {
         given()
                 .contentType(ContentType.JSON)
@@ -207,7 +223,7 @@ class CustomerEndpointRateLimitIT {
                 .when()
                 .post("/api/customers/register");
 
-        verify(rateLimiterService).check(eq("register"), eq("203.0.113.60"), anyInt(), anyLong());
+        verify(rateLimiterService).check(eq("register"), eq("10.0.0.1"), anyInt(), anyLong());
     }
 
     @Test

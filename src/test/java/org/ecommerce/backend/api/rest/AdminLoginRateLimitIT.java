@@ -176,8 +176,8 @@ class AdminLoginRateLimitIT {
     // ── X-Forwarded-For resolution (Req 7.1) ───────────────────────────────
 
     @Test
-    @DisplayName("X-Forwarded-For first entry is the resolved client IP for the IP limiter")
-    void xForwardedForUsedForIpLimiter() {
+    @DisplayName("X-Forwarded-For LAST entry (proxy-appended) is the resolved client IP for the IP limiter")
+    void xForwardedForLastEntryUsedForIpLimiter() {
         given()
                 .contentType(ContentType.JSON)
                 .header("X-Forwarded-For", "203.0.113.99, 10.0.0.1")
@@ -187,7 +187,40 @@ class AdminLoginRateLimitIT {
                 .then()
                 .statusCode(401);
 
-        verify(rateLimiterService).check(eq("admin-login"), eq("203.0.113.99"), anyInt(), anyLong());
+        verify(rateLimiterService).check(eq("admin-login"), eq("10.0.0.1"), anyInt(), anyLong());
+    }
+
+    @Test
+    @DisplayName("rotating spoofed X-Forwarded-For prefixes all resolve to the same (appended) IP")
+    void spoofedXffPrefixes_allResolveToAppendedIp() {
+        for (String spoofed : new String[]{"6.6.6.1", "6.6.6.2", "6.6.6.3"}) {
+            given()
+                    .contentType(ContentType.JSON)
+                    .header("X-Forwarded-For", spoofed + ", 10.0.0.1")
+                    .body(loginPayload("admin@test.com", "password123"))
+                    .when()
+                    .post("/api/admin/auth/login")
+                    .then()
+                    .statusCode(401);
+        }
+
+        verify(rateLimiterService, times(3)).check(eq("admin-login"), eq("10.0.0.1"), anyInt(), anyLong());
+    }
+
+    @Test
+    @DisplayName("CF-Connecting-IP takes precedence over X-Forwarded-For for the IP limiter")
+    void cfConnectingIpTakesPrecedence() {
+        given()
+                .contentType(ContentType.JSON)
+                .header("CF-Connecting-IP", "203.0.113.7")
+                .header("X-Forwarded-For", "6.6.6.6, 10.0.0.1")
+                .body(loginPayload("admin@test.com", "password123"))
+                .when()
+                .post("/api/admin/auth/login")
+                .then()
+                .statusCode(401);
+
+        verify(rateLimiterService).check(eq("admin-login"), eq("203.0.113.7"), anyInt(), anyLong());
     }
 
     @Test
