@@ -24,8 +24,8 @@ import java.util.*;
  */
 @Slf4j
 @ApplicationScoped
-public class ProductWriteValidator {
-
+public class ProductWriteValidator
+{
     @Inject
     ProductVariantRepository productVariantRepository;
 
@@ -43,9 +43,10 @@ public class ProductWriteValidator {
      * - Exactly one strictly-positive RETAIL_PRICE per variant
      * - SKUs not owned by another product
      */
-    public void validateForCreate(ProductInformationDto input) {
+    public void validateForCreate(ProductInformationDto input)
+    {
         validateCommon(input);
-        validateSkusNotOwnedByAnotherProduct(input.variants, null);
+        validateSkusNotOwnedByAnotherProduct(input.getVariants(), null);
     }
 
     /**
@@ -55,42 +56,45 @@ public class ProductWriteValidator {
      * - Every supplied image id belongs to a variant of the target product
      * - SKUs not owned by another product (excluding this product's own variants)
      */
-    public void validateForUpdate(UUID productId, ProductInformationDto input) {
+    public void validateForUpdate(UUID productId, ProductInformationDto input)
+    {
         validateCommon(input);
-        validateOwnership(productId, input.variants);
-        validateSkusNotOwnedByAnotherProduct(input.variants, productId);
+        validateOwnership(productId, input.getVariants());
+        validateSkusNotOwnedByAnotherProduct(input.getVariants(), productId);
     }
 
-    private void validateCommon(ProductInformationDto input) {
+    private void validateCommon(ProductInformationDto input)
+    {
         if (input == null) {
             throw new IllegalArgumentException("Product information cannot be null");
         }
-        if (input.product == null) {
+        if (input.getProduct() == null) {
             throw new IllegalArgumentException("Product data is required");
         }
-        if (input.variants == null || input.variants.isEmpty()) {
+        if (input.getVariants() == null || input.getVariants().isEmpty()) {
             throw new IllegalArgumentException("At least one variant is required");
         }
 
         Set<String> seenSkus = new HashSet<>();
-        for (int i = 0; i < input.variants.size(); i++) {
-            ProductVariantDto variant = input.variants.get(i);
+        for (int i = 0; i < input.getVariants().size(); i++) {
+            ProductVariantDto variant = input.getVariants().get(i);
             validateVariant(variant, i, seenSkus);
         }
     }
 
-    private void validateVariant(ProductVariantDto variant, int index, Set<String> seenSkus) {
+    private void validateVariant(ProductVariantDto variant, int index, Set<String> seenSkus)
+    {
         if (variant == null) {
             throw new IllegalArgumentException("Variant at index " + index + " cannot be null");
         }
 
         // SKU must be non-blank
-        if (variant.sku == null || variant.sku.isBlank()) {
+        if (variant.getSku() == null || variant.getSku().isBlank()) {
             throw new IllegalArgumentException("Variant at index " + index + " must have a non-blank SKU");
         }
 
         // SKU must be unique within the request
-        String normalizedSku = variant.sku.trim();
+        String normalizedSku = variant.getSku().trim();
         if (!seenSkus.add(normalizedSku.toLowerCase(Locale.ROOT))) {
             throw new IllegalArgumentException("Duplicate SKU in request: " + normalizedSku);
         }
@@ -99,40 +103,38 @@ public class ProductWriteValidator {
         validateRetailPrice(variant, index);
     }
 
-    private void validateRetailPrice(ProductVariantDto variant, int index) {
-        if (variant.prices == null || variant.prices.isEmpty()) {
-            throw new IllegalArgumentException(
-                    "Variant at index " + index + " (SKU: " + variant.sku + ") must have exactly one RETAIL_PRICE");
+    private void validateRetailPrice(ProductVariantDto variant, int index)
+    {
+        if (variant.getPrices() == null || variant.getPrices().isEmpty()) {
+            throw new IllegalArgumentException("Variant at index " + index + " (SKU: " + variant.getSku() + ") must have exactly one RETAIL_PRICE");
         }
 
-        long retailCount = variant.prices.stream()
-                .filter(p -> p != null && PriceTypeEn.RETAIL_PRICE.name().equals(p.priceType))
+        long retailCount = variant.getPrices()
+                .stream()
+                .filter(p -> p != null && PriceTypeEn.RETAIL_PRICE.name().equals(p.getPriceType()))
                 .count();
 
         if (retailCount == 0) {
-            throw new IllegalArgumentException(
-                    "Variant at index " + index + " (SKU: " + variant.sku + ") must have exactly one RETAIL_PRICE");
+            throw new IllegalArgumentException("Variant at index " + index + " (SKU: " + variant.getSku() + ") must have exactly one RETAIL_PRICE");
         }
         if (retailCount > 1) {
-            throw new IllegalArgumentException(
-                    "Variant at index " + index + " (SKU: " + variant.sku + ") has multiple RETAIL_PRICE entries; exactly one is required");
+            throw new IllegalArgumentException("Variant at index " + index + " (SKU: " + variant.getSku() + ") has multiple RETAIL_PRICE entries; exactly one is required");
         }
 
         // The single RETAIL_PRICE must be strictly positive (> 0)
-        VariantPriceDto retailPrice = variant.prices.stream()
-                .filter(p -> p != null && PriceTypeEn.RETAIL_PRICE.name().equals(p.priceType))
+        VariantPriceDto retailPrice = variant.getPrices()
+                .stream()
+                .filter(p -> p != null && PriceTypeEn.RETAIL_PRICE.name().equals(p.getPriceType()))
                 .findFirst()
                 .orElseThrow();
 
-        if (retailPrice.price == null) {
-            throw new IllegalArgumentException(
-                    "Variant at index " + index + " (SKU: " + variant.sku + ") RETAIL_PRICE amount is required");
+        if (retailPrice.getPrice() == null) {
+            throw new IllegalArgumentException("Variant at index " + index + " (SKU: " + variant.getSku() + ") RETAIL_PRICE amount is required");
         }
 
         // Use compareTo for BigDecimal scale-insensitive comparison
-        if (retailPrice.price.compareTo(BigDecimal.ZERO) <= 0) {
-            throw new IllegalArgumentException(
-                    "Variant at index " + index + " (SKU: " + variant.sku + ") RETAIL_PRICE must be strictly positive (> 0)");
+        if (retailPrice.getPrice().compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("Variant at index " + index + " (SKU: " + variant.getSku() + ") RETAIL_PRICE must be strictly positive (> 0)");
         }
     }
 
@@ -140,20 +142,21 @@ public class ProductWriteValidator {
      * On update, verify that every variant id, price id, and image id in the payload
      * belongs to the target product. Foreign or unknown ids fail the whole request.
      */
-    private void validateOwnership(UUID productId, List<ProductVariantDto> variants) {
+    private void validateOwnership(UUID productId, List<ProductVariantDto> variants)
+    {
         // Load existing variant ids for this product
         List<ProductVariantEntity> existingVariants = productVariantRepository.findByVariantsForProductId(productId);
         Set<UUID> ownedVariantIds = new HashSet<>();
         for (ProductVariantEntity v : existingVariants) {
-            ownedVariantIds.add(v.id);
+            ownedVariantIds.add(v.getId());
         }
 
         // Collect owned price ids (all prices across all owned variants)
         Map<UUID, UUID> priceOwnerVariantIds = new HashMap<>();
         for (ProductVariantEntity v : existingVariants) {
-            List<VariantPricesEntity> prices = VariantPricesEntity.findByVariantId(v.id);
+            List<VariantPricesEntity> prices = VariantPricesEntity.findByVariantId(v.getId());
             for (VariantPricesEntity p : prices) {
-                priceOwnerVariantIds.put(p.id, v.id);
+                priceOwnerVariantIds.put(p.getId(), v.getId());
             }
         }
 
@@ -161,42 +164,39 @@ public class ProductWriteValidator {
         Set<UUID> ownedImageIds = new HashSet<>();
         List<ProductImageEntity> existingImages = productImageRepository.findByProductId(productId);
         for (ProductImageEntity img : existingImages) {
-            ownedImageIds.add(img.id);
+            ownedImageIds.add(img.getId());
         }
 
         for (ProductVariantDto variant : variants) {
             UUID suppliedVariantId = null;
             // Check variant id ownership
-            if (variant.id != null && !variant.id.isBlank()) {
-                suppliedVariantId = parseUuidOrFail(variant.id, "variant");
+            if (variant.getId() != null && !variant.getId().isBlank()) {
+                suppliedVariantId = parseUuidOrFail(variant.getId(), "variant");
                 if (!ownedVariantIds.contains(suppliedVariantId)) {
-                    throw new IllegalArgumentException(
-                            "Variant id " + variant.id + " does not belong to the target product");
+                    throw new IllegalArgumentException("Variant id " + variant.getId() + " does not belong to the target product");
                 }
             }
 
             // Check price id ownership
-            if (variant.prices != null) {
-                for (VariantPriceDto price : variant.prices) {
-                    if (price != null && price.id != null && !price.id.isBlank()) {
-                        UUID priceId = parseUuidOrFail(price.id, "price");
+            if (variant.getPrices() != null) {
+                for (VariantPriceDto price : variant.getPrices()) {
+                    if (price != null && price.getId() != null && !price.getId().isBlank()) {
+                        UUID priceId = parseUuidOrFail(price.getId(), "price");
                         UUID ownerVariantId = priceOwnerVariantIds.get(priceId);
                         if (ownerVariantId == null || suppliedVariantId == null || !ownerVariantId.equals(suppliedVariantId)) {
-                            throw new IllegalArgumentException(
-                                    "Price id " + price.id + " does not belong to the supplied variant");
+                            throw new IllegalArgumentException("Price id " + price.getId() + " does not belong to the supplied variant");
                         }
                     }
                 }
             }
 
             // Check image id ownership
-            if (variant.images != null) {
-                for (var image : variant.images) {
-                    if (image != null && image.id != null && !image.id.isBlank()) {
-                        UUID imageId = parseUuidOrFail(image.id, "image");
+            if (variant.getImages() != null) {
+                for (var image : variant.getImages()) {
+                    if (image != null && image.getId() != null && !image.getId().isBlank()) {
+                        UUID imageId = parseUuidOrFail(image.getId(), "image");
                         if (!ownedImageIds.contains(imageId)) {
-                            throw new IllegalArgumentException(
-                                    "Image id " + image.id + " does not belong to the target product");
+                            throw new IllegalArgumentException("Image id " + image.getId() + " does not belong to the target product");
                         }
                     }
                 }
@@ -209,37 +209,38 @@ public class ProductWriteValidator {
      * On create, productId is null (all existing SKU owners are foreign).
      * On update, productId identifies the current product (its own SKUs are allowed).
      */
-    private void validateSkusNotOwnedByAnotherProduct(List<ProductVariantDto> variants, UUID productId) {
+    private void validateSkusNotOwnedByAnotherProduct(List<ProductVariantDto> variants, UUID productId)
+    {
         for (ProductVariantDto variant : variants) {
-            if (variant.sku == null || variant.sku.isBlank()) {
+            if (variant.getSku() == null || variant.getSku().isBlank()) {
                 continue; // already caught by validateCommon
             }
 
-            String sku = variant.sku.trim();
+            String sku = variant.getSku().trim();
             ProductVariantEntity existing = productVariantRepository.findBySkuWithProduct(sku);
             if (existing != null) {
                 // If we're updating and this SKU belongs to our own product, that's fine
-                if (productId != null && existing.product != null && productId.equals(existing.product.id)) {
+                if (productId != null && existing.getProduct() != null && productId.equals(existing.getProduct().getId())) {
                     continue;
                 }
                 // If the variant id matches what's in the payload, it's the same variant being updated
-                if (variant.id != null && !variant.id.isBlank()) {
+                if (variant.getId() != null && !variant.getId().isBlank()) {
                     try {
-                        UUID payloadVariantId = UUID.fromString(variant.id);
-                        if (payloadVariantId.equals(existing.id)) {
+                        UUID payloadVariantId = UUID.fromString(variant.getId());
+                        if (payloadVariantId.equals(existing.getId())) {
                             continue;
                         }
                     } catch (IllegalArgumentException ignored) {
                         // Invalid UUID will be caught elsewhere
                     }
                 }
-                throw new IllegalArgumentException(
-                        "SKU '" + sku + "' is already owned by another product");
+                throw new IllegalArgumentException("SKU '" + sku + "' is already owned by another product");
             }
         }
     }
 
-    private UUID parseUuidOrFail(String value, String label) {
+    private UUID parseUuidOrFail(String value, String label)
+    {
         try {
             return UUID.fromString(value);
         } catch (IllegalArgumentException e) {

@@ -21,8 +21,8 @@ import java.util.List;
 import java.util.UUID;
 
 @ApplicationScoped
-public class QuoteRequestService {
-
+public class QuoteRequestService
+{
     private static final Logger LOG = Logger.getLogger(QuoteRequestService.class);
 
     @Inject
@@ -34,15 +34,16 @@ public class QuoteRequestService {
      * observed post-commit by the mailer.
      */
     @Transactional
-    public QuoteRequestEntity submit(QuoteRequestSubmissionDto dto) {
+    public QuoteRequestEntity submit(QuoteRequestSubmissionDto dto)
+    {
         QuoteRequestEntity request = new QuoteRequestEntity();
-        request.name = dto.name();
-        request.email = dto.email();
-        request.phone = dto.phone();
-        request.company = dto.company();
-        request.message = dto.message();
-        request.status = QuoteRequestStatusEn.NEW;
-        request.createdAt = Instant.now();
+        request.setName(dto.name());
+        request.setEmail(dto.email());
+        request.setPhone(dto.phone());
+        request.setCompany(dto.company());
+        request.setMessage(dto.message());
+        request.setStatus(QuoteRequestStatusEn.NEW);
+        request.setCreatedAt(Instant.now());
 
         List<QuoteRequestItemEntity> items = new ArrayList<>();
         for (QuoteRequestLineDto line : dto.items()) {
@@ -52,21 +53,21 @@ public class QuoteRequestService {
             }
 
             QuoteRequestItemEntity item = new QuoteRequestItemEntity();
-            item.quoteRequest = request;
-            item.variant = variant;
-            item.productNameSnapshot = variant.product.name;
-            item.variantSkuSnapshot = variant.sku;
-            item.quantity = line.quantity();
+            item.setQuoteRequest(request);
+            item.setVariant(variant);
+            item.setProductNameSnapshot(variant.getProduct().getName());
+            item.setVariantSkuSnapshot(variant.getSku());
+            item.setQuantity(line.quantity());
             items.add(item);
         }
 
-        request.items = items;
+        request.setItems(items);
         QuoteRequestEntity.persist(request);
 
-        LOG.infof("[QuoteRequest] submitted id=%s, items=%d", request.id, items.size());
+        LOG.infof("[QuoteRequest] submitted id=%s, items=%d", request.getId(), items.size());
 
         // Fire post-commit CDI event — observed by QuoteRequestMailer at AFTER_SUCCESS
-        submittedEvent.fire(new QuoteRequestSubmittedEvent(request.id, toDetailsDto(request)));
+        submittedEvent.fire(new QuoteRequestSubmittedEvent(request.getId(), toDetailsDto(request)));
 
         return request;
     }
@@ -76,7 +77,8 @@ public class QuoteRequestService {
      * NEW→IN_PROGRESS, NEW→CLOSED, IN_PROGRESS→CLOSED. All others throw.
      */
     @Transactional
-    public QuoteRequestEntity updateStatus(UUID id, QuoteRequestStatusEn newStatus) {
+    public QuoteRequestEntity updateStatus(UUID id, QuoteRequestStatusEn newStatus)
+    {
         if (id == null) {
             throw new IllegalArgumentException("id is required");
         }
@@ -89,11 +91,11 @@ public class QuoteRequestService {
             throw new IllegalArgumentException("Quote request not found: " + id);
         }
 
-        validateTransition(request.status, newStatus);
+        validateTransition(request.getStatus(), newStatus);
 
-        QuoteRequestStatusEn previousStatus = request.status;
-        request.status = newStatus;
-        request.statusChangedAt = Instant.now();
+        QuoteRequestStatusEn previousStatus = request.getStatus();
+        request.setStatus(newStatus);
+        request.setStatusChangedAt(Instant.now());
 
         LOG.infof("[QuoteRequest] status updated id=%s, %s → %s", id, previousStatus, newStatus);
 
@@ -104,7 +106,8 @@ public class QuoteRequestService {
      * Validates that the transition from current to target is allowed.
      * Valid transitions: NEW→IN_PROGRESS, NEW→CLOSED, IN_PROGRESS→CLOSED.
      */
-    private void validateTransition(QuoteRequestStatusEn current, QuoteRequestStatusEn target) {
+    private void validateTransition(QuoteRequestStatusEn current, QuoteRequestStatusEn target)
+    {
         boolean valid = switch (current) {
             case NEW -> target == QuoteRequestStatusEn.IN_PROGRESS || target == QuoteRequestStatusEn.CLOSED;
             case IN_PROGRESS -> target == QuoteRequestStatusEn.CLOSED;
@@ -116,25 +119,26 @@ public class QuoteRequestService {
         }
     }
 
-    private QuoteRequestDetailsDto toDetailsDto(QuoteRequestEntity entity) {
+    private QuoteRequestDetailsDto toDetailsDto(QuoteRequestEntity entity)
+    {
         QuoteRequestDetailsDto dto = new QuoteRequestDetailsDto();
-        dto.setId(entity.id);
-        dto.setName(entity.name);
-        dto.setEmail(entity.email);
-        dto.setPhone(entity.phone);
-        dto.setCompany(entity.company);
-        dto.setMessage(entity.message);
-        dto.setCreatedAt(entity.createdAt);
-        dto.setStatus(entity.status);
-        dto.setStatusChangedAt(entity.statusChangedAt);
+        dto.setId(entity.getId());
+        dto.setName(entity.getName());
+        dto.setEmail(entity.getEmail());
+        dto.setPhone(entity.getPhone());
+        dto.setCompany(entity.getCompany());
+        dto.setMessage(entity.getMessage());
+        dto.setCreatedAt(entity.getCreatedAt());
+        dto.setStatus(entity.getStatus());
+        dto.setStatusChangedAt(entity.getStatusChangedAt());
 
         List<QuoteRequestItemDto> itemDtos = new ArrayList<>();
-        for (QuoteRequestItemEntity item : entity.items) {
+        for (QuoteRequestItemEntity item : entity.getItems()) {
             QuoteRequestItemDto itemDto = new QuoteRequestItemDto();
-            itemDto.setVariantId(item.variant != null ? item.variant.id : null);
-            itemDto.setProductNameSnapshot(item.productNameSnapshot);
-            itemDto.setVariantSkuSnapshot(item.variantSkuSnapshot);
-            itemDto.setQuantity(item.quantity);
+            itemDto.setVariantId(item.getVariant() != null ? item.getVariant().getId() : null);
+            itemDto.setProductNameSnapshot(item.getProductNameSnapshot());
+            itemDto.setVariantSkuSnapshot(item.getVariantSkuSnapshot());
+            itemDto.setQuantity(item.getQuantity());
             itemDtos.add(itemDto);
         }
         dto.setItems(itemDtos);

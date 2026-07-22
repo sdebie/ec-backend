@@ -68,8 +68,8 @@ public class PayFastService
 
     public List<HtmlFormField> generateHiddenHTMLForm(OrderEntity quote)
     {
-        String email = (quote.customerEntity != null && quote.customerEntity.user != null)
-                ? quote.customerEntity.user.email : "";
+        String email = (quote.getCustomerEntity() != null && quote.getCustomerEntity().getUser() != null)
+                ? quote.getCustomerEntity().getUser().getEmail() : "";
         return generateHiddenHTMLForm(quote, email);
     }
 
@@ -93,9 +93,9 @@ public class PayFastService
         input.put("cancel_url", cancelUrl);
         input.put("notify_url", notifyUrl);
 
-        input.put("amount", quote.totalAmount.setScale(2, java.math.RoundingMode.HALF_UP).toPlainString());
-        input.put("m_payment_id", quote.id.toString());
-        input.put("item_name", quote.id.toString());
+        input.put("amount", quote.getTotalAmount().setScale(2, java.math.RoundingMode.HALF_UP).toPlainString());
+        input.put("m_payment_id", quote.getId().toString());
+        input.put("item_name", quote.getId().toString());
         input.put("email_address", email != null ? email : "");
 
         input.put("payment_method", "dc");

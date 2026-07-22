@@ -1,8 +1,8 @@
 package org.ecommerce.backend.mapper;
 
+import org.ecommerce.common.dto.CountrySettingsDto;
 import org.ecommerce.common.dto.ShippingMethodDto;
 import org.ecommerce.common.dto.StoreSettingsDto;
-import org.ecommerce.common.dto.CountrySettingsDto;
 import org.ecommerce.common.entity.CountrySettingsEntity;
 import org.ecommerce.common.entity.ShippingMethodEntity;
 import org.ecommerce.common.entity.StoreSettingsEntity;
@@ -18,7 +18,8 @@ import static org.mapstruct.NullValuePropertyMappingStrategy.SET_TO_NULL;
 @Mapper(componentModel = "cdi", nullValueMappingStrategy = RETURN_NULL,
         nullValuePropertyMappingStrategy = SET_TO_NULL,
         nullValueCheckStrategy = ALWAYS)
-public interface SettingsMapper {
+public interface SettingsMapper
+{
     StoreSettingsDto mapStoreSettingsEntityToDto(StoreSettingsEntity entity);
 
     List<StoreSettingsDto> mapStoreSettingsEntityToDtoList(List<StoreSettingsEntity> entities);

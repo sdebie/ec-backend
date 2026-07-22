@@ -10,15 +10,16 @@ import io.vertx.ext.web.handler.StaticHandler;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
+import jakarta.transaction.Transactional;
 import org.eclipse.microprofile.config.ConfigProvider;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
-import jakarta.transaction.Transactional;
-import org.ecommerce.common.enums.StaffRoleEn;
 import org.ecommerce.common.entity.StaffUserEntity;
+import org.ecommerce.common.enums.StaffRoleEn;
 import org.jboss.logging.Logger;
 
 @ApplicationScoped
-public class Startup {
+public class Startup
+{
 
     private static final Logger LOG = Logger.getLogger(Startup.class);
 
@@ -35,7 +36,8 @@ public class Startup {
     Router router; // Inject the Vert.x Router
 
     @Transactional
-    void onStart(@Observes StartupEvent ev) {
+    void onStart(@Observes StartupEvent ev)
+    {
         // 1. Folder Verification logic
         java.io.File folder = new java.io.File(storagePath);
         if (!folder.exists()) {
@@ -52,11 +54,11 @@ public class Startup {
         // 3. User Seed logic
         if (StaffUserEntity.count() == 0) {
             StaffUserEntity admin = new StaffUserEntity();
-            admin.email = bootstrapAdminEmail;
-            admin.fullName = "System Administrator";
-            admin.role = StaffRoleEn.SUPER_ADMIN;
-            admin.passwordHash = BcryptUtil.bcryptHash(bootstrapAdminPassword);
-            admin.isActive = true;
+            admin.setEmail(bootstrapAdminEmail);
+            admin.setFullName("System Administrator");
+            admin.setRole(StaffRoleEn.SUPER_ADMIN);
+            admin.setPasswordHash(BcryptUtil.bcryptHash(bootstrapAdminPassword));
+            admin.setActive(true);
             admin.persist();
         }
     }
@@ -67,15 +69,14 @@ public class Startup {
      * but an empty or whitespace-only value resolves successfully and would boot
      * with a zero-origin config. This guard catches that case (REQ 1.2).
      */
-    void validateCorsOrigins(@Observes StartupEvent ev) {
+    void validateCorsOrigins(@Observes StartupEvent ev)
+    {
         if (LaunchMode.current() != LaunchMode.NORMAL) {
             return; // Only enforce in %prod
         }
-        String origins = ConfigProvider.getConfig()
-                .getOptionalValue("CORS_ORIGINS", String.class).orElse("");
+        String origins = ConfigProvider.getConfig().getOptionalValue("CORS_ORIGINS", String.class).orElse("");
         if (origins.isBlank()) {
-            throw new ConfigurationException(
-                    "CORS_ORIGINS must be set to a non-blank origin allowlist in production");
+            throw new ConfigurationException("CORS_ORIGINS must be set to a non-blank origin allowlist in production");
         }
     }
 }

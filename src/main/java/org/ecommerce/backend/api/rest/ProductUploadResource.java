@@ -53,13 +53,13 @@ public class ProductUploadResource {
             }
 
             // 2. Create the batch record immediately so the client gets a batchId
-            var batch = importService.createProductImportPendingBatch(form.file.fileName(), admin);
+            var batch = importService.createProductImportPendingBatch(form.getFile().fileName(), admin);
 
             // 3. Kick off async CSV parsing & staging — the client polls for status
-            InputStream is = Files.newInputStream(form.file.filePath());
-            asyncService.handleProductCsvUploadAsync(is, batch.id);
+            InputStream is = Files.newInputStream(form.getFile().filePath());
+            asyncService.handleProductCsvUploadAsync(is, batch.getId());
 
-            return Response.accepted(importService.getProductImportBatchProcessStatus(batch.id)).build();
+            return Response.accepted(importService.getProductImportBatchProcessStatus(batch.getId())).build();
         } catch (Exception e) {
             LOG.error("Error processing CSV upload", e);
             return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
@@ -109,13 +109,13 @@ public class ProductUploadResource {
             }
 
             // 2. Create the batch record immediately so the client gets a batchId
-            var batch = priceImportService.createProductPriceImportPendingBatch(form.file.fileName(), admin);
+            var batch = priceImportService.createProductPriceImportPendingBatch(form.getFile().fileName(), admin);
 
             // 3. Kick off async CSV parsing & staging — the client polls for status
-            InputStream is = Files.newInputStream(form.file.filePath());
-            processProductPriceImportRowsAsync.handleProductPriceCsvUploadAsync(is, batch.id);
+            InputStream is = Files.newInputStream(form.getFile().filePath());
+            processProductPriceImportRowsAsync.handleProductPriceCsvUploadAsync(is, batch.getId());
 
-            return Response.accepted(priceImportService.getProductPriceImportBatchProcessStatus(batch.id)).build();
+            return Response.accepted(priceImportService.getProductPriceImportBatchProcessStatus(batch.getId())).build();
         } catch (Exception e) {
             LOG.error("Error processing CSV upload", e);
             return Response.status(Response.Status.INTERNAL_SERVER_ERROR)

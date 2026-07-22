@@ -13,40 +13,43 @@ import java.util.stream.Collectors;
  * focused on orchestration.
  */
 @ApplicationScoped
-public class ProductComparisonMapper {
+public class ProductComparisonMapper
+{
 
-    public ProductComparisonDto toDto(ProductUploadStagedEntity staged) {
+    public ProductComparisonDto toDto(ProductUploadStagedEntity staged)
+    {
         ProductComparisonDto dto = new ProductComparisonDto();
-        dto.stagedId = staged.id;
-        dto.sku = staged.sku;
-        dto.proposedName = staged.name;
-        dto.proposedDescription = staged.description;
-        dto.proposedShortDescription = staged.shortDescription;
-        dto.categorySlug = staged.categorySlug;
-        dto.brandSlug = staged.brandSlug;
-        dto.proposedImages = staged.images;
-        dto.proposedStock = staged.stock;
-        dto.proposedAttributes = staged.attributes;
-        dto.validationErrors = staged.validationErrors;
-        dto.validationStatus = staged.validationStatus;
-        dto.imageErrors = staged.imageErrors;
-        dto.isValidCategory = staged.isValidCategory;
-        dto.isValidBrand = staged.isValidBrand;
-        dto.isNewProduct = staged.isNewProduct;
-        dto.isNewVariant = staged.isNewVariant;
-        dto.hasChanges = Boolean.TRUE.equals(staged.hasChanges);
+        dto.setStagedId(staged.getId());
+        dto.setSku(staged.getSku());
+        dto.setProposedName(staged.getName());
+        dto.setProposedDescription(staged.getDescription());
+        dto.setProposedShortDescription(staged.getShortDescription());
+        dto.setCategorySlug(staged.getCategorySlug());
+        dto.setBrandSlug(staged.getBrandSlug());
+        dto.setProposedImages(staged.getImages());
+        dto.setProposedStock(staged.getStock());
+        dto.setProposedAttributes(staged.getAttributes());
+        dto.setValidationErrors(staged.getValidationErrors());
+        dto.setValidationStatus(staged.getValidationStatus());
+        dto.setImageErrors(staged.getImageErrors());
+        dto.setValidCategory(staged.getIsValidCategory());
+        dto.setValidBrand(staged.getIsValidBrand());
+        dto.setNewProduct(staged.getIsNewProduct());
+        dto.setNewVariant(staged.getIsNewVariant());
+        dto.setHasChanges(Boolean.TRUE.equals(staged.getHasChanges()));
 
         // Persisted current values captured at import time
-        dto.currentName = staged.currentName;
-        dto.currentDescription = staged.currentDescription;
-        dto.currentShortDescription = staged.currentShortDescription;
-        dto.currentStock = staged.currentStock;
-        dto.currentImages = staged.currentImages;
-        dto.currentAttributes = staged.currentAttributes;
+        dto.setCurrentName(staged.getCurrentName());
+        dto.setCurrentDescription(staged.getCurrentDescription());
+        dto.setCurrentShortDescription(staged.getCurrentShortDescription());
+        dto.setCurrentStock(staged.getCurrentStock());
+        dto.setCurrentImages(staged.getCurrentImages());
+        dto.setCurrentAttributes(staged.getCurrentAttributes());
         return dto;
     }
 
-    public List<ProductComparisonDto> toDtos(List<ProductUploadStagedEntity> staged) {
+    public List<ProductComparisonDto> toDtos(List<ProductUploadStagedEntity> staged)
+    {
         return staged.stream().map(this::toDto).collect(Collectors.toList());
     }
 }

@@ -24,7 +24,8 @@ import java.util.stream.Collectors;
  */
 @Path("/api/storefront/config")
 @Produces(MediaType.APPLICATION_JSON)
-public class StorefrontConfigResource {
+public class StorefrontConfigResource
+{
 
     @Inject
     SettingsRepository settingsRepository;
@@ -33,21 +34,18 @@ public class StorefrontConfigResource {
     ObjectMapper objectMapper;
 
     @GET
-    public Response getConfig() {
+    public Response getConfig()
+    {
         List<StoreSettingsEntity> rows = settingsRepository.getAllStoreSettings();
 
-        Map<String, String> rawSettings = rows.stream()
-                .filter(r -> r.key.startsWith("storefront."))
-                .collect(Collectors.toMap(
-                        r -> r.key,
-                        r -> r.value
-                ));
+        Map<String, String> rawSettings = rows
+                .stream()
+                .filter(r -> r.getKey().startsWith("storefront."))
+                .collect(Collectors.toMap(StoreSettingsEntity::getKey, StoreSettingsEntity::getValue));
 
-        Map<String, JsonNode> sections = rawSettings.entrySet().stream()
-                .collect(Collectors.toMap(
-                        Map.Entry::getKey,
-                        e -> parseJson(e.getValue())
-                ));
+        Map<String, JsonNode> sections = rawSettings.entrySet()
+                .stream()
+                .collect(Collectors.toMap(Map.Entry::getKey, e -> parseJson(e.getValue())));
 
         ObjectNode config = objectMapper.createObjectNode();
 
@@ -67,42 +65,69 @@ public class StorefrontConfigResource {
 
     // ── Section assemblers ────────────────────────────────────────────────────
 
-    private void applyConfigSection(ObjectNode out, JsonNode section) {
-        if (section == null) return;
-        if (section.has("clientId"))    out.put("clientId", section.get("clientId").asText());
-        if (section.has("clientName"))  out.put("clientName", section.get("clientName").asText());
-        if (section.has("currency"))    out.put("currency", section.get("currency").asText());
-        else                            out.put("currency", "ZAR");
-        if (section.has("locale"))      out.put("locale", section.get("locale").asText());
-        if (section.has("stickyHeader"))out.put("stickyHeader", section.get("stickyHeader").asBoolean());
+    private void applyConfigSection(ObjectNode out, JsonNode section)
+    {
+        if (section == null) {
+            return;
+        }
+        if (section.has("clientId")) {
+            out.put("clientId", section.get("clientId").asText());
+        }
+        if (section.has("clientName")) {
+            out.put("clientName", section.get("clientName").asText());
+        }
+        if (section.has("currency")) {
+            out.put("currency", section.get("currency").asText());
+        } else {
+            out.put("currency", "ZAR");
+        }
+        if (section.has("locale")) {
+            out.put("locale", section.get("locale").asText());
+        }
+        if (section.has("stickyHeader")) {
+            out.put("stickyHeader", section.get("stickyHeader").asBoolean());
+        }
     }
 
-    private void applyBranding(ObjectNode out, JsonNode section) {
+    private void applyBranding(ObjectNode out, JsonNode section)
+    {
         if (section == null) return;
         ObjectNode branding = objectMapper.createObjectNode();
-        if (section.has("name"))    branding.put("name", section.get("name").asText());
-        if (section.has("tagline")) branding.put("tagline", section.get("tagline").asText());
+        if (section.has("name")) {
+            branding.put("name", section.get("name").asText());
+        }
+        if (section.has("tagline")) {
+            branding.put("tagline", section.get("tagline").asText());
+        }
 
         // Restructure flat logo fields into nested logo object
         if (section.has("logoSrc")) {
             ObjectNode logo = objectMapper.createObjectNode();
             logo.put("src", section.get("logoSrc").asText());
-            if (section.has("logoAlt"))    logo.put("alt", section.get("logoAlt").asText());
-            if (section.has("logoWidth"))  logo.put("width", section.get("logoWidth").asInt());
-            if (section.has("logoHeight")) logo.put("height", section.get("logoHeight").asInt());
+            if (section.has("logoAlt")) {
+                logo.put("alt", section.get("logoAlt").asText());
+            }
+            if (section.has("logoWidth")) {
+                logo.put("width", section.get("logoWidth").asInt());
+            }
+            if (section.has("logoHeight")) {
+                logo.put("height", section.get("logoHeight").asInt());
+            }
             branding.set("logo", logo);
         }
 
         out.set("branding", branding);
     }
 
-    private void applyTheme(ObjectNode out, JsonNode section) {
+    private void applyTheme(ObjectNode out, JsonNode section)
+    {
         if (section == null) return;
         // Theme fields map 1-to-1 between DB and StorefrontTheme
         out.set("theme", section.deepCopy());
     }
 
-    private void applyNavigation(ObjectNode out, JsonNode section) {
+    private void applyNavigation(ObjectNode out, JsonNode section)
+    {
         if (section == null) return;
         ArrayNode nav = objectMapper.createArrayNode();
         JsonNode items = section.get("items");
@@ -110,22 +135,31 @@ public class StorefrontConfigResource {
             for (int i = 0; i < items.size(); i++) {
                 JsonNode item = items.get(i);
                 ObjectNode navItem = objectMapper.createObjectNode();
-                if (item.has("id"))        navItem.put("id", item.get("id").asText());
-                if (item.has("label"))     navItem.put("label", item.get("label").asText());
-                if (item.has("path"))      navItem.put("path", item.get("path").asText());
-                navItem.put("external",    item.has("external") && item.get("external").asBoolean());
-                navItem.put("sortOrder",   item.has("sortOrder") ? item.get("sortOrder").asInt() : i);
+                if (item.has("id")) {
+                    navItem.put("id", item.get("id").asText());
+                }
+                if (item.has("label")) {
+                    navItem.put("label", item.get("label").asText());
+                }
+                if (item.has("path")) {
+                    navItem.put("path", item.get("path").asText());
+                }
+                navItem.put("external", item.has("external") && item.get("external").asBoolean());
+                navItem.put("sortOrder", item.has("sortOrder") ? item.get("sortOrder").asInt() : i);
                 nav.add(navItem);
             }
         }
         out.set("nav", nav);
     }
 
-    private void applyFooter(ObjectNode out, JsonNode section) {
+    private void applyFooter(ObjectNode out, JsonNode section)
+    {
         if (section == null) return;
         ObjectNode footer = objectMapper.createObjectNode();
 
-        if (section.has("description"))    footer.put("description", section.get("description").asText());
+        if (section.has("description")) {
+            footer.put("description", section.get("description").asText());
+        }
         if (section.has("calloutHeading") && section.has("calloutBody")) {
             ObjectNode callout = objectMapper.createObjectNode();
             callout.put("heading", section.get("calloutHeading").asText());
@@ -139,7 +173,9 @@ public class StorefrontConfigResource {
         if (rawCols != null && rawCols.isArray()) {
             for (JsonNode col : rawCols) {
                 ObjectNode colNode = objectMapper.createObjectNode();
-                if (col.has("heading")) colNode.put("heading", col.get("heading").asText());
+                if (col.has("heading")) {
+                    colNode.put("heading", col.get("heading").asText());
+                }
                 colNode.set("links", remapPathToTo(col.get("links")));
                 columns.add(colNode);
             }
@@ -155,12 +191,14 @@ public class StorefrontConfigResource {
         out.set("footer", footer);
     }
 
-    private void applyContact(ObjectNode out, JsonNode section) {
+    private void applyContact(ObjectNode out, JsonNode section)
+    {
         if (section == null || section.isNull()) return;
         out.set("contact", section);
     }
 
-    private void applyHeader(ObjectNode out, JsonNode section) {
+    private void applyHeader(ObjectNode out, JsonNode section)
+    {
         String headerJson;
         if (section != null) {
             headerJson = section.toString();
@@ -183,27 +221,22 @@ public class StorefrontConfigResource {
         }
     }
 
-    private void applyAuth(ObjectNode out, String loginStyle) {
+    private void applyAuth(ObjectNode out, String loginStyle)
+    {
         ObjectNode auth = objectMapper.createObjectNode();
         auth.put("loginStyle", loginStyle != null ? loginStyle : "page");
         out.set("auth", auth);
     }
 
     /**
-     * Reads a store_settings key containing a JSON array of section objects,
-     * filters out sections where {@code enabled} is explicitly {@code false},
-     * strips the {@code enabled} field from remaining sections, and writes the
-     * result to the specified output field. Falls back to an empty array when
-     * the key is absent or the value is not a valid JSON array.
-     */
-    /**
      * Applies a configured section array to a config response.
-     *
+     * <p>
      * Package visibility deliberately keeps this pure assembly seam directly
      * testable without reproducing its behaviour in a test fixture.
      */
     void applySections(ObjectNode config, Map<String, JsonNode> settings,
-                       String settingKey, String outputField) {
+                       String settingKey, String outputField)
+    {
         JsonNode section = settings.get(settingKey);
         if (section == null || !section.isArray()) {
             config.set(outputField, objectMapper.createArrayNode());
@@ -221,9 +254,8 @@ public class StorefrontConfigResource {
         config.set(outputField, result);
     }
 
-    // ── Helpers ───────────────────────────────────────────────────────────────
-
-    private ArrayNode remapPathToTo(JsonNode links) {
+    private ArrayNode remapPathToTo(JsonNode links)
+    {
         ArrayNode out = objectMapper.createArrayNode();
         if (links == null || !links.isArray()) return out;
         for (JsonNode link : links) {
@@ -238,7 +270,8 @@ public class StorefrontConfigResource {
         return out;
     }
 
-    private JsonNode parseJson(String raw) {
+    private JsonNode parseJson(String raw)
+    {
         try {
             return objectMapper.readTree(raw);
         } catch (Exception e) {

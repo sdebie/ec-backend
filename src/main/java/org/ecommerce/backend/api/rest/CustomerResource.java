@@ -1,18 +1,22 @@
 package org.ecommerce.backend.api.rest;
 
+import com.google.api.client.googleapis.auth.oauth2.GoogleIdToken;
+import com.google.api.client.googleapis.auth.oauth2.GoogleIdTokenVerifier;
+import com.google.api.client.http.javanet.NetHttpTransport;
+import com.google.api.client.json.gson.GsonFactory;
 import jakarta.annotation.security.RolesAllowed;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.eclipse.microprofile.jwt.JsonWebToken;
 import org.ecommerce.backend.exception.InvalidPasswordResetCodeException;
 import org.ecommerce.backend.exception.PasswordResetLockedException;
-import org.ecommerce.backend.service.CustomerAuthService;
-import org.ecommerce.backend.service.CustomerPasswordResetService;
-import org.ecommerce.backend.service.CustomerPortalService;
-import org.ecommerce.backend.service.RateLimitDecision;
-import org.ecommerce.backend.service.RateLimiterService;
+import org.ecommerce.backend.service.*;
+import org.ecommerce.backend.utils.ClientIpUtils;
+import org.ecommerce.backend.utils.PasswordHashUtil;
 import org.ecommerce.common.dto.CustomerLoginResponseDto;
 import org.ecommerce.common.dto.CustomerProfileDto;
 import org.ecommerce.common.dto.PasswordChangeRequestDto;
@@ -22,24 +26,17 @@ import org.ecommerce.common.entity.UserEntity;
 import org.ecommerce.common.enums.AddressTypeEn;
 import org.ecommerce.common.enums.CustomerStatusEn;
 import org.ecommerce.common.enums.CustomerTypeEn;
-import com.google.api.client.googleapis.auth.oauth2.GoogleIdToken;
-import com.google.api.client.googleapis.auth.oauth2.GoogleIdTokenVerifier;
-import com.google.api.client.http.javanet.NetHttpTransport;
-import com.google.api.client.json.gson.GsonFactory;
-import org.eclipse.microprofile.config.inject.ConfigProperty;
-import org.eclipse.microprofile.jwt.JsonWebToken;
 import org.jboss.logging.Logger;
 
 import java.time.OffsetDateTime;
 import java.util.Optional;
-import org.ecommerce.backend.utils.ClientIpUtils;
-import org.ecommerce.backend.utils.PasswordHashUtil;
 
 // Minimal REST API to support checkout UX (lookup, login, register, profile)
 @Path("/api/customers")
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
-public class CustomerResource {
+public class CustomerResource
+{
 
     private static final Logger LOG = Logger.getLogger(CustomerResource.class);
 
@@ -71,7 +68,8 @@ public class CustomerResource {
             @HeaderParam("CF-Connecting-IP") String cfConnectingIp,
             @HeaderParam("X-Forwarded-For") String xForwardedFor,
             @HeaderParam("X-Real-IP") String xRealIp
-    ) {
+    )
+    {
         if (email == null || email.isBlank()) {
             return Response.status(Response.Status.BAD_REQUEST).entity("email is required").build();
         }
@@ -89,28 +87,33 @@ public class CustomerResource {
         return Response.ok(toProfileDto(ce)).build();
     }
 
-    public static class LoginRequest {
+    public static class LoginRequest
+    {
         public String email;
         public String password;
     }
 
-    public static class PasswordResetRequest {
+    public static class PasswordResetRequest
+    {
         public String email;
     }
 
-    public static class PasswordResetVerifyRequest {
+    public static class PasswordResetVerifyRequest
+    {
         public String email;
         public String code;
     }
 
-    public static class PasswordResetCompleteRequest {
+    public static class PasswordResetCompleteRequest
+    {
         public String email;
         public String code;
         public String newPassword;
         public String confirmPassword;
     }
 
-    public static class GoogleLoginRequest {
+    public static class GoogleLoginRequest
+    {
         public String idToken;
     }
 
@@ -122,7 +125,8 @@ public class CustomerResource {
             @HeaderParam("CF-Connecting-IP") String cfConnectingIp,
             @HeaderParam("X-Forwarded-For") String xForwardedFor,
             @HeaderParam("X-Real-IP") String xRealIp
-    ) {
+    )
+    {
         if (req == null || req.email == null || req.email.isBlank()) {
             return Response.status(Response.Status.BAD_REQUEST).entity("email is required").build();
         }
@@ -155,7 +159,8 @@ public class CustomerResource {
             @HeaderParam("CF-Connecting-IP") String cfConnectingIp,
             @HeaderParam("X-Forwarded-For") String xForwardedFor,
             @HeaderParam("X-Real-IP") String xRealIp
-    ) {
+    )
+    {
         if (req == null || req.email == null || req.email.isBlank() || req.code == null || req.code.isBlank()) {
             return Response.status(Response.Status.BAD_REQUEST).entity("email and code are required").build();
         }
@@ -180,7 +185,8 @@ public class CustomerResource {
             @HeaderParam("CF-Connecting-IP") String cfConnectingIp,
             @HeaderParam("X-Forwarded-For") String xForwardedFor,
             @HeaderParam("X-Real-IP") String xRealIp
-    ) {
+    )
+    {
         if (req == null || req.email == null || req.email.isBlank() || req.code == null || req.code.isBlank()) {
             return Response.status(Response.Status.BAD_REQUEST).entity("email and code are required").build();
         }
@@ -218,7 +224,8 @@ public class CustomerResource {
             @HeaderParam("CF-Connecting-IP") String cfConnectingIp,
             @HeaderParam("X-Forwarded-For") String xForwardedFor,
             @HeaderParam("X-Real-IP") String xRealIp
-    ) {
+    )
+    {
         // Body-shape validation stays ahead of the limiter — guarantees email key is non-null
         if (req == null || req.email == null || req.password == null) {
             return Response.status(Response.Status.BAD_REQUEST).entity("email and password required").build();
@@ -240,27 +247,27 @@ public class CustomerResource {
         }
 
         UserEntity user = UserEntity.findByEmail(req.email.trim());
-        if (user == null || user.passwordHash == null) {
+        if (user == null || user.getPasswordHash() == null) {
             return Response.status(Response.Status.UNAUTHORIZED).entity("Invalid credentials").build();
         }
 
-        CustomerEntity ce = user.customer;
+        CustomerEntity ce = user.getCustomer();
         if (ce == null) {
             return Response.status(Response.Status.UNAUTHORIZED).entity("Invalid credentials").build();
         }
-        if (ce.status == CustomerStatusEn.PENDING) {
+        if (ce.getStatus() == CustomerStatusEn.PENDING) {
             return Response.status(Response.Status.FORBIDDEN).entity("Customer account is still pending").build();
         }
-        if (ce.status == CustomerStatusEn.DISABLED) {
+        if (ce.getStatus() == CustomerStatusEn.DISABLED) {
             return Response.status(Response.Status.FORBIDDEN).entity("Customer account is disabled").build();
         }
-        if (ce.status == null) {
-            ce.status = CustomerStatusEn.PENDING;
+        if (ce.getStatus() == null) {
+            ce.setStatus(CustomerStatusEn.PENDING);
         }
 
         boolean ok;
         try {
-            ok = PasswordHashUtil.verify(req.password, user.passwordHash);
+            ok = PasswordHashUtil.verify(req.password, user.getPasswordHash());
         } catch (Throwable t) {
             ok = false;
         }
@@ -268,7 +275,7 @@ public class CustomerResource {
             return Response.status(Response.Status.UNAUTHORIZED).entity("Invalid credentials").build();
         }
 
-        user.lastLogin = OffsetDateTime.now();
+        user.setLastLogin(OffsetDateTime.now());
         user.persist();
         return Response.ok(toLoginResponseDto(ce)).build();
     }
@@ -281,7 +288,8 @@ public class CustomerResource {
             @HeaderParam("CF-Connecting-IP") String cfConnectingIp,
             @HeaderParam("X-Forwarded-For") String xForwardedFor,
             @HeaderParam("X-Real-IP") String xRealIp
-    ) {
+    )
+    {
         if (req == null || req.idToken == null || req.idToken.isBlank()) {
             return Response.status(Response.Status.BAD_REQUEST).entity("idToken is required").build();
         }
@@ -319,35 +327,35 @@ public class CustomerResource {
             UserEntity user = UserEntity.findByEmail(email);
             if (user == null) {
                 user = new UserEntity();
-                user.email = email;
-                user.passwordHash = ""; // Google users might not have a local password initially
+                user.setEmail(email);
+                user.setPasswordHash(""); // Google users might not have a local password initially
                 user.persist();
             }
 
-            CustomerEntity ce = user.customer;
+            CustomerEntity ce = user.getCustomer();
             if (ce == null) {
                 ce = new CustomerEntity();
-                ce.user = user;
-                ce.firstName = firstName;
-                ce.lastName = lastName;
-                ce.status = CustomerStatusEn.ACTIVE; // Auto-activate Google users
-                ce.shopperType = CustomerTypeEn.RETAILER;
+                ce.setUser(user);
+                ce.setFirstName(firstName);
+                ce.setLastName(lastName);
+                ce.setStatus(CustomerStatusEn.ACTIVE); // Auto-activate Google users
+                ce.setShopperType(CustomerTypeEn.RETAILER);
                 ce.persist();
             } else {
-                if (ce.status == CustomerStatusEn.DISABLED) {
+                if (ce.getStatus() == CustomerStatusEn.DISABLED) {
                     return Response.status(Response.Status.FORBIDDEN).entity("Customer account is disabled").build();
                 }
                 // Update names if missing
-                if (ce.firstName == null) ce.firstName = firstName;
-                if (ce.lastName == null) ce.lastName = lastName;
-                if (ce.status == CustomerStatusEn.PENDING) ce.status = CustomerStatusEn.ACTIVE;
-                if (ce.shopperType == null || ce.shopperType == CustomerTypeEn.GUEST) {
-                    ce.shopperType = CustomerTypeEn.RETAILER;
+                if (ce.getFirstName() == null) ce.setFirstName(firstName);
+                if (ce.getLastName() == null) ce.setLastName(lastName);
+                if (ce.getStatus() == CustomerStatusEn.PENDING) ce.setStatus(CustomerStatusEn.ACTIVE);
+                if (ce.getShopperType() == null || ce.getShopperType() == CustomerTypeEn.GUEST) {
+                    ce.setShopperType(CustomerTypeEn.RETAILER);
                 }
                 ce.persist();
             }
 
-            user.lastLogin = OffsetDateTime.now();
+            user.setLastLogin(OffsetDateTime.now());
             user.persist();
 
             return Response.ok(toLoginResponseDto(ce)).build();
@@ -356,7 +364,8 @@ public class CustomerResource {
         }
     }
 
-    public static class RegisterRequest {
+    public static class RegisterRequest
+    {
         public String email;
         public String password;
         public String firstName;
@@ -376,7 +385,8 @@ public class CustomerResource {
         public String postalPostalCode;
     }
 
-    public static class ProfileUpdateRequest {
+    public static class ProfileUpdateRequest
+    {
         public String firstName;
         public String lastName;
         public String phone;
@@ -399,7 +409,7 @@ public class CustomerResource {
      * Returns 409 if the email already belongs to a claimed account (non-empty passwordHash OR ACTIVE status).
      * Only an unclaimed PENDING/GUEST record may be claimed. Token issued only on genuine creation/claim.
      * If token signing fails, the @Transactional handler rolls back — no account persists without its token.
-     *
+     * <p>
      * The 409 response is an account-existence oracle; rate limiting slows enumeration/mass signup
      * but is not a fix for lookup's PII disclosure.
      */
@@ -411,7 +421,8 @@ public class CustomerResource {
             @HeaderParam("CF-Connecting-IP") String cfConnectingIp,
             @HeaderParam("X-Forwarded-For") String xForwardedFor,
             @HeaderParam("X-Real-IP") String xRealIp
-    ) {
+    )
+    {
         // Body-shape validation first (400) — before rate limiter to avoid consuming budget on malformed requests
         if (req == null || req.email == null || req.email.isBlank()) {
             return Response.status(Response.Status.BAD_REQUEST).entity("email is required").build();
@@ -431,36 +442,35 @@ public class CustomerResource {
 
         // ── 409 guard: reject if account is already claimed by any method ──
         UserEntity user = UserEntity.findByEmail(email);
-        if (user != null && user.customer != null) {
-            CustomerEntity ec = user.customer;
-            boolean hasPassword = user.passwordHash != null && !user.passwordHash.isBlank();
-            boolean alreadyClaimed = hasPassword || ec.status == CustomerStatusEn.ACTIVE;
+        if (user != null && user.getCustomer() != null) {
+            CustomerEntity ec = user.getCustomer();
+            boolean hasPassword = user.getPasswordHash() != null && !user.getPasswordHash().isBlank();
+            boolean alreadyClaimed = hasPassword || ec.getStatus() == CustomerStatusEn.ACTIVE;
             if (alreadyClaimed) {
-                return Response.status(Response.Status.CONFLICT)
-                        .entity("Account already exists").build();
+                return Response.status(Response.Status.CONFLICT).entity("Account already exists").build();
             }
         }
 
         // ── Create or claim the account ───────────────────────────────────
         if (user == null) {
             user = new UserEntity();
-            user.email = email;
+            user.setEmail(email);
         }
-        user.passwordHash = PasswordHashUtil.hash(req.password);
+        user.setPasswordHash(PasswordHashUtil.hash(req.password));
         UserEntity.persist(user);
 
-        CustomerEntity ce = user.customer;
+        CustomerEntity ce = user.getCustomer();
         if (ce == null) {
             ce = new CustomerEntity();
-            ce.user = user;
+            ce.setUser(user);
         }
 
-        if (req.firstName != null) ce.firstName = req.firstName;
-        if (req.lastName  != null) ce.lastName  = req.lastName;
-        if (req.phone     != null) ce.phone     = req.phone;
+        if (req.firstName != null) ce.setFirstName(req.firstName);
+        if (req.lastName != null) ce.setLastName(req.lastName);
+        if (req.phone != null) ce.setPhone(req.phone);
 
-        ce.shopperType = CustomerTypeEn.RETAILER;
-        ce.status = CustomerStatusEn.ACTIVE;
+        ce.setShopperType(CustomerTypeEn.RETAILER);
+        ce.setStatus(CustomerStatusEn.ACTIVE);
         CustomerEntity.persist(ce);
 
         // ── Upsert addresses ──────────────────────────────────────────────
@@ -493,22 +503,23 @@ public class CustomerResource {
     @Path("/profile")
     @RolesAllowed("customer")
     @Transactional
-    public Response updateProfile(ProfileUpdateRequest req) {
+    public Response updateProfile(ProfileUpdateRequest req)
+    {
         if (req == null) {
             return Response.status(Response.Status.BAD_REQUEST).entity("request body is required").build();
         }
 
         String email = jwt.getSubject();
         UserEntity user = UserEntity.findByEmail(email);
-        if (user == null || user.customer == null) {
+        if (user == null || user.getCustomer() == null) {
             return Response.status(Response.Status.NOT_FOUND).entity("Customer not found").build();
         }
 
-        CustomerEntity ce = user.customer;
+        CustomerEntity ce = user.getCustomer();
 
-        if (req.firstName != null) ce.firstName = req.firstName;
-        if (req.lastName  != null) ce.lastName  = req.lastName;
-        if (req.phone     != null) ce.phone     = req.phone;
+        if (req.firstName != null) ce.setFirstName(req.firstName);
+        if (req.lastName != null) ce.setLastName(req.lastName);
+        if (req.phone != null) ce.setPhone(req.phone);
         ce.persist();
 
         // ── Upsert addresses ──────────────────────────────────────────────
@@ -529,9 +540,10 @@ public class CustomerResource {
     @Path("/password")
     @RolesAllowed("customer")
     @Consumes(MediaType.APPLICATION_JSON)
-    public Response changePassword(PasswordChangeRequestDto request) {
+    public Response changePassword(PasswordChangeRequestDto request)
+    {
         String email = jwt.getSubject();
-        customerPortalService.changePassword(email, request.currentPassword, request.newPassword);
+        customerPortalService.changePassword(email, request.getCurrentPassword(), request.getNewPassword());
         return Response.ok().build();
     }
 
@@ -544,76 +556,91 @@ public class CustomerResource {
     private static void upsertAddress(CustomerEntity ce, AddressTypeEn type,
                                       String line1, String line2,
                                       String suburb, String city,
-                                      String province, String postalCode) {
+                                      String province, String postalCode)
+    {
         if (line1 == null && city == null && province == null && postalCode == null) {
             return;
         }
 
-        CustomerAddressEntity addr = ce.addresses.stream()
-                .filter(a -> a.addressType == type)
+        CustomerAddressEntity addr = ce.getAddresses().stream()
+                .filter(a -> a.getAddressType() == type)
                 .findFirst()
                 .orElseGet(() -> {
                     CustomerAddressEntity a = new CustomerAddressEntity();
-                    a.customer = ce;
-                    a.addressType = type;
-                    ce.addresses.add(a);
+                    a.setCustomer(ce);
+                    a.setAddressType(type);
+                    ce.getAddresses().add(a);
                     return a;
                 });
 
-        if (line1     != null) addr.addressLine1 = line1;
-        if (line2     != null) addr.addressLine2 = line2;
-        if (suburb    != null) addr.suburb       = suburb;
-        if (city      != null) addr.city         = city;
-        if (province  != null) addr.province     = province;
-        if (postalCode != null) addr.postalCode  = postalCode;
+        if (line1 != null) {
+            addr.setAddressLine1(line1);
+        }
+        if (line2 != null) {
+            addr.setAddressLine2(line2);
+        }
+        if (suburb != null) {
+            addr.setSuburb(suburb);
+        }
+        if (city != null) {
+            addr.setCity(city);
+        }
+        if (province != null) {
+            addr.setProvince(province);
+        }
+        if (postalCode != null) {
+            addr.setPostalCode(postalCode);
+        }
     }
 
-    private CustomerLoginResponseDto toLoginResponseDto(CustomerEntity ce) {
+    private CustomerLoginResponseDto toLoginResponseDto(CustomerEntity ce)
+    {
         CustomerLoginResponseDto dto = new CustomerLoginResponseDto();
-        dto.token = customerAuthService.generateToken(ce);
-        dto.email = ce.user != null ? ce.user.email : null;
-        dto.firstName = ce.firstName;
-        dto.lastName = ce.lastName;
-        dto.shopperType = ce.shopperType != null ? ce.shopperType.name() : null;
-        dto.status = ce.status != null ? ce.status.name() : null;
+        dto.setToken(customerAuthService.generateToken(ce));
+        dto.setEmail(ce.getUser() != null ? ce.getUser().getEmail() : null);
+        dto.setFirstName(ce.getFirstName());
+        dto.setLastName(ce.getLastName());
+        dto.setShopperType(ce.getShopperType() != null ? ce.getShopperType().name() : null);
+        dto.setStatus(ce.getStatus() != null ? ce.getStatus().name() : null);
         return dto;
     }
 
-    private static CustomerProfileDto toProfileDto(CustomerEntity ce) {
+    private static CustomerProfileDto toProfileDto(CustomerEntity ce)
+    {
         CustomerProfileDto dto = new CustomerProfileDto();
-        dto.setEmail(ce.user != null ? ce.user.email : null);
-        dto.setFirstName(ce.firstName);
-        dto.setLastName(ce.lastName);
-        dto.setPhone(ce.phone);
+        dto.setEmail(ce.getUser() != null ? ce.getUser().getEmail() : null);
+        dto.setFirstName(ce.getFirstName());
+        dto.setLastName(ce.getLastName());
+        dto.setPhone(ce.getPhone());
 
         // Flatten addresses back to profile DTO fields
-        Optional<CustomerAddressEntity> physical = ce.addresses.stream()
-                .filter(a -> a.addressType == AddressTypeEn.PHYSICAL).findFirst();
+        Optional<CustomerAddressEntity> physical = ce.getAddresses().stream()
+                .filter(a -> a.getAddressType() == AddressTypeEn.PHYSICAL).findFirst();
         physical.ifPresent(a -> {
-            dto.setPhysicalAddressLine1(a.addressLine1);
-            dto.setPhysicalAddressLine2(a.addressLine2);
-            dto.setPhysicalSuburb(a.suburb);
-            dto.setPhysicalCity(a.city);
-            dto.setPhysicalProvince(a.province);
-            dto.setPhysicalPostalCode(a.postalCode);
+            dto.setPhysicalAddressLine1(a.getAddressLine1());
+            dto.setPhysicalAddressLine2(a.getAddressLine2());
+            dto.setPhysicalSuburb(a.getSuburb());
+            dto.setPhysicalCity(a.getCity());
+            dto.setPhysicalProvince(a.getProvince());
+            dto.setPhysicalPostalCode(a.getPostalCode());
         });
 
-        Optional<CustomerAddressEntity> postal = ce.addresses.stream()
-                .filter(a -> a.addressType == AddressTypeEn.POSTAL).findFirst();
+        Optional<CustomerAddressEntity> postal = ce.getAddresses().stream()
+                .filter(a -> a.getAddressType() == AddressTypeEn.POSTAL).findFirst();
         postal.ifPresent(a -> {
-            dto.setPostalAddressLine1(a.addressLine1);
-            dto.setPostalAddressLine2(a.addressLine2);
-            dto.setPostalSuburb(a.suburb);
-            dto.setPostalCity(a.city);
-            dto.setPostalProvince(a.province);
-            dto.setPostalPostalCode(a.postalCode);
+            dto.setPostalAddressLine1(a.getAddressLine1());
+            dto.setPostalAddressLine2(a.getAddressLine2());
+            dto.setPostalSuburb(a.getSuburb());
+            dto.setPostalCity(a.getCity());
+            dto.setPostalProvince(a.getProvince());
+            dto.setPostalPostalCode(a.getPostalCode());
         });
 
-        if (ce.shopperType != null) dto.setShopperType(ce.shopperType.name());
-        if (ce.status      != null) dto.setStatus(ce.status.name());
-        dto.setHasPassword(ce.user != null
-                && ce.user.passwordHash != null
-                && !ce.user.passwordHash.isBlank());
+        if (ce.getShopperType() != null) dto.setShopperType(ce.getShopperType().name());
+        if (ce.getStatus() != null) dto.setStatus(ce.getStatus().name());
+        dto.setHasPassword(ce.getUser() != null
+                && ce.getUser().getPasswordHash() != null
+                && !ce.getUser().getPasswordHash().isBlank());
         return dto;
     }
 

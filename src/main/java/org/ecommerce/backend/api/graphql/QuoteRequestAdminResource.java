@@ -22,8 +22,8 @@ import java.util.List;
 import java.util.UUID;
 
 @GraphQLApi
-public class QuoteRequestAdminResource {
-
+public class QuoteRequestAdminResource
+{
     @Inject
     QuoteRequestService quoteRequestService;
 
@@ -32,10 +32,8 @@ public class QuoteRequestAdminResource {
 
     @Query("allQuoteRequests")
     @RolesAllowed({"SUPER_ADMIN", "ORDER_MANAGER", "VIEWER"})
-    public List<QuoteRequestListItemDto> allQuoteRequests(
-            @Name("pageRequest") PageRequest pageRequest,
-            @Name("filterRequest") FilterRequest filterRequest
-    ) {
+    public List<QuoteRequestListItemDto> allQuoteRequests(@Name("pageRequest") PageRequest pageRequest, @Name("filterRequest") FilterRequest filterRequest)
+    {
         try {
             if (pageRequest == null) {
                 pageRequest = new PageRequest();
@@ -50,7 +48,8 @@ public class QuoteRequestAdminResource {
 
     @Query("quoteRequestCount")
     @RolesAllowed({"SUPER_ADMIN", "ORDER_MANAGER", "VIEWER"})
-    public long quoteRequestCount(@Name("filterRequest") FilterRequest filterRequest) {
+    public long quoteRequestCount(@Name("filterRequest") FilterRequest filterRequest)
+    {
         try {
             return quoteRequestRepository.count(filterRequest);
         } catch (RuntimeException ex) {
@@ -60,7 +59,8 @@ public class QuoteRequestAdminResource {
 
     @Query("quoteRequest")
     @RolesAllowed({"SUPER_ADMIN", "ORDER_MANAGER", "VIEWER"})
-    public QuoteRequestDetailsDto quoteRequest(@Name("id") UUID id) {
+    public QuoteRequestDetailsDto quoteRequest(@Name("id") UUID id)
+    {
         try {
             if (id == null) {
                 throw new IllegalArgumentException("id is required");
@@ -77,7 +77,8 @@ public class QuoteRequestAdminResource {
 
     @Mutation("updateQuoteRequestStatus")
     @RolesAllowed({"SUPER_ADMIN", "ORDER_MANAGER"})
-    public QuoteRequestDetailsDto updateQuoteRequestStatus(@Name("id") UUID id, @Name("status") String status) {
+    public QuoteRequestDetailsDto updateQuoteRequestStatus(@Name("id") UUID id, @Name("status") String status)
+    {
         try {
             QuoteRequestStatusEn statusEnum = parseStatus(status);
             QuoteRequestEntity updated = quoteRequestService.updateStatus(id, statusEnum);
@@ -87,7 +88,8 @@ public class QuoteRequestAdminResource {
         }
     }
 
-    private QuoteRequestStatusEn parseStatus(String status) {
+    private QuoteRequestStatusEn parseStatus(String status)
+    {
         if (status == null || status.isBlank()) {
             throw new IllegalArgumentException("status is required");
         }
@@ -98,37 +100,39 @@ public class QuoteRequestAdminResource {
         }
     }
 
-    private QuoteRequestListItemDto toListItemDto(QuoteRequestEntity entity) {
+    private QuoteRequestListItemDto toListItemDto(QuoteRequestEntity entity)
+    {
         QuoteRequestListItemDto dto = new QuoteRequestListItemDto();
-        dto.setId(entity.id);
-        dto.setName(entity.name);
-        dto.setCompany(entity.company);
-        dto.setItemCount(entity.items != null ? entity.items.size() : 0);
-        dto.setCreatedAt(entity.createdAt);
-        dto.setStatus(entity.status);
+        dto.setId(entity.getId());
+        dto.setName(entity.getName());
+        dto.setCompany(entity.getCompany());
+        dto.setItemCount(entity.getItems() != null ? entity.getItems().size() : 0);
+        dto.setCreatedAt(entity.getCreatedAt());
+        dto.setStatus(entity.getStatus());
         return dto;
     }
 
-    private QuoteRequestDetailsDto toDetailsDto(QuoteRequestEntity entity) {
+    private QuoteRequestDetailsDto toDetailsDto(QuoteRequestEntity entity)
+    {
         QuoteRequestDetailsDto dto = new QuoteRequestDetailsDto();
-        dto.setId(entity.id);
-        dto.setName(entity.name);
-        dto.setEmail(entity.email);
-        dto.setPhone(entity.phone);
-        dto.setCompany(entity.company);
-        dto.setMessage(entity.message);
-        dto.setCreatedAt(entity.createdAt);
-        dto.setStatus(entity.status);
-        dto.setStatusChangedAt(entity.statusChangedAt);
+        dto.setId(entity.getId());
+        dto.setName(entity.getName());
+        dto.setEmail(entity.getEmail());
+        dto.setPhone(entity.getPhone());
+        dto.setCompany(entity.getCompany());
+        dto.setMessage(entity.getMessage());
+        dto.setCreatedAt(entity.getCreatedAt());
+        dto.setStatus(entity.getStatus());
+        dto.setStatusChangedAt(entity.getStatusChangedAt());
 
         List<QuoteRequestItemDto> itemDtos = new ArrayList<>();
-        if (entity.items != null) {
-            for (QuoteRequestItemEntity item : entity.items) {
+        if (entity.getItems() != null) {
+            for (QuoteRequestItemEntity item : entity.getItems()) {
                 QuoteRequestItemDto itemDto = new QuoteRequestItemDto();
-                itemDto.setVariantId(item.variant != null ? item.variant.id : null);
-                itemDto.setProductNameSnapshot(item.productNameSnapshot);
-                itemDto.setVariantSkuSnapshot(item.variantSkuSnapshot);
-                itemDto.setQuantity(item.quantity);
+                itemDto.setVariantId(item.getVariant() != null ? item.getVariant().getId() : null);
+                itemDto.setProductNameSnapshot(item.getProductNameSnapshot());
+                itemDto.setVariantSkuSnapshot(item.getVariantSkuSnapshot());
+                itemDto.setQuantity(item.getQuantity());
                 itemDtos.add(itemDto);
             }
         }
@@ -137,7 +141,8 @@ public class QuoteRequestAdminResource {
         return dto;
     }
 
-    private RuntimeException toGraphQlException(RuntimeException ex) {
+    private RuntimeException toGraphQlException(RuntimeException ex)
+    {
         Throwable current = ex;
         while (current.getCause() != null && current.getCause() != current) {
             current = current.getCause();

@@ -8,16 +8,8 @@ import org.ecommerce.backend.mapper.WholesaleMapper;
 import org.ecommerce.common.dto.WholesaleApplicationDetailsDto;
 import org.ecommerce.common.dto.WholesaleApplicationListItemDto;
 import org.ecommerce.common.dto.WholesaleCustomerDto;
-import org.ecommerce.common.entity.CustomerAddressEntity;
-import org.ecommerce.common.entity.CustomerEntity;
-import org.ecommerce.common.entity.WholesaleApplicationEntity;
-import org.ecommerce.common.entity.WholesaleProfileEntity;
-import org.ecommerce.common.entity.UserEntity;
-import org.ecommerce.common.enums.AddressTypeEn;
-import org.ecommerce.common.enums.CustomerStatusEn;
-import org.ecommerce.common.enums.CustomerTypeEn;
-import org.ecommerce.common.enums.WholesaleApplicationStatusEn;
-import org.ecommerce.common.enums.WholesaleCustomerStatusEn;
+import org.ecommerce.common.entity.*;
+import org.ecommerce.common.enums.*;
 import org.ecommerce.common.query.FilterRequest;
 import org.ecommerce.common.query.PageRequest;
 import org.ecommerce.common.repository.WholesaleApplicationRepository;
@@ -29,8 +21,8 @@ import java.util.Optional;
 import java.util.UUID;
 
 @ApplicationScoped
-public class WholesaleCustomerService {
-
+public class WholesaleCustomerService
+{
     @Inject
     WholesaleApplicationRepository wholesaleApplicationRepository;
 
@@ -45,17 +37,21 @@ public class WholesaleCustomerService {
 
     private static final Logger LOG = Logger.getLogger(WholesaleCustomerService.class);
 
-    public List<WholesaleApplicationListItemDto> getWholesaleApplications(PageRequest pageRequest, FilterRequest filterRequest) {
-        return wholesaleApplicationRepository.findAll(pageRequest, filterRequest).stream()
+    public List<WholesaleApplicationListItemDto> getWholesaleApplications(PageRequest pageRequest, FilterRequest filterRequest)
+    {
+        return wholesaleApplicationRepository.findAll(pageRequest, filterRequest)
+                .stream()
                 .map(this::toListItemDto)
                 .toList();
     }
 
-    public long wholesaleApplicationCount(FilterRequest filterRequest) {
+    public long wholesaleApplicationCount(FilterRequest filterRequest)
+    {
         return wholesaleApplicationRepository.count(filterRequest);
     }
 
-    public WholesaleApplicationDetailsDto getWholesaleApplicationById(UUID id) {
+    public WholesaleApplicationDetailsDto getWholesaleApplicationById(UUID id)
+    {
         if (id == null) {
             throw new IllegalArgumentException("id is required");
         }
@@ -69,82 +65,80 @@ public class WholesaleCustomerService {
     }
 
     @Transactional
-    public WholesaleCustomerDto createWholesaleApplication(WholesaleCustomerDto customerDto) {
+    public WholesaleCustomerDto createWholesaleApplication(WholesaleCustomerDto customerDto)
+    {
         if (customerDto == null) {
             throw new IllegalArgumentException("customer is required");
         }
 
         // applicantEmail — required
         WholesaleApplicationEntity application = new WholesaleApplicationEntity();
-        application.applicantEmail = normalizeEmail(customerDto.getApplicantEmail());
-        if (application.applicantEmail == null) {
+        application.setApplicantEmail(normalizeEmail(customerDto.getApplicantEmail()));
+        if (application.getApplicantEmail() == null) {
             throw new IllegalArgumentException("applicantEmail is required");
         }
 
         // account_email is now optional
         String accountEmail = normalizeEmail(customerDto.getEmail());
         if (accountEmail != null) {
-            WholesaleApplicationEntity existing = WholesaleApplicationEntity
-                    .find("lower(accountEmail) = lower(?1)", accountEmail)
-                    .firstResult();
+            WholesaleApplicationEntity existing = WholesaleApplicationEntity.find("lower(accountEmail) = lower(?1)", accountEmail).firstResult();
             if (existing != null) {
                 throw new IllegalArgumentException("wholesale application already exists with email: " + accountEmail);
             }
         }
-        application.accountEmail = accountEmail;
+        application.setAccountEmail(accountEmail);
 
-        application.firstName = normalizeText(customerDto.getFirstName());
-        if (application.firstName == null) {
+        application.setFirstName(normalizeText(customerDto.getFirstName()));
+        if (application.getFirstName() == null) {
             throw new IllegalArgumentException("firstName is required");
         }
-        application.lastName = normalizeText(customerDto.getLastName());
-        application.phone = normalizeText(customerDto.getPhone());
+        application.setLastName(normalizeText(customerDto.getLastName()));
+        application.setPhone(normalizeText(customerDto.getPhone()));
 
-        application.companyName = firstNonBlank(normalizeText(customerDto.getCompanyName()), application.firstName);
-        application.vatNumber = normalizeText(customerDto.getVatNumber());
-        application.regNumber = normalizeText(customerDto.getRegNumber());
+        application.setCompanyName(firstNonBlank(normalizeText(customerDto.getCompanyName()), application.getFirstName()));
+        application.setVatNumber(normalizeText(customerDto.getVatNumber()));
+        application.setRegNumber(normalizeText(customerDto.getRegNumber()));
 
         // New optional fields
-        application.tradingName = normalizeText(customerDto.getTradingName());
-        application.companyPhone = normalizeText(customerDto.getCompanyPhone());
-        application.companyEmail = normalizeText(customerDto.getCompanyEmail());
-        application.financeContactName = normalizeText(customerDto.getFinanceContactName());
-        application.financeContactEmail = normalizeText(customerDto.getFinanceContactEmail());
-        application.financeContactPhone = normalizeText(customerDto.getFinanceContactPhone());
-        application.purchaseOrderRequired = customerDto.getPurchaseOrderRequired() != null
-                ? customerDto.getPurchaseOrderRequired()
-                : false;
+        application.setTradingName(normalizeText(customerDto.getTradingName()));
+        application.setCompanyPhone(normalizeText(customerDto.getCompanyPhone()));
+        application.setCompanyEmail(normalizeText(customerDto.getCompanyEmail()));
+        application.setFinanceContactName(normalizeText(customerDto.getFinanceContactName()));
+        application.setFinanceContactEmail(normalizeText(customerDto.getFinanceContactEmail()));
+        application.setFinanceContactPhone(normalizeText(customerDto.getFinanceContactPhone()));
+        application.setPurchaseOrderRequired(customerDto.getPurchaseOrderRequired() != null ? customerDto.getPurchaseOrderRequired() : false);
 
         // Server-controlled status — ignore any client-supplied status on the public create path
-        application.status = WholesaleApplicationStatusEn.PENDING;
-        application.notes = normalizeText(customerDto.getNotes());
+        application.setStatus(WholesaleApplicationStatusEn.PENDING);
+        application.setNotes(normalizeText(customerDto.getNotes()));
 
-        application.physicalAddressLine1 = normalizeText(customerDto.getPhysicalAddressLine1());
-        application.physicalAddressLine2 = normalizeText(customerDto.getPhysicalAddressLine2());
-        application.physicalSuburb = normalizeText(customerDto.getPhysicalSuburb());
-        application.physicalCity = normalizeText(customerDto.getPhysicalCity());
-        application.physicalProvince = normalizeText(customerDto.getPhysicalProvince());
-        application.physicalPostalCode = normalizeText(customerDto.getPhysicalPostalCode());
+        application.setPhysicalAddressLine1(normalizeText(customerDto.getPhysicalAddressLine1()));
+        application.setPhysicalAddressLine2(normalizeText(customerDto.getPhysicalAddressLine2()));
+        application.setPhysicalSuburb(normalizeText(customerDto.getPhysicalSuburb()));
+        application.setPhysicalCity(normalizeText(customerDto.getPhysicalCity()));
+        application.setPhysicalProvince(normalizeText(customerDto.getPhysicalProvince()));
+        application.setPhysicalPostalCode(normalizeText(customerDto.getPhysicalPostalCode()));
 
-        application.postalAddressLine1 = normalizeText(customerDto.getPostalAddressLine1());
-        application.postalAddressLine2 = normalizeText(customerDto.getPostalAddressLine2());
-        application.postalSuburb = normalizeText(customerDto.getPostalSuburb());
-        application.postalCity = normalizeText(customerDto.getPostalCity());
-        application.postalProvince = normalizeText(customerDto.getPostalProvince());
-        application.postalPostalCode = normalizeText(customerDto.getPostalPostalCode());
+        application.setPostalAddressLine1(normalizeText(customerDto.getPostalAddressLine1()));
+        application.setPostalAddressLine2(normalizeText(customerDto.getPostalAddressLine2()));
+        application.setPostalSuburb(normalizeText(customerDto.getPostalSuburb()));
+        application.setPostalCity(normalizeText(customerDto.getPostalCity()));
+        application.setPostalProvince(normalizeText(customerDto.getPostalProvince()));
+        application.setPostalPostalCode(normalizeText(customerDto.getPostalPostalCode()));
 
         WholesaleApplicationEntity.persist(application);
 
         WholesaleCustomerDto result = wholesaleMapper.toDto(application);
 
         // Observed AFTER_SUCCESS: the notification emails only go out if the submission commits
-        submittedEvent.fire(new WholesaleApplicationSubmittedEvent(application.id, result));
+        submittedEvent.fire(new WholesaleApplicationSubmittedEvent(application.getId(), result));
 
         return result;
     }
 
     @Transactional
-    public WholesaleCustomerDto updateWholesaleCustomer(UUID id, WholesaleCustomerDto customerDto) {
+    public WholesaleCustomerDto updateWholesaleCustomer(UUID id, WholesaleCustomerDto customerDto)
+    {
         if (id == null) {
             throw new IllegalArgumentException("id is required");
         }
@@ -156,7 +150,7 @@ public class WholesaleCustomerService {
         if (customerEntity == null) {
             throw new IllegalArgumentException("customer not found: " + id);
         }
-        if (customerEntity.shopperType != CustomerTypeEn.WHOLESALER) {
+        if (customerEntity.getShopperType() != CustomerTypeEn.WHOLESALER) {
             throw new IllegalArgumentException("customer is not a wholesale customer: " + id);
         }
 
@@ -167,17 +161,17 @@ public class WholesaleCustomerService {
                 throw new IllegalArgumentException("email cannot be blank");
             }
             UserEntity existing = UserEntity.findByEmail(email);
-            if (existing != null && !existing.id.equals(customerEntity.user.id)) {
+            if (existing != null && !existing.getId().equals(customerEntity.getUser().getId())) {
                 throw new IllegalArgumentException("customer already exists with email: " + email);
             }
-            customerEntity.user.email = email;
+            customerEntity.getUser().setEmail(email);
         }
 
         if (customerDto.getStatus() != null) {
-            customerEntity.status = resolveStatus(customerDto.getStatus(), customerEntity.status);
+            customerEntity.setStatus(resolveStatus(customerDto.getStatus(), customerEntity.getStatus()));
         }
 
-        customerEntity.shopperType = CustomerTypeEn.WHOLESALER;
+        customerEntity.setShopperType(CustomerTypeEn.WHOLESALER);
         applyProfileFields(customerEntity, customerDto);
         applyAddresses(customerEntity, customerDto);
         customerEntity.persist();
@@ -186,7 +180,8 @@ public class WholesaleCustomerService {
     }
 
     @Transactional
-    public WholesaleApplicationDetailsDto approveWholesaleApplication(UUID id) {
+    public WholesaleApplicationDetailsDto approveWholesaleApplication(UUID id)
+    {
         if (id == null) {
             throw new IllegalArgumentException("id is required");
         }
@@ -196,59 +191,59 @@ public class WholesaleCustomerService {
             throw new IllegalArgumentException("wholesale application not found: " + id);
         }
 
-        if (application.status != WholesaleApplicationStatusEn.PENDING) {
+        if (application.getStatus() != WholesaleApplicationStatusEn.PENDING) {
             throw new IllegalArgumentException("application must be in PENDING status to approve");
         }
 
         // ── Create customer account from application ──────────────────────
-        String email = normalizeEmail(application.accountEmail);
+        String email = normalizeEmail(application.getAccountEmail());
         if (email == null) {
             // Fall back to applicantEmail if accountEmail was not provided
-            email = normalizeEmail(application.applicantEmail);
+            email = normalizeEmail(application.getApplicantEmail());
         }
         if (email == null) {
             throw new IllegalArgumentException("application must have an accountEmail or applicantEmail to approve");
         }
 
-        if (application.customer == null) {
+        if (application.getCustomer() == null) {
             if (UserEntity.findByEmail(email) != null) {
                 throw new IllegalArgumentException("customer already exists with email: " + email);
             }
 
             // Create user account
             UserEntity user = new UserEntity();
-            user.email = email;
-            user.passwordHash = ""; // placeholder until the customer sets a password
+            user.setEmail(email);
+            user.setPasswordHash(""); // placeholder until the customer sets a password
             UserEntity.persist(user);
 
             // Create customer profile
             CustomerEntity customerEntity = new CustomerEntity();
-            customerEntity.user = user;
-            customerEntity.shopperType = CustomerTypeEn.WHOLESALER;
-            customerEntity.status = CustomerStatusEn.ACTIVE;
-            customerEntity.firstName = normalizeText(application.firstName);
-            customerEntity.lastName = normalizeText(application.lastName);
-            customerEntity.phone = normalizeText(application.phone);
+            customerEntity.setUser(user);
+            customerEntity.setShopperType(CustomerTypeEn.WHOLESALER);
+            customerEntity.setStatus(CustomerStatusEn.ACTIVE);
+            customerEntity.setFirstName(normalizeText(application.getFirstName()));
+            customerEntity.setLastName(normalizeText(application.getLastName()));
+            customerEntity.setPhone(normalizeText(application.getPhone()));
             CustomerEntity.persist(customerEntity);
 
             // Create wholesale profile
             WholesaleProfileEntity profile = new WholesaleProfileEntity();
-            profile.customer = customerEntity;
-            profile.companyName = firstNonBlank(normalizeText(application.companyName), customerEntity.firstName, "Unknown Company");
-            profile.vatNumber = normalizeText(application.vatNumber);
-            profile.regNumber = normalizeText(application.regNumber);
+            profile.setCustomer(customerEntity);
+            profile.setCompanyName(firstNonBlank(normalizeText(application.getCompanyName()), customerEntity.getFirstName(), "Unknown Company"));
+            profile.setVatNumber(normalizeText(application.getVatNumber()));
+            profile.setRegNumber(normalizeText(application.getRegNumber()));
             WholesaleProfileEntity.persist(profile);
 
             // Apply addresses from application
             applyAddressesFromApplication(customerEntity, application);
 
             // Link customer to application
-            application.customer = customerEntity;
+            application.setCustomer(customerEntity);
         }
 
         // ── Mark application approved ─────────────────────────────────────
-        application.status = WholesaleApplicationStatusEn.APPROVED;
-        application.processedAt = OffsetDateTime.now();
+        application.setStatus(WholesaleApplicationStatusEn.APPROVED);
+        application.setProcessedAt(OffsetDateTime.now());
         application.persist();
 
         decisionEvent.fire(buildDecisionEvent(application, null));
@@ -257,7 +252,8 @@ public class WholesaleCustomerService {
     }
 
     @Transactional
-    public WholesaleApplicationDetailsDto rejectWholesaleApplication(UUID id, String reason) {
+    public WholesaleApplicationDetailsDto rejectWholesaleApplication(UUID id, String reason)
+    {
         if (id == null) {
             throw new IllegalArgumentException("id is required");
         }
@@ -270,13 +266,13 @@ public class WholesaleCustomerService {
             throw new IllegalArgumentException("wholesale application not found: " + id);
         }
 
-        if (application.status != WholesaleApplicationStatusEn.PENDING) {
+        if (application.getStatus() != WholesaleApplicationStatusEn.PENDING) {
             throw new IllegalArgumentException("application must be in PENDING status to reject");
         }
 
-        application.status = WholesaleApplicationStatusEn.REJECTED;
-        application.processedAt = OffsetDateTime.now();
-        application.rejectionReason = reason.trim();
+        application.setStatus(WholesaleApplicationStatusEn.REJECTED);
+        application.setProcessedAt(OffsetDateTime.now());
+        application.setRejectionReason(reason.trim());
         application.persist();
 
         decisionEvent.fire(buildDecisionEvent(application, reason.trim()));
@@ -286,13 +282,21 @@ public class WholesaleCustomerService {
 
     // ── Private helpers ──────────────────────────────────────────────────────
 
-    private void applyProfileFields(CustomerEntity customerEntity, WholesaleCustomerDto dto) {
-        if (dto.getFirstName() != null) customerEntity.firstName = dto.getFirstName();
-        if (dto.getLastName()  != null) customerEntity.lastName  = dto.getLastName();
-        if (dto.getPhone()     != null) customerEntity.phone     = dto.getPhone();
+    private void applyProfileFields(CustomerEntity customerEntity, WholesaleCustomerDto dto)
+    {
+        if (dto.getFirstName() != null) {
+            customerEntity.setFirstName(dto.getFirstName());
+        }
+        if (dto.getLastName() != null) {
+            customerEntity.setLastName(dto.getLastName());
+        }
+        if (dto.getPhone() != null) {
+            customerEntity.setPhone(dto.getPhone());
+        }
     }
 
-    private void applyAddresses(CustomerEntity ce, WholesaleCustomerDto dto) {
+    private void applyAddresses(CustomerEntity ce, WholesaleCustomerDto dto)
+    {
         upsertAddress(ce, AddressTypeEn.PHYSICAL,
                 dto.getPhysicalAddressLine1(), dto.getPhysicalAddressLine2(),
                 dto.getPhysicalSuburb(), dto.getPhysicalCity(),
@@ -304,58 +308,73 @@ public class WholesaleCustomerService {
                 dto.getPostalProvince(), dto.getPostalPostalCode());
     }
 
-    private void applyAddressesFromApplication(CustomerEntity ce, WholesaleApplicationEntity application) {
+    private void applyAddressesFromApplication(CustomerEntity ce, WholesaleApplicationEntity application)
+    {
         upsertAddress(ce, AddressTypeEn.PHYSICAL,
-                normalizeText(application.physicalAddressLine1), normalizeText(application.physicalAddressLine2),
-                normalizeText(application.physicalSuburb), normalizeText(application.physicalCity),
-                normalizeText(application.physicalProvince), normalizeText(application.physicalPostalCode));
+                normalizeText(application.getPhysicalAddressLine1()), normalizeText(application.getPhysicalAddressLine2()),
+                normalizeText(application.getPhysicalSuburb()), normalizeText(application.getPhysicalCity()),
+                normalizeText(application.getPhysicalProvince()), normalizeText(application.getPhysicalPostalCode()));
 
         upsertAddress(ce, AddressTypeEn.POSTAL,
-                normalizeText(application.postalAddressLine1), normalizeText(application.postalAddressLine2),
-                normalizeText(application.postalSuburb), normalizeText(application.postalCity),
-                normalizeText(application.postalProvince), normalizeText(application.postalPostalCode));
+                normalizeText(application.getPostalAddressLine1()), normalizeText(application.getPostalAddressLine2()),
+                normalizeText(application.getPostalSuburb()), normalizeText(application.getPostalCity()),
+                normalizeText(application.getPostalProvince()), normalizeText(application.getPostalPostalCode()));
     }
 
-    private static void upsertAddress(CustomerEntity ce, AddressTypeEn type,
-                                      String line1, String line2,
-                                      String suburb, String city,
-                                      String province, String postalCode) {
+    private static void upsertAddress(CustomerEntity ce, AddressTypeEn type, String line1, String line2, String suburb, String city, String province, String postalCode)
+    {
         if (line1 == null && city == null && province == null && postalCode == null) {
             return;
         }
 
-        CustomerAddressEntity addr = ce.addresses.stream()
-                .filter(a -> a.addressType == type)
+        CustomerAddressEntity addr = ce.getAddresses()
+                .stream()
+                .filter(a -> a.getAddressType() == type)
                 .findFirst()
                 .orElseGet(() -> {
                     CustomerAddressEntity a = new CustomerAddressEntity();
-                    a.customer = ce;
-                    a.addressType = type;
-                    ce.addresses.add(a);
+                    a.setCustomer(ce);
+                    a.setAddressType(type);
+                    ce.getAddresses().add(a);
                     return a;
                 });
 
-        if (line1      != null) addr.addressLine1 = line1;
-        if (line2      != null) addr.addressLine2 = line2;
-        if (suburb     != null) addr.suburb       = suburb;
-        if (city       != null) addr.city         = city;
-        if (province   != null) addr.province     = province;
-        if (postalCode != null) addr.postalCode   = postalCode;
+        if (line1 != null) {
+            addr.setAddressLine1(line1);
+        }
+        if (line2 != null) {
+            addr.setAddressLine2(line2);
+        }
+        if (suburb != null) {
+            addr.setSuburb(suburb);
+        }
+        if (city != null) {
+            addr.setCity(city);
+        }
+        if (province != null) {
+            addr.setProvince(province);
+        }
+        if (postalCode != null) {
+            addr.setPostalCode(postalCode);
+        }
     }
 
-    private String normalizeEmail(String email) {
+    private String normalizeEmail(String email)
+    {
         if (email == null) return null;
         String normalized = email.trim();
         return normalized.isEmpty() ? null : normalized;
     }
 
-    private String normalizeText(String value) {
+    private String normalizeText(String value)
+    {
         if (value == null) return null;
         String normalized = value.trim();
         return normalized.isEmpty() ? null : normalized;
     }
 
-    private WholesaleApplicationStatusEn resolveApplicationStatus(WholesaleCustomerStatusEn status) {
+    private WholesaleApplicationStatusEn resolveApplicationStatus(WholesaleCustomerStatusEn status)
+    {
         if (status == null) {
             return WholesaleApplicationStatusEn.PENDING;
         }
@@ -368,7 +387,8 @@ public class WholesaleCustomerService {
         };
     }
 
-    private CustomerStatusEn resolveStatus(WholesaleCustomerStatusEn statusValue, CustomerStatusEn fallback) {
+    private CustomerStatusEn resolveStatus(WholesaleCustomerStatusEn statusValue, CustomerStatusEn fallback)
+    {
         if (statusValue == null) {
             return fallback;
         }
@@ -380,7 +400,8 @@ public class WholesaleCustomerService {
         };
     }
 
-    private String firstNonBlank(String... values) {
+    private String firstNonBlank(String... values)
+    {
         for (String value : values) {
             String normalized = normalizeText(value);
             if (normalized != null) {
@@ -390,75 +411,82 @@ public class WholesaleCustomerService {
         return null;
     }
 
-    private WholesaleCustomerDto toDto(CustomerEntity ce) {
+    private WholesaleCustomerDto toDto(CustomerEntity ce)
+    {
         WholesaleCustomerDto dto = new WholesaleCustomerDto();
-        dto.setId(ce.id);
-        dto.setEmail(ce.user != null ? ce.user.email : null);
-        dto.setFirstName(ce.firstName);
-        dto.setLastName(ce.lastName);
-        dto.setPhone(ce.phone);
+        dto.setId(ce.getId());
+        dto.setEmail(ce.getUser() != null ? ce.getUser().getEmail() : null);
+        dto.setFirstName(ce.getFirstName());
+        dto.setLastName(ce.getLastName());
+        dto.setPhone(ce.getPhone());
 
-        Optional<CustomerAddressEntity> physical = ce.addresses.stream()
-                .filter(a -> a.addressType == AddressTypeEn.PHYSICAL).findFirst();
+        Optional<CustomerAddressEntity> physical = ce.getAddresses()
+                .stream()
+                .filter(a -> a.getAddressType() == AddressTypeEn.PHYSICAL)
+                .findFirst();
+
         physical.ifPresent(a -> {
-            dto.setPhysicalAddressLine1(a.addressLine1);
-            dto.setPhysicalAddressLine2(a.addressLine2);
-            dto.setPhysicalSuburb(a.suburb);
-            dto.setPhysicalCity(a.city);
-            dto.setPhysicalProvince(a.province);
-            dto.setPhysicalPostalCode(a.postalCode);
+            dto.setPhysicalAddressLine1(a.getAddressLine1());
+            dto.setPhysicalAddressLine2(a.getAddressLine2());
+            dto.setPhysicalSuburb(a.getSuburb());
+            dto.setPhysicalCity(a.getCity());
+            dto.setPhysicalProvince(a.getProvince());
+            dto.setPhysicalPostalCode(a.getPostalCode());
         });
 
-        Optional<CustomerAddressEntity> postal = ce.addresses.stream()
-                .filter(a -> a.addressType == AddressTypeEn.POSTAL).findFirst();
+        Optional<CustomerAddressEntity> postal = ce.getAddresses()
+                .stream()
+                .filter(a -> a.getAddressType() == AddressTypeEn.POSTAL)
+                .findFirst();
         postal.ifPresent(a -> {
-            dto.setPostalAddressLine1(a.addressLine1);
-            dto.setPostalAddressLine2(a.addressLine2);
-            dto.setPostalSuburb(a.suburb);
-            dto.setPostalCity(a.city);
-            dto.setPostalProvince(a.province);
-            dto.setPostalPostalCode(a.postalCode);
+            dto.setPostalAddressLine1(a.getAddressLine1());
+            dto.setPostalAddressLine2(a.getAddressLine2());
+            dto.setPostalSuburb(a.getSuburb());
+            dto.setPostalCity(a.getCity());
+            dto.setPostalProvince(a.getProvince());
+            dto.setPostalPostalCode(a.getPostalCode());
         });
 
-        if (ce.wholesaleProfile != null) {
-            dto.setCompanyName(ce.wholesaleProfile.companyName);
-            dto.setVatNumber(ce.wholesaleProfile.vatNumber);
-            dto.setRegNumber(ce.wholesaleProfile.regNumber);
+        if (ce.getWholesaleProfile() != null) {
+            dto.setCompanyName(ce.getWholesaleProfile().getCompanyName());
+            dto.setVatNumber(ce.getWholesaleProfile().getVatNumber());
+            dto.setRegNumber(ce.getWholesaleProfile().getRegNumber());
         }
 
-        if (ce.status != null) {
-            dto.setStatus(WholesaleCustomerStatusEn.valueOf(ce.status.name()));
+        if (ce.getStatus() != null) {
+            dto.setStatus(WholesaleCustomerStatusEn.valueOf(ce.getStatus().name()));
         }
         return dto;
     }
 
-    private WholesaleApplicationListItemDto toListItemDto(WholesaleApplicationEntity application) {
+    private WholesaleApplicationListItemDto toListItemDto(WholesaleApplicationEntity application)
+    {
         WholesaleApplicationListItemDto dto = new WholesaleApplicationListItemDto();
-        dto.setId(application.id);
-        dto.setCreatedAt(application.createdAt);
-        dto.setStatus(application.status);
-        dto.setFirstName(application.firstName);
-        dto.setLastName(application.lastName);
-        dto.setEmail(application.accountEmail);
+        dto.setId(application.getId());
+        dto.setCreatedAt(application.getCreatedAt());
+        dto.setStatus(application.getStatus());
+        dto.setFirstName(application.getFirstName());
+        dto.setLastName(application.getLastName());
+        dto.setEmail(application.getAccountEmail());
         return dto;
     }
 
-    private WholesaleDecisionEvent buildDecisionEvent(WholesaleApplicationEntity application, String rejectionReason) {
+    private WholesaleDecisionEvent buildDecisionEvent(WholesaleApplicationEntity application, String rejectionReason)
+    {
         // Recipient: applicantEmail first (nullable = false column), fallback to accountEmail if blank
-        String recipientEmail = application.applicantEmail;
+        String recipientEmail = application.getApplicantEmail();
         if (recipientEmail == null || recipientEmail.isBlank()) {
-            recipientEmail = application.accountEmail;
+            recipientEmail = application.getAccountEmail();
         }
 
-        String firstName = (application.firstName != null && !application.firstName.isBlank())
-                ? application.firstName : "Wholesale Customer";
+        String firstName = (application.getFirstName() != null && !application.getFirstName().isBlank()) ? application.getFirstName() : "Wholesale Customer";
 
         return new WholesaleDecisionEvent(
-                application.id,
-                application.status,
+                application.getId(),
+                application.getStatus(),
                 recipientEmail,
                 firstName,
-                application.companyName,
+                application.getCompanyName(),
                 rejectionReason
         );
     }

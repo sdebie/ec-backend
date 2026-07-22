@@ -22,8 +22,8 @@ import org.jboss.logging.Logger;
  * (the resource has already returned {@code 202}).
  */
 @ApplicationScoped
-public class ContactEnquiryMailer {
-
+public class ContactEnquiryMailer
+{
     private static final Logger LOG = Logger.getLogger(ContactEnquiryMailer.class);
 
     private static final String CONTACT_SETTING_KEY = "storefront.contact";
@@ -46,7 +46,8 @@ public class ContactEnquiryMailer {
      * @param dto the validated enquiry submission
      * @throws RecipientNotConfiguredException if {@code enquiryEmail} is absent or blank
      */
-    public void send(ContactEnquiryRequestDto dto) {
+    public void send(ContactEnquiryRequestDto dto)
+    {
         String enquiryEmail = resolveRecipient();
 
         contact_enquiry.to(enquiryEmail)
@@ -74,17 +75,18 @@ public class ContactEnquiryMailer {
      *
      * @return the configured enquiry recipient email
      * @throws RecipientNotConfiguredException if the setting is missing, unparseable,
-     *         or {@code enquiryEmail} is absent/blank
+     *                                         or {@code enquiryEmail} is absent/blank
      */
-    String resolveRecipient() {
+    String resolveRecipient()
+    {
         StoreSettingsEntity setting = settingsRepository.findById(CONTACT_SETTING_KEY);
-        if (setting == null || setting.value == null || setting.value.isBlank()) {
+        if (setting == null || setting.getValue() == null || setting.getValue().isBlank()) {
             throw new RecipientNotConfiguredException(
                     "storefront.contact setting row is missing or empty");
         }
 
         try {
-            JsonNode contactNode = objectMapper.readTree(setting.value);
+            JsonNode contactNode = objectMapper.readTree(setting.getValue());
             JsonNode emailNode = contactNode.get("enquiryEmail");
 
             if (emailNode == null || emailNode.isNull() || emailNode.asText().isBlank()) {

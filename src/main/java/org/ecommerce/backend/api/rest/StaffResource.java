@@ -7,14 +7,14 @@ import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import lombok.extern.slf4j.Slf4j;
-import org.ecommerce.common.dto.LoginRequestDto;
-import org.ecommerce.common.dto.TokenResponseDto;
-import org.ecommerce.common.entity.StaffUserEntity;
 import org.ecommerce.backend.service.AdminAuthService;
 import org.ecommerce.backend.service.RateLimitDecision;
 import org.ecommerce.backend.service.RateLimiterService;
 import org.ecommerce.backend.service.StaffService;
 import org.ecommerce.backend.utils.ClientIpUtils;
+import org.ecommerce.common.dto.LoginRequestDto;
+import org.ecommerce.common.dto.TokenResponseDto;
+import org.ecommerce.common.entity.StaffUserEntity;
 
 @Path("/api/admin/auth")
 @Slf4j
@@ -22,7 +22,9 @@ import org.ecommerce.backend.utils.ClientIpUtils;
 @Consumes(MediaType.APPLICATION_JSON)
 public class StaffResource
 {
-    public record ResetPasswordRequest(String email, String password, String confirmPassword) {}
+    public record ResetPasswordRequest(String email, String password, String confirmPassword)
+    {
+    }
 
     @Inject
     AdminAuthService authService;
@@ -67,11 +69,11 @@ public class StaffResource
         if (token != null) {
             // Retrieve user again to send extra info to frontend if needed
             StaffUserEntity user = StaffUserEntity.findByEmail(loginDto.email());
-            return Response.ok(new TokenResponseDto(token, user.email, user.role.name(), user.resetPassword)).build();
+            return Response.ok(new TokenResponseDto(token, user.getEmail(), user.getRole().name(), user.isResetPassword())).build();
         }
 
         StaffUserEntity user = StaffUserEntity.findByEmail(loginDto.email());
-        if (user != null && !user.isActive) {
+        if (user != null && !user.isActive()) {
             return Response.status(Response.Status.FORBIDDEN)
                     .entity("Access denied")
                     .build();

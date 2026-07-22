@@ -1,13 +1,15 @@
 package org.ecommerce.backend.api.graphql;
 
+import io.micrometer.core.annotation.Timed;
 import jakarta.annotation.security.RolesAllowed;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+import jakarta.transaction.Transactional;
+import jakarta.transaction.Transactional.TxType;
 import org.eclipse.microprofile.graphql.*;
 import org.ecommerce.backend.service.FeaturedProductService;
 import org.ecommerce.backend.service.ProductService;
 import org.ecommerce.common.dto.*;
-import org.ecommerce.common.dto.PageResponse;
 import org.ecommerce.common.query.Filter;
 import org.ecommerce.common.query.FilterRequest;
 import org.ecommerce.common.query.PageRequest;
@@ -15,15 +17,7 @@ import org.ecommerce.common.query.enums.FilterOperator;
 import org.ecommerce.common.repository.BrandRepository;
 import org.ecommerce.common.repository.CategoryRepository;
 
-import jakarta.transaction.Transactional;
-import jakarta.transaction.Transactional.TxType;
-import io.micrometer.core.annotation.Timed;
-
-import java.util.ArrayList;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 
 @ApplicationScoped
 @GraphQLApi
@@ -45,9 +39,7 @@ public class ProductResource
     @Description("Returns a paged list of products with active retail or wholesale pricing. Category scoping is not applied in this endpoint.")
     @RolesAllowed({"SUPER_ADMIN", "CATALOG_MANAGER", "ORDER_MANAGER", "VIEWER"})
     @Transactional(value = TxType.SUPPORTS)
-    public List<ProductListItemDto> getProductsList(
-            @Name("pageRequest") PageRequest pageRequest,
-            @Name("filterRequest") FilterRequest filterRequest)
+    public List<ProductListItemDto> getProductsList(@Name("pageRequest") PageRequest pageRequest, @Name("filterRequest") FilterRequest filterRequest)
     {
         return productService.getAllProducts(pageRequest, filterRequest);
     }
@@ -136,9 +128,7 @@ public class ProductResource
                 throw new IllegalArgumentException("Category not found for id: " + categoryId);
             }
 
-            List<Filter> filters = resolvedFilterRequest.getFilters() != null
-                    ? resolvedFilterRequest.getFilters()
-                    : new ArrayList<>();
+            List<Filter> filters = resolvedFilterRequest.getFilters() != null ? resolvedFilterRequest.getFilters() : new ArrayList<>();
 
             if (includeSubCategories) {
                 List<String> scopedCategoryIds = resolveCategoryAndDescendantIds(parsedCategoryId)
@@ -180,8 +170,8 @@ public class ProductResource
 
                 List<org.ecommerce.common.entity.CategoryEntity> children = categoryRepository.list("parent.id", currentId);
                 for (org.ecommerce.common.entity.CategoryEntity child : children) {
-                    if (child != null && child.id != null && !collectedIds.contains(child.id)) {
-                        nextFrontier.add(child.id);
+                    if (child != null && child.getId() != null && !collectedIds.contains(child.getId())) {
+                        nextFrontier.add(child.getId());
                     }
                 }
             }

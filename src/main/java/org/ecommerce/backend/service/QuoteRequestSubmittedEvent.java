@@ -9,7 +9,6 @@ import java.util.UUID;
  * Carries the full mapped request snapshot so the mail observer can render
  * every submitted field without re-reading a detached entity.
  */
-public record QuoteRequestSubmittedEvent(
-        UUID requestId,
-        QuoteRequestDetailsDto request
-) {}
+public record QuoteRequestSubmittedEvent(UUID requestId, QuoteRequestDetailsDto request)
+{
+}

@@ -1,27 +1,17 @@
 package org.ecommerce.backend.mapper;
 
-import org.ecommerce.common.dto.BrandDto;
-import org.ecommerce.common.dto.CategoryDto;
-import org.ecommerce.common.dto.ProductImageDto;
-import org.ecommerce.common.dto.ProductDto;
-import org.ecommerce.common.dto.ProductInformationDto;
-import org.ecommerce.common.dto.ProductVariantDto;
-import org.ecommerce.common.entity.BrandEntity;
-import org.ecommerce.common.entity.CategoryEntity;
-import org.ecommerce.common.entity.ProductEntity;
-import org.ecommerce.common.entity.ProductImageEntity;
-import org.ecommerce.common.entity.ProductVariantEntity;
-import org.ecommerce.common.entity.VariantPricesEntity;
+import org.ecommerce.common.dto.*;
+import org.ecommerce.common.entity.*;
 import org.ecommerce.common.enums.PriceTypeEn;
 import org.ecommerce.common.enums.ProductStatusEn;
 import org.ecommerce.common.enums.ProductTypeEn;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 
-import java.util.Collections;
-import java.util.List;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
+import java.util.Collections;
+import java.util.List;
 
 import static org.mapstruct.NullValueCheckStrategy.ALWAYS;
 import static org.mapstruct.NullValueMappingStrategy.RETURN_NULL;
@@ -33,130 +23,134 @@ import static org.mapstruct.NullValuePropertyMappingStrategy.SET_TO_NULL;
         nullValueCheckStrategy = ALWAYS)
 public interface ProductMapper
 {
-    // ── ProductImageEntity → ProductImageDto ──────────────────────────────
-
-    @Mapping(target = "id",         expression = "java(entity.id == null ? null : entity.id.toString())")
-    @Mapping(target = "isFeatured", expression = "java(entity.isFeatured != null && entity.isFeatured)")
+    @Mapping(target = "id", expression = "java(entity.getId() == null ? null : entity.getId().toString())")
+    @Mapping(target = "featured", expression = "java(entity.getIsFeatured() != null && entity.getIsFeatured())")
     ProductImageDto mapImageEntityToDto(ProductImageEntity entity);
 
     List<ProductImageDto> mapImageEntitiesToDtos(List<ProductImageEntity> entities);
 
-    // ── ProductVariantEntity → ProductVariantDto ─────────────────────────
-
-    @Mapping(target = "id",      expression = "java(entity.id == null ? null : entity.id.toString())")
+    @Mapping(target = "id", expression = "java(entity.getId() == null ? null : entity.getId().toString())")
     @Mapping(target = "product", ignore = true)
-    @Mapping(target = "prices",  source = "prices")
-    @Mapping(target = "images",  source = "images")
+    @Mapping(target = "prices", source = "prices")
+    @Mapping(target = "images", source = "images")
     ProductVariantDto mapVariantEntityToDto(ProductVariantEntity entity);
 
     List<ProductVariantDto> mapVariantEntitiesToDtos(List<ProductVariantEntity> entities);
 
-    // ── VariantPricesEntity → VariantPriceDto ────────────────────────────
-
-    @Mapping(target = "id",        expression = "java(entity.id == null ? null : entity.id.toString())")
-    @Mapping(target = "priceType", expression = "java(entity.priceType == null ? null : entity.priceType.name())")
-    @Mapping(target = "isActive",  expression = "java(entity.isActive())")
+    @Mapping(target = "id", expression = "java(entity.getId() == null ? null : entity.getId().toString())")
+    @Mapping(target = "priceType", expression = "java(entity.getPriceType() == null ? null : entity.getPriceType().name())")
+    @Mapping(target = "isActive", expression = "java(entity.isActive())")
     @Mapping(target = "saleDaysRemaining", expression = "java(calculateSaleDaysRemaining(entity))")
     org.ecommerce.common.dto.VariantPriceDto mapPriceEntityToDto(org.ecommerce.common.entity.VariantPricesEntity entity);
 
-    // ── CategoryEntity → CategoryDto ──────────────────────────────────────
-
     CategoryDto mapCategoryEntityToDto(CategoryEntity entity);
-
-    // ── BrandEntity → BrandDto ────────────────────────────────────────────
 
     BrandDto mapBrandEntityToDto(BrandEntity entity);
 
-    // ── ProductEntity → ProductDto ─────────────────────────────────────────
-
-    @Mapping(target = "id", expression = "java(entity.id == null ? null : entity.id.toString())")
-    @Mapping(target = "shortDescription", source = "shorDescription")
-    @Mapping(target = "productType", expression = "java(entity.productType == null ? null : entity.productType.name())")
+    @Mapping(target = "id", expression = "java(entity.getId() == null ? null : entity.getId().toString())")
+    @Mapping(target = "shortDescription", source = "shortDescription")
+    @Mapping(target = "productType", expression = "java(entity.getProductType() == null ? null : entity.getProductType().name())")
     @Mapping(target = "status", ignore = true)
-    @Mapping(target = "createdAt", expression = "java(entity.createdAt == null ? null : entity.createdAt.toString())")
+    @Mapping(target = "createdAt", expression = "java(entity.getCreatedAt() == null ? null : entity.getCreatedAt().toString())")
     @Mapping(target = "category", expression = "java(mapPrimaryCategory(entity))")
     @Mapping(target = "categories", expression = "java(mapCategoryList(entity))")
     @Mapping(target = "brand", source = "brand")
     @Mapping(target = "variants", ignore = true)
     ProductDto mapProductEntityToDto(ProductEntity entity);
 
-    // ── ProductDto → ProductEntity scalar copy (create vs patch) ──────────────
-
-    /** Copy scalar fields for a NEW product, applying SIMPLE/ACTIVE defaults. */
-    default void applyCreatableFields(ProductDto src, ProductEntity target) {
-        target.name = src.name;
-        target.slug = src.slug;
-        target.description = src.description;
-        target.shorDescription = src.shortDescription;
-        target.productType = src.productType != null ? ProductTypeEn.valueOf(src.productType) : ProductTypeEn.SIMPLE;
-        target.status = src.status != null ? ProductStatusEn.valueOf(src.status) : ProductStatusEn.ACTIVE;
+    /**
+     * Copy scalar fields for a NEW product, applying SIMPLE/ACTIVE defaults.
+     */
+    default void applyCreatableFields(ProductDto productDto, ProductEntity productEntity)
+    {
+        productEntity.setName(productDto.getName());
+        productEntity.setSlug(productDto.getSlug());
+        productEntity.setDescription(productDto.getDescription());
+        productEntity.setShortDescription(productDto.getShortDescription());
+        productEntity.setProductType(productDto.getProductType() != null ? ProductTypeEn.valueOf(productDto.getProductType()) : ProductTypeEn.SIMPLE);
+        productEntity.setStatus(productDto.getStatus() != null ? ProductStatusEn.valueOf(productDto.getStatus()) : ProductStatusEn.ACTIVE);
     }
 
-    /** Patch scalar fields on an EXISTING product — only non-blank values are applied. */
-    default void applyEditableFields(ProductDto src, ProductEntity target) {
-        if (src.name != null && !src.name.isBlank()) target.name = src.name;
-        if (src.slug != null && !src.slug.isBlank()) target.slug = src.slug;
-        if (src.description != null && !src.description.isBlank()) target.description = src.description;
-        if (src.shortDescription != null && !src.shortDescription.isBlank()) target.shorDescription = src.shortDescription;
-        if (src.productType != null && !src.productType.isBlank()) target.productType = ProductTypeEn.valueOf(src.productType);
-        if (src.status != null && !src.status.isBlank()) target.status = ProductStatusEn.valueOf(src.status);
+    /**
+     * Patch scalar fields on an EXISTING product — only non-blank values are applied.
+     */
+    default void applyEditableFields(ProductDto src, ProductEntity target)
+    {
+        if (src.getName() != null && !src.getName().isBlank()) {
+            target.setName(src.getName());
+        }
+        if (src.getSlug() != null && !src.getSlug().isBlank()) {
+            target.setSlug(src.getSlug());
+        }
+        if (src.getDescription() != null && !src.getDescription().isBlank()) {
+            target.setDescription(src.getDescription());
+        }
+        if (src.getShortDescription() != null && !src.getShortDescription().isBlank()) {
+            target.setShortDescription(src.getShortDescription());
+        }
+        if (src.getProductType() != null && !src.getProductType().isBlank()) {
+            target.setProductType(ProductTypeEn.valueOf(src.getProductType()));
+        }
+        if (src.getStatus() != null && !src.getStatus().isBlank()) {
+            target.setStatus(ProductStatusEn.valueOf(src.getStatus()));
+        }
     }
 
-    // ── Composite: product + variants → ProductInformationDto ─────────────
-
-    default ProductInformationDto mapToProductInformationDto(ProductEntity product,
-                                                             List<ProductVariantEntity> variants)
+    default ProductInformationDto mapToProductInformationDto(ProductEntity product, List<ProductVariantEntity> variants)
     {
         if (product == null) return null;
 
         ProductDto productDto = mapProductEntityToDto(product);
         // Enrich product DTO with status
-        if (product.status != null) {
-            productDto.status = product.status.name();
+        if (product.getStatus() != null) {
+            productDto.setStatus(product.getStatus().name());
         }
 
-        List<ProductVariantDto> variantDtos = variants != null
-                ? variants.stream().map(v -> {
-                    ProductVariantDto dto = mapVariantEntityToDto(v);
-                    // Enrich variant DTO with status
-                    if (v.status != null) {
-                        dto.status = v.status.name();
-                    }
-                    return dto;
-                }).toList()
-                : Collections.emptyList();
+        List<ProductVariantDto> variantDtos = variants != null ? variants.stream().map(v -> {
+            ProductVariantDto dto = mapVariantEntityToDto(v);
+            // Enrich variant DTO with status
+            if (v.getStatus() != null) {
+                dto.setStatus(v.getStatus().name());
+            }
+            return dto;
+        }).toList() : Collections.emptyList();
 
         return new ProductInformationDto(productDto, variantDtos);
     }
 
-     default Long calculateSaleDaysRemaining(VariantPricesEntity entity)
-     {
-         if (entity == null || entity.priceType == null || entity.priceEndDate == null) return null;
+    default Long calculateSaleDaysRemaining(VariantPricesEntity variantPricesEntity)
+    {
+        if (variantPricesEntity == null || variantPricesEntity.getPriceType() == null || variantPricesEntity.getPriceEndDate() == null) {
+            return null;
+        }
 
-         if (entity.priceType != PriceTypeEn.RETAIL_SALE_PRICE
-                 && entity.priceType != PriceTypeEn.WHOLESALE_SALE_PRICE) {
-             return null;
-         }
+        if (variantPricesEntity.getPriceType() != PriceTypeEn.RETAIL_SALE_PRICE && variantPricesEntity.getPriceType() != PriceTypeEn.WHOLESALE_SALE_PRICE) {
+            return null;
+        }
 
-         LocalDate today = LocalDate.now();
-         LocalDate endDate = entity.priceEndDate.toLocalDate();
-         long daysRemaining = ChronoUnit.DAYS.between(today, endDate);
-         return Math.max(daysRemaining, 0L);
-     }
+        LocalDate today = LocalDate.now();
+        LocalDate endDate = variantPricesEntity.getPriceEndDate().toLocalDate();
+        long daysRemaining = ChronoUnit.DAYS.between(today, endDate);
+        return Math.max(daysRemaining, 0L);
+    }
 
-     default CategoryDto mapPrimaryCategory(ProductEntity entity) {
-         if (entity == null || entity.categories == null || entity.categories.isEmpty()) {
-             return null;
-         }
-         return mapCategoryEntityToDto(entity.categories.iterator().next());
-     }
+    default CategoryDto mapPrimaryCategory(ProductEntity productEntity)
+    {
+        if (productEntity == null || productEntity.getCategories() == null || productEntity.getCategories().isEmpty()) {
+            return null;
+        }
+        return mapCategoryEntityToDto(productEntity.getCategories().iterator().next());
+    }
 
-     default List<CategoryDto> mapCategoryList(ProductEntity entity) {
-         if (entity == null || entity.categories == null) {
-             return Collections.emptyList();
-         }
-         return entity.categories.stream()
-                 .map(this::mapCategoryEntityToDto)
-                 .toList();
-     }
+    default List<CategoryDto> mapCategoryList(ProductEntity productEntity)
+    {
+        if (productEntity == null || productEntity.getCategories() == null) {
+            return Collections.emptyList();
+        }
+
+        return productEntity.getCategories()
+                .stream()
+                .map(this::mapCategoryEntityToDto)
+                .toList();
+    }
 }

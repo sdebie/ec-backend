@@ -3,19 +3,15 @@ package org.ecommerce.backend.api.graphql;
 import jakarta.annotation.security.RolesAllowed;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
-import org.eclipse.microprofile.graphql.Description;
-import org.eclipse.microprofile.graphql.GraphQLApi;
-import org.eclipse.microprofile.graphql.Mutation;
-import org.eclipse.microprofile.graphql.Name;
-import org.eclipse.microprofile.graphql.Query;
+import org.eclipse.microprofile.graphql.*;
 import org.ecommerce.backend.service.SettingsService;
+import org.ecommerce.common.dto.CountrySettingsDto;
 import org.ecommerce.common.dto.SettingsDto;
 import org.ecommerce.common.dto.ShippingMethodDto;
 import org.ecommerce.common.dto.StoreSettingsDto;
-import org.ecommerce.common.dto.CountrySettingsDto;
 
-import java.util.List;
 import java.util.Collections;
+import java.util.List;
 
 @GraphQLApi
 public class SettingsResource
@@ -58,8 +54,8 @@ public class SettingsResource
     public StoreSettingsDto updateSetting(@Name("key") String key, @Name("value") String value)
     {
         StoreSettingsDto dto = new StoreSettingsDto();
-        dto.key = key;
-        dto.value = value;
+        dto.setKey(key);
+        dto.setValue(value);
         List<StoreSettingsDto> updated = settingsService.saveStoreSettings(Collections.singletonList(dto));
         return updated.isEmpty() ? null : updated.get(0);
     }

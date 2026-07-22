@@ -13,29 +13,31 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 
-import static org.ecommerce.common.util.CsvImportUtils.*;
+import static org.ecommerce.common.util.CsvImportUtils.getValue;
+import static org.ecommerce.common.util.CsvImportUtils.parseBigDecimal;
 
 /**
  * Parses price-import CSV files into typed {@link ParsedPriceRow} objects.
  * <p>
  * Extracted from {@code ProductPriceImportService} — the parsing logic is
- * identical to the pre-extraction behaviour (blank→ZERO, invalid→error,
- * same header aliases).
+ * identical to the pre-extraction behavior (blank → ZERO, invalid → error, same header aliases).
  */
 @ApplicationScoped
-public class ProductPriceImportParser {
+public class ProductPriceImportParser
+{
 
     /**
      * Parses a single {@link CSVRecord} into a typed {@link ParsedPriceRow}.
      * <p>
-     * Behaviour matches the original {@code ProductPriceImportService.parseProductPriceCsvRow}:
+     * Behavior matches the original {@code ProductPriceImportService.parseProductPriceCsvRow}:
      * <ul>
      *   <li>{@code sku} is extracted via headers "sku" or "SKU"</li>
      *   <li>{@code retail_price} / "Retail Price" — blank→BigDecimal.ZERO, invalid→null + error</li>
      *   <li>{@code wholesale_price} / "Wholesale Price" — blank→BigDecimal.ZERO, invalid→null + error</li>
      * </ul>
      */
-    public ParsedPriceRow parsePriceCsvRow(CSVRecord record) {
+    public ParsedPriceRow parsePriceCsvRow(CSVRecord record)
+    {
         List<String> validationErrors = new ArrayList<>();
         return new ParsedPriceRow(
                 record.getRecordNumber(),
@@ -51,7 +53,8 @@ public class ProductPriceImportParser {
      * Uses the same CSV format configuration as the original service:
      * header row present, skip header record, ignore header case, trim values.
      */
-    public List<ParsedPriceRow> parseAll(InputStream is) throws IOException {
+    public List<ParsedPriceRow> parseAll(InputStream is) throws IOException
+    {
         List<ParsedPriceRow> rows = new ArrayList<>();
 
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(is));
@@ -79,10 +82,10 @@ public class ProductPriceImportParser {
      * Contains the raw parsed values and any validation errors
      * accumulated during parsing (e.g. invalid decimal format).
      *
-     * @param recordNumber    the 1-based row number from the CSV file
-     * @param sku             the SKU value (may be null if header not found)
-     * @param retailPrice     the parsed retail price (ZERO if blank, null if invalid)
-     * @param wholesalePrice  the parsed wholesale price (ZERO if blank, null if invalid)
+     * @param recordNumber     the 1-based row number from the CSV file
+     * @param sku              the SKU value (maybe null if header not found)
+     * @param retailPrice      the parsed retail price (ZERO if blank, null if invalid)
+     * @param wholesalePrice   the parsed wholesale price (ZERO if blank, null if invalid)
      * @param validationErrors list of parsing errors (empty if row parsed cleanly)
      */
     public record ParsedPriceRow(
@@ -91,6 +94,7 @@ public class ProductPriceImportParser {
             BigDecimal retailPrice,
             BigDecimal wholesalePrice,
             List<String> validationErrors
-    ) {
+    )
+    {
     }
 }

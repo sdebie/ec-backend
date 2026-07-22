@@ -9,7 +9,6 @@ import jakarta.enterprise.event.TransactionPhase;
 import jakarta.inject.Inject;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.ecommerce.common.dto.QuoteRequestDetailsDto;
-import org.ecommerce.common.dto.QuoteRequestItemDto;
 import org.ecommerce.common.entity.StoreSettingsEntity;
 import org.ecommerce.common.repository.SettingsRepository;
 import org.jboss.logging.Logger;
@@ -24,8 +23,8 @@ import org.jboss.logging.Logger;
  * is already persisted.
  */
 @ApplicationScoped
-public class QuoteRequestMailer {
-
+public class QuoteRequestMailer
+{
     private static final Logger LOG = Logger.getLogger(QuoteRequestMailer.class);
 
     private static final String CONTACT_SETTING_KEY = "storefront.contact";
@@ -47,7 +46,8 @@ public class QuoteRequestMailer {
      * Resolves the operator recipient from store settings and sends the notification.
      * Missing recipient or delivery failure are logged and skipped — no exception is thrown.
      */
-    public void onSubmitted(@Observes(during = TransactionPhase.AFTER_SUCCESS) QuoteRequestSubmittedEvent event) {
+    public void onSubmitted(@Observes(during = TransactionPhase.AFTER_SUCCESS) QuoteRequestSubmittedEvent event)
+    {
         QuoteRequestDetailsDto request = event.request();
 
         // Resolve recipient from storefront.contact → enquiryEmail
@@ -90,14 +90,15 @@ public class QuoteRequestMailer {
      * Returns {@code null} if the setting is missing, unparseable, or {@code enquiryEmail}
      * is absent/blank — the caller logs and skips, never throws.
      */
-    String resolveRecipient() {
+    String resolveRecipient()
+    {
         StoreSettingsEntity setting = settingsRepository.findById(CONTACT_SETTING_KEY);
-        if (setting == null || setting.value == null || setting.value.isBlank()) {
+        if (setting == null || setting.getValue() == null || setting.getValue().isBlank()) {
             return null;
         }
 
         try {
-            JsonNode contactNode = objectMapper.readTree(setting.value);
+            JsonNode contactNode = objectMapper.readTree(setting.getValue());
             JsonNode emailNode = contactNode.get("enquiryEmail");
 
             if (emailNode == null || emailNode.isNull() || emailNode.asText().isBlank()) {

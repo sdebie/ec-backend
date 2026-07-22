@@ -20,8 +20,8 @@ import java.util.concurrent.ConcurrentHashMap;
 
 @Slf4j
 @ApplicationScoped
-public class CustomerPasswordResetService {
-
+public class CustomerPasswordResetService
+{
     private static final int RESET_CODE_LENGTH = 6;
     private static final int RESET_CODE_EXPIRY_MINUTES = 10;
     private static final int MAX_INVALID_ATTEMPTS = 3;
@@ -33,13 +33,15 @@ public class CustomerPasswordResetService {
     @Inject
     PasswordResetNotificationService passwordResetNotificationService;
 
-    private static class IpAttemptState {
+    private static class IpAttemptState
+    {
         int failedAttempts;
         OffsetDateTime lockedUntil;
     }
 
     @Transactional
-    public void initiatePasswordReset(String email) {
+    public void initiatePasswordReset(String email)
+    {
         if (email == null || email.isBlank()) {
             return;
         }
@@ -47,23 +49,24 @@ public class CustomerPasswordResetService {
         UserEntity user = UserEntity.findByEmail(email.trim());
         if (user != null) {
             String token = UUID.randomUUID().toString();
-            user.resetToken = token;
-            user.resetTokenExpiry = OffsetDateTime.now().plusMinutes(20);
+            user.setResetToken(token);
+            user.setResetTokenExpiry(OffsetDateTime.now().plusMinutes(20));
 
             // Keep generic caller response; notification transport can be upgraded later.
-            passwordResetNotificationService.sendResetLink(user.email, token);
+            passwordResetNotificationService.sendResetLink(user.getEmail(), token);
         }
     }
 
     @Transactional
-    public void initiatePasswordResetCode(String email) {
+    public void initiatePasswordResetCode(String email)
+    {
         if (email == null || email.isBlank()) {
             return;
         }
 
         String normalizedEmail = email.trim();
         UserEntity user = UserEntity.findByEmail(normalizedEmail);
-        if (user == null || user.customer == null) {
+        if (user == null || user.getCustomer() == null) {
             return;
         }
 
@@ -71,39 +74,42 @@ public class CustomerPasswordResetService {
         OffsetDateTime now = OffsetDateTime.now();
 
         log.debug("Password Reset {}", rawCode);
-        user.passwordResetCodeHash = PasswordHashUtil.hash(rawCode);
-        user.passwordResetCodeExpiry = now.plusMinutes(RESET_CODE_EXPIRY_MINUTES);
-        user.passwordResetCodeAttempts = 0;
-        user.passwordResetCodeLockedUntil = null;
+        user.setPasswordResetCodeHash(PasswordHashUtil.hash(rawCode));
+        user.setPasswordResetCodeExpiry(now.plusMinutes(RESET_CODE_EXPIRY_MINUTES));
+        user.setPasswordResetCodeAttempts(0);
+        user.setPasswordResetCodeLockedUntil(null);
 
-        passwordResetNotificationService.sendResetCode(user.email, rawCode, RESET_CODE_EXPIRY_MINUTES);
+        passwordResetNotificationService.sendResetCode(user.getEmail(), rawCode, RESET_CODE_EXPIRY_MINUTES);
     }
 
     @Transactional
-    public void verifyPasswordResetCode(String email, String code, String clientIp) {
+    public void verifyPasswordResetCode(String email, String code, String clientIp)
+    {
         verifyCodeInternal(email, code, clientIp);
     }
 
     @Transactional
-    public void completePasswordResetWithCode(String email, String code, String newPassword, String clientIp) {
+    public void completePasswordResetWithCode(String email, String code, String newPassword, String clientIp)
+    {
         if (newPassword == null || newPassword.isBlank()) {
             throw new IllegalArgumentException("New password is required");
         }
 
         UserEntity user = verifyCodeInternal(email, code, clientIp);
-        user.passwordHash = PasswordHashUtil.hash(newPassword);
-        user.lastLogin = OffsetDateTime.now();
+        user.setPasswordHash(PasswordHashUtil.hash(newPassword));
+        user.setLastLogin(OffsetDateTime.now());
 
-        activateCustomerProfile(user.customer);
+        activateCustomerProfile(user.getCustomer());
 
-        user.passwordResetCodeHash = null;
-        user.passwordResetCodeExpiry = null;
-        user.passwordResetCodeAttempts = 0;
-        user.passwordResetCodeLockedUntil = null;
+        user.setPasswordResetCodeHash(null);
+        user.setPasswordResetCodeExpiry(null);
+        user.setPasswordResetCodeAttempts(0);
+        user.setPasswordResetCodeLockedUntil(null);
     }
 
     @Transactional
-    public void completePasswordReset(String token, String newPassword) {
+    public void completePasswordReset(String token, String newPassword)
+    {
         if (token == null || token.isBlank()) {
             throw new IllegalArgumentException("Reset token is required");
         }
@@ -113,17 +119,17 @@ public class CustomerPasswordResetService {
         }
 
         UserEntity user = UserEntity.findByResetToken(token);
-        if (user == null || user.resetTokenExpiry == null || user.resetTokenExpiry.isBefore(OffsetDateTime.now())) {
+        if (user == null || user.getResetTokenExpiry() == null || user.getResetTokenExpiry().isBefore(OffsetDateTime.now())) {
             throw new IllegalArgumentException("Invalid or expired reset token");
         }
 
-        user.passwordHash = PasswordHashUtil.hash(newPassword);
-        user.lastLogin = OffsetDateTime.now();
+        user.setPasswordHash(PasswordHashUtil.hash(newPassword));
+        user.setLastLogin(OffsetDateTime.now());
 
-        activateCustomerProfile(user.customer);
+        activateCustomerProfile(user.getCustomer());
 
-        user.resetToken = null;
-        user.resetTokenExpiry = null;
+        user.setResetToken(null);
+        user.setResetTokenExpiry(null);
     }
 
     /**
@@ -131,19 +137,21 @@ public class CustomerPasswordResetService {
      * leave PENDING and must not remain GUEST — that tier is anonymous-checkout only.
      * WHOLESALER is never downgraded.
      */
-    private static void activateCustomerProfile(CustomerEntity customer) {
+    private static void activateCustomerProfile(CustomerEntity customer)
+    {
         if (customer == null) {
             return;
         }
-        if (customer.status == null || customer.status == CustomerStatusEn.PENDING) {
-            customer.status = CustomerStatusEn.ACTIVE;
+        if (customer.getStatus() == null || customer.getStatus() == CustomerStatusEn.PENDING) {
+            customer.setStatus(CustomerStatusEn.ACTIVE);
         }
-        if (customer.shopperType == null || customer.shopperType == CustomerTypeEn.GUEST) {
-            customer.shopperType = CustomerTypeEn.RETAILER;
+        if (customer.getShopperType() == null || customer.getShopperType() == CustomerTypeEn.GUEST) {
+            customer.setShopperType(CustomerTypeEn.RETAILER);
         }
     }
 
-    private UserEntity verifyCodeInternal(String email, String code, String clientIp) {
+    private UserEntity verifyCodeInternal(String email, String code, String clientIp)
+    {
         String normalizedIp = normalizeIp(clientIp);
         OffsetDateTime now = OffsetDateTime.now();
 
@@ -159,33 +167,35 @@ public class CustomerPasswordResetService {
         ensureAccountNotLocked(user, now);
 
         boolean validCode = isValidCodeFormat(code)
-                && user.passwordResetCodeHash != null
-                && user.passwordResetCodeExpiry != null
-                && !user.passwordResetCodeExpiry.isBefore(now)
-                && PasswordHashUtil.hash(code.trim()).equals(user.passwordResetCodeHash);
+                && user.getPasswordResetCodeHash() != null
+                && user.getPasswordResetCodeExpiry() != null
+                && !user.getPasswordResetCodeExpiry().isBefore(now)
+                && PasswordHashUtil.hash(code.trim()).equals(user.getPasswordResetCodeHash());
 
         if (!validCode) {
             registerFailure(user, normalizedIp, now);
             throw new InvalidPasswordResetCodeException();
         }
 
-        user.passwordResetCodeAttempts = 0;
-        user.passwordResetCodeLockedUntil = null;
+        user.setPasswordResetCodeAttempts(0);
+        user.setPasswordResetCodeLockedUntil(null);
         clearIpFailure(normalizedIp);
         return user;
     }
 
-    private void ensureAccountNotLocked(UserEntity user, OffsetDateTime now) {
-        if (user.passwordResetCodeLockedUntil != null && user.passwordResetCodeLockedUntil.isAfter(now)) {
-            throw new PasswordResetLockedException(user.passwordResetCodeLockedUntil);
+    private void ensureAccountNotLocked(UserEntity user, OffsetDateTime now)
+    {
+        if (user.getPasswordResetCodeLockedUntil() != null && user.getPasswordResetCodeLockedUntil().isAfter(now)) {
+            throw new PasswordResetLockedException(user.getPasswordResetCodeLockedUntil());
         }
-        if (user.passwordResetCodeLockedUntil != null && !user.passwordResetCodeLockedUntil.isAfter(now)) {
-            user.passwordResetCodeLockedUntil = null;
-            user.passwordResetCodeAttempts = 0;
+        if (user.getPasswordResetCodeLockedUntil() != null && !user.getPasswordResetCodeLockedUntil().isAfter(now)) {
+            user.setPasswordResetCodeLockedUntil(null);
+            user.setPasswordResetCodeAttempts(0);
         }
     }
 
-    private void ensureIpNotLocked(String ip, OffsetDateTime now) {
+    private void ensureIpNotLocked(String ip, OffsetDateTime now)
+    {
         IpAttemptState state = ipAttemptStateMap.get(ip);
         if (state == null) {
             return;
@@ -198,22 +208,24 @@ public class CustomerPasswordResetService {
         }
     }
 
-    private void registerFailure(UserEntity user, String ip, OffsetDateTime now) {
-        user.passwordResetCodeAttempts = user.passwordResetCodeAttempts + 1;
-        if (user.passwordResetCodeAttempts >= MAX_INVALID_ATTEMPTS) {
+    private void registerFailure(UserEntity user, String ip, OffsetDateTime now)
+    {
+        user.setPasswordResetCodeAttempts(user.getPasswordResetCodeAttempts() + 1);
+        if (user.getPasswordResetCodeAttempts() >= MAX_INVALID_ATTEMPTS) {
             OffsetDateTime lockedUntil = now.plusMinutes(LOCKOUT_MINUTES);
-            user.passwordResetCodeLockedUntil = lockedUntil;
-            user.passwordResetCodeAttempts = 0;
+            user.setPasswordResetCodeLockedUntil(lockedUntil);
+            user.setPasswordResetCodeAttempts(0);
         }
 
         registerIpFailure(ip, now);
 
-        if (user.passwordResetCodeLockedUntil != null && user.passwordResetCodeLockedUntil.isAfter(now)) {
-            throw new PasswordResetLockedException(user.passwordResetCodeLockedUntil);
+        if (user.getPasswordResetCodeLockedUntil() != null && user.getPasswordResetCodeLockedUntil().isAfter(now)) {
+            throw new PasswordResetLockedException(user.getPasswordResetCodeLockedUntil());
         }
     }
 
-    private void registerIpFailure(String ip, OffsetDateTime now) {
+    private void registerIpFailure(String ip, OffsetDateTime now)
+    {
         IpAttemptState state = ipAttemptStateMap.computeIfAbsent(ip, ignored -> new IpAttemptState());
         state.failedAttempts = state.failedAttempts + 1;
         if (state.failedAttempts >= MAX_INVALID_ATTEMPTS) {
@@ -223,25 +235,29 @@ public class CustomerPasswordResetService {
         }
     }
 
-    private void clearIpFailure(String ip) {
+    private void clearIpFailure(String ip)
+    {
         ipAttemptStateMap.remove(ip);
     }
 
-    private static String normalizeIp(String clientIp) {
+    private static String normalizeIp(String clientIp)
+    {
         if (clientIp == null || clientIp.isBlank()) {
             return "unknown";
         }
         return clientIp.trim();
     }
 
-    private static String generateResetCode() {
+    private static String generateResetCode()
+    {
         int floor = (int) Math.pow(10, RESET_CODE_LENGTH - 1);
         int bound = floor * 9;
         int code = floor + SECURE_RANDOM.nextInt(bound);
         return String.format("%06d", code);
     }
 
-    private static boolean isValidCodeFormat(String code) {
+    private static boolean isValidCodeFormat(String code)
+    {
         if (code == null) {
             return false;
         }

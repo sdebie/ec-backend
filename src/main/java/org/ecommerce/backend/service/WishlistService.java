@@ -12,25 +12,29 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 @ApplicationScoped
-public class WishlistService {
-
+public class WishlistService
+{
     private static final Logger LOG = Logger.getLogger(WishlistService.class);
 
-    public enum AddResult {
+    public enum AddResult
+    {
         CREATED,
         ALREADY_EXISTS,
         VARIANT_NOT_FOUND
     }
 
-    public List<UUID> getWishlistVariantIds(UUID customerId) {
+    public List<UUID> getWishlistVariantIds(UUID customerId)
+    {
         List<WishlistItemEntity> items = WishlistItemEntity.findByCustomerId(customerId);
-        return items.stream()
-                .map(item -> item.variant.id)
+        return items
+                .stream()
+                .map(item -> item.getVariant().getId())
                 .collect(Collectors.toList());
     }
 
     @Transactional
-    public AddResult addToWishlist(UUID customerId, UUID variantId) {
+    public AddResult addToWishlist(UUID customerId, UUID variantId)
+    {
         // Check variant existence
         ProductVariantEntity variant = ProductVariantEntity.findById(variantId);
         if (variant == null) {
@@ -47,15 +51,16 @@ public class WishlistService {
         // Persist new entry
         CustomerEntity customer = CustomerEntity.findById(customerId);
         WishlistItemEntity newItem = new WishlistItemEntity();
-        newItem.customer = customer;
-        newItem.variant = variant;
+        newItem.setCustomer(customer);
+        newItem.setVariant(variant);
         newItem.persist();
 
         return AddResult.CREATED;
     }
 
     @Transactional
-    public void removeFromWishlist(UUID customerId, UUID variantId) {
+    public void removeFromWishlist(UUID customerId, UUID variantId)
+    {
         WishlistItemEntity.deleteByCustomerAndVariant(customerId, variantId);
     }
 }

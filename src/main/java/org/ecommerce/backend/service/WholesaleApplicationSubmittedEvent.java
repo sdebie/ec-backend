@@ -10,7 +10,6 @@ import java.util.UUID;
  * notification + applicant confirmation) can render every submitted field without
  * re-reading a detached entity.
  */
-public record WholesaleApplicationSubmittedEvent(
-        UUID applicationId,
-        WholesaleCustomerDto application
-) {}
+public record WholesaleApplicationSubmittedEvent(UUID applicationId, WholesaleCustomerDto application)
+{
+}

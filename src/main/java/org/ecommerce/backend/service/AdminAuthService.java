@@ -23,7 +23,7 @@ public class AdminAuthService
         StaffUserEntity user = StaffUserEntity.findByEmail(loginDto.email());
 
         // 2. Verify password against BCrypt hash
-        if (user != null && user.isActive && BcryptUtil.matches(loginDto.password(), user.passwordHash)) {
+        if (user != null && user.isActive() && BcryptUtil.matches(loginDto.password(), user.getPasswordHash())) {
             return generateToken(user);
         }
         return null;
@@ -33,10 +33,10 @@ public class AdminAuthService
     {
         // 3. Map the Enum role to the JWT 'groups' claim for RBAC
         return Jwt.issuer(issuer)
-                .subject(user.email)
-                .upn(user.email)
-                .groups(new HashSet<>(List.of(user.role.name())))
-                .claim("full_name", user.fullName)
+                .subject(user.getEmail())
+                .upn(user.getEmail())
+                .groups(new HashSet<>(List.of(user.getRole().name())))
+                .claim("full_name", user.getFullName())
                 .expiresIn(Duration.ofHours(8))
                 .sign();
     }
