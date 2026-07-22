@@ -1,16 +1,57 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <style>
-        body { font-family: sans-serif; color: #333; line-height: 1.6; }
-        .container { width: 100%; max-width: 600px; margin: 0 auto; border: 1px solid #eee; padding: 20px; border-radius: 10px; }
-        .header { text-align: center; border-bottom: 2px solid #3b82f6; padding-bottom: 20px; }
-        .details-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
-        .details-table th { text-align: left; padding: 8px 10px; border-bottom: 1px solid #eee; color: #555; width: 150px; vertical-align: top; }
-        .details-table td { padding: 8px 10px; border-bottom: 1px solid #eee; }
-        .footer { font-size: 12px; color: #777; margin-top: 30px; text-align: center; }
+        body {
+            font-family: sans-serif;
+            color: #333;
+            line-height: 1.6;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 600px;
+            margin: 0 auto;
+            border: 1px solid #eee;
+            padding: 20px;
+            border-radius: 10px;
+        }
+
+        .header {
+            text-align: center;
+            border-bottom: 2px solid #3b82f6;
+            padding-bottom: 20px;
+        }
+
+        .details-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+
+        .details-table th {
+            text-align: left;
+            padding: 8px 10px;
+            border-bottom: 1px solid #eee;
+            color: #555;
+            width: 150px;
+            vertical-align: top;
+        }
+
+        .details-table td {
+            padding: 8px 10px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .footer {
+            font-size: 12px;
+            color: #777;
+            margin-top: 30px;
+            text-align: center;
+        }
     </style>
+    <title>Wholesale Application Received</title>
 </head>
 <body>
 <div class="container">
@@ -35,34 +76,34 @@
             <td>{app.companyName}</td>
         </tr>
         {#if app.tradingName}
-        <tr>
-            <th>Trading name</th>
-            <td>{app.tradingName}</td>
-        </tr>
+            <tr>
+                <th>Trading name</th>
+                <td>{app.tradingName}</td>
+            </tr>
         {/if}
         {#if app.regNumber}
-        <tr>
-            <th>Registration no.</th>
-            <td>{app.regNumber}</td>
-        </tr>
+            <tr>
+                <th>Registration no.</th>
+                <td>{app.regNumber}</td>
+            </tr>
         {/if}
         {#if app.vatNumber}
-        <tr>
-            <th>VAT number</th>
-            <td>{app.vatNumber}</td>
-        </tr>
+            <tr>
+                <th>VAT number</th>
+                <td>{app.vatNumber}</td>
+            </tr>
         {/if}
         {#if app.companyEmail}
-        <tr>
-            <th>Company email</th>
-            <td>{app.companyEmail}</td>
-        </tr>
+            <tr>
+                <th>Company email</th>
+                <td>{app.companyEmail}</td>
+            </tr>
         {/if}
         {#if app.companyPhone}
-        <tr>
-            <th>Company phone</th>
-            <td>{app.companyPhone}</td>
-        </tr>
+            <tr>
+                <th>Company phone</th>
+                <td>{app.companyPhone}</td>
+            </tr>
         {/if}
         <tr>
             <th>Applicant</th>
@@ -73,44 +114,44 @@
             <td>{app.applicantEmail}</td>
         </tr>
         {#if app.email}
-        <tr>
-            <th>Account email</th>
-            <td>{app.email}</td>
-        </tr>
+            <tr>
+                <th>Account email</th>
+                <td>{app.email}</td>
+            </tr>
         {/if}
         {#if app.phone}
-        <tr>
-            <th>Phone</th>
-            <td>{app.phone}</td>
-        </tr>
+            <tr>
+                <th>Phone</th>
+                <td>{app.phone}</td>
+            </tr>
         {/if}
         {#if app.financeContactName}
-        <tr>
-            <th>Finance contact</th>
-            <td>{app.financeContactName}{#if app.financeContactEmail} — {app.financeContactEmail}{/if}{#if app.financeContactPhone} — {app.financeContactPhone}{/if}</td>
-        </tr>
+            <tr>
+                <th>Finance contact</th>
+                <td>{app.financeContactName}{#if app.financeContactEmail} — {app.financeContactEmail}{/if}{#if app.financeContactPhone} — {app.financeContactPhone}{/if}</td>
+            </tr>
         {/if}
         <tr>
             <th>PO required</th>
             <td>{#if app.purchaseOrderRequired}Yes{#else}No{/if}</td>
         </tr>
         {#if app.physicalAddressLine1}
-        <tr>
-            <th>Physical address</th>
-            <td>{app.physicalAddressLine1}{#if app.physicalAddressLine2}, {app.physicalAddressLine2}{/if}{#if app.physicalSuburb}, {app.physicalSuburb}{/if}{#if app.physicalCity}, {app.physicalCity}{/if}{#if app.physicalProvince}, {app.physicalProvince}{/if}{#if app.physicalPostalCode}, {app.physicalPostalCode}{/if}</td>
-        </tr>
+            <tr>
+                <th>Physical address</th>
+                <td>{app.physicalAddressLine1}{#if app.physicalAddressLine2}, {app.physicalAddressLine2}{/if}{#if app.physicalSuburb}, {app.physicalSuburb}{/if}{#if app.physicalCity}, {app.physicalCity}{/if}{#if app.physicalProvince}, {app.physicalProvince}{/if}{#if app.physicalPostalCode}, {app.physicalPostalCode}{/if}</td>
+            </tr>
         {/if}
         {#if app.postalAddressLine1}
-        <tr>
-            <th>Postal address</th>
-            <td>{app.postalAddressLine1}{#if app.postalAddressLine2}, {app.postalAddressLine2}{/if}{#if app.postalSuburb}, {app.postalSuburb}{/if}{#if app.postalCity}, {app.postalCity}{/if}{#if app.postalProvince}, {app.postalProvince}{/if}{#if app.postalPostalCode}, {app.postalPostalCode}{/if}</td>
-        </tr>
+            <tr>
+                <th>Postal address</th>
+                <td>{app.postalAddressLine1}{#if app.postalAddressLine2}, {app.postalAddressLine2}{/if}{#if app.postalSuburb}, {app.postalSuburb}{/if}{#if app.postalCity}, {app.postalCity}{/if}{#if app.postalProvince}, {app.postalProvince}{/if}{#if app.postalPostalCode}, {app.postalPostalCode}{/if}</td>
+            </tr>
         {/if}
         {#if app.notes}
-        <tr>
-            <th>Notes</th>
-            <td>{app.notes}</td>
-        </tr>
+            <tr>
+                <th>Notes</th>
+                <td>{app.notes}</td>
+            </tr>
         {/if}
     </table>
 
