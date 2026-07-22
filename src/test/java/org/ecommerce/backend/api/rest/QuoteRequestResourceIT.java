@@ -29,8 +29,8 @@ import static org.mockito.Mockito.*;
  */
 @QuarkusTest
 @DisplayName("QuoteRequestResource — integration tests")
-class QuoteRequestResourceIT {
-
+class QuoteRequestResourceIT
+{
     @InjectMock
     QuoteRequestService quoteRequestService;
 
@@ -38,26 +38,27 @@ class QuoteRequestResourceIT {
     RateLimiterService rateLimiterService;
 
     @BeforeEach
-    void setUp() {
+    void setUp()
+    {
         // Default: allow all requests (under rate limit)
-        when(rateLimiterService.check(anyString(), anyString(), anyInt(), anyLong()))
-                .thenReturn(new RateLimitDecision(true, 0));
+        when(rateLimiterService.check(anyString(), anyString(), anyInt(), anyLong())).thenReturn(new RateLimitDecision(true, 0));
 
         // Default: submit returns a persisted entity
         QuoteRequestEntity entity = new QuoteRequestEntity();
-        entity.id = UUID.randomUUID();
-        entity.name = "Test User";
-        entity.email = "test@example.com";
-        entity.status = QuoteRequestStatusEn.NEW;
-        entity.createdAt = Instant.now();
-        entity.items = new ArrayList<>();
+        entity.setId(UUID.randomUUID());
+        entity.setName("Test User");
+        entity.setEmail("test@example.com");
+        entity.setStatus(QuoteRequestStatusEn.NEW);
+        entity.setCreatedAt(Instant.now());
+        entity.setItems(new ArrayList<>());
 
         when(quoteRequestService.submit(any())).thenReturn(entity);
     }
 
     // ── Helpers ─────────────────────────────────────────────────────────────
 
-    private String validPayload() {
+    private String validPayload()
+    {
         return """
                 {
                     "name": "Jane Doe",
@@ -72,7 +73,8 @@ class QuoteRequestResourceIT {
                 """;
     }
 
-    private String validPayloadWithHoneypot(String honeypotValue) {
+    private String validPayloadWithHoneypot(String honeypotValue)
+    {
         return """
                 {
                     "name": "Jane Doe",
@@ -92,7 +94,8 @@ class QuoteRequestResourceIT {
 
     @Test
     @DisplayName("valid payload returns 201 and invokes service.submit()")
-    void validSubmission_returns201_invokesService() {
+    void validSubmission_returns201_invokesService()
+    {
         given()
                 .contentType(ContentType.JSON)
                 .body(validPayload())
@@ -106,7 +109,8 @@ class QuoteRequestResourceIT {
 
     @Test
     @DisplayName("valid payload with empty honeypot returns 201 and invokes service.submit()")
-    void validSubmission_emptyHoneypot_returns201_invokesService() {
+    void validSubmission_emptyHoneypot_returns201_invokesService()
+    {
         String payload = """
                 {
                     "name": "John Smith",
@@ -135,7 +139,8 @@ class QuoteRequestResourceIT {
 
     @Test
     @DisplayName("null body returns 422")
-    void nullBody_returns422() {
+    void nullBody_returns422()
+    {
         given()
                 .contentType(ContentType.JSON)
                 .when()
@@ -148,7 +153,8 @@ class QuoteRequestResourceIT {
 
     @Test
     @DisplayName("missing required name field returns 422")
-    void missingName_returns422() {
+    void missingName_returns422()
+    {
         String payload = """
                 {
                     "email": "jane@visitor.com",
@@ -171,7 +177,8 @@ class QuoteRequestResourceIT {
 
     @Test
     @DisplayName("invalid email format returns 422")
-    void invalidEmail_returns422() {
+    void invalidEmail_returns422()
+    {
         String payload = """
                 {
                     "name": "Jane Doe",
@@ -195,7 +202,8 @@ class QuoteRequestResourceIT {
 
     @Test
     @DisplayName("empty items list returns 422")
-    void emptyItems_returns422() {
+    void emptyItems_returns422()
+    {
         String payload = """
                 {
                     "name": "Jane Doe",
@@ -217,7 +225,8 @@ class QuoteRequestResourceIT {
 
     @Test
     @DisplayName("item with quantity 0 returns 422")
-    void quantityZero_returns422() {
+    void quantityZero_returns422()
+    {
         String payload = """
                 {
                     "name": "Jane Doe",
@@ -241,7 +250,8 @@ class QuoteRequestResourceIT {
 
     @Test
     @DisplayName("unknown variant returns 422 (service throws IllegalArgumentException)")
-    void unknownVariant_returns422() {
+    void unknownVariant_returns422()
+    {
         when(quoteRequestService.submit(any()))
                 .thenThrow(new IllegalArgumentException("Unknown variant: 00000000-0000-0000-0000-000000000099"));
 
@@ -268,7 +278,8 @@ class QuoteRequestResourceIT {
 
     @Test
     @DisplayName("honeypot field filled returns 201 but does NOT invoke service.submit()")
-    void honeypotFilled_returns201_noSubmit() {
+    void honeypotFilled_returns201_noSubmit()
+    {
         given()
                 .contentType(ContentType.JSON)
                 .body(validPayloadWithHoneypot("http://spam-site.com"))
@@ -282,7 +293,8 @@ class QuoteRequestResourceIT {
 
     @Test
     @DisplayName("honeypot field with whitespace only is treated as empty (not bot)")
-    void honeypotWhitespaceOnly_returns201_invokesService() {
+    void honeypotWhitespaceOnly_returns201_invokesService()
+    {
         String payload = """
                 {
                     "name": "Jane Doe",
@@ -310,7 +322,8 @@ class QuoteRequestResourceIT {
 
     @Test
     @DisplayName("rate limit exceeded returns 429 with Retry-After header")
-    void rateLimitExceeded_returns429_withRetryAfter() {
+    void rateLimitExceeded_returns429_withRetryAfter()
+    {
         when(rateLimiterService.check(anyString(), anyString(), anyInt(), anyLong()))
                 .thenReturn(new RateLimitDecision(false, 3500));
 
@@ -330,7 +343,8 @@ class QuoteRequestResourceIT {
 
     @Test
     @DisplayName("mail failure (via service) still returns 201 — persist succeeds")
-    void mailFailure_stillReturns201() {
+    void mailFailure_stillReturns201()
+    {
         // The mailer is an event observer — its failure never propagates to the resource.
         // This test confirms that even if the service-layer event mechanism were to
         // hypothetically fail, the resource still returns 201 (service.submit() itself
@@ -350,7 +364,8 @@ class QuoteRequestResourceIT {
 
     @Test
     @DisplayName("X-Forwarded-For LAST entry is used for rate-limit key")
-    void xForwardedForUsedForRateLimiting() {
+    void xForwardedForUsedForRateLimiting()
+    {
         given()
                 .contentType(ContentType.JSON)
                 .header("X-Forwarded-For", "203.0.113.42, 10.0.0.1")
@@ -365,7 +380,8 @@ class QuoteRequestResourceIT {
 
     @Test
     @DisplayName("CF-Connecting-IP takes precedence over X-Forwarded-For")
-    void cfConnectingIpTakesPrecedence() {
+    void cfConnectingIpTakesPrecedence()
+    {
         given()
                 .contentType(ContentType.JSON)
                 .header("CF-Connecting-IP", "203.0.113.9")
@@ -381,7 +397,8 @@ class QuoteRequestResourceIT {
 
     @Test
     @DisplayName("falls back to X-Real-IP when X-Forwarded-For is absent")
-    void xRealIpFallback() {
+    void xRealIpFallback()
+    {
         given()
                 .contentType(ContentType.JSON)
                 .header("X-Real-IP", "198.51.100.7")
@@ -398,7 +415,8 @@ class QuoteRequestResourceIT {
 
     @Test
     @DisplayName("endpoint is accessible without authentication token")
-    void endpointIsPublic_noAuthRequired() {
+    void endpointIsPublic_noAuthRequired()
+    {
         given()
                 .contentType(ContentType.JSON)
                 .body(validPayload())
@@ -412,7 +430,8 @@ class QuoteRequestResourceIT {
 
     @Test
     @DisplayName("rate limiter is called with name 'quote-request' and defaults 5/3600")
-    void rateLimiterCalledWithCorrectNameAndDefaults() {
+    void rateLimiterCalledWithCorrectNameAndDefaults()
+    {
         given()
                 .contentType(ContentType.JSON)
                 .body(validPayload())

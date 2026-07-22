@@ -20,20 +20,20 @@ import static org.mockito.Mockito.*;
 
 /**
  * Feature: featured-products-list, Property 1: Featured Toggle Round-Trip
- *
+ * <p>
  * For any product that is not featured, setFeatured(id, true) then setFeatured(id, false)
  * on the REAL {@link FeaturedProductService} leaves is_featured = false, and each step's
  * DTO reflects the new state.
- *
+ * <p>
  * Exercises the real service via @QuarkusTest + PanacheMock. The property is quantified by
  * iterating every product status and a range of pre-existing featured counts (kept below
  * the cap so the featuring step succeeds).
- *
+ * <p>
  * Validates: Requirements 1.4, 2.1, 2.2
  */
 @QuarkusTest
-class FeaturedToggleRoundTripPropertyTest {
-
+class FeaturedToggleRoundTripPropertyTest
+{
     @Inject
     FeaturedProductService service;
 
@@ -41,13 +41,17 @@ class FeaturedToggleRoundTripPropertyTest {
     ProductRepository productRepository;
 
     @BeforeEach
-    void setUp() {
+    void setUp()
+    {
         PanacheMock.mock(ProductEntity.class);
     }
 
-    /** Property: true-then-false leaves the product not featured, for any status / below-cap count. */
+    /**
+     * Property: true-then-false leaves the product not featured, for any status / below-cap count.
+     */
     @Test
-    void toggleTrueThenFalseLeavesProductNotFeatured() {
+    void toggleTrueThenFalseLeavesProductNotFeatured()
+    {
         long[] existingCounts = {0L, 1L, 25L, 49L};
         for (ProductStatusEn status : ProductStatusEn.values()) {
             for (long existingCount : existingCounts) {
@@ -58,27 +62,28 @@ class FeaturedToggleRoundTripPropertyTest {
                 // Count is only read on the featuring step; keep below cap.
                 when(ProductEntity.count("isFeatured", true)).thenReturn(existingCount);
 
-                assertFalse(product.isFeatured, "Precondition: product starts not featured");
+                assertFalse(product.isFeatured(), "Precondition: product starts not featured");
 
                 FeaturedProductResultDto featured = service.setFeatured(productId, true);
-                assertTrue(featured.featured, "setFeatured(true) should report featured");
-                assertTrue(product.isFeatured, "Product should be featured after step 1");
+                assertTrue(featured.isFeatured(), "setFeatured(true) should report featured");
+                assertTrue(product.isFeatured(), "Product should be featured after step 1");
 
                 FeaturedProductResultDto unfeatured = service.setFeatured(productId, false);
-                assertFalse(unfeatured.featured, "setFeatured(false) should report not featured");
-                assertFalse(product.isFeatured, "Product must be not featured after round-trip");
-                assertEquals(productId.toString(), unfeatured.productId);
+                assertFalse(unfeatured.isFeatured(), "setFeatured(false) should report not featured");
+                assertFalse(product.isFeatured(), "Product must be not featured after round-trip");
+                assertEquals(productId.toString(), unfeatured.getProductId());
             }
         }
     }
 
-    private ProductEntity product(UUID id, String name, ProductStatusEn status) {
+    private ProductEntity product(UUID id, String name, ProductStatusEn status)
+    {
         ProductEntity product = new ProductEntity();
-        product.id = id;
-        product.name = name;
-        product.slug = "p-" + id;
-        product.status = status;
-        product.isFeatured = false;
+        product.setId(id);
+        product.setName(name);
+        product.setSlug("p-" + id);
+        product.setStatus(status);
+        product.setFeatured(false);
         return product;
     }
 }

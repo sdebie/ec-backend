@@ -9,8 +9,6 @@ import org.ecommerce.common.entity.ProductVariantEntity;
 import org.ecommerce.common.entity.QuoteRequestEntity;
 import org.ecommerce.common.entity.QuoteRequestItemEntity;
 import org.ecommerce.common.enums.QuoteRequestStatusEn;
-import org.ecommerce.common.query.FilterRequest;
-import org.ecommerce.common.query.PageRequest;
 import org.ecommerce.common.repository.QuoteRequestRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -39,8 +37,8 @@ import static org.mockito.Mockito.when;
  */
 @QuarkusTest
 @DisplayName("QuoteRequestAdminResource — integration tests")
-class QuoteRequestAdminResourceIT {
-
+class QuoteRequestAdminResourceIT
+{
     @InjectMock
     QuoteRequestRepository quoteRequestRepository;
 
@@ -52,7 +50,8 @@ class QuoteRequestAdminResourceIT {
 
     // ─── JWT Helpers ─────────────────────────────────────────────────────────
 
-    private String generateStaffJwt(String role) {
+    private String generateStaffJwt(String role)
+    {
         return Jwt.subject("staff-" + role.toLowerCase() + "@test.com")
                 .issuer("http://localhost:8080")
                 .groups(role)
@@ -67,98 +66,96 @@ class QuoteRequestAdminResourceIT {
     private static final String QUOTE_REQUEST_COUNT_BODY =
             "{\"query\":\"{ quoteRequestCount }\"}";
 
-    private String quoteRequestDetailBody(UUID id) {
+    private String quoteRequestDetailBody(UUID id)
+    {
         return "{\"query\":\"{ quoteRequest(id: \\\"" + id + "\\\") { id name email phone company message createdAt status statusChangedAt items { variantId productNameSnapshot variantSkuSnapshot quantity } } }\"}";
     }
 
-    private String updateStatusBody(UUID id, String status) {
+    private String updateStatusBody(UUID id, String status)
+    {
         return "{\"query\":\"mutation { updateQuoteRequestStatus(id: \\\"" + id + "\\\", status: \\\"" + status + "\\\") { id status statusChangedAt } }\"}";
     }
 
     // ─── Test Data Setup ────────────────────────────────────────────────────
 
     @BeforeEach
-    void setUp() {
+    void setUp()
+    {
         testRequestId = UUID.randomUUID();
         testEntity = createTestEntity(testRequestId, QuoteRequestStatusEn.NEW);
 
         // Repository mocks
-        when(quoteRequestRepository.findAll(any(), any()))
-                .thenReturn(List.of(testEntity));
-        when(quoteRequestRepository.count(any()))
-                .thenReturn(1L);
-        when(quoteRequestRepository.findById(any(UUID.class)))
-                .thenReturn(testEntity);
+        when(quoteRequestRepository.findAll(any(), any())).thenReturn(List.of(testEntity));
+        when(quoteRequestRepository.count(any())).thenReturn(1L);
+        when(quoteRequestRepository.findById(any(UUID.class))).thenReturn(testEntity);
 
         // Service mocks for valid transitions
         QuoteRequestEntity inProgressEntity = createTestEntity(testRequestId, QuoteRequestStatusEn.IN_PROGRESS);
-        inProgressEntity.statusChangedAt = Instant.parse("2026-07-21T12:00:00Z");
-        when(quoteRequestService.updateStatus(any(UUID.class), eq(QuoteRequestStatusEn.IN_PROGRESS)))
-                .thenReturn(inProgressEntity);
+        inProgressEntity.setStatusChangedAt(Instant.parse("2026-07-21T12:00:00Z"));
+        when(quoteRequestService.updateStatus(any(UUID.class), eq(QuoteRequestStatusEn.IN_PROGRESS))).thenReturn(inProgressEntity);
 
         QuoteRequestEntity closedEntity = createTestEntity(testRequestId, QuoteRequestStatusEn.CLOSED);
-        closedEntity.statusChangedAt = Instant.parse("2026-07-21T13:00:00Z");
-        when(quoteRequestService.updateStatus(any(UUID.class), eq(QuoteRequestStatusEn.CLOSED)))
-                .thenReturn(closedEntity);
+        closedEntity.setStatusChangedAt(Instant.parse("2026-07-21T13:00:00Z"));
+        when(quoteRequestService.updateStatus(any(UUID.class), eq(QuoteRequestStatusEn.CLOSED))).thenReturn(closedEntity);
 
         // Invalid transition
-        when(quoteRequestService.updateStatus(any(UUID.class), eq(QuoteRequestStatusEn.NEW)))
-                .thenThrow(new InvalidQuoteStatusTransitionException(
-                        QuoteRequestStatusEn.IN_PROGRESS, QuoteRequestStatusEn.NEW));
+        when(quoteRequestService.updateStatus(any(UUID.class), eq(QuoteRequestStatusEn.NEW))).thenThrow(new InvalidQuoteStatusTransitionException(QuoteRequestStatusEn.IN_PROGRESS, QuoteRequestStatusEn.NEW));
     }
 
-    private QuoteRequestEntity createTestEntity(UUID id, QuoteRequestStatusEn status) {
+    private QuoteRequestEntity createTestEntity(UUID id, QuoteRequestStatusEn status)
+    {
         QuoteRequestEntity entity = new QuoteRequestEntity();
-        entity.id = id;
-        entity.name = "John Doe";
-        entity.email = "john@example.com";
-        entity.phone = "+27123456789";
-        entity.company = "Acme Corp";
-        entity.message = "Need bulk pricing";
-        entity.status = status;
-        entity.createdAt = Instant.parse("2026-07-21T10:00:00Z");
-        entity.statusChangedAt = null;
+        entity.setId(id);
+        entity.setName("John Doe");
+        entity.setEmail("john@example.com");
+        entity.setPhone("+27123456789");
+        entity.setCompany("Acme Corp");
+        entity.setMessage("Need bulk pricing");
+        entity.setStatus(status);
+        entity.setCreatedAt(Instant.parse("2026-07-21T10:00:00Z"));
+        entity.setStatusChangedAt(null);
 
         QuoteRequestItemEntity item1 = new QuoteRequestItemEntity();
-        item1.id = UUID.randomUUID();
-        item1.quoteRequest = entity;
-        item1.variant = createMockVariant();
-        item1.productNameSnapshot = "Widget Pro";
-        item1.variantSkuSnapshot = "WP-001";
-        item1.quantity = 10;
+        item1.setId(UUID.randomUUID());
+        item1.setQuoteRequest(entity);
+        item1.setVariant(createMockVariant());
+        item1.setProductNameSnapshot("Widget Pro");
+        item1.setVariantSkuSnapshot("WP-001");
+        item1.setQuantity(10);
 
         QuoteRequestItemEntity item2 = new QuoteRequestItemEntity();
-        item2.id = UUID.randomUUID();
-        item2.quoteRequest = entity;
-        item2.variant = createMockVariant();
-        item2.productNameSnapshot = "Gadget Plus";
-        item2.variantSkuSnapshot = "GP-002";
-        item2.quantity = 5;
+        item2.setId(UUID.randomUUID());
+        item2.setQuoteRequest(entity);
+        item2.setVariant(createMockVariant());
+        item2.setProductNameSnapshot("Gadget Plus");
+        item2.setVariantSkuSnapshot("GP-002");
+        item2.setQuantity(5);
 
-        entity.items = new ArrayList<>(List.of(item1, item2));
+        entity.setItems(new ArrayList<>(List.of(item1, item2)));
         return entity;
     }
 
-    private ProductVariantEntity createMockVariant() {
+    private ProductVariantEntity createMockVariant()
+    {
         ProductVariantEntity variant = new ProductVariantEntity();
-        variant.id = UUID.randomUUID();
+        variant.setId(UUID.randomUUID());
         return variant;
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
     // allQuoteRequests — role matrix
     // ═══════════════════════════════════════════════════════════════════════════
-
     @Test
     @DisplayName("allQuoteRequests — SUPER_ADMIN succeeds")
-    void allQuoteRequests_superAdmin_succeeds() {
+    void allQuoteRequests_superAdmin_succeeds()
+    {
         given()
                 .header("Authorization", "Bearer " + generateStaffJwt("SUPER_ADMIN"))
                 .contentType("application/json")
                 .body(ALL_QUOTE_REQUESTS_BODY)
-        .when()
+                .when()
                 .post("/api/graphql")
-        .then()
+                .then()
                 .statusCode(200)
                 .body("errors", nullValue())
                 .body("data.allQuoteRequests", hasSize(1))
@@ -170,14 +167,15 @@ class QuoteRequestAdminResourceIT {
 
     @Test
     @DisplayName("allQuoteRequests — ORDER_MANAGER succeeds")
-    void allQuoteRequests_orderManager_succeeds() {
+    void allQuoteRequests_orderManager_succeeds()
+    {
         given()
                 .header("Authorization", "Bearer " + generateStaffJwt("ORDER_MANAGER"))
                 .contentType("application/json")
                 .body(ALL_QUOTE_REQUESTS_BODY)
-        .when()
+                .when()
                 .post("/api/graphql")
-        .then()
+                .then()
                 .statusCode(200)
                 .body("errors", nullValue())
                 .body("data.allQuoteRequests", hasSize(1));
@@ -185,14 +183,15 @@ class QuoteRequestAdminResourceIT {
 
     @Test
     @DisplayName("allQuoteRequests — VIEWER succeeds")
-    void allQuoteRequests_viewer_succeeds() {
+    void allQuoteRequests_viewer_succeeds()
+    {
         given()
                 .header("Authorization", "Bearer " + generateStaffJwt("VIEWER"))
                 .contentType("application/json")
                 .body(ALL_QUOTE_REQUESTS_BODY)
-        .when()
+                .when()
                 .post("/api/graphql")
-        .then()
+                .then()
                 .statusCode(200)
                 .body("errors", nullValue())
                 .body("data.allQuoteRequests", hasSize(1));
@@ -200,14 +199,15 @@ class QuoteRequestAdminResourceIT {
 
     @Test
     @DisplayName("allQuoteRequests — CATALOG_MANAGER forbidden")
-    void allQuoteRequests_catalogManager_forbidden() {
+    void allQuoteRequests_catalogManager_forbidden()
+    {
         given()
                 .header("Authorization", "Bearer " + generateStaffJwt("CATALOG_MANAGER"))
                 .contentType("application/json")
                 .body(ALL_QUOTE_REQUESTS_BODY)
-        .when()
+                .when()
                 .post("/api/graphql")
-        .then()
+                .then()
                 .statusCode(200)
                 .body("errors", not(empty()))
                 .body("errors[0].extensions.code", equalTo("forbidden"));
@@ -215,13 +215,14 @@ class QuoteRequestAdminResourceIT {
 
     @Test
     @DisplayName("allQuoteRequests — anonymous unauthorized")
-    void allQuoteRequests_anonymous_unauthorized() {
+    void allQuoteRequests_anonymous_unauthorized()
+    {
         given()
                 .contentType("application/json")
                 .body(ALL_QUOTE_REQUESTS_BODY)
-        .when()
+                .when()
                 .post("/api/graphql")
-        .then()
+                .then()
                 .statusCode(200)
                 .body("errors", not(empty()))
                 .body("errors[0].extensions.code", equalTo("unauthorized"));
@@ -233,14 +234,15 @@ class QuoteRequestAdminResourceIT {
 
     @Test
     @DisplayName("quoteRequestCount — SUPER_ADMIN succeeds")
-    void quoteRequestCount_superAdmin_succeeds() {
+    void quoteRequestCount_superAdmin_succeeds()
+    {
         given()
                 .header("Authorization", "Bearer " + generateStaffJwt("SUPER_ADMIN"))
                 .contentType("application/json")
                 .body(QUOTE_REQUEST_COUNT_BODY)
-        .when()
+                .when()
                 .post("/api/graphql")
-        .then()
+                .then()
                 .statusCode(200)
                 .body("errors", nullValue())
                 .body("data.quoteRequestCount", equalTo(1));
@@ -248,14 +250,15 @@ class QuoteRequestAdminResourceIT {
 
     @Test
     @DisplayName("quoteRequestCount — ORDER_MANAGER succeeds")
-    void quoteRequestCount_orderManager_succeeds() {
+    void quoteRequestCount_orderManager_succeeds()
+    {
         given()
                 .header("Authorization", "Bearer " + generateStaffJwt("ORDER_MANAGER"))
                 .contentType("application/json")
                 .body(QUOTE_REQUEST_COUNT_BODY)
-        .when()
+                .when()
                 .post("/api/graphql")
-        .then()
+                .then()
                 .statusCode(200)
                 .body("errors", nullValue())
                 .body("data.quoteRequestCount", equalTo(1));
@@ -263,14 +266,15 @@ class QuoteRequestAdminResourceIT {
 
     @Test
     @DisplayName("quoteRequestCount — VIEWER succeeds")
-    void quoteRequestCount_viewer_succeeds() {
+    void quoteRequestCount_viewer_succeeds()
+    {
         given()
                 .header("Authorization", "Bearer " + generateStaffJwt("VIEWER"))
                 .contentType("application/json")
                 .body(QUOTE_REQUEST_COUNT_BODY)
-        .when()
+                .when()
                 .post("/api/graphql")
-        .then()
+                .then()
                 .statusCode(200)
                 .body("errors", nullValue())
                 .body("data.quoteRequestCount", equalTo(1));
@@ -278,14 +282,15 @@ class QuoteRequestAdminResourceIT {
 
     @Test
     @DisplayName("quoteRequestCount — CATALOG_MANAGER forbidden")
-    void quoteRequestCount_catalogManager_forbidden() {
+    void quoteRequestCount_catalogManager_forbidden()
+    {
         given()
                 .header("Authorization", "Bearer " + generateStaffJwt("CATALOG_MANAGER"))
                 .contentType("application/json")
                 .body(QUOTE_REQUEST_COUNT_BODY)
-        .when()
+                .when()
                 .post("/api/graphql")
-        .then()
+                .then()
                 .statusCode(200)
                 .body("errors", not(empty()))
                 .body("errors[0].extensions.code", equalTo("forbidden"));
@@ -293,13 +298,14 @@ class QuoteRequestAdminResourceIT {
 
     @Test
     @DisplayName("quoteRequestCount — anonymous unauthorized")
-    void quoteRequestCount_anonymous_unauthorized() {
+    void quoteRequestCount_anonymous_unauthorized()
+    {
         given()
                 .contentType("application/json")
                 .body(QUOTE_REQUEST_COUNT_BODY)
-        .when()
+                .when()
                 .post("/api/graphql")
-        .then()
+                .then()
                 .statusCode(200)
                 .body("errors", not(empty()))
                 .body("errors[0].extensions.code", equalTo("unauthorized"));
@@ -311,14 +317,15 @@ class QuoteRequestAdminResourceIT {
 
     @Test
     @DisplayName("quoteRequest — SUPER_ADMIN full detail returned")
-    void quoteRequest_superAdmin_fullDetail() {
+    void quoteRequest_superAdmin_fullDetail()
+    {
         given()
                 .header("Authorization", "Bearer " + generateStaffJwt("SUPER_ADMIN"))
                 .contentType("application/json")
                 .body(quoteRequestDetailBody(testRequestId))
-        .when()
+                .when()
                 .post("/api/graphql")
-        .then()
+                .then()
                 .statusCode(200)
                 .body("errors", nullValue())
                 .body("data.quoteRequest.id", equalTo(testRequestId.toString()))
@@ -336,14 +343,15 @@ class QuoteRequestAdminResourceIT {
 
     @Test
     @DisplayName("quoteRequest — ORDER_MANAGER succeeds")
-    void quoteRequest_orderManager_succeeds() {
+    void quoteRequest_orderManager_succeeds()
+    {
         given()
                 .header("Authorization", "Bearer " + generateStaffJwt("ORDER_MANAGER"))
                 .contentType("application/json")
                 .body(quoteRequestDetailBody(testRequestId))
-        .when()
+                .when()
                 .post("/api/graphql")
-        .then()
+                .then()
                 .statusCode(200)
                 .body("errors", nullValue())
                 .body("data.quoteRequest.id", equalTo(testRequestId.toString()));
@@ -351,14 +359,15 @@ class QuoteRequestAdminResourceIT {
 
     @Test
     @DisplayName("quoteRequest — VIEWER succeeds")
-    void quoteRequest_viewer_succeeds() {
+    void quoteRequest_viewer_succeeds()
+    {
         given()
                 .header("Authorization", "Bearer " + generateStaffJwt("VIEWER"))
                 .contentType("application/json")
                 .body(quoteRequestDetailBody(testRequestId))
-        .when()
+                .when()
                 .post("/api/graphql")
-        .then()
+                .then()
                 .statusCode(200)
                 .body("errors", nullValue())
                 .body("data.quoteRequest.id", equalTo(testRequestId.toString()));
@@ -366,14 +375,15 @@ class QuoteRequestAdminResourceIT {
 
     @Test
     @DisplayName("quoteRequest — CATALOG_MANAGER forbidden")
-    void quoteRequest_catalogManager_forbidden() {
+    void quoteRequest_catalogManager_forbidden()
+    {
         given()
                 .header("Authorization", "Bearer " + generateStaffJwt("CATALOG_MANAGER"))
                 .contentType("application/json")
                 .body(quoteRequestDetailBody(testRequestId))
-        .when()
+                .when()
                 .post("/api/graphql")
-        .then()
+                .then()
                 .statusCode(200)
                 .body("errors", not(empty()))
                 .body("errors[0].extensions.code", equalTo("forbidden"));
@@ -381,13 +391,14 @@ class QuoteRequestAdminResourceIT {
 
     @Test
     @DisplayName("quoteRequest — anonymous unauthorized")
-    void quoteRequest_anonymous_unauthorized() {
+    void quoteRequest_anonymous_unauthorized()
+    {
         given()
                 .contentType("application/json")
                 .body(quoteRequestDetailBody(testRequestId))
-        .when()
+                .when()
                 .post("/api/graphql")
-        .then()
+                .then()
                 .statusCode(200)
                 .body("errors", not(empty()))
                 .body("errors[0].extensions.code", equalTo("unauthorized"));
@@ -399,14 +410,15 @@ class QuoteRequestAdminResourceIT {
 
     @Test
     @DisplayName("updateQuoteRequestStatus — SUPER_ADMIN succeeds")
-    void updateStatus_superAdmin_succeeds() {
+    void updateStatus_superAdmin_succeeds()
+    {
         given()
                 .header("Authorization", "Bearer " + generateStaffJwt("SUPER_ADMIN"))
                 .contentType("application/json")
                 .body(updateStatusBody(testRequestId, "IN_PROGRESS"))
-        .when()
+                .when()
                 .post("/api/graphql")
-        .then()
+                .then()
                 .statusCode(200)
                 .body("errors", nullValue())
                 .body("data.updateQuoteRequestStatus.id", equalTo(testRequestId.toString()))
@@ -415,14 +427,15 @@ class QuoteRequestAdminResourceIT {
 
     @Test
     @DisplayName("updateQuoteRequestStatus — ORDER_MANAGER succeeds")
-    void updateStatus_orderManager_succeeds() {
+    void updateStatus_orderManager_succeeds()
+    {
         given()
                 .header("Authorization", "Bearer " + generateStaffJwt("ORDER_MANAGER"))
                 .contentType("application/json")
                 .body(updateStatusBody(testRequestId, "IN_PROGRESS"))
-        .when()
+                .when()
                 .post("/api/graphql")
-        .then()
+                .then()
                 .statusCode(200)
                 .body("errors", nullValue())
                 .body("data.updateQuoteRequestStatus.id", equalTo(testRequestId.toString()))
@@ -431,14 +444,15 @@ class QuoteRequestAdminResourceIT {
 
     @Test
     @DisplayName("updateQuoteRequestStatus — VIEWER forbidden")
-    void updateStatus_viewer_forbidden() {
+    void updateStatus_viewer_forbidden()
+    {
         given()
                 .header("Authorization", "Bearer " + generateStaffJwt("VIEWER"))
                 .contentType("application/json")
                 .body(updateStatusBody(testRequestId, "IN_PROGRESS"))
-        .when()
+                .when()
                 .post("/api/graphql")
-        .then()
+                .then()
                 .statusCode(200)
                 .body("errors", not(empty()))
                 .body("errors[0].extensions.code", equalTo("forbidden"));
@@ -446,14 +460,15 @@ class QuoteRequestAdminResourceIT {
 
     @Test
     @DisplayName("updateQuoteRequestStatus — CATALOG_MANAGER forbidden")
-    void updateStatus_catalogManager_forbidden() {
+    void updateStatus_catalogManager_forbidden()
+    {
         given()
                 .header("Authorization", "Bearer " + generateStaffJwt("CATALOG_MANAGER"))
                 .contentType("application/json")
                 .body(updateStatusBody(testRequestId, "IN_PROGRESS"))
-        .when()
+                .when()
                 .post("/api/graphql")
-        .then()
+                .then()
                 .statusCode(200)
                 .body("errors", not(empty()))
                 .body("errors[0].extensions.code", equalTo("forbidden"));
@@ -461,13 +476,14 @@ class QuoteRequestAdminResourceIT {
 
     @Test
     @DisplayName("updateQuoteRequestStatus — anonymous unauthorized")
-    void updateStatus_anonymous_unauthorized() {
+    void updateStatus_anonymous_unauthorized()
+    {
         given()
                 .contentType("application/json")
                 .body(updateStatusBody(testRequestId, "IN_PROGRESS"))
-        .when()
+                .when()
                 .post("/api/graphql")
-        .then()
+                .then()
                 .statusCode(200)
                 .body("errors", not(empty()))
                 .body("errors[0].extensions.code", equalTo("unauthorized"));
@@ -479,14 +495,15 @@ class QuoteRequestAdminResourceIT {
 
     @Test
     @DisplayName("Transition NEW → IN_PROGRESS succeeds")
-    void transition_newToInProgress_succeeds() {
+    void transition_newToInProgress_succeeds()
+    {
         given()
                 .header("Authorization", "Bearer " + generateStaffJwt("SUPER_ADMIN"))
                 .contentType("application/json")
                 .body(updateStatusBody(testRequestId, "IN_PROGRESS"))
-        .when()
+                .when()
                 .post("/api/graphql")
-        .then()
+                .then()
                 .statusCode(200)
                 .body("errors", nullValue())
                 .body("data.updateQuoteRequestStatus.status", equalTo("IN_PROGRESS"));
@@ -494,14 +511,15 @@ class QuoteRequestAdminResourceIT {
 
     @Test
     @DisplayName("Transition NEW → CLOSED (skip) succeeds")
-    void transition_newToClosed_succeeds() {
+    void transition_newToClosed_succeeds()
+    {
         given()
                 .header("Authorization", "Bearer " + generateStaffJwt("SUPER_ADMIN"))
                 .contentType("application/json")
                 .body(updateStatusBody(testRequestId, "CLOSED"))
-        .when()
+                .when()
                 .post("/api/graphql")
-        .then()
+                .then()
                 .statusCode(200)
                 .body("errors", nullValue())
                 .body("data.updateQuoteRequestStatus.status", equalTo("CLOSED"));
@@ -509,14 +527,15 @@ class QuoteRequestAdminResourceIT {
 
     @Test
     @DisplayName("Invalid transition returns error")
-    void transition_invalid_returnsError() {
+    void transition_invalid_returnsError()
+    {
         given()
                 .header("Authorization", "Bearer " + generateStaffJwt("SUPER_ADMIN"))
                 .contentType("application/json")
                 .body(updateStatusBody(testRequestId, "NEW"))
-        .when()
+                .when()
                 .post("/api/graphql")
-        .then()
+                .then()
                 .statusCode(200)
                 .body("errors", not(empty()))
                 .body("errors[0].message", containsString("Invalid status transition"));
@@ -524,14 +543,15 @@ class QuoteRequestAdminResourceIT {
 
     @Test
     @DisplayName("Invalid status string returns error")
-    void transition_invalidStatusString_returnsError() {
+    void transition_invalidStatusString_returnsError()
+    {
         given()
                 .header("Authorization", "Bearer " + generateStaffJwt("SUPER_ADMIN"))
                 .contentType("application/json")
                 .body(updateStatusBody(testRequestId, "INVALID_STATUS"))
-        .when()
+                .when()
                 .post("/api/graphql")
-        .then()
+                .then()
                 .statusCode(200)
                 .body("errors", not(empty()))
                 .body("errors[0].message", containsString("Invalid status"));
@@ -543,29 +563,30 @@ class QuoteRequestAdminResourceIT {
 
     @Test
     @DisplayName("Detail with deleted variant renders snapshot fields with null variantId")
-    void variantDeleted_rendersFromSnapshot() {
+    void variantDeleted_rendersFromSnapshot()
+    {
         UUID requestId = UUID.randomUUID();
         QuoteRequestEntity entity = new QuoteRequestEntity();
-        entity.id = requestId;
-        entity.name = "Jane Doe";
-        entity.email = "jane@example.com";
-        entity.phone = null;
-        entity.company = "Deleted Inc";
-        entity.message = null;
-        entity.status = QuoteRequestStatusEn.IN_PROGRESS;
-        entity.createdAt = Instant.parse("2026-07-20T09:00:00Z");
-        entity.statusChangedAt = Instant.parse("2026-07-21T11:00:00Z");
+        entity.setId(requestId);
+        entity.setName("Jane Doe");
+        entity.setEmail("jane@example.com");
+        entity.setPhone(null);
+        entity.setCompany("Deleted Inc");
+        entity.setMessage(null);
+        entity.setStatus(QuoteRequestStatusEn.IN_PROGRESS);
+        entity.setCreatedAt(Instant.parse("2026-07-20T09:00:00Z"));
+        entity.setStatusChangedAt(Instant.parse("2026-07-21T11:00:00Z"));
 
         // Item with deleted variant (variant = null, ON DELETE SET NULL)
         QuoteRequestItemEntity deletedItem = new QuoteRequestItemEntity();
-        deletedItem.id = UUID.randomUUID();
-        deletedItem.quoteRequest = entity;
-        deletedItem.variant = null; // variant was deleted
-        deletedItem.productNameSnapshot = "Discontinued Product";
-        deletedItem.variantSkuSnapshot = "DISC-999";
-        deletedItem.quantity = 3;
+        deletedItem.setId(UUID.randomUUID());
+        deletedItem.setQuoteRequest(entity);
+        deletedItem.setVariant(null); // variant was deleted
+        deletedItem.setProductNameSnapshot("Discontinued Product");
+        deletedItem.setVariantSkuSnapshot("DISC-999");
+        deletedItem.setQuantity(3);
 
-        entity.items = new ArrayList<>(List.of(deletedItem));
+        entity.setItems(new ArrayList<>(List.of(deletedItem)));
 
         when(quoteRequestRepository.findById(requestId)).thenReturn(entity);
 
@@ -573,9 +594,9 @@ class QuoteRequestAdminResourceIT {
                 .header("Authorization", "Bearer " + generateStaffJwt("SUPER_ADMIN"))
                 .contentType("application/json")
                 .body(quoteRequestDetailBody(requestId))
-        .when()
+                .when()
                 .post("/api/graphql")
-        .then()
+                .then()
                 .statusCode(200)
                 .body("errors", nullValue())
                 .body("data.quoteRequest.id", equalTo(requestId.toString()))

@@ -7,7 +7,9 @@ import org.ecommerce.backend.mapper.ProductImportParser.StagedProductCsvRow;
 import org.ecommerce.common.entity.*;
 import org.ecommerce.common.enums.ProductImportValidationStatusEn;
 import org.ecommerce.common.repository.*;
-import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -17,7 +19,8 @@ import java.util.*;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 /**
  * Example-based test verifying that the decomposed import pipeline
@@ -31,8 +34,8 @@ import static org.mockito.Mockito.*;
  *
  * <p><b>Validates: Requirements 3.2, 4.1, 4.2</b>
  */
-class ProductImportErrorAccumulationEquivalenceTest {
-
+class ProductImportErrorAccumulationEquivalenceTest
+{
     private ProductImportParser parser;
     private ProductImportValidator validator;
 
@@ -43,7 +46,8 @@ class ProductImportErrorAccumulationEquivalenceTest {
     private ProductImageRepository productImageRepository;
 
     @BeforeEach
-    void setUp() throws Exception {
+    void setUp() throws Exception
+    {
         parser = new ProductImportParser();
         validator = new ProductImportValidator();
 
@@ -68,11 +72,12 @@ class ProductImportErrorAccumulationEquivalenceTest {
 
     @Test
     @DisplayName("Decomposed pipeline: all-valid rows produce VALID status and null errors for each row")
-    void allValidRows_noErrorsAccumulated() throws Exception {
+    void allValidRows_noErrorsAccumulated() throws Exception
+    {
         CategoryEntity category = new CategoryEntity();
-        category.slug = "apparel";
+        category.setSlug("apparel");
         BrandEntity brand = new BrandEntity();
-        brand.slug = "nike";
+        brand.setSlug("nike");
 
         when(categoryRepository.findBySlugIgnoreCase("apparel")).thenReturn(category);
         when(brandRepository.findBySlugIgnoreCase("nike")).thenReturn(brand);
@@ -100,11 +105,12 @@ class ProductImportErrorAccumulationEquivalenceTest {
 
     @Test
     @DisplayName("Decomposed pipeline: some-invalid rows produce per-row errors matching monolithic baseline")
-    void someInvalidRows_errorsMatchMonolithicBaseline() throws Exception {
+    void someInvalidRows_errorsMatchMonolithicBaseline() throws Exception
+    {
         CategoryEntity category = new CategoryEntity();
-        category.slug = "apparel";
+        category.setSlug("apparel");
         BrandEntity brand = new BrandEntity();
-        brand.slug = "nike";
+        brand.setSlug("nike");
 
         when(categoryRepository.findBySlugIgnoreCase("apparel")).thenReturn(category);
         when(categoryRepository.findBySlugIgnoreCase("bad-cat")).thenReturn(null);
@@ -143,11 +149,12 @@ class ProductImportErrorAccumulationEquivalenceTest {
 
     @Test
     @DisplayName("Decomposed pipeline: malformed stock produces parse error in final error string")
-    void malformedStock_parseErrorCarriedThrough() throws Exception {
+    void malformedStock_parseErrorCarriedThrough() throws Exception
+    {
         CategoryEntity category = new CategoryEntity();
-        category.slug = "apparel";
+        category.setSlug("apparel");
         BrandEntity brand = new BrandEntity();
-        brand.slug = "nike";
+        brand.setSlug("nike");
 
         when(categoryRepository.findBySlugIgnoreCase("apparel")).thenReturn(category);
         when(brandRepository.findBySlugIgnoreCase("nike")).thenReturn(brand);
@@ -171,7 +178,8 @@ class ProductImportErrorAccumulationEquivalenceTest {
 
     @Test
     @DisplayName("Decomposed pipeline: parse error + validation errors both accumulate in correct order")
-    void parseAndValidationErrors_accumulateInOrder() throws Exception {
+    void parseAndValidationErrors_accumulateInOrder() throws Exception
+    {
         when(categoryRepository.findBySlugIgnoreCase(any())).thenReturn(null);
         when(brandRepository.findBySlugIgnoreCase(any())).thenReturn(null);
         when(productVariantRepository.findBySku(any())).thenReturn(null);
@@ -204,30 +212,31 @@ class ProductImportErrorAccumulationEquivalenceTest {
 
     @Test
     @DisplayName("Decomposed pipeline: SKU belonging to another product produces conflict error")
-    void skuBelongsToAnotherProduct_conflictError() throws Exception {
+    void skuBelongsToAnotherProduct_conflictError() throws Exception
+    {
         CategoryEntity category = new CategoryEntity();
-        category.slug = "apparel";
+        category.setSlug("apparel");
         BrandEntity brand = new BrandEntity();
-        brand.slug = "nike";
+        brand.setSlug("nike");
 
         when(categoryRepository.findBySlugIgnoreCase("apparel")).thenReturn(category);
         when(brandRepository.findBySlugIgnoreCase("nike")).thenReturn(brand);
 
         // SKU-CONFLICT belongs to Product A, but the CSV references Product B
         ProductEntity productA = new ProductEntity();
-        productA.id = UUID.randomUUID();
-        productA.name = "Product A";
+        productA.setId(UUID.randomUUID());
+        productA.setName("Product A");
         ProductVariantEntity variantA = new ProductVariantEntity();
-        variantA.id = UUID.randomUUID();
-        variantA.product = productA;
-        variantA.stockQuantity = 10;
+        variantA.setId(UUID.randomUUID());
+        variantA.setProduct(productA);
+        variantA.setStockQuantity(10);
         when(productVariantRepository.findBySku("SKU-CONFLICT")).thenReturn(variantA);
-        when(productImageRepository.findByVariantId(variantA.id)).thenReturn(List.of());
+        when(productImageRepository.findByVariantId(variantA.getId())).thenReturn(List.of());
 
         ProductEntity productB = new ProductEntity();
-        productB.id = UUID.randomUUID();
-        productB.name = "Product B";
-        productB.slug = "product-b";
+        productB.setId(UUID.randomUUID());
+        productB.setName("Product B");
+        productB.setSlug("product-b");
         when(productRepository.findBySlugIgnoreCase("product-b")).thenReturn(productB);
 
         String csv = "product_slug,sku,name,description,categories_slug,short_description,stock,brand_slug,images,attributes\n"
@@ -246,7 +255,8 @@ class ProductImportErrorAccumulationEquivalenceTest {
 
     @Test
     @DisplayName("Decomposed pipeline: empty file (header only) produces no results")
-    void emptyFile_noResults() throws Exception {
+    void emptyFile_noResults() throws Exception
+    {
         String csv = "product_slug,sku,name,description,categories_slug,short_description,stock,brand_slug,images,attributes\n";
 
         List<ValidationResult> results = runDecomposedPipeline(csv);
@@ -260,7 +270,8 @@ class ProductImportErrorAccumulationEquivalenceTest {
 
     @Test
     @DisplayName("Decomposed pipeline: multiple validation errors joined with '; ' separator")
-    void multipleErrors_joinedWithSemicolonSpace() throws Exception {
+    void multipleErrors_joinedWithSemicolonSpace() throws Exception
+    {
         when(productVariantRepository.findBySku(any())).thenReturn(null);
         when(productRepository.findBySlugIgnoreCase(any())).thenReturn(null);
         when(productRepository.findByNameIgnoreCase(any())).thenReturn(null);
@@ -290,11 +301,12 @@ class ProductImportErrorAccumulationEquivalenceTest {
 
     @Test
     @DisplayName("Decomposed pipeline: mixed file preserves per-row error isolation and order")
-    void mixedFile_preservesPerRowIsolation() throws Exception {
+    void mixedFile_preservesPerRowIsolation() throws Exception
+    {
         CategoryEntity category = new CategoryEntity();
-        category.slug = "apparel";
+        category.setSlug("apparel");
         BrandEntity brand = new BrandEntity();
-        brand.slug = "nike";
+        brand.setSlug("nike");
 
         when(categoryRepository.findBySlugIgnoreCase("apparel")).thenReturn(category);
         when(categoryRepository.findBySlugIgnoreCase("bad-cat")).thenReturn(null);
@@ -338,7 +350,8 @@ class ProductImportErrorAccumulationEquivalenceTest {
 
     @Test
     @DisplayName("Decomposed pipeline: missing category, brand, and SKU produce errors in order")
-    void missingRequiredFields_errorsInOrder() throws Exception {
+    void missingRequiredFields_errorsInOrder() throws Exception
+    {
         when(productVariantRepository.findBySku(null)).thenReturn(null);
         when(productRepository.findBySlugIgnoreCase(any())).thenReturn(null);
         when(productRepository.findByNameIgnoreCase(any())).thenReturn(null);
@@ -366,23 +379,24 @@ class ProductImportErrorAccumulationEquivalenceTest {
      * validator.applyValidationResults. This is the same sequence the orchestrating
      * service performs, but called directly on the extracted collaborators.
      */
-    private List<ValidationResult> runDecomposedPipeline(String csv) throws IOException {
+    private List<ValidationResult> runDecomposedPipeline(String csv) throws IOException
+    {
         InputStream inputStream = new ByteArrayInputStream(csv.getBytes(StandardCharsets.UTF_8));
         List<StagedProductCsvRow> parsedRows = parser.parse(inputStream);
 
         List<ValidationResult> results = new ArrayList<>();
         for (StagedProductCsvRow row : parsedRows) {
             ProductUploadStagedEntity staged = new ProductUploadStagedEntity();
-            staged.productSlug = row.productSlug();
-            staged.sku = row.sku();
-            staged.name = row.name();
-            staged.description = row.description();
-            staged.categorySlug = normalizeCategorySlugs(row.categorySlug());
-            staged.shortDescription = row.shortDescription();
-            staged.stock = row.stock();
-            staged.brandSlug = row.brandSlug();
-            staged.images = row.images();
-            staged.attributes = row.attributes();
+            staged.setProductSlug(row.productSlug());
+            staged.setSku(row.sku());
+            staged.setName(row.name());
+            staged.setDescription(row.description());
+            staged.setCategorySlug(normalizeCategorySlugs(row.categorySlug()));
+            staged.setShortDescription(row.shortDescription());
+            staged.setStock(row.stock());
+            staged.setBrandSlug(row.brandSlug());
+            staged.setImages(row.images());
+            staged.setAttributes(row.attributes());
 
             // Start with parse errors from the parser step
             List<String> validationErrors = new ArrayList<>(row.validationErrors());
@@ -394,8 +408,8 @@ class ProductImportErrorAccumulationEquivalenceTest {
             validator.applyValidationResults(staged, validationErrors);
 
             results.add(new ValidationResult(
-                    staged.validationStatus,
-                    staged.validationErrors,
+                    staged.getValidationStatus(),
+                    staged.getValidationErrors(),
                     List.copyOf(validationErrors)
             ));
         }
@@ -407,7 +421,8 @@ class ProductImportErrorAccumulationEquivalenceTest {
      * Replicates the service's normalizeCategorySlugs logic.
      * The service normalizes category slugs before passing to the validator.
      */
-    private String normalizeCategorySlugs(String value) {
+    private String normalizeCategorySlugs(String value)
+    {
         if (value == null || value.isBlank()) {
             return null;
         }
@@ -427,10 +442,12 @@ class ProductImportErrorAccumulationEquivalenceTest {
             ProductImportValidationStatusEn status,
             String errorString,
             List<String> errors
-    ) {
+    )
+    {
     }
 
-    private void setField(Object target, String fieldName, Object value) throws Exception {
+    private void setField(Object target, String fieldName, Object value) throws Exception
+    {
         java.lang.reflect.Field field = target.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);
         field.set(target, value);

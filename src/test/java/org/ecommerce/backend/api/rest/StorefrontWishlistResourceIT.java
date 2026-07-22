@@ -27,8 +27,8 @@ import static org.mockito.Mockito.when;
  * Validates: Requirements 4.1, 4.2, 4.3, 4.4, 4.5, 4.6
  */
 @QuarkusTest
-class StorefrontWishlistResourceIT {
-
+class StorefrontWishlistResourceIT
+{
     private static final String CUSTOMER_EMAIL = "wishlist-test@example.com";
 
     @InjectMock
@@ -39,33 +39,35 @@ class StorefrontWishlistResourceIT {
     private UUID existingVariantId;
 
     @BeforeEach
-    void setUp() {
+    void setUp()
+    {
         PanacheMock.mock(CustomerEntity.class);
 
         customerId = UUID.randomUUID();
         existingVariantId = UUID.randomUUID();
 
         UserEntity user = new UserEntity();
-        user.id = UUID.randomUUID();
-        user.email = CUSTOMER_EMAIL;
-        user.passwordHash = "somehash";
-        user.isActive = true;
+        user.setId(UUID.randomUUID());
+        user.setEmail(CUSTOMER_EMAIL);
+        user.setPasswordHash("somehash");
+        user.setActive(true);
 
         customer = new CustomerEntity();
-        customer.id = customerId;
-        customer.user = user;
-        customer.firstName = "Test";
-        customer.lastName = "Customer";
-        customer.shopperType = CustomerTypeEn.RETAILER;
-        customer.status = CustomerStatusEn.ACTIVE;
-        customer.addresses = new ArrayList<>();
-        user.customer = customer;
+        customer.setId(customerId);
+        customer.setUser(user);
+        customer.setFirstName("Test");
+        customer.setLastName("Customer");
+        customer.setShopperType(CustomerTypeEn.RETAILER);
+        customer.setStatus(CustomerStatusEn.ACTIVE);
+        customer.setAddresses(new ArrayList<>());
+        user.setCustomer(customer);
 
         // Mock CustomerEntity.findByEmail (used by resolveCustomerId in the resource)
         when(CustomerEntity.findByEmail(CUSTOMER_EMAIL)).thenReturn(customer);
     }
 
-    private String generateCustomerJwt(String email) {
+    private String generateCustomerJwt(String email)
+    {
         return Jwt.subject(email)
                 .issuer("http://localhost:8080")
                 .groups("customer")
@@ -75,7 +77,8 @@ class StorefrontWishlistResourceIT {
     // ── GET /api/storefront/wishlist ──────────────────────────────────────────
 
     @Test
-    void getWishlist_newCustomer_returnsEmptyList() {
+    void getWishlist_newCustomer_returnsEmptyList()
+    {
         when(wishlistService.getWishlistVariantIds(customerId))
                 .thenReturn(Collections.emptyList());
 
@@ -91,7 +94,8 @@ class StorefrontWishlistResourceIT {
     }
 
     @Test
-    void getWishlist_withoutToken_returns401() {
+    void getWishlist_withoutToken_returns401()
+    {
         given()
                 .when()
                 .get("/api/storefront/wishlist")
@@ -100,7 +104,8 @@ class StorefrontWishlistResourceIT {
     }
 
     @Test
-    void getWishlist_afterAddingItems_returnsCorrectList() {
+    void getWishlist_afterAddingItems_returnsCorrectList()
+    {
         UUID variantId1 = UUID.randomUUID();
         UUID variantId2 = UUID.randomUUID();
 
@@ -123,7 +128,8 @@ class StorefrontWishlistResourceIT {
     // ── POST /api/storefront/wishlist/{variantId} ─────────────────────────────
 
     @Test
-    void addToWishlist_newVariant_returns201() {
+    void addToWishlist_newVariant_returns201()
+    {
         when(wishlistService.addToWishlist(customerId, existingVariantId))
                 .thenReturn(WishlistService.AddResult.CREATED);
 
@@ -138,7 +144,8 @@ class StorefrontWishlistResourceIT {
     }
 
     @Test
-    void addToWishlist_alreadyExists_returns200() {
+    void addToWishlist_alreadyExists_returns200()
+    {
         when(wishlistService.addToWishlist(customerId, existingVariantId))
                 .thenReturn(WishlistService.AddResult.ALREADY_EXISTS);
 
@@ -153,7 +160,8 @@ class StorefrontWishlistResourceIT {
     }
 
     @Test
-    void addToWishlist_nonExistentVariant_returns404() {
+    void addToWishlist_nonExistentVariant_returns404()
+    {
         UUID nonExistentVariantId = UUID.randomUUID();
         when(wishlistService.addToWishlist(customerId, nonExistentVariantId))
                 .thenReturn(WishlistService.AddResult.VARIANT_NOT_FOUND);
@@ -170,7 +178,8 @@ class StorefrontWishlistResourceIT {
     }
 
     @Test
-    void addToWishlist_invalidUuidFormat_returns400() {
+    void addToWishlist_invalidUuidFormat_returns400()
+    {
         String token = generateCustomerJwt(CUSTOMER_EMAIL);
 
         given()
@@ -183,7 +192,8 @@ class StorefrontWishlistResourceIT {
     }
 
     @Test
-    void addToWishlist_withoutToken_returns401() {
+    void addToWishlist_withoutToken_returns401()
+    {
         given()
                 .when()
                 .post("/api/storefront/wishlist/{variantId}", existingVariantId)
@@ -194,7 +204,8 @@ class StorefrontWishlistResourceIT {
     // ── DELETE /api/storefront/wishlist/{variantId} ────────────────────────────
 
     @Test
-    void removeFromWishlist_existingEntry_returns204() {
+    void removeFromWishlist_existingEntry_returns204()
+    {
         // removeFromWishlist is void — no setup needed for "success" case
         String token = generateCustomerJwt(CUSTOMER_EMAIL);
 
@@ -207,7 +218,8 @@ class StorefrontWishlistResourceIT {
     }
 
     @Test
-    void removeFromWishlist_notInWishlist_returns204() {
+    void removeFromWishlist_notInWishlist_returns204()
+    {
         // Idempotent: removing something not in the wishlist still returns 204
         UUID otherVariantId = UUID.randomUUID();
 
@@ -222,7 +234,8 @@ class StorefrontWishlistResourceIT {
     }
 
     @Test
-    void removeFromWishlist_withoutToken_returns401() {
+    void removeFromWishlist_withoutToken_returns401()
+    {
         given()
                 .when()
                 .delete("/api/storefront/wishlist/{variantId}", existingVariantId)
@@ -231,7 +244,8 @@ class StorefrontWishlistResourceIT {
     }
 
     @Test
-    void removeFromWishlist_invalidUuid_returns400() {
+    void removeFromWishlist_invalidUuid_returns400()
+    {
         String token = generateCustomerJwt(CUSTOMER_EMAIL);
 
         given()
@@ -246,7 +260,8 @@ class StorefrontWishlistResourceIT {
     // ── DB state verification (operation sequence) ────────────────────────────
 
     @Test
-    void verifyDbState_afterAddAndGet_wishlistContainsVariant() {
+    void verifyDbState_afterAddAndGet_wishlistContainsVariant()
+    {
         // Simulate add returning CREATED
         when(wishlistService.addToWishlist(customerId, existingVariantId))
                 .thenReturn(WishlistService.AddResult.CREATED);
@@ -276,7 +291,8 @@ class StorefrontWishlistResourceIT {
     }
 
     @Test
-    void verifyDbState_afterDelete_wishlistIsEmpty() {
+    void verifyDbState_afterDelete_wishlistIsEmpty()
+    {
         // Simulate initial state: wishlist has the variant
         when(wishlistService.getWishlistVariantIds(customerId))
                 .thenReturn(List.of(existingVariantId));

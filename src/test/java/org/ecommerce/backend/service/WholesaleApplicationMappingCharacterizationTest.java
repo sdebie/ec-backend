@@ -29,20 +29,20 @@ import static org.mockito.Mockito.when;
 
 /**
  * Characterization tests for wholesale application entity→DTO mapping.
- *
+ * <p>
  * Pins the current output of BOTH:
  * - WholesaleCustomerService.toDetailsDto (via getWholesaleApplicationById)
  * - CustomerAdminService.toApplicationDetailsDto (via adminCustomer)
- *
+ * <p>
  * These two services hand-map the same entity to the same DTO type.
  * This test captures their current behaviour as a baseline before
  * consolidation into a single WholesaleMapper.
- *
+ * <p>
  * Requirements: 4.2, 4.4
  */
 @QuarkusTest
-class WholesaleApplicationMappingCharacterizationTest {
-
+class WholesaleApplicationMappingCharacterizationTest
+{
     @Inject
     WholesaleCustomerService wholesaleCustomerService;
 
@@ -54,7 +54,8 @@ class WholesaleApplicationMappingCharacterizationTest {
 
     @SuppressWarnings("unchecked")
     @BeforeEach
-    void setUp() {
+    void setUp()
+    {
         PanacheMock.mock(CustomerEntity.class);
         PanacheMock.mock(WholesaleApplicationEntity.class);
         PanacheMock.mock(OrderEntity.class);
@@ -63,49 +64,52 @@ class WholesaleApplicationMappingCharacterizationTest {
     // ── Test: Fully populated entity ────────────────────────────────────────
 
     @Test
-    void toDetailsDto_fullyPopulated_pinsAllFields() {
+    void toDetailsDto_fullyPopulated_pinsAllFields()
+    {
         WholesaleApplicationEntity app = buildFullyPopulatedApplication();
 
-        when(wholesaleApplicationRepository.findById(app.id)).thenReturn(app);
+        when(wholesaleApplicationRepository.findById(app.getId())).thenReturn(app);
 
-        WholesaleApplicationDetailsDto result = wholesaleCustomerService.getWholesaleApplicationById(app.id);
+        WholesaleApplicationDetailsDto result = wholesaleCustomerService.getWholesaleApplicationById(app.getId());
 
         assertFullyPopulatedBaseline(result, app);
     }
 
     @Test
     @SuppressWarnings("unchecked")
-    void toApplicationDetailsDto_fullyPopulated_pinsAllFields() {
+    void toApplicationDetailsDto_fullyPopulated_pinsAllFields()
+    {
         UUID customerId = UUID.randomUUID();
         WholesaleApplicationEntity app = buildFullyPopulatedApplication();
 
         CustomerEntity customer = buildCustomerEntity(customerId);
-        app.customer = customer;
+        app.setCustomer(customer);
 
         stubPanacheForAdminCustomer(customerId, customer, app);
 
         AdminCustomerDetailDto detail = customerAdminService.adminCustomer(customerId);
 
-        assertNotNull(detail.wholesaleApplication, "wholesaleApplication should be populated");
-        assertFullyPopulatedBaseline(detail.wholesaleApplication, app);
+        assertNotNull(detail.getWholesaleApplication(), "wholesaleApplication should be populated");
+        assertFullyPopulatedBaseline(detail.getWholesaleApplication(), app);
     }
 
     @Test
-    void bothServices_fullyPopulated_produceIdenticalOutput() {
+    void bothServices_fullyPopulated_produceIdenticalOutput()
+    {
         UUID customerId = UUID.randomUUID();
         WholesaleApplicationEntity app = buildFullyPopulatedApplication();
 
         CustomerEntity customer = buildCustomerEntity(customerId);
-        app.customer = customer;
+        app.setCustomer(customer);
 
         // WholesaleCustomerService path
-        when(wholesaleApplicationRepository.findById(app.id)).thenReturn(app);
-        WholesaleApplicationDetailsDto fromWholesaleService = wholesaleCustomerService.getWholesaleApplicationById(app.id);
+        when(wholesaleApplicationRepository.findById(app.getId())).thenReturn(app);
+        WholesaleApplicationDetailsDto fromWholesaleService = wholesaleCustomerService.getWholesaleApplicationById(app.getId());
 
         // CustomerAdminService path
         stubPanacheForAdminCustomer(customerId, customer, app);
         AdminCustomerDetailDto detail = customerAdminService.adminCustomer(customerId);
-        WholesaleApplicationDetailsDto fromAdminService = detail.wholesaleApplication;
+        WholesaleApplicationDetailsDto fromAdminService = detail.getWholesaleApplication();
 
         assertDtosEqual(fromWholesaleService, fromAdminService);
     }
@@ -113,39 +117,41 @@ class WholesaleApplicationMappingCharacterizationTest {
     // ── Test: Null optional fields ──────────────────────────────────────────
 
     @Test
-    void toDetailsDto_nullOptionalFields_pinsNullsCorrectly() {
+    void toDetailsDto_nullOptionalFields_pinsNullsCorrectly()
+    {
         WholesaleApplicationEntity app = buildMinimalApplication();
 
-        when(wholesaleApplicationRepository.findById(app.id)).thenReturn(app);
+        when(wholesaleApplicationRepository.findById(app.getId())).thenReturn(app);
 
-        WholesaleApplicationDetailsDto result = wholesaleCustomerService.getWholesaleApplicationById(app.id);
+        WholesaleApplicationDetailsDto result = wholesaleCustomerService.getWholesaleApplicationById(app.getId());
 
         assertMinimalBaseline(result, app);
     }
 
     @Test
     @SuppressWarnings("unchecked")
-    void toApplicationDetailsDto_nullOptionalFields_pinsNullsCorrectly() {
+    void toApplicationDetailsDto_nullOptionalFields_pinsNullsCorrectly()
+    {
         UUID customerId = UUID.randomUUID();
         WholesaleApplicationEntity app = buildMinimalApplication();
 
         CustomerEntity customer = buildCustomerEntity(customerId);
-        app.customer = customer;
+        app.setCustomer(customer);
 
         stubPanacheForAdminCustomer(customerId, customer, app);
 
         AdminCustomerDetailDto detail = customerAdminService.adminCustomer(customerId);
 
-        assertNotNull(detail.wholesaleApplication);
+        assertNotNull(detail.getWholesaleApplication());
         // In the admin path, the application was found via customer.id query,
         // so app.customer is set — customerId on DTO reflects the linked customer
-        WholesaleApplicationDetailsDto dto = detail.wholesaleApplication;
-        assertEquals(app.id, dto.getId());
-        assertEquals(app.applicantEmail, dto.getApplicantEmail());
-        assertEquals(app.firstName, dto.getFirstName());
-        assertEquals(app.companyName, dto.getCompanyName());
-        assertEquals(app.status, dto.getStatus());
-        assertEquals(app.createdAt, dto.getCreatedAt());
+        WholesaleApplicationDetailsDto dto = detail.getWholesaleApplication();
+        assertEquals(app.getId(), dto.getId());
+        assertEquals(app.getApplicantEmail(), dto.getApplicantEmail());
+        assertEquals(app.getFirstName(), dto.getFirstName());
+        assertEquals(app.getCompanyName(), dto.getCompanyName());
+        assertEquals(app.getStatus(), dto.getStatus());
+        assertEquals(app.getCreatedAt(), dto.getCreatedAt());
         assertEquals(customerId, dto.getCustomerId(), "customerId should match the linked customer");
 
         // All optional fields should be null
@@ -180,19 +186,20 @@ class WholesaleApplicationMappingCharacterizationTest {
     }
 
     @Test
-    void bothServices_nullOptionalFields_produceIdenticalOutput() {
+    void bothServices_nullOptionalFields_produceIdenticalOutput()
+    {
         UUID customerId = UUID.randomUUID();
         WholesaleApplicationEntity app = buildMinimalApplication();
 
         CustomerEntity customer = buildCustomerEntity(customerId);
-        app.customer = customer;
+        app.setCustomer(customer);
 
-        when(wholesaleApplicationRepository.findById(app.id)).thenReturn(app);
-        WholesaleApplicationDetailsDto fromWholesaleService = wholesaleCustomerService.getWholesaleApplicationById(app.id);
+        when(wholesaleApplicationRepository.findById(app.getId())).thenReturn(app);
+        WholesaleApplicationDetailsDto fromWholesaleService = wholesaleCustomerService.getWholesaleApplicationById(app.getId());
 
         stubPanacheForAdminCustomer(customerId, customer, app);
         AdminCustomerDetailDto detail = customerAdminService.adminCustomer(customerId);
-        WholesaleApplicationDetailsDto fromAdminService = detail.wholesaleApplication;
+        WholesaleApplicationDetailsDto fromAdminService = detail.getWholesaleApplication();
 
         assertDtosEqual(fromWholesaleService, fromAdminService);
     }
@@ -200,50 +207,56 @@ class WholesaleApplicationMappingCharacterizationTest {
     // ── Test: Various statuses ──────────────────────────────────────────────
 
     @Test
-    void toDetailsDto_pendingStatus_mapsCorrectly() {
+    void toDetailsDto_pendingStatus_mapsCorrectly()
+    {
         assertStatusMappedCorrectly(WholesaleApplicationStatusEn.PENDING);
     }
 
     @Test
-    void toDetailsDto_approvedStatus_mapsCorrectly() {
+    void toDetailsDto_approvedStatus_mapsCorrectly()
+    {
         assertStatusMappedCorrectly(WholesaleApplicationStatusEn.APPROVED);
     }
 
     @Test
-    void toDetailsDto_rejectedStatus_mapsCorrectly() {
+    void toDetailsDto_rejectedStatus_mapsCorrectly()
+    {
         assertStatusMappedCorrectly(WholesaleApplicationStatusEn.REJECTED);
     }
 
     @Test
-    void toDetailsDto_convertedStatus_mapsCorrectly() {
+    void toDetailsDto_convertedStatus_mapsCorrectly()
+    {
         assertStatusMappedCorrectly(WholesaleApplicationStatusEn.CONVERTED);
     }
 
     // ── Test: Null customer (no linked customer yet) ────────────────────────
 
     @Test
-    void toDetailsDto_nullCustomer_customerId_isNull() {
+    void toDetailsDto_nullCustomer_customerId_isNull()
+    {
         WholesaleApplicationEntity app = buildFullyPopulatedApplication();
-        app.customer = null;
+        app.setCustomer(null);
 
-        when(wholesaleApplicationRepository.findById(app.id)).thenReturn(app);
+        when(wholesaleApplicationRepository.findById(app.getId())).thenReturn(app);
 
-        WholesaleApplicationDetailsDto result = wholesaleCustomerService.getWholesaleApplicationById(app.id);
+        WholesaleApplicationDetailsDto result = wholesaleCustomerService.getWholesaleApplicationById(app.getId());
 
         assertNull(result.getCustomerId(), "customerId should be null when entity.customer is null");
         // All other fields should still be populated
-        assertEquals(app.id, result.getId());
-        assertEquals(app.accountEmail, result.getEmail());
-        assertEquals(app.companyName, result.getCompanyName());
+        assertEquals(app.getId(), result.getId());
+        assertEquals(app.getAccountEmail(), result.getEmail());
+        assertEquals(app.getCompanyName(), result.getCompanyName());
     }
 
     @Test
     @SuppressWarnings("unchecked")
-    void toApplicationDetailsDto_nullCustomerOnApp_customerId_isNull() {
+    void toApplicationDetailsDto_nullCustomerOnApp_customerId_isNull()
+    {
         UUID customerId = UUID.randomUUID();
         WholesaleApplicationEntity app = buildFullyPopulatedApplication();
         // The wholesale application entity's customer link is null (not yet converted)
-        app.customer = null;
+        app.setCustomer(null);
 
         CustomerEntity customer = buildCustomerEntity(customerId);
 
@@ -251,22 +264,22 @@ class WholesaleApplicationMappingCharacterizationTest {
 
         AdminCustomerDetailDto detail = customerAdminService.adminCustomer(customerId);
 
-        assertNotNull(detail.wholesaleApplication);
-        assertNull(detail.wholesaleApplication.getCustomerId(),
-                "customerId on DTO should be null when app.customer is null");
+        assertNotNull(detail.getWholesaleApplication());
+        assertNull(detail.getWholesaleApplication().getCustomerId(), "customerId on DTO should be null when app.customer is null");
     }
 
     // ── Test: ProcessedAt populated (approved/rejected) ─────────────────────
 
     @Test
-    void toDetailsDto_withProcessedAt_mapsDateCorrectly() {
+    void toDetailsDto_withProcessedAt_mapsDateCorrectly()
+    {
         WholesaleApplicationEntity app = buildFullyPopulatedApplication();
-        app.status = WholesaleApplicationStatusEn.APPROVED;
-        app.processedAt = OffsetDateTime.parse("2026-07-01T14:30:00Z");
+        app.setStatus(WholesaleApplicationStatusEn.APPROVED);
+        app.setProcessedAt(OffsetDateTime.parse("2026-07-01T14:30:00Z"));
 
-        when(wholesaleApplicationRepository.findById(app.id)).thenReturn(app);
+        when(wholesaleApplicationRepository.findById(app.getId())).thenReturn(app);
 
-        WholesaleApplicationDetailsDto result = wholesaleCustomerService.getWholesaleApplicationById(app.id);
+        WholesaleApplicationDetailsDto result = wholesaleCustomerService.getWholesaleApplicationById(app.getId());
 
         assertEquals(WholesaleApplicationStatusEn.APPROVED, result.getStatus());
         assertEquals(OffsetDateTime.parse("2026-07-01T14:30:00Z"), result.getProcessedAt());
@@ -274,107 +287,111 @@ class WholesaleApplicationMappingCharacterizationTest {
 
     // ── Builders ────────────────────────────────────────────────────────────
 
-    private WholesaleApplicationEntity buildFullyPopulatedApplication() {
+    private WholesaleApplicationEntity buildFullyPopulatedApplication()
+    {
         WholesaleApplicationEntity app = new WholesaleApplicationEntity();
-        app.id = UUID.randomUUID();
-        app.applicantEmail = "applicant@wholesale.co.za";
-        app.accountEmail = "account@wholesale.co.za";
-        app.firstName = "Johan";
-        app.lastName = "van der Merwe";
-        app.phone = "0821234567";
-        app.companyName = "Wholesale Traders (Pty) Ltd";
-        app.tradingName = "WT Trading";
-        app.companyPhone = "0111234567";
-        app.companyEmail = "info@wholesaletraders.co.za";
-        app.vatNumber = "4123456789";
-        app.regNumber = "2020/123456/07";
-        app.financeContactName = "Anelize Botha";
-        app.financeContactEmail = "finance@wholesaletraders.co.za";
-        app.financeContactPhone = "0119876543";
-        app.purchaseOrderRequired = true;
-        app.notes = "Bulk orders monthly, minimum R50k per order";
-        app.status = WholesaleApplicationStatusEn.PENDING;
-        app.createdAt = OffsetDateTime.parse("2026-06-15T08:30:00Z");
-        app.processedAt = null;
+        app.setId(UUID.randomUUID());
+        app.setApplicantEmail("applicant@wholesale.co.za");
+        app.setAccountEmail("account@wholesale.co.za");
+        app.setFirstName("Johan");
+        app.setLastName("van der Merwe");
+        app.setPhone("0821234567");
+        app.setCompanyName("Wholesale Traders (Pty) Ltd");
+        app.setTradingName("WT Trading");
+        app.setCompanyPhone("0111234567");
+        app.setCompanyEmail("info@wholesaletraders.co.za");
+        app.setVatNumber("4123456789");
+        app.setRegNumber("2020/123456/07");
+        app.setFinanceContactName("Anelize Botha");
+        app.setFinanceContactEmail("finance@wholesaletraders.co.za");
+        app.setFinanceContactPhone("0119876543");
+        app.setPurchaseOrderRequired(true);
+        app.setNotes("Bulk orders monthly, minimum R50k per order");
+        app.setStatus(WholesaleApplicationStatusEn.PENDING);
+        app.setCreatedAt(OffsetDateTime.parse("2026-06-15T08:30:00Z"));
+        app.setProcessedAt(null);
 
-        app.physicalAddressLine1 = "42 Industry Road";
-        app.physicalAddressLine2 = "Unit 7, Warehouse Park";
-        app.physicalSuburb = "Midrand";
-        app.physicalCity = "Johannesburg";
-        app.physicalProvince = "Gauteng";
-        app.physicalPostalCode = "1685";
+        app.setPhysicalAddressLine1("42 Industry Road");
+        app.setPhysicalAddressLine2("Unit 7, Warehouse Park");
+        app.setPhysicalSuburb("Midrand");
+        app.setPhysicalCity("Johannesburg");
+        app.setPhysicalProvince("Gauteng");
+        app.setPhysicalPostalCode("1685");
 
-        app.postalAddressLine1 = "PO Box 5500";
-        app.postalAddressLine2 = null;
-        app.postalSuburb = "Halfway House";
-        app.postalCity = "Midrand";
-        app.postalProvince = "Gauteng";
-        app.postalPostalCode = "1685";
+        app.setPostalAddressLine1("PO Box 5500");
+        app.setPostalAddressLine2(null);
+        app.setPostalSuburb("Halfway House");
+        app.setPostalCity("Midrand");
+        app.setPostalProvince("Gauteng");
+        app.setPostalPostalCode("1685");
 
         // Customer will be set by tests that need it
-        app.customer = null;
+        app.setCustomer(null);
         return app;
     }
 
-    private WholesaleApplicationEntity buildMinimalApplication() {
+    private WholesaleApplicationEntity buildMinimalApplication()
+    {
         WholesaleApplicationEntity app = new WholesaleApplicationEntity();
-        app.id = UUID.randomUUID();
-        app.applicantEmail = "minimal@example.com";
-        app.accountEmail = null;
-        app.firstName = "Min";
-        app.lastName = null;
-        app.phone = null;
-        app.companyName = "Min Corp";
-        app.tradingName = null;
-        app.companyPhone = null;
-        app.companyEmail = null;
-        app.vatNumber = null;
-        app.regNumber = null;
-        app.financeContactName = null;
-        app.financeContactEmail = null;
-        app.financeContactPhone = null;
-        app.purchaseOrderRequired = null;
-        app.notes = null;
-        app.status = WholesaleApplicationStatusEn.PENDING;
-        app.createdAt = OffsetDateTime.parse("2026-07-10T12:00:00Z");
-        app.processedAt = null;
+        app.setId(UUID.randomUUID());
+        app.setApplicantEmail("minimal@example.com");
+        app.setAccountEmail(null);
+        app.setFirstName("Min");
+        app.setLastName(null);
+        app.setPhone(null);
+        app.setCompanyName("Min Corp");
+        app.setTradingName(null);
+        app.setCompanyPhone(null);
+        app.setCompanyEmail(null);
+        app.setVatNumber(null);
+        app.setRegNumber(null);
+        app.setFinanceContactName(null);
+        app.setFinanceContactEmail(null);
+        app.setFinanceContactPhone(null);
+        app.setPurchaseOrderRequired(null);
+        app.setNotes(null);
+        app.setStatus(WholesaleApplicationStatusEn.PENDING);
+        app.setCreatedAt(OffsetDateTime.parse("2026-07-10T12:00:00Z"));
+        app.setProcessedAt(null);
 
-        app.physicalAddressLine1 = null;
-        app.physicalAddressLine2 = null;
-        app.physicalSuburb = null;
-        app.physicalCity = null;
-        app.physicalProvince = null;
-        app.physicalPostalCode = null;
+        app.setPhysicalAddressLine1(null);
+        app.setPhysicalAddressLine2(null);
+        app.setPhysicalSuburb(null);
+        app.setPhysicalCity(null);
+        app.setPhysicalProvince(null);
+        app.setPhysicalPostalCode(null);
 
-        app.postalAddressLine1 = null;
-        app.postalAddressLine2 = null;
-        app.postalSuburb = null;
-        app.postalCity = null;
-        app.postalProvince = null;
-        app.postalPostalCode = null;
+        app.setPostalAddressLine1(null);
+        app.setPostalAddressLine2(null);
+        app.setPostalSuburb(null);
+        app.setPostalCity(null);
+        app.setPostalProvince(null);
+        app.setPostalPostalCode(null);
 
-        app.customer = null;
+        app.setCustomer(null);
         return app;
     }
 
-    private CustomerEntity buildCustomerEntity(UUID customerId) {
+    private CustomerEntity buildCustomerEntity(UUID customerId)
+    {
         CustomerEntity customer = new CustomerEntity();
-        customer.id = customerId;
-        customer.firstName = "Test";
-        customer.lastName = "Customer";
-        customer.status = CustomerStatusEn.ACTIVE;
-        customer.shopperType = CustomerTypeEn.WHOLESALER;
+        customer.setId(customerId);
+        customer.setFirstName("Test");
+        customer.setLastName("Customer");
+        customer.setStatus(CustomerStatusEn.ACTIVE);
+        customer.setShopperType(CustomerTypeEn.WHOLESALER);
 
         UserEntity user = new UserEntity();
-        user.email = "test@example.com";
-        user.createdAt = OffsetDateTime.parse("2026-01-01T00:00:00Z");
-        customer.user = user;
+        user.setEmail("test@example.com");
+        user.setCreatedAt(OffsetDateTime.parse("2026-01-01T00:00:00Z"));
+        customer.setUser(user);
 
         return customer;
     }
 
     @SuppressWarnings("unchecked")
-    private void stubPanacheForAdminCustomer(UUID customerId, CustomerEntity customer, WholesaleApplicationEntity app) {
+    private void stubPanacheForAdminCustomer(UUID customerId, CustomerEntity customer, WholesaleApplicationEntity app)
+    {
         // CustomerEntity.findById(customerId) → customer
         when(CustomerEntity.findById(customerId)).thenReturn(customer);
 
@@ -392,59 +409,61 @@ class WholesaleApplicationMappingCharacterizationTest {
 
     // ── Assertion helpers ───────────────────────────────────────────────────
 
-    private void assertFullyPopulatedBaseline(WholesaleApplicationDetailsDto dto, WholesaleApplicationEntity app) {
-        assertEquals(app.id, dto.getId());
-        assertEquals(app.accountEmail, dto.getEmail());
-        assertEquals(app.applicantEmail, dto.getApplicantEmail());
-        assertEquals(app.firstName, dto.getFirstName());
-        assertEquals(app.lastName, dto.getLastName());
-        assertEquals(app.phone, dto.getPhone());
+    private void assertFullyPopulatedBaseline(WholesaleApplicationDetailsDto dto, WholesaleApplicationEntity app)
+    {
+        assertEquals(app.getId(), dto.getId());
+        assertEquals(app.getAccountEmail(), dto.getEmail());
+        assertEquals(app.getApplicantEmail(), dto.getApplicantEmail());
+        assertEquals(app.getFirstName(), dto.getFirstName());
+        assertEquals(app.getLastName(), dto.getLastName());
+        assertEquals(app.getPhone(), dto.getPhone());
 
         // Company fields
-        assertEquals(app.companyName, dto.getCompanyName());
-        assertEquals(app.tradingName, dto.getTradingName());
-        assertEquals(app.companyPhone, dto.getCompanyPhone());
-        assertEquals(app.companyEmail, dto.getCompanyEmail());
-        assertEquals(app.vatNumber, dto.getVatNumber());
-        assertEquals(app.regNumber, dto.getRegNumber());
+        assertEquals(app.getCompanyName(), dto.getCompanyName());
+        assertEquals(app.getTradingName(), dto.getTradingName());
+        assertEquals(app.getCompanyPhone(), dto.getCompanyPhone());
+        assertEquals(app.getCompanyEmail(), dto.getCompanyEmail());
+        assertEquals(app.getVatNumber(), dto.getVatNumber());
+        assertEquals(app.getRegNumber(), dto.getRegNumber());
 
         // Finance fields
-        assertEquals(app.financeContactName, dto.getFinanceContactName());
-        assertEquals(app.financeContactEmail, dto.getFinanceContactEmail());
-        assertEquals(app.financeContactPhone, dto.getFinanceContactPhone());
-        assertEquals(app.purchaseOrderRequired, dto.getPurchaseOrderRequired());
+        assertEquals(app.getFinanceContactName(), dto.getFinanceContactName());
+        assertEquals(app.getFinanceContactEmail(), dto.getFinanceContactEmail());
+        assertEquals(app.getFinanceContactPhone(), dto.getFinanceContactPhone());
+        assertEquals(app.getPurchaseOrderRequired(), dto.getPurchaseOrderRequired());
 
         // Metadata
-        assertEquals(app.notes, dto.getNotes());
-        assertEquals(app.status, dto.getStatus());
-        assertEquals(app.createdAt, dto.getCreatedAt());
-        assertEquals(app.processedAt, dto.getProcessedAt());
-        assertEquals(app.customer != null ? app.customer.id : null, dto.getCustomerId());
+        assertEquals(app.getNotes(), dto.getNotes());
+        assertEquals(app.getStatus(), dto.getStatus());
+        assertEquals(app.getCreatedAt(), dto.getCreatedAt());
+        assertEquals(app.getProcessedAt(), dto.getProcessedAt());
+        assertEquals(app.getCustomer() != null ? app.getCustomer().getId() : null, dto.getCustomerId());
 
         // Physical address
-        assertEquals(app.physicalAddressLine1, dto.getPhysicalAddressLine1());
-        assertEquals(app.physicalAddressLine2, dto.getPhysicalAddressLine2());
-        assertEquals(app.physicalSuburb, dto.getPhysicalSuburb());
-        assertEquals(app.physicalCity, dto.getPhysicalCity());
-        assertEquals(app.physicalProvince, dto.getPhysicalProvince());
-        assertEquals(app.physicalPostalCode, dto.getPhysicalPostalCode());
+        assertEquals(app.getPhysicalAddressLine1(), dto.getPhysicalAddressLine1());
+        assertEquals(app.getPhysicalAddressLine2(), dto.getPhysicalAddressLine2());
+        assertEquals(app.getPhysicalSuburb(), dto.getPhysicalSuburb());
+        assertEquals(app.getPhysicalCity(), dto.getPhysicalCity());
+        assertEquals(app.getPhysicalProvince(), dto.getPhysicalProvince());
+        assertEquals(app.getPhysicalPostalCode(), dto.getPhysicalPostalCode());
 
         // Postal address
-        assertEquals(app.postalAddressLine1, dto.getPostalAddressLine1());
-        assertEquals(app.postalAddressLine2, dto.getPostalAddressLine2());
-        assertEquals(app.postalSuburb, dto.getPostalSuburb());
-        assertEquals(app.postalCity, dto.getPostalCity());
-        assertEquals(app.postalProvince, dto.getPostalProvince());
-        assertEquals(app.postalPostalCode, dto.getPostalPostalCode());
+        assertEquals(app.getPostalAddressLine1(), dto.getPostalAddressLine1());
+        assertEquals(app.getPostalAddressLine2(), dto.getPostalAddressLine2());
+        assertEquals(app.getPostalSuburb(), dto.getPostalSuburb());
+        assertEquals(app.getPostalCity(), dto.getPostalCity());
+        assertEquals(app.getPostalProvince(), dto.getPostalProvince());
+        assertEquals(app.getPostalPostalCode(), dto.getPostalPostalCode());
     }
 
-    private void assertMinimalBaseline(WholesaleApplicationDetailsDto dto, WholesaleApplicationEntity app) {
-        assertEquals(app.id, dto.getId());
-        assertEquals(app.applicantEmail, dto.getApplicantEmail());
-        assertEquals(app.firstName, dto.getFirstName());
-        assertEquals(app.companyName, dto.getCompanyName());
-        assertEquals(app.status, dto.getStatus());
-        assertEquals(app.createdAt, dto.getCreatedAt());
+    private void assertMinimalBaseline(WholesaleApplicationDetailsDto dto, WholesaleApplicationEntity app)
+    {
+        assertEquals(app.getId(), dto.getId());
+        assertEquals(app.getApplicantEmail(), dto.getApplicantEmail());
+        assertEquals(app.getFirstName(), dto.getFirstName());
+        assertEquals(app.getCompanyName(), dto.getCompanyName());
+        assertEquals(app.getStatus(), dto.getStatus());
+        assertEquals(app.getCreatedAt(), dto.getCreatedAt());
 
         // All optional fields should be null
         assertNull(dto.getEmail(), "email (accountEmail) should be null");
@@ -478,7 +497,8 @@ class WholesaleApplicationMappingCharacterizationTest {
         assertNull(dto.getPostalPostalCode());
     }
 
-    private void assertDtosEqual(WholesaleApplicationDetailsDto a, WholesaleApplicationDetailsDto b) {
+    private void assertDtosEqual(WholesaleApplicationDetailsDto a, WholesaleApplicationDetailsDto b)
+    {
         assertEquals(a.getId(), b.getId(), "id");
         assertEquals(a.getEmail(), b.getEmail(), "email");
         assertEquals(a.getApplicantEmail(), b.getApplicantEmail(), "applicantEmail");
@@ -519,16 +539,17 @@ class WholesaleApplicationMappingCharacterizationTest {
         assertEquals(a.getPostalPostalCode(), b.getPostalPostalCode(), "postalPostalCode");
     }
 
-    private void assertStatusMappedCorrectly(WholesaleApplicationStatusEn status) {
+    private void assertStatusMappedCorrectly(WholesaleApplicationStatusEn status)
+    {
         WholesaleApplicationEntity app = buildMinimalApplication();
-        app.status = status;
+        app.setStatus(status);
         if (status == WholesaleApplicationStatusEn.APPROVED || status == WholesaleApplicationStatusEn.REJECTED) {
-            app.processedAt = OffsetDateTime.parse("2026-07-15T10:00:00Z");
+            app.setProcessedAt(OffsetDateTime.parse("2026-07-15T10:00:00Z"));
         }
 
-        when(wholesaleApplicationRepository.findById(app.id)).thenReturn(app);
+        when(wholesaleApplicationRepository.findById(app.getId())).thenReturn(app);
 
-        WholesaleApplicationDetailsDto result = wholesaleCustomerService.getWholesaleApplicationById(app.id);
+        WholesaleApplicationDetailsDto result = wholesaleCustomerService.getWholesaleApplicationById(app.getId());
 
         assertEquals(status, result.getStatus());
         if (status == WholesaleApplicationStatusEn.APPROVED || status == WholesaleApplicationStatusEn.REJECTED) {

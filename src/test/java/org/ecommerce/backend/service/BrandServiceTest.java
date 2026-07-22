@@ -137,7 +137,7 @@ class BrandServiceTest
         brandDto.setSlug("test-brand");
 
         BrandEntity existingBrandEntity = new BrandEntity();
-        existingBrandEntity.id = id;
+        existingBrandEntity.setId(id);
 
         when(brandRepository.findById(id)).thenReturn(existingBrandEntity);
 
@@ -173,7 +173,7 @@ class BrandServiceTest
         brandDto.setSlug("test-brand");
 
         BrandEntity existingBrandEntity = mock();
-        existingBrandEntity.id = id;
+        existingBrandEntity.setId(id);
 
         when(brandRepository.findById(id)).thenReturn(existingBrandEntity);
         when(brandMapper.mapDtoToEntity(brandDto, existingBrandEntity)).thenReturn(existingBrandEntity);

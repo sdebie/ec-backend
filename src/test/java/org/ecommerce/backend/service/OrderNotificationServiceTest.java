@@ -15,32 +15,35 @@ import static org.junit.jupiter.api.Assertions.assertNull;
  * SMTP mailer) is framework plumbing and is not exercised here; the branch logic is.
  */
 @DisplayName("OrderNotificationService — recipient & display-name resolution")
-class OrderNotificationServiceTest {
-
+class OrderNotificationServiceTest
+{
     private final OrderNotificationService service = new OrderNotificationService();
 
-    private OrderEntity orderWith(String firstName, String email) {
+    private OrderEntity orderWith(String firstName, String email)
+    {
         OrderEntity order = new OrderEntity();
         CustomerEntity customer = new CustomerEntity();
-        customer.firstName = firstName;
+        customer.setFirstName(firstName);
         if (email != null) {
             UserEntity user = new UserEntity();
-            user.email = email;
-            customer.user = user;
+            user.setEmail(email);
+            customer.setUser(user);
         }
-        order.customerEntity = customer;
+        order.setCustomerEntity(customer);
         return order;
     }
 
     @Test
     @DisplayName("display name uses the customer's first name when present")
-    void displayNameUsesFirstName() {
+    void displayNameUsesFirstName()
+    {
         assertEquals("Alice", service.resolveDisplayName(orderWith("Alice", "a@test.co")));
     }
 
     @Test
     @DisplayName("display name falls back to Guest for blank/null first name and null customer")
-    void displayNameFallsBackToGuest() {
+    void displayNameFallsBackToGuest()
+    {
         assertEquals("Guest", service.resolveDisplayName(orderWith("   ", "a@test.co")));
         assertEquals("Guest", service.resolveDisplayName(orderWith(null, "a@test.co")));
         OrderEntity noCustomer = new OrderEntity();
@@ -49,13 +52,15 @@ class OrderNotificationServiceTest {
 
     @Test
     @DisplayName("recipient resolves from customer→user email")
-    void recipientFromUserEmail() {
+    void recipientFromUserEmail()
+    {
         assertEquals("a@test.co", service.resolveRecipient(orderWith("Alice", "a@test.co")));
     }
 
     @Test
     @DisplayName("recipient is null when customer or user is missing")
-    void recipientNullWhenMissing() {
+    void recipientNullWhenMissing()
+    {
         assertNull(service.resolveRecipient(orderWith("Alice", null))); // null user
         OrderEntity noCustomer = new OrderEntity();
         assertNull(service.resolveRecipient(noCustomer));

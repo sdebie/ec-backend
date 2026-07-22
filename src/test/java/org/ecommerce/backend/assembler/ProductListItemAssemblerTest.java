@@ -48,7 +48,7 @@ class ProductListItemAssemblerTest {
         LocalDateTime now = LocalDateTime.now();
         VariantPricesEntity firstPrice = price(firstVariant, new BigDecimal("10.00"), now);
         VariantPricesEntity secondPrice = price(secondVariant, new BigDecimal("20.00"), now);
-        List<UUID> productIds = List.of(first.id, second.id);
+        List<UUID> productIds = List.of(first.getId(), second.getId());
 
         when(variants.findForProductIds(productIds, false)).thenReturn(List.of(firstVariant, secondVariant));
         when(images.findForListingProductIds(productIds)).thenReturn(List.of());
@@ -58,9 +58,9 @@ class ProductListItemAssemblerTest {
         List<ProductShoppingListItemDto> result = assembler.buildShoppingListItems(List.of(first, second), now, false);
 
         assertEquals(2, result.size());
-        assertEquals(1, result.get(0).variantCount);
-        assertEquals(new BigDecimal("10.00"), result.get(0).retailPrice.price);
-        assertEquals(new BigDecimal("20.00"), result.get(1).retailPrice.price);
+        assertEquals(1, result.get(0).getVariantCount());
+        assertEquals(new BigDecimal("10.00"), result.get(0).getRetailPrice().getPrice());
+        assertEquals(new BigDecimal("20.00"), result.get(1).getRetailPrice().getPrice());
         verify(variants).findForProductIds(productIds, false);
         verify(images).findForListingProductIds(productIds);
         verify(prices).findActiveForProductIds(eq(productIds), any(), eq(now), eq(false));
@@ -71,30 +71,30 @@ class ProductListItemAssemblerTest {
 
     private ProductEntity product(String name) {
         ProductEntity product = new ProductEntity();
-        product.id = UUID.randomUUID();
-        product.name = name;
-        product.slug = name.toLowerCase();
-        product.productType = ProductTypeEn.SIMPLE;
-        product.status = ProductStatusEn.ACTIVE;
+        product.setId(UUID.randomUUID());
+        product.setName(name);
+        product.setSlug(name.toLowerCase());
+        product.setProductType(ProductTypeEn.SIMPLE);
+        product.setStatus(ProductStatusEn.ACTIVE);
         return product;
     }
 
     private ProductVariantEntity variant(ProductEntity product, String sku) {
         ProductVariantEntity variant = new ProductVariantEntity();
-        variant.id = UUID.randomUUID();
-        variant.product = product;
-        variant.sku = sku;
-        variant.status = ProductStatusEn.ACTIVE;
+        variant.setId(UUID.randomUUID());
+        variant.setProduct(product);
+        variant.setSku(sku);
+        variant.setStatus(ProductStatusEn.ACTIVE);
         return variant;
     }
 
     private VariantPricesEntity price(ProductVariantEntity variant, BigDecimal amount, LocalDateTime now) {
         VariantPricesEntity price = new VariantPricesEntity();
-        price.id = UUID.randomUUID();
-        price.variant = variant;
-        price.priceType = PriceTypeEn.RETAIL_PRICE;
-        price.price = amount;
-        price.createdAt = now;
+        price.setId(UUID.randomUUID());
+        price.setVariant(variant);
+        price.setPriceType(PriceTypeEn.RETAIL_PRICE);
+        price.setPrice(amount);
+        price.setCreatedAt(now);
         return price;
     }
 }

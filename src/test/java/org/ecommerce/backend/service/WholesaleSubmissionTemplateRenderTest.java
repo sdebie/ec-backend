@@ -10,7 +10,8 @@ import org.junit.jupiter.api.Test;
 
 import java.util.UUID;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Renders the wholesale submission mail templates with real Qute. The mail sends are
@@ -19,8 +20,8 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 @QuarkusTest
 @DisplayName("WholesaleSubmissionTemplateRenderTest — Qute templates render without errors")
-class WholesaleSubmissionTemplateRenderTest {
-
+class WholesaleSubmissionTemplateRenderTest
+{
     @Inject
     @Location("wholesale_application_received.html")
     Template adminTemplate;
@@ -31,7 +32,8 @@ class WholesaleSubmissionTemplateRenderTest {
 
     private static final UUID APPLICATION_ID = UUID.fromString("11111111-2222-3333-4444-555555555555");
 
-    private WholesaleCustomerDto fullDto() {
+    private WholesaleCustomerDto fullDto()
+    {
         WholesaleCustomerDto dto = new WholesaleCustomerDto();
         dto.setApplicantEmail("applicant@test.com");
         dto.setEmail("account@test.com");
@@ -62,8 +64,11 @@ class WholesaleSubmissionTemplateRenderTest {
         return dto;
     }
 
-    /** Only the fields the create path guarantees; every optional field left null. */
-    private WholesaleCustomerDto minimalDto() {
+    /**
+     * Only the fields the create path guarantees; every optional field left null.
+     */
+    private WholesaleCustomerDto minimalDto()
+    {
         WholesaleCustomerDto dto = new WholesaleCustomerDto();
         dto.setApplicantEmail("applicant@test.com");
         dto.setFirstName("Jane");
@@ -74,7 +79,8 @@ class WholesaleSubmissionTemplateRenderTest {
 
     @Test
     @DisplayName("admin template renders every field of a full application")
-    void adminTemplateRendersFullApplication() {
+    void adminTemplateRendersFullApplication()
+    {
         String html = adminTemplate
                 .data("applicationId", APPLICATION_ID)
                 .data("app", fullDto())
@@ -96,7 +102,8 @@ class WholesaleSubmissionTemplateRenderTest {
 
     @Test
     @DisplayName("admin template renders a minimal application (all optionals null)")
-    void adminTemplateRendersMinimalApplication() {
+    void adminTemplateRendersMinimalApplication()
+    {
         String html = adminTemplate
                 .data("applicationId", APPLICATION_ID)
                 .data("app", minimalDto())
@@ -111,7 +118,8 @@ class WholesaleSubmissionTemplateRenderTest {
 
     @Test
     @DisplayName("applicant template renders every field with store name")
-    void applicantTemplateRendersFullApplication() {
+    void applicantTemplateRendersFullApplication()
+    {
         String html = applicantTemplate
                 .data("applicationId", APPLICATION_ID)
                 .data("storeName", "My Store")
@@ -130,7 +138,8 @@ class WholesaleSubmissionTemplateRenderTest {
 
     @Test
     @DisplayName("applicant template renders a minimal application (all optionals null)")
-    void applicantTemplateRendersMinimalApplication() {
+    void applicantTemplateRendersMinimalApplication()
+    {
         String html = applicantTemplate
                 .data("applicationId", APPLICATION_ID)
                 .data("storeName", "My Store")

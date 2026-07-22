@@ -10,14 +10,18 @@ import org.ecommerce.common.entity.*;
 import org.ecommerce.common.enums.ProductImportValidationStatusEn;
 import org.ecommerce.common.enums.ProductUploadStatusEn;
 import org.ecommerce.common.repository.*;
-import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
 import java.io.IOException;
 import java.io.StringReader;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -25,22 +29,22 @@ import static org.mockito.Mockito.*;
 
 /**
  * Characterization tests for ProductImportService.
- *
+ * <p>
  * Pins the current behaviour of CSV parsing, row validation, error accumulation,
  * and successful-row outcomes before the service is decomposed into
  * parser/validator/orchestrator (Tasks 7.2–7.4).
- *
+ * <p>
  * Test cases:
  * - All-valid import rows
  * - Some-invalid rows (missing required fields)
  * - Malformed rows (invalid stock values)
  * - Unknown-SKU rows (SKU belongs to another product)
  * - Empty file
- *
+ * <p>
  * Requirements: 4.2, 4.4
  */
-class ProductImportCharacterizationTest {
-
+class ProductImportCharacterizationTest
+{
     private ProductImportService service;
     private ProductImportParser parser;
     private ProductImportValidator validator;
@@ -54,7 +58,8 @@ class ProductImportCharacterizationTest {
     private ImageService imageService;
 
     @BeforeEach
-    void setUp() throws Exception {
+    void setUp() throws Exception
+    {
         service = new ProductImportService();
         parser = new ProductImportParser();
         validator = new ProductImportValidator();
@@ -96,7 +101,8 @@ class ProductImportCharacterizationTest {
 
     @Test
     @DisplayName("parseProductCsvRow: valid row maps all fields correctly")
-    void parseProductCsvRow_validRow_mapsAllFields() throws Exception {
+    void parseProductCsvRow_validRow_mapsAllFields() throws Exception
+    {
         String csv = "product_slug,sku,name,description,categories_slug,short_description,stock,brand_slug,images,attributes\n"
                 + "blue-tee,SKU-001,Blue Tee,A blue t-shirt,apparel,Short desc,50,nike,img1.jpg,{\"color\":\"blue\"}";
 
@@ -118,7 +124,8 @@ class ProductImportCharacterizationTest {
 
     @Test
     @DisplayName("parseProductCsvRow: invalid stock produces parse error")
-    void parseProductCsvRow_invalidStock_producesValidationError() throws Exception {
+    void parseProductCsvRow_invalidStock_producesValidationError() throws Exception
+    {
         String csv = "product_slug,sku,name,description,categories_slug,short_description,stock,brand_slug,images,attributes\n"
                 + "blue-tee,SKU-001,Blue Tee,A blue t-shirt,apparel,Short desc,NOT_A_NUMBER,nike,img1.jpg,{}";
 
@@ -132,7 +139,8 @@ class ProductImportCharacterizationTest {
 
     @Test
     @DisplayName("parseProductCsvRow: blank stock defaults to zero")
-    void parseProductCsvRow_blankStock_defaultsToZero() throws Exception {
+    void parseProductCsvRow_blankStock_defaultsToZero() throws Exception
+    {
         String csv = "product_slug,sku,name,description,categories_slug,short_description,stock,brand_slug,images,attributes\n"
                 + "blue-tee,SKU-001,Blue Tee,A blue t-shirt,apparel,Short desc,,nike,img1.jpg,{}";
 
@@ -145,7 +153,8 @@ class ProductImportCharacterizationTest {
 
     @Test
     @DisplayName("parseProductCsvRow: alternate header names are recognized")
-    void parseProductCsvRow_alternateHeaders_recognized() throws Exception {
+    void parseProductCsvRow_alternateHeaders_recognized() throws Exception
+    {
         String csv = "product-slug,SKU,Name,description,Category,short_description,stock_quantity,Brand,images,attributes\n"
                 + "red-hat,SKU-ALT,Red Hat,Description,hats,Short,25,adidas,hat.png,{}";
 
@@ -167,11 +176,12 @@ class ProductImportCharacterizationTest {
 
     @Test
     @DisplayName("validateAndDiff: all-valid row with known category and brand produces no errors")
-    void validateAndDiff_allValid_noErrors() throws Exception {
+    void validateAndDiff_allValid_noErrors() throws Exception
+    {
         CategoryEntity category = new CategoryEntity();
-        category.slug = "apparel";
+        category.setSlug("apparel");
         BrandEntity brand = new BrandEntity();
-        brand.slug = "nike";
+        brand.setSlug("nike");
 
         when(categoryRepository.findBySlugIgnoreCase("apparel")).thenReturn(category);
         when(brandRepository.findBySlugIgnoreCase("nike")).thenReturn(brand);
@@ -180,74 +190,74 @@ class ProductImportCharacterizationTest {
         when(productRepository.findByNameIgnoreCase("Blue Tee")).thenReturn(null);
 
         ProductUploadStagedEntity staged = new ProductUploadStagedEntity();
-        staged.productSlug = "blue-tee";
-        staged.sku = "SKU-001";
-        staged.name = "Blue Tee";
-        staged.description = "A blue t-shirt";
-        staged.categorySlug = "apparel";
-        staged.brandSlug = "nike";
+        staged.setProductSlug("blue-tee");
+        staged.setSku("SKU-001");
+        staged.setName("Blue Tee");
+        staged.setDescription("A blue t-shirt");
+        staged.setCategorySlug("apparel");
+        staged.setBrandSlug("nike");
 
         List<String> errors = new ArrayList<>();
         validator.validateAndDiff(staged, errors, 50, "nike", "img1.jpg", "{}");
 
         assertTrue(errors.isEmpty(), "All-valid row should produce no validation errors");
-        assertTrue(staged.isNewProduct, "Should be flagged as new product");
-        assertTrue(staged.isNewVariant, "Should be flagged as new variant");
-        assertTrue(staged.isValidCategory);
-        assertTrue(staged.isValidBrand);
-        assertTrue(staged.hasChanges, "New product always has changes");
+        assertTrue(staged.getIsNewProduct(), "Should be flagged as new product");
+        assertTrue(staged.getIsNewVariant(), "Should be flagged as new variant");
+        assertTrue(staged.getIsValidCategory());
+        assertTrue(staged.getIsValidBrand());
+        assertTrue(staged.getHasChanges(), "New product always has changes");
     }
 
     @Test
     @DisplayName("blank images cell preserves existing associations and retries delayed bulk-image linking")
-    void upsertVariantImages_blankImages_preservesAssociationsAndRetriesBulkLinking() throws Exception {
+    void upsertVariantImages_blankImages_preservesAssociationsAndRetriesBulkLinking() throws Exception
+    {
         ProductVariantEntity variant = new ProductVariantEntity();
-        variant.id = UUID.randomUUID();
-        variant.sku = "SKU-001";
+        variant.setId(UUID.randomUUID());
+        variant.setSku("SKU-001");
 
-        Method method = ProductImportService.class.getDeclaredMethod(
-                "upsertVariantImages", ProductVariantEntity.class, String.class);
+        Method method = ProductImportService.class.getDeclaredMethod("upsertVariantImages", ProductVariantEntity.class, String.class);
         method.setAccessible(true);
         method.invoke(service, variant, "   ");
 
-        verify(imageRepository, never()).deleteByVariantId(variant.id);
+        verify(imageRepository, never()).deleteByVariantId(variant.getId());
         verify(imageRepository, never()).persist(any(ProductImageEntity.class));
         verify(imageService).linkExistingBulkImagesForVariant(variant);
     }
 
     @Test
     @DisplayName("upsertVariantImages: WordPress-style leading slashes are stored as storage-relative paths")
-    void upsertVariantImages_leadingSlashes_areNormalized() throws Exception {
+    void upsertVariantImages_leadingSlashes_areNormalized() throws Exception
+    {
         ProductVariantEntity variant = new ProductVariantEntity();
-        variant.id = UUID.randomUUID();
+        variant.setId(UUID.randomUUID());
 
-        Method method = ProductImportService.class.getDeclaredMethod(
-                "upsertVariantImages", ProductVariantEntity.class, String.class);
+        Method method = ProductImportService.class.getDeclaredMethod("upsertVariantImages", ProductVariantEntity.class, String.class);
         method.setAccessible(true);
         method.invoke(service, variant, "/04/first.jpg, /04/second.jpg");
 
         var images = ArgumentCaptor.forClass(ProductImageEntity.class);
-        verify(imageRepository).deleteByVariantId(variant.id);
+        verify(imageRepository).deleteByVariantId(variant.getId());
         verify(imageRepository, times(2)).persist(images.capture());
-        assertEquals(List.of("04/first.jpg", "04/second.jpg"),
-                images.getAllValues().stream().map(image -> image.imageUrl).toList());
+        assertEquals(List.of("04/first.jpg", "04/second.jpg"), images.getAllValues().stream().map(image -> image.getImageUrl()).toList());
     }
 
     @Test
     @DisplayName("validateAndDiff: missing category produces 'category is required' error")
-    void validateAndDiff_missingCategory_producesError() throws Exception {
+    void validateAndDiff_missingCategory_producesError() throws Exception
+    {
         BrandEntity brand = new BrandEntity();
-        brand.slug = "nike";
+        brand.setSlug("nike");
         when(brandRepository.findBySlugIgnoreCase("nike")).thenReturn(brand);
         when(variantRepository.findBySku("SKU-002")).thenReturn(null);
         when(productRepository.findBySlugIgnoreCase("test-prod")).thenReturn(null);
         when(productRepository.findByNameIgnoreCase("Test Prod")).thenReturn(null);
 
         ProductUploadStagedEntity staged = new ProductUploadStagedEntity();
-        staged.productSlug = "test-prod";
-        staged.sku = "SKU-002";
-        staged.name = "Test Prod";
-        staged.categorySlug = null;
+        staged.setProductSlug("test-prod");
+        staged.setSku("SKU-002");
+        staged.setName("Test Prod");
+        staged.setCategorySlug(null);
 
         List<String> errors = new ArrayList<>();
         validator.validateAndDiff(staged, errors, 10, "nike", "", "");
@@ -258,20 +268,21 @@ class ProductImportCharacterizationTest {
 
     @Test
     @DisplayName("validateAndDiff: missing brand produces 'brand is required' error")
-    void validateAndDiff_missingBrand_producesError() throws Exception {
+    void validateAndDiff_missingBrand_producesError() throws Exception
+    {
         CategoryEntity category = new CategoryEntity();
-        category.slug = "apparel";
+        category.setSlug("apparel");
         when(categoryRepository.findBySlugIgnoreCase("apparel")).thenReturn(category);
         when(variantRepository.findBySku("SKU-003")).thenReturn(null);
         when(productRepository.findBySlugIgnoreCase("test-prod")).thenReturn(null);
         when(productRepository.findByNameIgnoreCase("Test Prod")).thenReturn(null);
 
         ProductUploadStagedEntity staged = new ProductUploadStagedEntity();
-        staged.productSlug = "test-prod";
-        staged.sku = "SKU-003";
-        staged.name = "Test Prod";
-        staged.categorySlug = "apparel";
-        staged.brandSlug = null;
+        staged.setProductSlug("test-prod");
+        staged.setSku("SKU-003");
+        staged.setName("Test Prod");
+        staged.setCategorySlug("apparel");
+        staged.setBrandSlug(null);
 
         List<String> errors = new ArrayList<>();
         validator.validateAndDiff(staged, errors, 10, null, "", "");
@@ -282,11 +293,12 @@ class ProductImportCharacterizationTest {
 
     @Test
     @DisplayName("validateAndDiff: missing SKU produces 'sku is required' error")
-    void validateAndDiff_missingSku_producesError() throws Exception {
+    void validateAndDiff_missingSku_producesError() throws Exception
+    {
         CategoryEntity category = new CategoryEntity();
-        category.slug = "apparel";
+        category.setSlug("apparel");
         BrandEntity brand = new BrandEntity();
-        brand.slug = "nike";
+        brand.setSlug("nike");
         when(categoryRepository.findBySlugIgnoreCase("apparel")).thenReturn(category);
         when(brandRepository.findBySlugIgnoreCase("nike")).thenReturn(brand);
         when(variantRepository.findBySku(null)).thenReturn(null);
@@ -294,11 +306,11 @@ class ProductImportCharacterizationTest {
         when(productRepository.findByNameIgnoreCase("Test Prod")).thenReturn(null);
 
         ProductUploadStagedEntity staged = new ProductUploadStagedEntity();
-        staged.productSlug = "test-prod";
-        staged.sku = null;
-        staged.name = "Test Prod";
-        staged.categorySlug = "apparel";
-        staged.brandSlug = "nike";
+        staged.setProductSlug("test-prod");
+        staged.setSku(null);
+        staged.setName("Test Prod");
+        staged.setCategorySlug("apparel");
+        staged.setBrandSlug("nike");
 
         List<String> errors = new ArrayList<>();
         validator.validateAndDiff(staged, errors, 10, "nike", "", "");
@@ -309,9 +321,10 @@ class ProductImportCharacterizationTest {
 
     @Test
     @DisplayName("validateAndDiff: unknown category produces 'Unknown category: <slug>' error")
-    void validateAndDiff_unknownCategory_producesError() throws Exception {
+    void validateAndDiff_unknownCategory_producesError() throws Exception
+    {
         BrandEntity brand = new BrandEntity();
-        brand.slug = "nike";
+        brand.setSlug("nike");
         when(categoryRepository.findBySlugIgnoreCase("nonexistent-cat")).thenReturn(null);
         when(brandRepository.findBySlugIgnoreCase("nike")).thenReturn(brand);
         when(variantRepository.findBySku("SKU-004")).thenReturn(null);
@@ -319,25 +332,26 @@ class ProductImportCharacterizationTest {
         when(productRepository.findByNameIgnoreCase("Test Prod")).thenReturn(null);
 
         ProductUploadStagedEntity staged = new ProductUploadStagedEntity();
-        staged.productSlug = "test-prod";
-        staged.sku = "SKU-004";
-        staged.name = "Test Prod";
-        staged.categorySlug = "nonexistent-cat";
-        staged.brandSlug = "nike";
+        staged.setProductSlug("test-prod");
+        staged.setSku("SKU-004");
+        staged.setName("Test Prod");
+        staged.setCategorySlug("nonexistent-cat");
+        staged.setBrandSlug("nike");
 
         List<String> errors = new ArrayList<>();
         validator.validateAndDiff(staged, errors, 10, "nike", "", "");
 
         assertEquals(1, errors.size());
         assertEquals("Unknown category: nonexistent-cat", errors.get(0));
-        assertFalse(staged.isValidCategory);
+        assertFalse(staged.getIsValidCategory());
     }
 
     @Test
     @DisplayName("validateAndDiff: unknown brand produces 'Unknown brand: <slug>' error")
-    void validateAndDiff_unknownBrand_producesError() throws Exception {
+    void validateAndDiff_unknownBrand_producesError() throws Exception
+    {
         CategoryEntity category = new CategoryEntity();
-        category.slug = "apparel";
+        category.setSlug("apparel");
         when(categoryRepository.findBySlugIgnoreCase("apparel")).thenReturn(category);
         when(brandRepository.findBySlugIgnoreCase("unknown-brand")).thenReturn(null);
         when(variantRepository.findBySku("SKU-005")).thenReturn(null);
@@ -345,57 +359,58 @@ class ProductImportCharacterizationTest {
         when(productRepository.findByNameIgnoreCase("Test Prod")).thenReturn(null);
 
         ProductUploadStagedEntity staged = new ProductUploadStagedEntity();
-        staged.productSlug = "test-prod";
-        staged.sku = "SKU-005";
-        staged.name = "Test Prod";
-        staged.categorySlug = "apparel";
-        staged.brandSlug = "unknown-brand";
+        staged.setProductSlug("test-prod");
+        staged.setSku("SKU-005");
+        staged.setName("Test Prod");
+        staged.setCategorySlug("apparel");
+        staged.setBrandSlug("unknown-brand");
 
         List<String> errors = new ArrayList<>();
         validator.validateAndDiff(staged, errors, 10, "unknown-brand", "", "");
 
         assertEquals(1, errors.size());
         assertEquals("Unknown brand: unknown-brand", errors.get(0));
-        assertFalse(staged.isValidBrand);
+        assertFalse(staged.getIsValidBrand());
     }
 
     @Test
     @DisplayName("validateAndDiff: SKU belonging to another product produces conflict error")
-    void validateAndDiff_skuBelongsToAnotherProduct_producesError() throws Exception {
+    void validateAndDiff_skuBelongsToAnotherProduct_producesError() throws Exception
+    {
         CategoryEntity category = new CategoryEntity();
-        category.slug = "apparel";
+        category.setSlug("apparel");
         BrandEntity brand = new BrandEntity();
-        brand.slug = "nike";
+        brand.setSlug("nike");
         when(categoryRepository.findBySlugIgnoreCase("apparel")).thenReturn(category);
         when(brandRepository.findBySlugIgnoreCase("nike")).thenReturn(brand);
 
         // Existing variant belongs to a different product
         ProductEntity otherProduct = new ProductEntity();
-        otherProduct.id = UUID.randomUUID();
-        otherProduct.name = "Other Product";
+        otherProduct.setId(UUID.randomUUID());
+        otherProduct.setName("Other Product");
 
         ProductVariantEntity existingVariant = new ProductVariantEntity();
-        existingVariant.id = UUID.randomUUID();
-        existingVariant.product = otherProduct;
-        existingVariant.stockQuantity = 10;
+        existingVariant.setId(UUID.randomUUID());
+        existingVariant.setProduct(otherProduct);
+        existingVariant.setStockQuantity(10);
 
         when(variantRepository.findBySku("SKU-CONFLICT")).thenReturn(existingVariant);
 
         // The product referenced in the CSV row is different
         ProductEntity csvProduct = new ProductEntity();
-        csvProduct.id = UUID.randomUUID();
-        csvProduct.name = "CSV Product";
-        csvProduct.slug = "csv-product";
+        csvProduct.setId(UUID.randomUUID());
+        csvProduct.setName("CSV Product");
+        csvProduct.setSlug("csv-product");
         when(productRepository.findBySlugIgnoreCase("csv-product")).thenReturn(csvProduct);
 
-        when(imageRepository.findByVariantId(existingVariant.id)).thenReturn(List.of());
+        when(imageRepository.findByVariantId(existingVariant.getId())).thenReturn(List.of());
 
         ProductUploadStagedEntity staged = new ProductUploadStagedEntity();
-        staged.productSlug = "csv-product";
-        staged.sku = "SKU-CONFLICT";
-        staged.name = "CSV Product";
-        staged.categorySlug = "apparel";
-        staged.brandSlug = "nike";
+        staged.setProductSlug("csv-product");
+        staged.setSku("SKU-CONFLICT");
+        staged.setName("CSV Product");
+        staged.setCategorySlug("apparel");
+        staged.setBrandSlug("nike");
 
         List<String> errors = new ArrayList<>();
         validator.validateAndDiff(staged, errors, 10, "nike", "", "");
@@ -406,36 +421,37 @@ class ProductImportCharacterizationTest {
 
     @Test
     @DisplayName("validateAndDiff: SKU exists for new product slug produces error")
-    void validateAndDiff_skuExistsForNewProduct_producesError() throws Exception {
+    void validateAndDiff_skuExistsForNewProduct_producesError() throws Exception
+    {
         CategoryEntity category = new CategoryEntity();
-        category.slug = "apparel";
+        category.setSlug("apparel");
         BrandEntity brand = new BrandEntity();
-        brand.slug = "nike";
+        brand.setSlug("nike");
         when(categoryRepository.findBySlugIgnoreCase("apparel")).thenReturn(category);
         when(brandRepository.findBySlugIgnoreCase("nike")).thenReturn(brand);
 
         // Variant exists and belongs to a different product
         ProductEntity existingProduct = new ProductEntity();
-        existingProduct.id = UUID.randomUUID();
-        existingProduct.name = "Existing Product";
+        existingProduct.setId(UUID.randomUUID());
+        existingProduct.setName("Existing Product");
 
         ProductVariantEntity existingVariant = new ProductVariantEntity();
-        existingVariant.id = UUID.randomUUID();
-        existingVariant.product = existingProduct;
-        existingVariant.stockQuantity = 5;
+        existingVariant.setId(UUID.randomUUID());
+        existingVariant.setProduct(existingProduct);
+        existingVariant.setStockQuantity(5);
 
         when(variantRepository.findBySku("SKU-EXISTS")).thenReturn(existingVariant);
         // Product slug doesn't match and name doesn't match → isNewProduct = true
         when(productRepository.findBySlugIgnoreCase("new-product")).thenReturn(null);
         when(productRepository.findByNameIgnoreCase("New Product")).thenReturn(null);
-        when(imageRepository.findByVariantId(existingVariant.id)).thenReturn(List.of());
+        when(imageRepository.findByVariantId(existingVariant.getId())).thenReturn(List.of());
 
         ProductUploadStagedEntity staged = new ProductUploadStagedEntity();
-        staged.productSlug = "new-product";
-        staged.sku = "SKU-EXISTS";
-        staged.name = "New Product";
-        staged.categorySlug = "apparel";
-        staged.brandSlug = "nike";
+        staged.setProductSlug("new-product");
+        staged.setSku("SKU-EXISTS");
+        staged.setName("New Product");
+        staged.setCategorySlug("apparel");
+        staged.setBrandSlug("nike");
 
         List<String> errors = new ArrayList<>();
         validator.validateAndDiff(staged, errors, 10, "nike", "", "");
@@ -447,7 +463,8 @@ class ProductImportCharacterizationTest {
 
     @Test
     @DisplayName("validateAndDiff: multiple errors accumulate in order — category then brand then SKU")
-    void validateAndDiff_multipleErrors_accumulateInOrder() throws Exception {
+    void validateAndDiff_multipleErrors_accumulateInOrder() throws Exception
+    {
         when(categoryRepository.findBySlugIgnoreCase("bad-cat")).thenReturn(null);
         when(brandRepository.findBySlugIgnoreCase("bad-brand")).thenReturn(null);
         when(variantRepository.findBySku("SKU-MULTI")).thenReturn(null);
@@ -455,11 +472,11 @@ class ProductImportCharacterizationTest {
         when(productRepository.findByNameIgnoreCase("Test")).thenReturn(null);
 
         ProductUploadStagedEntity staged = new ProductUploadStagedEntity();
-        staged.productSlug = "test-prod";
-        staged.sku = "SKU-MULTI";
-        staged.name = "Test";
-        staged.categorySlug = "bad-cat";
-        staged.brandSlug = "bad-brand";
+        staged.setProductSlug("test-prod");
+        staged.setSku("SKU-MULTI");
+        staged.setName("Test");
+        staged.setCategorySlug("bad-cat");
+        staged.setBrandSlug("bad-brand");
 
         List<String> errors = new ArrayList<>();
         validator.validateAndDiff(staged, errors, 10, "bad-brand", "", "");
@@ -472,17 +489,18 @@ class ProductImportCharacterizationTest {
 
     @Test
     @DisplayName("validateAndDiff: missing both category and brand produces both errors in order")
-    void validateAndDiff_missingCategoryAndBrand_bothErrors() throws Exception {
+    void validateAndDiff_missingCategoryAndBrand_bothErrors() throws Exception
+    {
         when(variantRepository.findBySku("SKU-006")).thenReturn(null);
         when(productRepository.findBySlugIgnoreCase("test-prod")).thenReturn(null);
         when(productRepository.findByNameIgnoreCase("Test")).thenReturn(null);
 
         ProductUploadStagedEntity staged = new ProductUploadStagedEntity();
-        staged.productSlug = "test-prod";
-        staged.sku = "SKU-006";
-        staged.name = "Test";
-        staged.categorySlug = null;
-        staged.brandSlug = null;
+        staged.setProductSlug("test-prod");
+        staged.setSku("SKU-006");
+        staged.setName("Test");
+        staged.setCategorySlug(null);
+        staged.setBrandSlug(null);
 
         List<String> errors = new ArrayList<>();
         validator.validateAndDiff(staged, errors, 10, null, "", "");
@@ -500,32 +518,35 @@ class ProductImportCharacterizationTest {
 
     @Test
     @DisplayName("applyValidationResults: no errors sets VALID status and null message")
-    void applyValidationResults_noErrors_setsValid() throws Exception {
+    void applyValidationResults_noErrors_setsValid() throws Exception
+    {
         ProductUploadStagedEntity staged = new ProductUploadStagedEntity();
         List<String> errors = new ArrayList<>();
 
         validator.applyValidationResults(staged, errors);
 
-        assertEquals(ProductImportValidationStatusEn.VALID, staged.validationStatus);
-        assertNull(staged.validationErrors);
+        assertEquals(ProductImportValidationStatusEn.VALID, staged.getValidationStatus());
+        assertNull(staged.getValidationErrors());
     }
 
     @Test
     @DisplayName("applyValidationResults: single error sets INVALID and stores message")
-    void applyValidationResults_singleError_setsInvalid() throws Exception {
+    void applyValidationResults_singleError_setsInvalid() throws Exception
+    {
         ProductUploadStagedEntity staged = new ProductUploadStagedEntity();
         List<String> errors = new ArrayList<>();
         errors.add("Unknown category: apparel");
 
         validator.applyValidationResults(staged, errors);
 
-        assertEquals(ProductImportValidationStatusEn.INVALID, staged.validationStatus);
-        assertEquals("Unknown category: apparel", staged.validationErrors);
+        assertEquals(ProductImportValidationStatusEn.INVALID, staged.getValidationStatus());
+        assertEquals("Unknown category: apparel", staged.getValidationErrors());
     }
 
     @Test
     @DisplayName("applyValidationResults: multiple errors joined with semicolon-space separator")
-    void applyValidationResults_multipleErrors_joinedWithSemicolonSpace() throws Exception {
+    void applyValidationResults_multipleErrors_joinedWithSemicolonSpace() throws Exception
+    {
         ProductUploadStagedEntity staged = new ProductUploadStagedEntity();
         List<String> errors = new ArrayList<>();
         errors.add("category is required");
@@ -534,9 +555,8 @@ class ProductImportCharacterizationTest {
 
         validator.applyValidationResults(staged, errors);
 
-        assertEquals(ProductImportValidationStatusEn.INVALID, staged.validationStatus);
-        assertEquals("category is required; brand is required; sku is required",
-                staged.validationErrors);
+        assertEquals(ProductImportValidationStatusEn.INVALID, staged.getValidationStatus());
+        assertEquals("category is required; brand is required; sku is required", staged.getValidationErrors());
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -546,15 +566,16 @@ class ProductImportCharacterizationTest {
 
     @Test
     @DisplayName("stageProductRowsChunkInTransaction: all-valid rows produce VALID status for all")
-    void stageChunk_allValidRows_allValid() throws Exception {
+    void stageChunk_allValidRows_allValid() throws Exception
+    {
         UUID batchId = UUID.randomUUID();
         ProductUploadBatchEntity batch = createBatch(batchId);
         when(batchRepository.findById(batchId)).thenReturn(batch);
 
         CategoryEntity category = new CategoryEntity();
-        category.slug = "apparel";
+        category.setSlug("apparel");
         BrandEntity brand = new BrandEntity();
-        brand.slug = "nike";
+        brand.setSlug("nike");
         when(categoryRepository.findBySlugIgnoreCase("apparel")).thenReturn(category);
         when(brandRepository.findBySlugIgnoreCase("nike")).thenReturn(brand);
         when(variantRepository.findBySku(any())).thenReturn(null);
@@ -578,24 +599,25 @@ class ProductImportCharacterizationTest {
 
         assertEquals(2, persisted.size());
         for (ProductUploadStagedEntity staged : persisted) {
-            assertEquals(ProductImportValidationStatusEn.VALID, staged.validationStatus);
-            assertNull(staged.validationErrors);
+            assertEquals(ProductImportValidationStatusEn.VALID, staged.getValidationStatus());
+            assertNull(staged.getValidationErrors());
         }
-        assertEquals(2, batch.totalRows);
-        assertEquals(Integer.valueOf(0), batch.validationErrorCount);
+        assertEquals(2, batch.getTotalRows());
+        assertEquals(Integer.valueOf(0), batch.getValidationErrorCount());
     }
 
     @Test
     @DisplayName("stageProductRowsChunkInTransaction: some-invalid rows pin errors per row")
-    void stageChunk_someInvalidRows_pinsErrorsPerRow() throws Exception {
+    void stageChunk_someInvalidRows_pinsErrorsPerRow() throws Exception
+    {
         UUID batchId = UUID.randomUUID();
         ProductUploadBatchEntity batch = createBatch(batchId);
         when(batchRepository.findById(batchId)).thenReturn(batch);
 
         CategoryEntity category = new CategoryEntity();
-        category.slug = "apparel";
+        category.setSlug("apparel");
         BrandEntity brand = new BrandEntity();
-        brand.slug = "nike";
+        brand.setSlug("nike");
         when(categoryRepository.findBySlugIgnoreCase("apparel")).thenReturn(category);
         when(categoryRepository.findBySlugIgnoreCase("bad-cat")).thenReturn(null);
         when(brandRepository.findBySlugIgnoreCase("nike")).thenReturn(brand);
@@ -623,32 +645,33 @@ class ProductImportCharacterizationTest {
         assertEquals(3, persisted.size());
 
         // Row 1: valid
-        assertEquals(ProductImportValidationStatusEn.VALID, persisted.get(0).validationStatus);
-        assertNull(persisted.get(0).validationErrors);
+        assertEquals(ProductImportValidationStatusEn.VALID, persisted.get(0).getValidationStatus());
+        assertNull(persisted.get(0).getValidationErrors());
 
         // Row 2: unknown category
-        assertEquals(ProductImportValidationStatusEn.INVALID, persisted.get(1).validationStatus);
-        assertEquals("Unknown category: bad-cat", persisted.get(1).validationErrors);
+        assertEquals(ProductImportValidationStatusEn.INVALID, persisted.get(1).getValidationStatus());
+        assertEquals("Unknown category: bad-cat", persisted.get(1).getValidationErrors());
 
         // Row 3: unknown brand
-        assertEquals(ProductImportValidationStatusEn.INVALID, persisted.get(2).validationStatus);
-        assertEquals("Unknown brand: bad-brand", persisted.get(2).validationErrors);
+        assertEquals(ProductImportValidationStatusEn.INVALID, persisted.get(2).getValidationStatus());
+        assertEquals("Unknown brand: bad-brand", persisted.get(2).getValidationErrors());
 
         // Batch error count = errors from row 2 (1) + row 3 (1) = 2
-        assertEquals(Integer.valueOf(2), batch.validationErrorCount);
+        assertEquals(Integer.valueOf(2), batch.getValidationErrorCount());
     }
 
     @Test
     @DisplayName("stageProductRowsChunkInTransaction: malformed stock row pins parse error carried through")
-    void stageChunk_malformedStock_pinsParseErrorCarriedThrough() throws Exception {
+    void stageChunk_malformedStock_pinsParseErrorCarriedThrough() throws Exception
+    {
         UUID batchId = UUID.randomUUID();
         ProductUploadBatchEntity batch = createBatch(batchId);
         when(batchRepository.findById(batchId)).thenReturn(batch);
 
         CategoryEntity category = new CategoryEntity();
-        category.slug = "apparel";
+        category.setSlug("apparel");
         BrandEntity brand = new BrandEntity();
-        brand.slug = "nike";
+        brand.setSlug("nike");
         when(categoryRepository.findBySlugIgnoreCase("apparel")).thenReturn(category);
         when(brandRepository.findBySlugIgnoreCase("nike")).thenReturn(brand);
         when(variantRepository.findBySku(any())).thenReturn(null);
@@ -673,42 +696,43 @@ class ProductImportCharacterizationTest {
         ProductUploadStagedEntity staged = persisted.get(0);
 
         // The parse error from parseProductCsvRow is carried through to the final error
-        assertEquals(ProductImportValidationStatusEn.INVALID, staged.validationStatus);
+        assertEquals(ProductImportValidationStatusEn.INVALID, staged.getValidationStatus());
         assertEquals("Invalid integer value for stock: INVALID_NUMBER",
-                staged.validationErrors);
-        assertEquals(Integer.valueOf(1), batch.validationErrorCount);
+                staged.getValidationErrors());
+        assertEquals(Integer.valueOf(1), batch.getValidationErrorCount());
     }
 
     @Test
     @DisplayName("stageProductRowsChunkInTransaction: unknown-SKU row (SKU belongs to another product)")
-    void stageChunk_unknownSkuRow_pinsConflictError() throws Exception {
+    void stageChunk_unknownSkuRow_pinsConflictError() throws Exception
+    {
         UUID batchId = UUID.randomUUID();
         ProductUploadBatchEntity batch = createBatch(batchId);
         when(batchRepository.findById(batchId)).thenReturn(batch);
 
         CategoryEntity category = new CategoryEntity();
-        category.slug = "apparel";
+        category.setSlug("apparel");
         BrandEntity brand = new BrandEntity();
-        brand.slug = "nike";
+        brand.setSlug("nike");
         when(categoryRepository.findBySlugIgnoreCase("apparel")).thenReturn(category);
         when(brandRepository.findBySlugIgnoreCase("nike")).thenReturn(brand);
 
         // SKU-CONFLICT belongs to Product A, but the CSV row references Product B
         ProductEntity productA = new ProductEntity();
-        productA.id = UUID.randomUUID();
-        productA.name = "Product A";
+        productA.setId(UUID.randomUUID());
+        productA.setName("Product A");
         ProductVariantEntity variantA = new ProductVariantEntity();
-        variantA.id = UUID.randomUUID();
-        variantA.product = productA;
-        variantA.stockQuantity = 10;
+        variantA.setId(UUID.randomUUID());
+        variantA.setProduct(productA);
+        variantA.setStockQuantity(10);
         when(variantRepository.findBySku("SKU-CONFLICT")).thenReturn(variantA);
-        when(imageRepository.findByVariantId(variantA.id)).thenReturn(List.of());
+        when(imageRepository.findByVariantId(variantA.getId())).thenReturn(List.of());
 
         // CSV product slug maps to a different product
         ProductEntity productB = new ProductEntity();
-        productB.id = UUID.randomUUID();
-        productB.name = "Product B";
-        productB.slug = "product-b";
+        productB.setId(UUID.randomUUID());
+        productB.setName("Product B");
+        productB.setSlug("product-b");
         when(productRepository.findBySlugIgnoreCase("product-b")).thenReturn(productB);
 
         String csv = "product_slug,sku,name,description,categories_slug,short_description,stock,brand_slug,images,attributes\n"
@@ -726,14 +750,15 @@ class ProductImportCharacterizationTest {
 
         assertEquals(1, persisted.size());
         ProductUploadStagedEntity staged = persisted.get(0);
-        assertEquals(ProductImportValidationStatusEn.INVALID, staged.validationStatus);
+        assertEquals(ProductImportValidationStatusEn.INVALID, staged.getValidationStatus());
         assertEquals("SKU SKU-CONFLICT already belongs to another product",
-                staged.validationErrors);
+                staged.getValidationErrors());
     }
 
     @Test
     @DisplayName("stageProductRowsChunkInTransaction: empty file (no data rows) produces no staged entities")
-    void stageChunk_emptyFile_noStagedEntities() throws Exception {
+    void stageChunk_emptyFile_noStagedEntities() throws Exception
+    {
         UUID batchId = UUID.randomUUID();
         ProductUploadBatchEntity batch = createBatch(batchId);
         when(batchRepository.findById(batchId)).thenReturn(batch);
@@ -746,23 +771,24 @@ class ProductImportCharacterizationTest {
 
         // stageChunkInTransaction should not be called with empty list, but verify
         // the batch remains at zero counts
-        assertEquals(Integer.valueOf(0), batch.totalRows);
-        assertEquals(Integer.valueOf(0), batch.validationErrorCount);
+        assertEquals(Integer.valueOf(0), batch.getTotalRows());
+        assertEquals(Integer.valueOf(0), batch.getValidationErrorCount());
     }
 
     @Test
     @DisplayName("stageProductRowsChunkInTransaction: multiple categories validated independently")
-    void stageChunk_multipleCategorySlugs_validatedIndependently() throws Exception {
+    void stageChunk_multipleCategorySlugs_validatedIndependently() throws Exception
+    {
         UUID batchId = UUID.randomUUID();
         ProductUploadBatchEntity batch = createBatch(batchId);
         when(batchRepository.findById(batchId)).thenReturn(batch);
 
         CategoryEntity cat1 = new CategoryEntity();
-        cat1.slug = "shoes";
+        cat1.setSlug("shoes");
         when(categoryRepository.findBySlugIgnoreCase("shoes")).thenReturn(cat1);
         when(categoryRepository.findBySlugIgnoreCase("unknown")).thenReturn(null);
         BrandEntity brand = new BrandEntity();
-        brand.slug = "nike";
+        brand.setSlug("nike");
         when(brandRepository.findBySlugIgnoreCase("nike")).thenReturn(brand);
         when(variantRepository.findBySku(any())).thenReturn(null);
         when(productRepository.findBySlugIgnoreCase(any())).thenReturn(null);
@@ -784,13 +810,14 @@ class ProductImportCharacterizationTest {
 
         assertEquals(1, persisted.size());
         ProductUploadStagedEntity staged = persisted.get(0);
-        assertEquals(ProductImportValidationStatusEn.INVALID, staged.validationStatus);
-        assertEquals("Unknown category: unknown", staged.validationErrors);
+        assertEquals(ProductImportValidationStatusEn.INVALID, staged.getValidationStatus());
+        assertEquals("Unknown category: unknown", staged.getValidationErrors());
     }
 
     @Test
     @DisplayName("stageProductRowsChunkInTransaction: parse error + validation error both appear in final errors")
-    void stageChunk_parseAndValidationErrors_bothAppearInFinalErrors() throws Exception {
+    void stageChunk_parseAndValidationErrors_bothAppearInFinalErrors() throws Exception
+    {
         UUID batchId = UUID.randomUUID();
         ProductUploadBatchEntity batch = createBatch(batchId);
         when(batchRepository.findById(batchId)).thenReturn(batch);
@@ -817,19 +844,20 @@ class ProductImportCharacterizationTest {
 
         assertEquals(1, persisted.size());
         ProductUploadStagedEntity staged = persisted.get(0);
-        assertEquals(ProductImportValidationStatusEn.INVALID, staged.validationStatus);
+        assertEquals(ProductImportValidationStatusEn.INVALID, staged.getValidationStatus());
 
         // Pin the full error string: parse error (stock) + validation errors (category, brand)
         // Order: parse error carried first, then category, then brand
         String expectedErrors = "Invalid integer value for stock: XYZ; Unknown category: bad-cat; Unknown brand: bad-brand";
-        assertEquals(expectedErrors, staged.validationErrors);
+        assertEquals(expectedErrors, staged.getValidationErrors());
     }
 
     // ══════════════════════════════════════════════════════════════════════════
     // Helper methods
     // ══════════════════════════════════════════════════════════════════════════
 
-    private CSVRecord parseSingleRecord(String csv) throws IOException {
+    private CSVRecord parseSingleRecord(String csv) throws IOException
+    {
         try (CSVParser parser = new CSVParser(
                 new StringReader(csv),
                 CSVFormat.DEFAULT.builder()
@@ -842,7 +870,8 @@ class ProductImportCharacterizationTest {
         }
     }
 
-    private List<CSVRecord> parseAllRecords(String csv) throws IOException {
+    private List<CSVRecord> parseAllRecords(String csv) throws IOException
+    {
         try (CSVParser parser = new CSVParser(
                 new StringReader(csv),
                 CSVFormat.DEFAULT.builder()
@@ -855,7 +884,8 @@ class ProductImportCharacterizationTest {
         }
     }
 
-    private List<StagedProductCsvRow> parseAllRows(String csv) throws Exception {
+    private List<StagedProductCsvRow> parseAllRows(String csv) throws Exception
+    {
         List<CSVRecord> records = parseAllRecords(csv);
         List<StagedProductCsvRow> rows = new ArrayList<>();
         for (CSVRecord record : records) {
@@ -864,7 +894,8 @@ class ProductImportCharacterizationTest {
         return rows;
     }
 
-    private void invokeStageChunkInTransaction(UUID batchId, List<StagedProductCsvRow> rows) throws Exception {
+    private void invokeStageChunkInTransaction(UUID batchId, List<StagedProductCsvRow> rows) throws Exception
+    {
         // After the state-machine refactor, stageProductRowsChunkInTransaction no longer
         // exists on ProductImportService. The equivalent logic now lives in
         // ChunkedImportStateMachine.stageRowsChunkInTransaction which delegates to the
@@ -888,18 +919,20 @@ class ProductImportCharacterizationTest {
         strategy.setValidationErrorCount(batch, (currentErrors != null ? currentErrors : 0) + validationErrorCount);
     }
 
-    private ProductUploadBatchEntity createBatch(UUID batchId) {
+    private ProductUploadBatchEntity createBatch(UUID batchId)
+    {
         ProductUploadBatchEntity batch = new ProductUploadBatchEntity();
-        batch.id = batchId;
-        batch.productUploadStatusEn = ProductUploadStatusEn.IMPORTING;
-        batch.totalRows = 0;
-        batch.processedRows = 0;
-        batch.skippedRows = 0;
-        batch.validationErrorCount = 0;
+        batch.setId(batchId);
+        batch.setProductUploadStatusEn(ProductUploadStatusEn.IMPORTING);
+        batch.setTotalRows(0);
+        batch.setProcessedRows(0);
+        batch.setSkippedRows(0);
+        batch.setValidationErrorCount(0);
         return batch;
     }
 
-    private void setField(Object target, String fieldName, Object value) throws Exception {
+    private void setField(Object target, String fieldName, Object value) throws Exception
+    {
         Field field = target.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);
         field.set(target, value);

@@ -25,8 +25,8 @@ import static org.mockito.Mockito.*;
  */
 @QuarkusTest
 @DisplayName("ContactEnquiryResource — integration tests")
-class ContactEnquiryResourceTest {
-
+class ContactEnquiryResourceTest
+{
     @InjectMock
     ContactEnquiryMailer contactEnquiryMailer;
 
@@ -34,17 +34,18 @@ class ContactEnquiryResourceTest {
     RateLimiterService rateLimiterService;
 
     @BeforeEach
-    void setUp() {
+    void setUp()
+    {
         // Default: allow all requests (under rate limit)
-        when(rateLimiterService.check(anyString(), anyString(), anyInt(), anyLong()))
-                .thenReturn(new RateLimitDecision(true, 0));
+        when(rateLimiterService.check(anyString(), anyString(), anyInt(), anyLong())).thenReturn(new RateLimitDecision(true, 0));
         // Default: mailer does nothing (no throw = success)
         doNothing().when(contactEnquiryMailer).send(any(ContactEnquiryRequestDto.class));
     }
 
     // ── Helpers ─────────────────────────────────────────────────────────────
 
-    private String validPayload() {
+    private String validPayload()
+    {
         return """
                 {
                     "name": "Jane Doe",
@@ -56,7 +57,8 @@ class ContactEnquiryResourceTest {
                 """;
     }
 
-    private String validPayloadWithHoneypot(String honeypotValue) {
+    private String validPayloadWithHoneypot(String honeypotValue)
+    {
         return """
                 {
                     "name": "Jane Doe",
@@ -73,7 +75,8 @@ class ContactEnquiryResourceTest {
 
     @Test
     @DisplayName("valid payload returns 202 and invokes mailer")
-    void validSubmission_returns202_invokesMailer() {
+    void validSubmission_returns202_invokesMailer()
+    {
         given()
                 .contentType(ContentType.JSON)
                 .body(validPayload())
@@ -87,7 +90,8 @@ class ContactEnquiryResourceTest {
 
     @Test
     @DisplayName("valid payload with empty honeypot returns 202 and invokes mailer")
-    void validSubmission_emptyHoneypot_returns202_invokesMailer() {
+    void validSubmission_emptyHoneypot_returns202_invokesMailer()
+    {
         String payload = """
                 {
                     "name": "John Smith",
@@ -116,7 +120,8 @@ class ContactEnquiryResourceTest {
 
     @Test
     @DisplayName("missing required name field returns 422 and does not invoke mailer")
-    void missingName_returns422_noMail() {
+    void missingName_returns422_noMail()
+    {
         String payload = """
                 {
                     "email": "jane@visitor.com",
@@ -138,7 +143,8 @@ class ContactEnquiryResourceTest {
 
     @Test
     @DisplayName("missing required email field returns 422 and does not invoke mailer")
-    void missingEmail_returns422_noMail() {
+    void missingEmail_returns422_noMail()
+    {
         String payload = """
                 {
                     "name": "Jane Doe",
@@ -160,7 +166,8 @@ class ContactEnquiryResourceTest {
 
     @Test
     @DisplayName("invalid email format returns 422 and does not invoke mailer")
-    void invalidEmailFormat_returns422_noMail() {
+    void invalidEmailFormat_returns422_noMail()
+    {
         String payload = """
                 {
                     "name": "Jane Doe",
@@ -183,7 +190,8 @@ class ContactEnquiryResourceTest {
 
     @Test
     @DisplayName("missing required phone field returns 422 and does not invoke mailer")
-    void missingPhone_returns422_noMail() {
+    void missingPhone_returns422_noMail()
+    {
         String payload = """
                 {
                     "name": "Jane Doe",
@@ -205,7 +213,8 @@ class ContactEnquiryResourceTest {
 
     @Test
     @DisplayName("missing required message field returns 422 and does not invoke mailer")
-    void missingMessage_returns422_noMail() {
+    void missingMessage_returns422_noMail()
+    {
         String payload = """
                 {
                     "name": "Jane Doe",
@@ -229,7 +238,8 @@ class ContactEnquiryResourceTest {
 
     @Test
     @DisplayName("honeypot field filled returns 202 but does NOT invoke mailer")
-    void honeypotFilled_returns202_noMail() {
+    void honeypotFilled_returns202_noMail()
+    {
         given()
                 .contentType(ContentType.JSON)
                 .body(validPayloadWithHoneypot("http://spam-site.com"))
@@ -243,7 +253,8 @@ class ContactEnquiryResourceTest {
 
     @Test
     @DisplayName("honeypot field with whitespace only is treated as empty (not bot)")
-    void honeypotWhitespaceOnly_returns202_invokesMailer() {
+    void honeypotWhitespaceOnly_returns202_invokesMailer()
+    {
         String payload = """
                 {
                     "name": "Jane Doe",
@@ -269,7 +280,8 @@ class ContactEnquiryResourceTest {
 
     @Test
     @DisplayName("rate limit exceeded returns 429 and does not invoke mailer")
-    void rateLimitExceeded_returns429_noMail() {
+    void rateLimitExceeded_returns429_noMail()
+    {
         when(rateLimiterService.check(anyString(), anyString(), anyInt(), anyLong()))
                 .thenReturn(new RateLimitDecision(false, 3500));
 
@@ -289,7 +301,8 @@ class ContactEnquiryResourceTest {
 
     @Test
     @DisplayName("no recipient configured returns 503 Service Unavailable")
-    void noRecipientConfigured_returns503() {
+    void noRecipientConfigured_returns503()
+    {
         doThrow(new RecipientNotConfiguredException("enquiryEmail is absent"))
                 .when(contactEnquiryMailer).send(any(ContactEnquiryRequestDto.class));
 
@@ -306,7 +319,8 @@ class ContactEnquiryResourceTest {
 
     @Test
     @DisplayName("payload cannot influence recipient — extra fields are ignored")
-    void recipientNotFromPayload_extraFieldsIgnored() {
+    void recipientNotFromPayload_extraFieldsIgnored()
+    {
         // Even if someone tries to inject a "recipientEmail" or "to" field,
         // the endpoint ignores it — only server-resolved enquiryEmail is used
         String payloadWithExtraRecipientField = """
@@ -337,7 +351,8 @@ class ContactEnquiryResourceTest {
 
     @Test
     @DisplayName("endpoint is accessible without authentication token")
-    void endpointIsPublic_noAuthRequired() {
+    void endpointIsPublic_noAuthRequired()
+    {
         // No Authorization header or JWT — should still work (public endpoint)
         given()
                 .contentType(ContentType.JSON)
@@ -352,7 +367,8 @@ class ContactEnquiryResourceTest {
 
     @Test
     @DisplayName("X-Forwarded-For LAST entry (proxy-appended) is the resolved client IP passed to the rate limiter")
-    void xForwardedForUsedForRateLimiting() {
+    void xForwardedForUsedForRateLimiting()
+    {
         given()
                 .contentType(ContentType.JSON)
                 .header("X-Forwarded-For", "203.0.113.42, 10.0.0.1")
@@ -369,7 +385,8 @@ class ContactEnquiryResourceTest {
 
     @Test
     @DisplayName("CF-Connecting-IP takes precedence over X-Forwarded-For for the rate limiter")
-    void cfConnectingIpTakesPrecedence() {
+    void cfConnectingIpTakesPrecedence()
+    {
         given()
                 .contentType(ContentType.JSON)
                 .header("CF-Connecting-IP", "203.0.113.9")
@@ -385,7 +402,8 @@ class ContactEnquiryResourceTest {
 
     @Test
     @DisplayName("falls back to X-Real-IP when X-Forwarded-For is absent")
-    void xRealIpUsedWhenNoForwardedFor() {
+    void xRealIpUsedWhenNoForwardedFor()
+    {
         given()
                 .contentType(ContentType.JSON)
                 .header("X-Real-IP", "198.51.100.7")

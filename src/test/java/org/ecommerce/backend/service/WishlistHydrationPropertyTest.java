@@ -21,25 +21,24 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Property 6: Hydration omits inactive products
- *
+ * <p>
  * For any set of variant IDs passed to the hydration endpoint, the response SHALL
  * contain only entries where both the product status is ACTIVE and the variant status
  * is ACTIVE. No entry with a DISABLED or PENDING product/variant SHALL appear in the
  * response.
- *
+ * <p>
  * Validates: Requirements 3.7
  */
-class WishlistHydrationPropertyTest {
-
+class WishlistHydrationPropertyTest
+{
     /**
      * Property: For any mix of variant statuses (ACTIVE/DISABLED/PENDING) and product
      * statuses, only those with BOTH product.status = ACTIVE and variant.status = ACTIVE
      * appear in the hydration response.
      */
     @Property(tries = 100)
-    void hydrationOnlyReturnsVariantsWithBothProductAndVariantActive(
-            @ForAll("variantScenarios") VariantScenario scenario
-    ) {
+    void hydrationOnlyReturnsVariantsWithBothProductAndVariantActive(@ForAll("variantScenarios") VariantScenario scenario)
+    {
         // Set up the service with mocked repositories
         WishlistHydrationService service = buildServiceWithMockedRepos(scenario);
 
@@ -53,7 +52,7 @@ class WishlistHydrationPropertyTest {
         // Property assertion: every returned item must correspond to a variant
         // where both product.status == ACTIVE and variant.status == ACTIVE
         Set<UUID> returnedVariantIds = results.stream()
-                .map(dto -> dto.variantId)
+                .map(dto -> dto.getVariantId())
                 .collect(Collectors.toSet());
 
         // Determine which variant IDs SHOULD be in the response
@@ -72,24 +71,22 @@ class WishlistHydrationPropertyTest {
 
         // Assert: no inactive variant appears in results
         for (UUID inactiveId : inactiveIds) {
-            assertFalse(returnedVariantIds.contains(inactiveId),
-                    "Variant " + inactiveId + " has inactive product/variant status and must NOT appear in results");
+            assertFalse(returnedVariantIds.contains(inactiveId), "Variant " + inactiveId + " has inactive product/variant status and must NOT appear in results");
         }
 
         // Assert: all active variants DO appear in results
         for (UUID activeId : expectedActiveIds) {
-            assertTrue(returnedVariantIds.contains(activeId),
-                    "Variant " + activeId + " has ACTIVE product and variant status and MUST appear in results");
+            assertTrue(returnedVariantIds.contains(activeId), "Variant " + activeId + " has ACTIVE product and variant status and MUST appear in results");
         }
 
         // Assert: result count equals exactly the number of both-ACTIVE entries
-        assertEquals(expectedActiveIds.size(), results.size(),
-                "Result count must equal number of variants with both product and variant ACTIVE");
+        assertEquals(expectedActiveIds.size(), results.size(), "Result count must equal number of variants with both product and variant ACTIVE");
     }
 
     // ── Service construction with mocked repositories ──────────────────────────
 
-    private WishlistHydrationService buildServiceWithMockedRepos(VariantScenario scenario) {
+    private WishlistHydrationService buildServiceWithMockedRepos(VariantScenario scenario)
+    {
         // Build entities for the scenario
         Map<UUID, ProductEntity> productEntities = new HashMap<>();
         List<ProductVariantEntity> allVariantEntities = new ArrayList<>();
@@ -98,50 +95,55 @@ class WishlistHydrationPropertyTest {
             // Get or create the product entity
             ProductEntity product = productEntities.computeIfAbsent(def.productId, id -> {
                 ProductEntity p = new ProductEntity();
-                p.id = id;
-                p.name = "Product-" + id.toString().substring(0, 8);
-                p.slug = "product-" + id.toString().substring(0, 8);
-                p.status = def.productStatus;
+                p.setId(id);
+                p.setName("Product-" + id.toString().substring(0, 8));
+                p.setSlug("product-" + id.toString().substring(0, 8));
+                p.setStatus(def.productStatus);
                 return p;
             });
 
             ProductVariantEntity variant = new ProductVariantEntity();
-            variant.id = def.variantId;
-            variant.sku = "SKU-" + def.variantId.toString().substring(0, 8);
-            variant.attributesJson = "{\"color\":\"blue\"}";
-            variant.status = def.variantStatus;
-            variant.product = product;
+            variant.setId(def.variantId);
+            variant.setSku("SKU-" + def.variantId.toString().substring(0, 8));
+            variant.setAttributesJson("{\"color\":\"blue\"}");
+            variant.setStatus(def.variantStatus);
+            variant.setProduct(product);
             allVariantEntities.add(variant);
         }
 
         // Filter to only ACTIVE variants with ACTIVE products (mimics the DB query)
         List<ProductVariantEntity> activeVariants = allVariantEntities.stream()
-                .filter(v -> v.status == ProductStatusEn.ACTIVE
-                        && v.product.status == ProductStatusEn.ACTIVE)
-                .collect(Collectors.toList());
+                .filter(v -> v.getStatus() == ProductStatusEn.ACTIVE && v.getProduct().getStatus() == ProductStatusEn.ACTIVE)
+                .toList();
 
         // Create mock repositories
-        ProductVariantRepository mockVariantRepo = new ProductVariantRepository() {
+        ProductVariantRepository mockVariantRepo = new ProductVariantRepository()
+        {
             @Override
-            public List<ProductVariantEntity> findActiveByIdsWithProduct(List<UUID> ids) {
+            public List<ProductVariantEntity> findActiveByIdsWithProduct(List<UUID> ids)
+            {
                 return activeVariants.stream()
-                        .filter(v -> ids.contains(v.id))
-                        .collect(Collectors.toList());
+                        .filter(v -> ids.contains(v.getId()))
+                        .toList();
             }
         };
 
-        VariantPricesRepository mockPricesRepo = new VariantPricesRepository() {
+        VariantPricesRepository mockPricesRepo = new VariantPricesRepository()
+        {
             @Override
             public List<VariantPricesEntity> findActiveForVariantIds(
                     List<UUID> variantIds, List<org.ecommerce.common.enums.PriceTypeEn> priceTypes,
-                    java.time.LocalDateTime now) {
+                    java.time.LocalDateTime now)
+            {
                 return Collections.emptyList();
             }
         };
 
-        ProductImageRepository mockImageRepo = new ProductImageRepository() {
+        ProductImageRepository mockImageRepo = new ProductImageRepository()
+        {
             @Override
-            public List<ProductImageEntity> findForVariantIds(List<UUID> variantIds) {
+            public List<ProductImageEntity> findForVariantIds(List<UUID> variantIds)
+            {
                 return Collections.emptyList();
             }
         };
@@ -154,7 +156,8 @@ class WishlistHydrationPropertyTest {
         return service;
     }
 
-    private void setField(Object target, String fieldName, Object value) {
+    private void setField(Object target, String fieldName, Object value)
+    {
         try {
             Field field = target.getClass().getDeclaredField(fieldName);
             field.setAccessible(true);
@@ -167,32 +170,34 @@ class WishlistHydrationPropertyTest {
     // ── Generators ─────────────────────────────────────────────────────────────
 
     @Provide
-    Arbitrary<VariantScenario> variantScenarios() {
-        Arbitrary<List<VariantDef>> variantDefsArb = variantDefs()
-                .list().ofMinSize(1).ofMaxSize(15);
+    Arbitrary<VariantScenario> variantScenarios()
+    {
+        Arbitrary<List<VariantDef>> variantDefsArb = variantDefs().list().ofMinSize(1).ofMaxSize(15);
 
         return variantDefsArb.map(VariantScenario::new);
     }
 
-    private Arbitrary<VariantDef> variantDefs() {
+    private Arbitrary<VariantDef> variantDefs()
+    {
         Arbitrary<UUID> variantIdArb = Arbitraries.create(UUID::randomUUID);
         Arbitrary<UUID> productIdArb = Arbitraries.create(UUID::randomUUID);
         Arbitrary<ProductStatusEn> variantStatusArb = Arbitraries.of(ProductStatusEn.values());
         Arbitrary<ProductStatusEn> productStatusArb = Arbitraries.of(ProductStatusEn.values());
 
-        return Combinators.combine(variantIdArb, productIdArb, variantStatusArb, productStatusArb)
-                .as(VariantDef::new);
+        return Combinators.combine(variantIdArb, productIdArb, variantStatusArb, productStatusArb).as(VariantDef::new);
     }
 
     // ── Scenario classes ───────────────────────────────────────────────────────
 
-    static class VariantDef {
+    static class VariantDef
+    {
         final UUID variantId;
         final UUID productId;
         final ProductStatusEn variantStatus;
         final ProductStatusEn productStatus;
 
-        VariantDef(UUID variantId, UUID productId, ProductStatusEn variantStatus, ProductStatusEn productStatus) {
+        VariantDef(UUID variantId, UUID productId, ProductStatusEn variantStatus, ProductStatusEn productStatus)
+        {
             this.variantId = variantId;
             this.productId = productId;
             this.variantStatus = variantStatus;
@@ -200,7 +205,8 @@ class WishlistHydrationPropertyTest {
         }
 
         @Override
-        public String toString() {
+        public String toString()
+        {
             return "VariantDef{id=" + variantId.toString().substring(0, 8)
                     + ", productId=" + productId.toString().substring(0, 8)
                     + ", variantStatus=" + variantStatus
@@ -208,15 +214,18 @@ class WishlistHydrationPropertyTest {
         }
     }
 
-    static class VariantScenario {
+    static class VariantScenario
+    {
         final List<VariantDef> variants;
 
-        VariantScenario(List<VariantDef> variants) {
+        VariantScenario(List<VariantDef> variants)
+        {
             this.variants = variants;
         }
 
         @Override
-        public String toString() {
+        public String toString()
+        {
             long activeCount = variants.stream()
                     .filter(v -> v.variantStatus == ProductStatusEn.ACTIVE
                             && v.productStatus == ProductStatusEn.ACTIVE)

@@ -9,8 +9,8 @@ import org.apache.commons.csv.CSVParser;
 import org.apache.commons.csv.CSVRecord;
 import org.ecommerce.backend.mapper.ProductImportParser.StagedProductCsvRow;
 
-import java.io.IOException;
 import java.io.ByteArrayInputStream;
+import java.io.IOException;
 import java.io.StringReader;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -23,14 +23,14 @@ import static org.junit.jupiter.api.Assertions.*;
  * Property-based test verifying that {@link ProductImportParser#parseRow(CSVRecord)}
  * produces output identical to a reference implementation that duplicates the old
  * inline parsing logic from {@code ProductImportService}.
- *
+ * <p>
  * The reference implementation is a straightforward transcription of the pre-extraction
  * CSV field extraction, slug normalization, and stock parsing logic.
- *
+ * <p>
  * Validates: Requirements 3.2, 4.1, 4.2
  */
-public class ProductImportParserPropertyTest {
-
+public class ProductImportParserPropertyTest
+{
     private static final CSVFormat CSV_FORMAT = CSVFormat.DEFAULT.builder()
             .setHeader()
             .setSkipHeaderRecord(true)
@@ -47,7 +47,8 @@ public class ProductImportParserPropertyTest {
      * before extraction. This is a direct transcription of the field extraction,
      * slug normalization (lowercase), and stock parsing (blank→0, invalid→null+error).
      */
-    private StagedProductCsvRow referenceParseRow(CSVRecord record) {
+    private StagedProductCsvRow referenceParseRow(CSVRecord record)
+    {
         List<String> validationErrors = new ArrayList<>();
 
         String productSlugRaw = referenceGetValue(record, "product_slug", "product-slug");
@@ -79,7 +80,8 @@ public class ProductImportParserPropertyTest {
                 List.copyOf(validationErrors));
     }
 
-    private String referenceGetValue(CSVRecord record, String... headers) {
+    private String referenceGetValue(CSVRecord record, String... headers)
+    {
         for (String header : headers) {
             if (record.isMapped(header)) {
                 String value = record.get(header);
@@ -91,16 +93,19 @@ public class ProductImportParserPropertyTest {
         return null;
     }
 
-    private String referenceNormalizeSlug(String value) {
+    private String referenceNormalizeSlug(String value)
+    {
         String normalized = referenceIsBlank(value) ? null : value.trim();
         return normalized == null ? null : normalized.toLowerCase(Locale.ROOT);
     }
 
-    private boolean referenceIsBlank(String value) {
+    private boolean referenceIsBlank(String value)
+    {
         return value == null || value.trim().isEmpty();
     }
 
-    private Integer referenceParseStockInteger(String value, List<String> validationErrors) {
+    private Integer referenceParseStockInteger(String value, List<String> validationErrors)
+    {
         if (referenceIsBlank(value)) {
             return 0;
         }
@@ -117,7 +122,8 @@ public class ProductImportParserPropertyTest {
     @Property(tries = 200)
     void parserOutputMatchesReferenceImplementation(
             @ForAll("csvRowStrings") String csvContent
-    ) throws IOException {
+    ) throws IOException
+    {
         // Parse the CSV content into a CSVRecord
         CSVRecord record = parseSingleRecord(csvContent);
 
@@ -143,7 +149,8 @@ public class ProductImportParserPropertyTest {
     @Property(tries = 100)
     void slugNormalizationAlwaysLowercases(
             @ForAll("csvRowStringsWithMixedCaseSlugs") String csvContent
-    ) throws IOException {
+    ) throws IOException
+    {
         CSVRecord record = parseSingleRecord(csvContent);
         StagedProductCsvRow result = parser.parseRow(record);
 
@@ -157,7 +164,8 @@ public class ProductImportParserPropertyTest {
     @Property(tries = 100)
     void blankStockDefaultsToZero(
             @ForAll("csvRowStringsWithBlankStock") String csvContent
-    ) throws IOException {
+    ) throws IOException
+    {
         CSVRecord record = parseSingleRecord(csvContent);
         StagedProductCsvRow result = parser.parseRow(record);
 
@@ -168,7 +176,8 @@ public class ProductImportParserPropertyTest {
     @Property(tries = 100)
     void invalidStockProducesNullAndError(
             @ForAll("csvRowStringsWithInvalidStock") String csvContent
-    ) throws IOException {
+    ) throws IOException
+    {
         CSVRecord record = parseSingleRecord(csvContent);
         StagedProductCsvRow result = parser.parseRow(record);
 
@@ -179,7 +188,8 @@ public class ProductImportParserPropertyTest {
     }
 
     @Example
-    void streamsMoreThanFiveThousandRowsInOrder() throws IOException {
+    void streamsMoreThanFiveThousandRowsInOrder() throws IOException
+    {
         int rowCount = 5_001;
         StringBuilder csv = new StringBuilder("product_slug,sku,name,description,categories_slug,short_description,stock,brand_slug,images,attributes\n");
         for (int index = 0; index < rowCount; index++) {
@@ -206,7 +216,8 @@ public class ProductImportParserPropertyTest {
      * Stock values include: valid integers, blank, and invalid strings.
      */
     @Provide
-    Arbitrary<String> csvRowStrings() {
+    Arbitrary<String> csvRowStrings()
+    {
         return buildCsvRow(stockValues());
     }
 
@@ -214,7 +225,8 @@ public class ProductImportParserPropertyTest {
      * Generates CSV rows where the product_slug has mixed case characters.
      */
     @Provide
-    Arbitrary<String> csvRowStringsWithMixedCaseSlugs() {
+    Arbitrary<String> csvRowStringsWithMixedCaseSlugs()
+    {
         Arbitrary<String> mixedCaseSlugs = Arbitraries.strings()
                 .withChars("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ-_0123456789")
                 .ofMinLength(1).ofMaxLength(30);
@@ -246,7 +258,8 @@ public class ProductImportParserPropertyTest {
      * Generates CSV rows with blank stock values (empty or whitespace-only).
      */
     @Provide
-    Arbitrary<String> csvRowStringsWithBlankStock() {
+    Arbitrary<String> csvRowStringsWithBlankStock()
+    {
         Arbitrary<String> blankStocks = Arbitraries.oneOf(
                 Arbitraries.just(""),
                 Arbitraries.just("   "),
@@ -259,7 +272,8 @@ public class ProductImportParserPropertyTest {
      * Generates CSV rows with invalid (non-numeric, non-blank) stock values.
      */
     @Provide
-    Arbitrary<String> csvRowStringsWithInvalidStock() {
+    Arbitrary<String> csvRowStringsWithInvalidStock()
+    {
         Arbitrary<String> invalidStocks = Arbitraries.oneOf(
                 Arbitraries.strings().alpha().ofMinLength(1).ofMaxLength(10),
                 Arbitraries.just("12.5"),
@@ -272,7 +286,8 @@ public class ProductImportParserPropertyTest {
 
     // ── Builder helpers ──────────────────────────────────────────────────────────
 
-    private Arbitrary<String> buildCsvRow(Arbitrary<String> stockArbitrary) {
+    private Arbitrary<String> buildCsvRow(Arbitrary<String> stockArbitrary)
+    {
         // Randomly pick between canonical and alternate header sets
         Arbitrary<String[]> headerSets = Arbitraries.oneOf(
                 Arbitraries.just(new String[]{
@@ -317,7 +332,8 @@ public class ProductImportParserPropertyTest {
         });
     }
 
-    private Arbitrary<String> stockValues() {
+    private Arbitrary<String> stockValues()
+    {
         return Arbitraries.oneOf(
                 // Valid integers
                 Arbitraries.integers().between(0, 99999).map(String::valueOf),
@@ -328,11 +344,13 @@ public class ProductImportParserPropertyTest {
         );
     }
 
-    private Arbitrary<String> validStockValues() {
+    private Arbitrary<String> validStockValues()
+    {
         return Arbitraries.integers().between(0, 99999).map(String::valueOf);
     }
 
-    private Arbitrary<String> slugFieldValues() {
+    private Arbitrary<String> slugFieldValues()
+    {
         return Arbitraries.oneOf(
                 // Normal slug
                 Arbitraries.strings()
@@ -352,7 +370,8 @@ public class ProductImportParserPropertyTest {
      * Generates safe field values that won't break CSV parsing.
      * Avoids newlines and double-quotes to keep row structure valid.
      */
-    private Arbitrary<String> safeFieldValues() {
+    private Arbitrary<String> safeFieldValues()
+    {
         return Arbitraries.oneOf(
                 Arbitraries.strings()
                         .withChars("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 -_.")
@@ -367,7 +386,8 @@ public class ProductImportParserPropertyTest {
      * Escapes a value for inclusion in a CSV field.
      * Wraps in double-quotes if the value contains commas, quotes, or newlines.
      */
-    private static String escapeCsv(String value) {
+    private static String escapeCsv(String value)
+    {
         if (value == null) {
             return "";
         }
@@ -377,7 +397,8 @@ public class ProductImportParserPropertyTest {
         return value;
     }
 
-    private CSVRecord parseSingleRecord(String csv) throws IOException {
+    private CSVRecord parseSingleRecord(String csv) throws IOException
+    {
         try (CSVParser csvParser = new CSVParser(
                 new StringReader(csv),
                 CSV_FORMAT)) {

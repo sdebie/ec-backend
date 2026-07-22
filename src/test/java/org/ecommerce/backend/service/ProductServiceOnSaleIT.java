@@ -8,11 +8,7 @@ import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import org.ecommerce.common.dto.ProductShoppingListItemDto;
-import org.ecommerce.common.entity.BrandEntity;
-import org.ecommerce.common.entity.CategoryEntity;
-import org.ecommerce.common.entity.ProductEntity;
-import org.ecommerce.common.entity.ProductVariantEntity;
-import org.ecommerce.common.entity.VariantPricesEntity;
+import org.ecommerce.common.entity.*;
 import org.ecommerce.common.enums.PriceTypeEn;
 import org.ecommerce.common.enums.ProductStatusEn;
 import org.ecommerce.common.enums.ProductTypeEn;
@@ -37,20 +33,20 @@ import static org.junit.jupiter.api.Assertions.*;
  * DB-backed integration tests for the {@code onSale} scope on
  * {@link ProductService#getShoppingProducts} and
  * {@link ProductService#countShoppingProducts}.
- *
+ * <p>
  * Follows the {@link FeaturedProductServiceIT} pattern: real datasource,
  * {@link TestTransaction} (rolled back afterward), unique per-test markers
  * to isolate assertions from pre-existing DB rows.
- *
+ * <p>
  * Covers:
- *   Property 1: onSale=true returns exactly the active-sale set (Req 1.1, 1.2)
- *   Property 2: onSale=false is unchanged / regression (Req 1.3)
- *   Property 3: totalElements/totalPages correct across pages (Req 1.4)
- *   Composition: onSale + category/brand/search filters (Req 1.2)
+ * Property 1: onSale=true returns exactly the active-sale set (Req 1.1, 1.2)
+ * Property 2: onSale=false is unchanged / regression (Req 1.3)
+ * Property 3: totalElements/totalPages correct across pages (Req 1.4)
+ * Composition: onSale + category/brand/search filters (Req 1.2)
  */
 @QuarkusTest
-class ProductServiceOnSaleIT {
-
+class ProductServiceOnSaleIT
+{
     @Inject
     ProductService productService;
 
@@ -59,23 +55,25 @@ class ProductServiceOnSaleIT {
 
     // ─── Helpers ────────────────────────────────────────────────────────────
 
-    private ProductEntity newProduct(String marker, String nameSuffix) {
+    private ProductEntity newProduct(String marker, String nameSuffix)
+    {
         ProductEntity p = new ProductEntity();
-        p.name = marker + nameSuffix;
-        p.slug = (marker + nameSuffix + "-" + UUID.randomUUID()).toLowerCase();
-        p.status = ProductStatusEn.ACTIVE;
-        p.isFeatured = false;
-        p.productType = ProductTypeEn.SIMPLE;
+        p.setName(marker + nameSuffix);
+        p.setSlug((marker + nameSuffix + "-" + UUID.randomUUID()).toLowerCase());
+        p.setStatus(ProductStatusEn.ACTIVE);
+        p.setFeatured(false);
+        p.setProductType(ProductTypeEn.SIMPLE);
         p.persist();
         return p;
     }
 
-    private ProductVariantEntity newVariant(ProductEntity product) {
+    private ProductVariantEntity newVariant(ProductEntity product)
+    {
         ProductVariantEntity v = new ProductVariantEntity();
-        v.product = product;
-        v.sku = "SKU-" + UUID.randomUUID();
-        v.status = ProductStatusEn.ACTIVE;
-        v.stockQuantity = 100;
+        v.setProduct(product);
+        v.setSku("SKU-" + UUID.randomUUID());
+        v.setStatus(ProductStatusEn.ACTIVE);
+        v.setStockQuantity(100);
         v.persist();
         return v;
     }
@@ -83,30 +81,33 @@ class ProductServiceOnSaleIT {
     /**
      * Creates a price on the variant with the given type and an active date window.
      */
-    private void addActivePrice(ProductVariantEntity variant, PriceTypeEn priceType, BigDecimal amount) {
+    private void addActivePrice(ProductVariantEntity variant, PriceTypeEn priceType, BigDecimal amount)
+    {
         VariantPricesEntity vp = new VariantPricesEntity();
-        vp.variant = variant;
-        vp.priceType = priceType;
-        vp.price = amount;
-        vp.priceStartDate = LocalDateTime.now().minusDays(7);
-        vp.priceEndDate = LocalDateTime.now().plusDays(7);
+        vp.setVariant(variant);
+        vp.setPriceType(priceType);
+        vp.setPrice(amount);
+        vp.setPriceStartDate(LocalDateTime.now().minusDays(7));
+        vp.setPriceEndDate(LocalDateTime.now().plusDays(7));
         vp.persist();
     }
 
     /**
      * Creates a price with an expired date window (no longer active).
      */
-    private void addExpiredPrice(ProductVariantEntity variant, PriceTypeEn priceType, BigDecimal amount) {
+    private void addExpiredPrice(ProductVariantEntity variant, PriceTypeEn priceType, BigDecimal amount)
+    {
         VariantPricesEntity vp = new VariantPricesEntity();
-        vp.variant = variant;
-        vp.priceType = priceType;
-        vp.price = amount;
-        vp.priceStartDate = LocalDateTime.now().minusDays(30);
-        vp.priceEndDate = LocalDateTime.now().minusDays(1);
+        vp.setVariant(variant);
+        vp.setPriceType(priceType);
+        vp.setPrice(amount);
+        vp.setPriceStartDate(LocalDateTime.now().minusDays(30));
+        vp.setPriceEndDate(LocalDateTime.now().minusDays(1));
         vp.persist();
     }
 
-    private PageRequest pageOf(int index, int size) {
+    private PageRequest pageOf(int index, int size)
+    {
         PageRequest pr = new PageRequest();
         pr.setPageIndex(index);
         pr.setPageSize(size);
@@ -117,7 +118,8 @@ class ProductServiceOnSaleIT {
 
     @Test
     @TestTransaction
-    void onSaleTrueReturnsOnlyProductsWithActiveSalePrice() {
+    void onSaleTrueReturnsOnlyProductsWithActiveSalePrice()
+    {
         String marker = "ZZONSALE1-" + UUID.randomUUID().toString().substring(0, 8) + "-";
 
         // Product A: has active retail sale price → qualifies
@@ -148,28 +150,25 @@ class ProductServiceOnSaleIT {
         List<ProductShoppingListItemDto> results = productService.getShoppingProducts(
                 pageOf(0, 50), null, true, false);
 
-        List<String> mine = results.stream()
-                .map(d -> d.name)
+        List<String> mine = results
+                .stream()
+                .map(d -> d.getName())
                 .filter(n -> n.startsWith(marker))
-                .collect(Collectors.toList());
+                .toList();
 
-        assertTrue(mine.contains(marker + "Alpha"),
-                "Product with active retail sale price must appear");
-        assertTrue(mine.contains(marker + "Bravo"),
-                "Product with active wholesale sale price must appear");
-        assertFalse(mine.contains(marker + "Charlie"),
-                "Product without any sale price must NOT appear");
-        assertFalse(mine.contains(marker + "Delta"),
-                "Product with only expired sale price must NOT appear");
-        assertEquals(2, mine.size(),
-                "Exactly 2 products from this test set should qualify");
+        assertTrue(mine.contains(marker + "Alpha"), "Product with active retail sale price must appear");
+        assertTrue(mine.contains(marker + "Bravo"), "Product with active wholesale sale price must appear");
+        assertFalse(mine.contains(marker + "Charlie"), "Product without any sale price must NOT appear");
+        assertFalse(mine.contains(marker + "Delta"), "Product with only expired sale price must NOT appear");
+        assertEquals(2, mine.size(), "Exactly 2 products from this test set should qualify");
     }
 
     // ─── Property 1b: parity with findOnSaleShoppingProductList ─────────────
 
     @Test
     @TestTransaction
-    void onSaleTrueMatchesFindOnSaleShoppingProductList() {
+    void onSaleTrueMatchesFindOnSaleShoppingProductList()
+    {
         String marker = "ZZONSALEPARITY-" + UUID.randomUUID().toString().substring(0, 8) + "-";
 
         // Create several products — mix of sale and non-sale
@@ -188,22 +187,22 @@ class ProductServiceOnSaleIT {
         em.flush();
 
         // Use onSale=true path (the new scope)
-        List<ProductShoppingListItemDto> onSaleResults = productService.getShoppingProducts(
-                pageOf(0, 50), null, true, false);
+        List<ProductShoppingListItemDto> onSaleResults = productService.getShoppingProducts(pageOf(0, 50), null, true, false);
 
         // Use the legacy findOnSaleShoppingProductList (existing)
-        List<ProductShoppingListItemDto> legacyResults = productService.getProductsOnSale(
-                pageOf(0, 50), false);
+        List<ProductShoppingListItemDto> legacyResults = productService.getProductsOnSale(pageOf(0, 50), false);
 
         // Filter to our test marker
-        List<String> onSaleNames = onSaleResults.stream()
-                .map(d -> d.name)
+        List<String> onSaleNames = onSaleResults
+                .stream()
+                .map(ProductShoppingListItemDto::getName)
                 .filter(n -> n.startsWith(marker))
                 .sorted()
                 .collect(Collectors.toList());
 
-        List<String> legacyNames = legacyResults.stream()
-                .map(d -> d.name)
+        List<String> legacyNames = legacyResults
+                .stream()
+                .map(ProductShoppingListItemDto::getName)
                 .filter(n -> n.startsWith(marker))
                 .sorted()
                 .collect(Collectors.toList());
@@ -216,12 +215,13 @@ class ProductServiceOnSaleIT {
 
     @Test
     @TestTransaction
-    void onSaleTrueComposesWithCategoryFilter() {
+    void onSaleTrueComposesWithCategoryFilter()
+    {
         String marker = "ZZONSALECAT-" + UUID.randomUUID().toString().substring(0, 8) + "-";
 
         CategoryEntity category = new CategoryEntity();
-        category.name = marker + "TestCategory";
-        category.slug = "zzonsalecat-" + UUID.randomUUID();
+        category.setName(marker + "TestCategory");
+        category.setSlug("zzonsalecat-" + UUID.randomUUID());
         category.persist();
 
         // Product A: on sale + in category → qualifies
@@ -244,37 +244,35 @@ class ProductServiceOnSaleIT {
         em.flush();
 
         FilterRequest filterRequest = new FilterRequest();
-        filterRequest.setFilters(List.of(
-                new Filter("categories.id", FilterOperator.EQUALS, category.id.toString())
-        ));
+        filterRequest.setFilters(List.of(new Filter("categories.id", FilterOperator.EQUALS, category.getId().toString())));
 
-        List<ProductShoppingListItemDto> results = productService.getShoppingProducts(
-                pageOf(0, 50), filterRequest, true, false);
+        List<ProductShoppingListItemDto> results = productService.getShoppingProducts(pageOf(0, 50), filterRequest, true, false);
 
-        List<String> mine = results.stream()
-                .map(d -> d.name)
+        List<String> mine = results
+                .stream()
+                .map(ProductShoppingListItemDto::getName)
                 .filter(n -> n.startsWith(marker))
                 .collect(Collectors.toList());
 
-        assertEquals(List.of(marker + "Alpha"), mine,
-                "Only the on-sale product in the filtered category should appear");
+        assertEquals(List.of(marker + "Alpha"), mine, "Only the on-sale product in the filtered category should appear");
     }
 
     // ─── Composition: onSale + brand filter ─────────────────────────────────
 
     @Test
     @TestTransaction
-    void onSaleTrueComposesWithBrandFilter() {
+    void onSaleTrueComposesWithBrandFilter()
+    {
         String marker = "ZZONSALEBRAND-" + UUID.randomUUID().toString().substring(0, 8) + "-";
 
         BrandEntity brand = new BrandEntity();
-        brand.name = marker + "TestBrand";
-        brand.slug = "zzonsalebrand-" + UUID.randomUUID();
+        brand.setName(marker + "TestBrand");
+        brand.setSlug("zzonsalebrand-" + UUID.randomUUID());
         brand.persist();
 
         // Product A: on sale + brand matches → qualifies
         ProductEntity pA = newProduct(marker, "Alpha");
-        pA.brand = brand;
+        pA.setBrand(brand);
         ProductVariantEntity vA = newVariant(pA);
         addActivePrice(vA, PriceTypeEn.WHOLESALE_SALE_PRICE, BigDecimal.valueOf(20));
 
@@ -286,15 +284,13 @@ class ProductServiceOnSaleIT {
         em.flush();
 
         FilterRequest filterRequest = new FilterRequest();
-        filterRequest.setFilters(List.of(
-                new Filter("brand.id", FilterOperator.EQUALS, brand.id.toString())
-        ));
+        filterRequest.setFilters(List.of(new Filter("brand.id", FilterOperator.EQUALS, brand.getId().toString())));
 
-        List<ProductShoppingListItemDto> results = productService.getShoppingProducts(
-                pageOf(0, 50), filterRequest, true, false);
+        List<ProductShoppingListItemDto> results = productService.getShoppingProducts(pageOf(0, 50), filterRequest, true, false);
 
-        List<String> mine = results.stream()
-                .map(d -> d.name)
+        List<String> mine = results
+                .stream()
+                .map(ProductShoppingListItemDto::getName)
                 .filter(n -> n.startsWith(marker))
                 .collect(Collectors.toList());
 
@@ -306,7 +302,8 @@ class ProductServiceOnSaleIT {
 
     @Test
     @TestTransaction
-    void onSaleTrueComposesWithSearchFilter() {
+    void onSaleTrueComposesWithSearchFilter()
+    {
         String marker = "ZZONSALESRCH-" + UUID.randomUUID().toString().substring(0, 8) + "-";
 
         // Product A: on sale, name contains "Findable"
@@ -322,27 +319,25 @@ class ProductServiceOnSaleIT {
         em.flush();
 
         FilterRequest filterRequest = new FilterRequest();
-        filterRequest.setFilters(List.of(
-                new Filter("name", FilterOperator.ILIKE, "Findable")
-        ));
+        filterRequest.setFilters(List.of(new Filter("name", FilterOperator.ILIKE, "Findable")));
 
-        List<ProductShoppingListItemDto> results = productService.getShoppingProducts(
-                pageOf(0, 50), filterRequest, true, false);
+        List<ProductShoppingListItemDto> results = productService.getShoppingProducts(pageOf(0, 50), filterRequest, true, false);
 
-        List<String> mine = results.stream()
-                .map(d -> d.name)
+        List<String> mine = results
+                .stream()
+                .map(ProductShoppingListItemDto::getName)
                 .filter(n -> n.startsWith(marker))
                 .collect(Collectors.toList());
 
-        assertEquals(List.of(marker + "FindableAlpha"), mine,
-                "Only the on-sale product matching the search should appear");
+        assertEquals(List.of(marker + "FindableAlpha"), mine, "Only the on-sale product matching the search should appear");
     }
 
     // ─── Composition: onSale + sort ─────────────────────────────────────────
 
     @Test
     @TestTransaction
-    void onSaleTrueRespectsSortOrder() {
+    void onSaleTrueRespectsSortOrder()
+    {
         String marker = "ZZONSALESORT-" + UUID.randomUUID().toString().substring(0, 8) + "-";
 
         ProductEntity pA = newProduct(marker, "Zebra");
@@ -367,23 +362,22 @@ class ProductServiceOnSaleIT {
         FilterRequest filterRequest = new FilterRequest();
         filterRequest.setSort(List.of(sortDesc));
 
-        List<ProductShoppingListItemDto> results = productService.getShoppingProducts(
-                pageOf(0, 50), filterRequest, true, false);
+        List<ProductShoppingListItemDto> results = productService.getShoppingProducts(pageOf(0, 50), filterRequest, true, false);
 
         List<String> mine = results.stream()
-                .map(d -> d.name)
+                .map(ProductShoppingListItemDto::getName)
                 .filter(n -> n.startsWith(marker))
                 .collect(Collectors.toList());
 
-        assertEquals(List.of(marker + "Zebra", marker + "Mango", marker + "Apple"), mine,
-                "On-sale products must be sorted by name DESC");
+        assertEquals(List.of(marker + "Zebra", marker + "Mango", marker + "Apple"), mine, "On-sale products must be sorted by name DESC");
     }
 
     // ─── Property 3: totalElements/totalPages correct across pages ──────────
 
     @Test
     @TestTransaction
-    void onSaleTotalElementsAndTotalPagesCorrectAcrossPages() {
+    void onSaleTotalElementsAndTotalPagesCorrectAcrossPages()
+    {
         String marker = "ZZONSALEPG-" + UUID.randomUUID().toString().substring(0, 8) + "-";
 
         // Create 5 on-sale products
@@ -411,19 +405,16 @@ class ProductServiceOnSaleIT {
         // The on-sale total includes our 5 + any pre-existing on-sale products
         // The all-products total includes our 8 + any pre-existing products
         // Key assertion: totalAll >= totalOnSale (on-sale is a strict subset)
-        assertTrue(totalAll >= totalOnSale,
-                "Total products (onSale=false) must be >= total on-sale products");
+        assertTrue(totalAll >= totalOnSale, "Total products (onSale=false) must be >= total on-sale products");
 
         // Now verify pagination math with a small page size
         int pageSize = 2;
 
         // Get page 0 of on-sale products
-        List<ProductShoppingListItemDto> page0 = productService.getShoppingProducts(
-                pageOf(0, pageSize), null, true, false);
+        List<ProductShoppingListItemDto> page0 = productService.getShoppingProducts(pageOf(0, pageSize), null, true, false);
 
         // Verify page size is respected
-        assertTrue(page0.size() <= pageSize,
-                "Page 0 must contain at most pageSize items");
+        assertTrue(page0.size() <= pageSize, "Page 0 must contain at most pageSize items");
 
         // Verify totalPages = ceil(totalElements / pageSize)
         long expectedTotalPages = (long) Math.ceil((double) totalOnSale / pageSize);
@@ -431,26 +422,23 @@ class ProductServiceOnSaleIT {
         // Collect all on-sale products across all pages to verify disjoint coverage
         List<String> allOnSaleIds = new ArrayList<>();
         for (int pageIdx = 0; pageIdx < expectedTotalPages; pageIdx++) {
-            List<ProductShoppingListItemDto> page = productService.getShoppingProducts(
-                    pageOf(pageIdx, pageSize), null, true, false);
-            assertTrue(page.size() <= pageSize,
-                    "Page " + pageIdx + " must contain at most pageSize items");
+            List<ProductShoppingListItemDto> page = productService.getShoppingProducts(pageOf(pageIdx, pageSize), null, true, false);
+            assertTrue(page.size() <= pageSize, "Page " + pageIdx + " must contain at most pageSize items");
             for (ProductShoppingListItemDto dto : page) {
-                assertFalse(allOnSaleIds.contains(dto.id),
-                        "Product " + dto.id + " appeared on multiple pages (not disjoint)");
-                allOnSaleIds.add(dto.id);
+                assertFalse(allOnSaleIds.contains(dto.getId()), "Product " + dto.getId() + " appeared on multiple pages (not disjoint)");
+                allOnSaleIds.add(dto.getId());
             }
         }
 
-        assertEquals(totalOnSale, allOnSaleIds.size(),
-                "Sum of items across all pages must equal totalElements");
+        assertEquals(totalOnSale, allOnSaleIds.size(), "Sum of items across all pages must equal totalElements");
     }
 
     // ─── Property 2: onSale=false is unchanged (regression) ─────────────────
 
     @Test
     @TestTransaction
-    void onSaleFalseReturnsIdenticalResultsAsFullShoppingList() {
+    void onSaleFalseReturnsIdenticalResultsAsFullShoppingList()
+    {
         String marker = "ZZONSALEREGR-" + UUID.randomUUID().toString().substring(0, 8) + "-";
 
         // Mix of sale and non-sale products
@@ -472,48 +460,45 @@ class ProductServiceOnSaleIT {
         // Use an ILIKE filter matching our marker to isolate from pre-existing data
         // (default name-ASC sort + in-memory pagination can miss rows if the DB has >50 products)
         FilterRequest filterRequest = new FilterRequest();
-        filterRequest.setFilters(List.of(
-                new Filter("name", FilterOperator.ILIKE, marker)
-        ));
+        filterRequest.setFilters(List.of(new Filter("name", FilterOperator.ILIKE, marker)));
 
         // onSale=false should return ALL products (sale AND non-sale) — same as today
         List<ProductShoppingListItemDto> onSaleFalse = productService.getShoppingProducts(
                 pageOf(0, 50), filterRequest, false, false);
 
-        List<String> onSaleFalseNames = onSaleFalse.stream()
-                .map(d -> d.name)
+        List<String> onSaleFalseNames = onSaleFalse
+                .stream()
+                .map(ProductShoppingListItemDto::getName)
                 .filter(n -> n.startsWith(marker))
                 .sorted()
                 .collect(Collectors.toList());
 
         // All three products have an active price of some type → all qualify
         List<String> expected = List.of(marker + "Alpha", marker + "Bravo", marker + "Charlie");
-        assertEquals(expected, onSaleFalseNames,
-                "onSale=false must return all products with any active price (unchanged behaviour)");
+        assertEquals(expected, onSaleFalseNames, "onSale=false must return all products with any active price (unchanged behaviour)");
 
         // Now verify that onSale=true for the same filter only returns Alpha (has sale price)
-        List<ProductShoppingListItemDto> onSaleTrue = productService.getShoppingProducts(
-                pageOf(0, 50), filterRequest, true, false);
+        List<ProductShoppingListItemDto> onSaleTrue = productService.getShoppingProducts(pageOf(0, 50), filterRequest, true, false);
 
-        List<String> onSaleTrueNames = onSaleTrue.stream()
-                .map(d -> d.name)
+        List<String> onSaleTrueNames = onSaleTrue
+                .stream()
+                .map(ProductShoppingListItemDto::getName)
                 .filter(n -> n.startsWith(marker))
                 .sorted()
                 .collect(Collectors.toList());
 
-        assertEquals(List.of(marker + "Alpha"), onSaleTrueNames,
-                "onSale=true must only return the product with an active sale price");
+        assertEquals(List.of(marker + "Alpha"), onSaleTrueNames, "onSale=true must only return the product with an active sale price");
 
         // The regression guarantee: onSale=false returns a superset of onSale=true
-        assertTrue(onSaleFalseNames.containsAll(onSaleTrueNames),
-                "onSale=false must be a superset of onSale=true");
+        assertTrue(onSaleFalseNames.containsAll(onSaleTrueNames), "onSale=false must be a superset of onSale=true");
     }
 
     // ─── Property 2b: count onSale=false matches count of all shopping products ─
 
     @Test
     @TestTransaction
-    void countOnSaleFalseMatchesAllShoppingProductsCount() {
+    void countOnSaleFalseMatchesAllShoppingProductsCount()
+    {
         String marker = "ZZONSALECNT-" + UUID.randomUUID().toString().substring(0, 8) + "-";
 
         // Create products with various price types
@@ -531,8 +516,7 @@ class ProductServiceOnSaleIT {
         long countTrue = productService.countShoppingProducts(null, true, false);
 
         // onSale=true is strictly a subset of onSale=false
-        assertTrue(countFalse >= countTrue,
-                "onSale=false total must be >= onSale=true total (sale is a subset of all)");
+        assertTrue(countFalse >= countTrue, "onSale=false total must be >= onSale=true total (sale is a subset of all)");
 
         // Both must be >= 1 (our test data guarantees at least some products)
         assertTrue(countTrue >= 1, "At least one on-sale product should exist");

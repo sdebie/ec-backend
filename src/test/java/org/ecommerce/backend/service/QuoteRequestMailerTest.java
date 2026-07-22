@@ -34,8 +34,8 @@ import static org.mockito.Mockito.*;
  */
 @ExtendWith(MockitoExtension.class)
 @DisplayName("QuoteRequestMailer — recipient resolution & fire-and-log behaviour")
-class QuoteRequestMailerTest {
-
+class QuoteRequestMailerTest
+{
     @InjectMocks
     private QuoteRequestMailer mailer;
 
@@ -51,7 +51,8 @@ class QuoteRequestMailerTest {
     private static final String CONFIGURED_FROM = "no-reply@store.co.za";
 
     @BeforeEach
-    void setUp() throws Exception {
+    void setUp() throws Exception
+    {
         var fromField = QuoteRequestMailer.class.getDeclaredField("mailerFrom");
         fromField.setAccessible(true);
         fromField.set(mailer, CONFIGURED_FROM);
@@ -59,14 +60,16 @@ class QuoteRequestMailerTest {
 
     // ── Helpers ─────────────────────────────────────────────────────────────
 
-    private StoreSettingsEntity settingWith(String jsonValue) {
+    private StoreSettingsEntity settingWith(String jsonValue)
+    {
         StoreSettingsEntity entity = new StoreSettingsEntity();
-        entity.key = "storefront.contact";
-        entity.value = jsonValue;
+        entity.setKey("storefront.contact");
+        entity.setValue(jsonValue);
         return entity;
     }
 
-    private QuoteRequestSubmittedEvent sampleEvent() {
+    private QuoteRequestSubmittedEvent sampleEvent()
+    {
         QuoteRequestItemDto item = new QuoteRequestItemDto();
         item.setProductNameSnapshot("Widget Pro");
         item.setVariantSkuSnapshot("WGT-001");
@@ -86,7 +89,8 @@ class QuoteRequestMailerTest {
         return new QuoteRequestSubmittedEvent(dto.getId(), dto);
     }
 
-    private MailTemplate.MailTemplateInstance stubMailTemplateChain() {
+    private MailTemplate.MailTemplateInstance stubMailTemplateChain()
+    {
         MailTemplate.MailTemplateInstance instance = mock(MailTemplate.MailTemplateInstance.class);
         when(quote_request.to(anyString())).thenReturn(instance);
         when(instance.from(anyString())).thenReturn(instance);
@@ -101,11 +105,13 @@ class QuoteRequestMailerTest {
 
     @Nested
     @DisplayName("resolveRecipient — reads enquiryEmail from storefront.contact config")
-    class RecipientResolutionTests {
+    class RecipientResolutionTests
+    {
 
         @Test
         @DisplayName("resolves enquiryEmail when present in the storefront.contact JSON")
-        void resolvesFromConfig() {
+        void resolvesFromConfig()
+        {
             when(settingsRepository.findById("storefront.contact"))
                     .thenReturn(settingWith("{\"enquiryEmail\":\"quotes@store.co.za\"}"));
 
@@ -116,7 +122,8 @@ class QuoteRequestMailerTest {
 
         @Test
         @DisplayName("returns null when setting row is missing")
-        void returnsNullWhenSettingMissing() {
+        void returnsNullWhenSettingMissing()
+        {
             when(settingsRepository.findById("storefront.contact")).thenReturn(null);
 
             assertNull(mailer.resolveRecipient());
@@ -124,7 +131,8 @@ class QuoteRequestMailerTest {
 
         @Test
         @DisplayName("returns null when setting value is blank")
-        void returnsNullWhenValueBlank() {
+        void returnsNullWhenValueBlank()
+        {
             when(settingsRepository.findById("storefront.contact"))
                     .thenReturn(settingWith("   "));
 
@@ -133,7 +141,8 @@ class QuoteRequestMailerTest {
 
         @Test
         @DisplayName("returns null when enquiryEmail field is blank")
-        void returnsNullWhenEnquiryEmailBlank() {
+        void returnsNullWhenEnquiryEmailBlank()
+        {
             when(settingsRepository.findById("storefront.contact"))
                     .thenReturn(settingWith("{\"enquiryEmail\":\"   \"}"));
 
@@ -142,7 +151,8 @@ class QuoteRequestMailerTest {
 
         @Test
         @DisplayName("returns null when enquiryEmail field is null in JSON")
-        void returnsNullWhenEnquiryEmailNull() {
+        void returnsNullWhenEnquiryEmailNull()
+        {
             when(settingsRepository.findById("storefront.contact"))
                     .thenReturn(settingWith("{\"enquiryEmail\":null}"));
 
@@ -151,7 +161,8 @@ class QuoteRequestMailerTest {
 
         @Test
         @DisplayName("returns null when enquiryEmail field is absent")
-        void returnsNullWhenFieldAbsent() {
+        void returnsNullWhenFieldAbsent()
+        {
             when(settingsRepository.findById("storefront.contact"))
                     .thenReturn(settingWith("{\"phone\":\"0211234567\"}"));
 
@@ -160,7 +171,8 @@ class QuoteRequestMailerTest {
 
         @Test
         @DisplayName("returns null when JSON is malformed")
-        void returnsNullWhenJsonMalformed() {
+        void returnsNullWhenJsonMalformed()
+        {
             when(settingsRepository.findById("storefront.contact"))
                     .thenReturn(settingWith("not valid json {{{"));
 
@@ -172,11 +184,13 @@ class QuoteRequestMailerTest {
 
     @Nested
     @DisplayName("onSubmitted — fire-and-log, missing-recipient skip")
-    class OnSubmittedTests {
+    class OnSubmittedTests
+    {
 
         @Test
         @DisplayName("sends mail to resolved recipient with correct to/from/replyTo/subject")
-        void sendsMailWhenRecipientConfigured() {
+        void sendsMailWhenRecipientConfigured()
+        {
             when(settingsRepository.findById("storefront.contact"))
                     .thenReturn(settingWith("{\"enquiryEmail\":\"quotes@store.co.za\"}"));
             MailTemplate.MailTemplateInstance instance = stubMailTemplateChain();
@@ -192,7 +206,8 @@ class QuoteRequestMailerTest {
 
         @Test
         @DisplayName("passes contact fields and items as template data")
-        void passesTemplateData() {
+        void passesTemplateData()
+        {
             when(settingsRepository.findById("storefront.contact"))
                     .thenReturn(settingWith("{\"enquiryEmail\":\"quotes@store.co.za\"}"));
             MailTemplate.MailTemplateInstance instance = stubMailTemplateChain();
@@ -210,7 +225,8 @@ class QuoteRequestMailerTest {
 
         @Test
         @DisplayName("skips sending when no recipient configured — no exception thrown")
-        void skipsWhenNoRecipient() {
+        void skipsWhenNoRecipient()
+        {
             when(settingsRepository.findById("storefront.contact")).thenReturn(null);
 
             // Must not throw
@@ -222,7 +238,8 @@ class QuoteRequestMailerTest {
 
         @Test
         @DisplayName("skips sending when enquiryEmail is blank — no exception thrown")
-        void skipsWhenEnquiryEmailBlank() {
+        void skipsWhenEnquiryEmailBlank()
+        {
             when(settingsRepository.findById("storefront.contact"))
                     .thenReturn(settingWith("{\"enquiryEmail\":\"\"}"));
 
@@ -232,7 +249,8 @@ class QuoteRequestMailerTest {
 
         @Test
         @DisplayName("skips sending when JSON is malformed — no exception thrown")
-        void skipsWhenJsonMalformed() {
+        void skipsWhenJsonMalformed()
+        {
             when(settingsRepository.findById("storefront.contact"))
                     .thenReturn(settingWith("broken{json"));
 

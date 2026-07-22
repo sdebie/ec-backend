@@ -11,13 +11,14 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-class ImageServiceFileSystemTest {
-
+class ImageServiceFileSystemTest
+{
     @TempDir
     Path tempDir;
 
     @Test
-    void normalizeDestinationDirectory_shouldNormalizeNestedRelativePaths() {
+    void normalizeDestinationDirectory_shouldNormalizeNestedRelativePaths()
+    {
         ImageService imageService = new ImageService();
 
         assertEquals("", imageService.normalizeDestinationDirectory(null));
@@ -27,7 +28,8 @@ class ImageServiceFileSystemTest {
     }
 
     @Test
-    void normalizeDestinationDirectory_shouldRejectTraversalOutsideStorageRoot() {
+    void normalizeDestinationDirectory_shouldRejectTraversalOutsideStorageRoot()
+    {
         ImageService imageService = new ImageService();
 
         assertThrows(IllegalArgumentException.class, () -> imageService.normalizeDestinationDirectory("../secret"));
@@ -35,7 +37,8 @@ class ImageServiceFileSystemTest {
     }
 
     @Test
-    void listDestinationDirectories_andImages_shouldListImagesFromThumbnailsOnly() throws IOException {
+    void listDestinationDirectories_andImages_shouldListImagesFromThumbnailsOnly() throws IOException
+    {
         ImageService imageService = new ImageService();
         imageService.storagePath = tempDir.toString();
 
@@ -75,7 +78,8 @@ class ImageServiceFileSystemTest {
     }
 
     @Test
-    void findBulkImagePathsForSku_shouldFindRootAndNestedImagesButNeverThumbnails() throws IOException {
+    void findBulkImagePathsForSku_shouldFindRootAndNestedImagesButNeverThumbnails() throws IOException
+    {
         ImageService imageService = new ImageService();
         imageService.storagePath = tempDir.toString();
 

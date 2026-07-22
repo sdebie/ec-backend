@@ -23,16 +23,17 @@ import static org.junit.jupiter.api.Assertions.*;
  *   <li>Wholesale-queue detail: {@link WholesaleMapper#toDetailsDto}</li>
  *   <li>Customer-admin detail: {@link CustomerAdminMapper#toDetailDto} (delegates to WholesaleMapper)</li>
  * </ol>
- *
+ * <p>
  * Validates: Requirements 1.2, 3.2
  */
-class WholesaleRejectionReasonMappingTest {
-
+class WholesaleRejectionReasonMappingTest
+{
     private WholesaleMapper wholesaleMapper;
     private CustomerAdminMapper customerAdminMapper;
 
     @BeforeEach
-    void setUp() {
+    void setUp()
+    {
         wholesaleMapper = new WholesaleMapperImpl();
 
         customerAdminMapper = new CustomerAdminMapper();
@@ -48,110 +49,111 @@ class WholesaleRejectionReasonMappingTest {
     // ── Path 1: WholesaleMapper.toDetailsDto (wholesale-queue detail) ────────
 
     @Test
-    void toDetailsDto_mapsRejectionReason_whenPresent() {
+    void toDetailsDto_mapsRejectionReason_whenPresent()
+    {
         WholesaleApplicationEntity entity = buildRejectedEntity("Quality standards not met");
 
         WholesaleApplicationDetailsDto dto = wholesaleMapper.toDetailsDto(entity);
 
-        assertEquals("Quality standards not met", dto.getRejectionReason(),
-                "rejectionReason should be mapped from entity to details DTO");
+        assertEquals("Quality standards not met", dto.getRejectionReason(), "rejectionReason should be mapped from entity to details DTO");
     }
 
     @Test
-    void toDetailsDto_rejectionReasonIsNull_whenApproved() {
+    void toDetailsDto_rejectionReasonIsNull_whenApproved()
+    {
         WholesaleApplicationEntity entity = buildApprovedEntity();
 
         WholesaleApplicationDetailsDto dto = wholesaleMapper.toDetailsDto(entity);
 
-        assertNull(dto.getRejectionReason(),
-                "rejectionReason should be null for approved applications");
+        assertNull(dto.getRejectionReason(), "rejectionReason should be null for approved applications");
     }
 
     @Test
-    void toDetailsDto_rejectionReasonIsNull_whenEntityFieldIsNull() {
+    void toDetailsDto_rejectionReasonIsNull_whenEntityFieldIsNull()
+    {
         WholesaleApplicationEntity entity = buildPendingEntity();
 
         WholesaleApplicationDetailsDto dto = wholesaleMapper.toDetailsDto(entity);
 
-        assertNull(dto.getRejectionReason(),
-                "rejectionReason should be null for pending applications");
+        assertNull(dto.getRejectionReason(), "rejectionReason should be null for pending applications");
     }
 
     // ── Path 2: CustomerAdminMapper.toDetailDto (customer-admin detail) ──────
 
     @Test
-    void customerAdminDetailDto_surfacesRejectionReason_whenPresent() {
+    void customerAdminDetailDto_surfacesRejectionReason_whenPresent()
+    {
         CustomerEntity customer = new CustomerEntity();
-        customer.id = UUID.randomUUID();
-        customer.firstName = "Jane";
-        customer.lastName = "Doe";
+        customer.setId(UUID.randomUUID());
+        customer.setFirstName("Jane");
+        customer.setLastName("Doe");
 
         WholesaleApplicationEntity entity = buildRejectedEntity("Incomplete documentation");
-        entity.customer = customer;
+        entity.setCustomer(customer);
 
         AdminCustomerDetailDto dto = customerAdminMapper.toDetailDto(customer, entity, Collections.emptyList());
 
-        assertNotNull(dto.wholesaleApplication,
-                "wholesaleApplication should be present in customer detail DTO");
-        assertEquals("Incomplete documentation", dto.wholesaleApplication.getRejectionReason(),
-                "rejectionReason should be surfaced through the customer-admin detail path");
+        assertNotNull(dto.getWholesaleApplication(), "wholesaleApplication should be present in customer detail DTO");
+        assertEquals("Incomplete documentation", dto.getWholesaleApplication().getRejectionReason(), "rejectionReason should be surfaced through the customer-admin detail path");
     }
 
     @Test
-    void customerAdminDetailDto_rejectionReasonIsNull_whenApproved() {
+    void customerAdminDetailDto_rejectionReasonIsNull_whenApproved()
+    {
         CustomerEntity customer = new CustomerEntity();
-        customer.id = UUID.randomUUID();
-        customer.firstName = "John";
-        customer.lastName = "Smith";
+        customer.setId(UUID.randomUUID());
+        customer.setFirstName("John");
+        customer.setLastName("Smith");
 
         WholesaleApplicationEntity entity = buildApprovedEntity();
-        entity.customer = customer;
+        entity.setCustomer(customer);
 
         AdminCustomerDetailDto dto = customerAdminMapper.toDetailDto(customer, entity, Collections.emptyList());
 
-        assertNotNull(dto.wholesaleApplication,
-                "wholesaleApplication should be present in customer detail DTO");
-        assertNull(dto.wholesaleApplication.getRejectionReason(),
-                "rejectionReason should be null for approved applications via customer-admin path");
+        assertNotNull(dto.getWholesaleApplication(), "wholesaleApplication should be present in customer detail DTO");
+        assertNull(dto.getWholesaleApplication().getRejectionReason(), "rejectionReason should be null for approved applications via customer-admin path");
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────
 
-    private WholesaleApplicationEntity buildRejectedEntity(String reason) {
+    private WholesaleApplicationEntity buildRejectedEntity(String reason)
+    {
         WholesaleApplicationEntity entity = new WholesaleApplicationEntity();
-        entity.id = UUID.randomUUID();
-        entity.applicantEmail = "applicant@example.com";
-        entity.firstName = "Test";
-        entity.lastName = "User";
-        entity.companyName = "Test Corp";
-        entity.status = WholesaleApplicationStatusEn.REJECTED;
-        entity.processedAt = OffsetDateTime.now();
-        entity.rejectionReason = reason;
+        entity.setId(UUID.randomUUID());
+        entity.setApplicantEmail("applicant@example.com");
+        entity.setFirstName("Test");
+        entity.setLastName("User");
+        entity.setCompanyName("Test Corp");
+        entity.setStatus(WholesaleApplicationStatusEn.REJECTED);
+        entity.setProcessedAt(OffsetDateTime.now());
+        entity.setRejectionReason(reason);
         return entity;
     }
 
-    private WholesaleApplicationEntity buildApprovedEntity() {
+    private WholesaleApplicationEntity buildApprovedEntity()
+    {
         WholesaleApplicationEntity entity = new WholesaleApplicationEntity();
-        entity.id = UUID.randomUUID();
-        entity.applicantEmail = "applicant@example.com";
-        entity.firstName = "Test";
-        entity.lastName = "User";
-        entity.companyName = "Test Corp";
-        entity.status = WholesaleApplicationStatusEn.APPROVED;
-        entity.processedAt = OffsetDateTime.now();
-        entity.rejectionReason = null;
+        entity.setId(UUID.randomUUID());
+        entity.setApplicantEmail("applicant@example.com");
+        entity.setFirstName("Test");
+        entity.setLastName("User");
+        entity.setCompanyName("Test Corp");
+        entity.setStatus(WholesaleApplicationStatusEn.APPROVED);
+        entity.setProcessedAt(OffsetDateTime.now());
+        entity.setRejectionReason(null);
         return entity;
     }
 
-    private WholesaleApplicationEntity buildPendingEntity() {
+    private WholesaleApplicationEntity buildPendingEntity()
+    {
         WholesaleApplicationEntity entity = new WholesaleApplicationEntity();
-        entity.id = UUID.randomUUID();
-        entity.applicantEmail = "applicant@example.com";
-        entity.firstName = "Test";
-        entity.lastName = "User";
-        entity.companyName = "Test Corp";
-        entity.status = WholesaleApplicationStatusEn.PENDING;
-        entity.rejectionReason = null;
+        entity.setId(UUID.randomUUID());
+        entity.setApplicantEmail("applicant@example.com");
+        entity.setFirstName("Test");
+        entity.setLastName("User");
+        entity.setCompanyName("Test Corp");
+        entity.setStatus(WholesaleApplicationStatusEn.PENDING);
+        entity.setRejectionReason(null);
         return entity;
     }
 }

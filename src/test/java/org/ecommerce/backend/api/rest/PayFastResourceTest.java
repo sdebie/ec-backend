@@ -17,20 +17,15 @@ import java.util.List;
 import java.util.UUID;
 
 import static io.restassured.RestAssured.given;
-import static org.hamcrest.Matchers.*;
+import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.hasSize;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doNothing;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.spy;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
 
 @QuarkusTest
-class PayFastResourceTest {
-
+class PayFastResourceTest
+{
     @InjectMock
     PayFastService payFastService;
 
@@ -38,19 +33,21 @@ class PayFastResourceTest {
     OrderNotificationService orderNotificationService;
 
     @BeforeEach
-    void setUp() {
+    void setUp()
+    {
         PanacheMock.mock(OrderEntity.class);
     }
 
     @Test
-    void checkout_withEmailParam_returns202WithGatewayUrl() {
+    void checkout_withEmailParam_returns202WithGatewayUrl()
+    {
         UUID orderId = UUID.randomUUID();
 
         OrderEntity order = new OrderEntity();
-        order.id = orderId;
-        order.totalAmount = new BigDecimal("1000.00");
-        order.status = OrderStatusEn.PENDING;
-        order.customerEntity = null; // Guest order
+        order.setId(orderId);
+        order.setTotalAmount(new BigDecimal("1000.00"));
+        order.setStatus(OrderStatusEn.PENDING);
+        order.setCustomerEntity(null); // Guest order
 
         when(OrderEntity.findById(orderId)).thenReturn(order);
 
@@ -76,14 +73,15 @@ class PayFastResourceTest {
     }
 
     @Test
-    void checkout_withoutEmailAndNoCustomer_returns400() {
+    void checkout_withoutEmailAndNoCustomer_returns400()
+    {
         UUID orderId = UUID.randomUUID();
 
         OrderEntity order = new OrderEntity();
-        order.id = orderId;
-        order.totalAmount = new BigDecimal("500.00");
-        order.status = OrderStatusEn.PENDING;
-        order.customerEntity = null; // No customer — guest with no email
+        order.setId(orderId);
+        order.setTotalAmount(new BigDecimal("500.00"));
+        order.setStatus(OrderStatusEn.PENDING);
+        order.setCustomerEntity(null); // No customer — guest with no email
 
         when(OrderEntity.findById(orderId)).thenReturn(order);
 
@@ -98,7 +96,8 @@ class PayFastResourceTest {
     }
 
     @Test
-    void itn_withInvalidSignature_returns401AndDoesNotTouchOrder() {
+    void itn_withInvalidSignature_returns401AndDoesNotTouchOrder()
+    {
         when(payFastService.verifyItnSignature(anyString())).thenReturn(false);
 
         given()
@@ -113,13 +112,14 @@ class PayFastResourceTest {
     }
 
     @Test
-    void itn_withValidSignatureAndCompleteStatus_marksOrderPaidAndNotifies() {
+    void itn_withValidSignatureAndCompleteStatus_marksOrderPaidAndNotifies()
+    {
         UUID orderId = UUID.randomUUID();
 
         OrderEntity order = spy(new OrderEntity());
-        order.id = orderId;
-        order.totalAmount = new BigDecimal("100.00");
-        order.status = OrderStatusEn.PENDING;
+        order.setId(orderId);
+        order.setTotalAmount(new BigDecimal("100.00"));
+        order.setStatus(OrderStatusEn.PENDING);
         doNothing().when(order).persist();
 
         when(payFastService.verifyItnSignature(anyString())).thenReturn(true);
@@ -133,7 +133,7 @@ class PayFastResourceTest {
                 .then()
                 .statusCode(200);
 
-        assertEquals(OrderStatusEn.PAID, order.status);
+        assertEquals(OrderStatusEn.PAID, order.getStatus());
         verify(orderNotificationService).sendConfirmationEmail(order);
     }
 }

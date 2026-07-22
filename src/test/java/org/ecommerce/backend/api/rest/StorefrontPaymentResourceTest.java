@@ -10,31 +10,35 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
 import static io.restassured.RestAssured.given;
-import static org.hamcrest.Matchers.*;
+import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.hasSize;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
 @QuarkusTest
-class StorefrontPaymentResourceTest {
-
+class StorefrontPaymentResourceTest
+{
     @BeforeEach
-    void setUp() {
+    void setUp()
+    {
         PanacheMock.mock(StoreSettingsEntity.class);
     }
 
     @SuppressWarnings("unchecked")
-    private void mockFindByKey(StoreSettingsEntity result) {
+    private void mockFindByKey(StoreSettingsEntity result)
+    {
         PanacheQuery<PanacheEntityBase> query = Mockito.mock(PanacheQuery.class);
         when(query.firstResult()).thenReturn(result);
         when(StoreSettingsEntity.find(eq("key"), any(Object[].class))).thenReturn(query);
     }
 
     @Test
-    void getAllowedPaymentMethods_returnsParsedArray() {
+    void getAllowedPaymentMethods_returnsParsedArray()
+    {
         StoreSettingsEntity setting = new StoreSettingsEntity();
-        setting.key = "payment_methods_allowed";
-        setting.value = "[\"PAYFAST\", \"IN_STORE\"]";
+        setting.setKey("payment_methods_allowed");
+        setting.setValue("[\"PAYFAST\", \"IN_STORE\"]");
 
         mockFindByKey(setting);
 
@@ -49,7 +53,8 @@ class StorefrontPaymentResourceTest {
     }
 
     @Test
-    void getAllowedPaymentMethods_returnsEmptyWhenSettingAbsent() {
+    void getAllowedPaymentMethods_returnsEmptyWhenSettingAbsent()
+    {
         mockFindByKey(null);
 
         given()

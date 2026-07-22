@@ -16,31 +16,32 @@ import static org.hamcrest.Matchers.*;
 import static org.mockito.Mockito.when;
 
 @QuarkusTest
-class StorefrontShippingResourceTest {
-
+class StorefrontShippingResourceTest
+{
     @BeforeEach
-    void setUp() {
+    void setUp()
+    {
         PanacheMock.mock(ShippingMethodEntity.class);
     }
 
     @Test
-    void getActiveShippingMethods_returnsOnlyActiveMethods() {
+    void getActiveShippingMethods_returnsOnlyActiveMethods()
+    {
         ShippingMethodEntity delivery = new ShippingMethodEntity();
-        delivery.id = UUID.randomUUID();
-        delivery.name = "Standard Delivery";
-        delivery.isActive = true;
-        delivery.baseFee = new BigDecimal("89.00");
-        delivery.estimatedDays = "3-5";
+        delivery.setId(UUID.randomUUID());
+        delivery.setName("Standard Delivery");
+        delivery.setActive(true);
+        delivery.setBaseFee(new BigDecimal("89.00"));
+        delivery.setEstimatedDays("3-5");
 
         ShippingMethodEntity collection = new ShippingMethodEntity();
-        collection.id = UUID.randomUUID();
-        collection.name = "In-store Collection";
-        collection.isActive = true;
-        collection.baseFee = BigDecimal.ZERO;
-        collection.estimatedDays = null;
+        collection.setId(UUID.randomUUID());
+        collection.setName("In-store Collection");
+        collection.setActive(true);
+        collection.setBaseFee(BigDecimal.ZERO);
+        collection.setEstimatedDays(null);
 
-        when(ShippingMethodEntity.<ShippingMethodEntity>list("isActive", true))
-                .thenReturn(List.of(delivery, collection));
+        when(ShippingMethodEntity.<ShippingMethodEntity>list("isActive", true)).thenReturn(List.of(delivery, collection));
 
         given()
                 .when()
@@ -57,7 +58,8 @@ class StorefrontShippingResourceTest {
     }
 
     @Test
-    void getActiveShippingMethods_returnsEmptyWhenNoneActive() {
+    void getActiveShippingMethods_returnsEmptyWhenNoneActive()
+    {
         when(ShippingMethodEntity.<ShippingMethodEntity>list("isActive", true))
                 .thenReturn(Collections.emptyList());
 

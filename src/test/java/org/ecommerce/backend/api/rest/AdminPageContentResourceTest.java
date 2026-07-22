@@ -16,7 +16,6 @@ import java.util.UUID;
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.notNullValue;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
@@ -25,12 +24,13 @@ import static org.mockito.Mockito.when;
  * Validates: Requirements 2.1, 2.2, 2.3, 2.4, 3.5
  */
 @QuarkusTest
-class AdminPageContentResourceTest {
-
+class AdminPageContentResourceTest
+{
     @InjectMock
     PageContentService pageContentService;
 
-    private String generateAdminJwt(String role) {
+    private String generateAdminJwt(String role)
+    {
         return Jwt.subject("admin@example.com")
                 .issuer("http://localhost:8080")
                 .groups(role)
@@ -40,7 +40,8 @@ class AdminPageContentResourceTest {
     // ── PUT (save draft) ─────────────────────────────────────────────────────
 
     @Test
-    void saveDraft_asSuperAdmin_returns200() {
+    void saveDraft_asSuperAdmin_returns200()
+    {
         UUID pageId = UUID.randomUUID();
         OffsetDateTime updatedAt = OffsetDateTime.now();
 
@@ -73,7 +74,8 @@ class AdminPageContentResourceTest {
     }
 
     @Test
-    void saveDraft_asViewer_returns403() {
+    void saveDraft_asViewer_returns403()
+    {
         UUID pageId = UUID.randomUUID();
         String token = generateAdminJwt("VIEWER");
 
@@ -90,7 +92,8 @@ class AdminPageContentResourceTest {
     // ── POST publish ─────────────────────────────────────────────────────────
 
     @Test
-    void publish_asSuperAdmin_returns200() {
+    void publish_asSuperAdmin_returns200()
+    {
         UUID pageId = UUID.randomUUID();
         OffsetDateTime now = OffsetDateTime.now();
 
@@ -122,7 +125,8 @@ class AdminPageContentResourceTest {
     }
 
     @Test
-    void publish_asViewer_returns403() {
+    void publish_asViewer_returns403()
+    {
         UUID pageId = UUID.randomUUID();
         String token = generateAdminJwt("VIEWER");
 
@@ -138,7 +142,8 @@ class AdminPageContentResourceTest {
     // ── GET list ─────────────────────────────────────────────────────────────
 
     @Test
-    void listByCategory_asViewer_returns200() {
+    void listByCategory_asViewer_returns200()
+    {
         UUID pageId = UUID.randomUUID();
         OffsetDateTime updatedAt = OffsetDateTime.now();
 
@@ -172,7 +177,8 @@ class AdminPageContentResourceTest {
     // ── GET by id ────────────────────────────────────────────────────────────
 
     @Test
-    void getById_invalidId_returns404() {
+    void getById_invalidId_returns404()
+    {
         UUID nonExistentId = UUID.randomUUID();
 
         when(pageContentService.getById(nonExistentId)).thenReturn(null);

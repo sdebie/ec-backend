@@ -14,26 +14,27 @@ import org.junit.jupiter.api.Test;
 
 import java.util.UUID;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.when;
 
 /**
  * Feature: featured-products-list, Property 3: Not-Found Rejection
- *
+ * <p>
  * For any UUID that does not correspond to an existing product, setFeatured(uuid, true)
  * or setFeatured(uuid, false) on the REAL {@link FeaturedProductService} throws
  * {@link NotFoundException} (referencing the id) before any mutation — the featured count
  * is never consulted.
- *
+ * <p>
  * Exercises the real service via @QuarkusTest with @InjectMock {@link ProductRepository}
  * returning null. The property is quantified by iterating many random ids and both
  * boolean flag values.
- *
+ * <p>
  * Validates: Requirements 2.3
  */
 @QuarkusTest
-class FeaturedNotFoundPropertyTest {
-
+class FeaturedNotFoundPropertyTest
+{
     @Inject
     FeaturedProductService service;
 
@@ -41,13 +42,17 @@ class FeaturedNotFoundPropertyTest {
     ProductRepository productRepository;
 
     @BeforeEach
-    void setUp() {
+    void setUp()
+    {
         PanacheMock.mock(ProductEntity.class);
     }
 
-    /** Property: for any missing id and either flag, setFeatured throws NotFound and never reads the cap count. */
+    /**
+     * Property: for any missing id and either flag, setFeatured throws NotFound and never reads the cap count.
+     */
     @Test
-    void setFeaturedWithMissingIdThrowsNotFoundRegardlessOfFlag() {
+    void setFeaturedWithMissingIdThrowsNotFoundRegardlessOfFlag()
+    {
         for (int i = 0; i < 200; i++) {
             UUID missingId = UUID.randomUUID();
             boolean featured = (i % 2 == 0);

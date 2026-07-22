@@ -3,21 +3,21 @@ package org.ecommerce.backend.utils;
 // Feature: customer-portal-backend, Property 7: Password Hash Round-Trip
 
 import net.jqwik.api.*;
-import net.jqwik.api.constraints.StringLength;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Property 7: Password Hash Round-Trip
- *
+ * <p>
  * For any password string of length >= 8, PasswordHashUtil.verify(password, PasswordHashUtil.hash(password))
  * SHALL return true. For any two distinct passwords a and b,
  * PasswordHashUtil.verify(a, PasswordHashUtil.hash(b)) SHALL return false.
- *
+ * <p>
  * Validates: Requirements 5.4, 5.6
  */
-class PasswordHashPropertyTest {
-
+class PasswordHashPropertyTest
+{
     /**
      * Property: For any password string of length 8-128 (including special chars and unicode),
      * hashing and then verifying with the same password returns true.
@@ -25,7 +25,8 @@ class PasswordHashPropertyTest {
     @Property(tries = 100)
     void hashThenVerifyWithSamePasswordReturnsTrue(
             @ForAll("passwords") String password
-    ) {
+    )
+    {
         String hashed = PasswordHashUtil.hash(password);
 
         assertTrue(PasswordHashUtil.verify(password, hashed),
@@ -40,7 +41,8 @@ class PasswordHashPropertyTest {
     void verifyWithDifferentPasswordReturnsFalse(
             @ForAll("passwords") String a,
             @ForAll("passwords") String b
-    ) {
+    )
+    {
         Assume.that(!a.equals(b));
 
         String hashedB = PasswordHashUtil.hash(b);
@@ -52,7 +54,8 @@ class PasswordHashPropertyTest {
     // ── Generators ──────────────────────────────────────────────────────────────
 
     @Provide
-    Arbitrary<String> passwords() {
+    Arbitrary<String> passwords()
+    {
         // Generate strings of length 8-128 including alpha, numeric, special chars, and unicode
         Arbitrary<String> alpha = Arbitraries.strings()
                 .withCharRange('a', 'z')

@@ -13,22 +13,23 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.UUID;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 /**
  * Property-based test verifying that the MapStruct {@link WholesaleMapper#toDetailsDto}
  * produces output identical to the old inline mapping logic that previously lived in
  * both {@code WholesaleCustomerService.toDetailsDto} and
  * {@code CustomerAdminService.toApplicationDetailsDto}.
- *
+ * <p>
  * The reference implementation below is a direct transcription of the deleted inline
  * methods — a simple field-by-field copy with {@code accountEmail → email} and
  * null-safe {@code customer.id → customerId}.
- *
+ * <p>
  * Validates: Requirements 2.3, 2.4, 4.1, 4.2
  */
-public class WholesaleMapperOutputPreservationPropertyTest {
-
+public class WholesaleMapperOutputPreservationPropertyTest
+{
     private final WholesaleMapper mapper = new WholesaleMapperImpl();
 
     // ── Reference implementation (old inline logic) ──────────────────────────────
@@ -38,52 +39,53 @@ public class WholesaleMapperOutputPreservationPropertyTest {
      * WholesaleCustomerService and CustomerAdminService before consolidation.
      * This is a straightforward field-by-field copy.
      */
-    private WholesaleApplicationDetailsDto referenceToDetailsDto(WholesaleApplicationEntity application) {
+    private WholesaleApplicationDetailsDto referenceToDetailsDto(WholesaleApplicationEntity application)
+    {
         if (application == null) {
             return null;
         }
 
         WholesaleApplicationDetailsDto dto = new WholesaleApplicationDetailsDto();
-        dto.setId(application.id);
-        dto.setEmail(application.accountEmail);
-        dto.setFirstName(application.firstName);
-        dto.setLastName(application.lastName);
-        dto.setPhone(application.phone);
+        dto.setId(application.getId());
+        dto.setEmail(application.getAccountEmail());
+        dto.setFirstName(application.getFirstName());
+        dto.setLastName(application.getLastName());
+        dto.setPhone(application.getPhone());
 
-        dto.setPhysicalAddressLine1(application.physicalAddressLine1);
-        dto.setPhysicalAddressLine2(application.physicalAddressLine2);
-        dto.setPhysicalSuburb(application.physicalSuburb);
-        dto.setPhysicalCity(application.physicalCity);
-        dto.setPhysicalProvince(application.physicalProvince);
-        dto.setPhysicalPostalCode(application.physicalPostalCode);
+        dto.setPhysicalAddressLine1(application.getPhysicalAddressLine1());
+        dto.setPhysicalAddressLine2(application.getPhysicalAddressLine2());
+        dto.setPhysicalSuburb(application.getPhysicalSuburb());
+        dto.setPhysicalCity(application.getPhysicalCity());
+        dto.setPhysicalProvince(application.getPhysicalProvince());
+        dto.setPhysicalPostalCode(application.getPhysicalPostalCode());
 
-        dto.setPostalAddressLine1(application.postalAddressLine1);
-        dto.setPostalAddressLine2(application.postalAddressLine2);
-        dto.setPostalSuburb(application.postalSuburb);
-        dto.setPostalCity(application.postalCity);
-        dto.setPostalProvince(application.postalProvince);
-        dto.setPostalPostalCode(application.postalPostalCode);
+        dto.setPostalAddressLine1(application.getPostalAddressLine1());
+        dto.setPostalAddressLine2(application.getPostalAddressLine2());
+        dto.setPostalSuburb(application.getPostalSuburb());
+        dto.setPostalCity(application.getPostalCity());
+        dto.setPostalProvince(application.getPostalProvince());
+        dto.setPostalPostalCode(application.getPostalPostalCode());
 
-        dto.setCompanyName(application.companyName);
-        dto.setTradingName(application.tradingName);
-        dto.setCompanyPhone(application.companyPhone);
-        dto.setCompanyEmail(application.companyEmail);
-        dto.setVatNumber(application.vatNumber);
-        dto.setRegNumber(application.regNumber);
-        dto.setFinanceContactName(application.financeContactName);
-        dto.setFinanceContactEmail(application.financeContactEmail);
-        dto.setFinanceContactPhone(application.financeContactPhone);
-        dto.setPurchaseOrderRequired(application.purchaseOrderRequired);
-        dto.setNotes(application.notes);
-        dto.setApplicantEmail(application.applicantEmail);
-        dto.setRejectionReason(application.rejectionReason);
+        dto.setCompanyName(application.getCompanyName());
+        dto.setTradingName(application.getTradingName());
+        dto.setCompanyPhone(application.getCompanyPhone());
+        dto.setCompanyEmail(application.getCompanyEmail());
+        dto.setVatNumber(application.getVatNumber());
+        dto.setRegNumber(application.getRegNumber());
+        dto.setFinanceContactName(application.getFinanceContactName());
+        dto.setFinanceContactEmail(application.getFinanceContactEmail());
+        dto.setFinanceContactPhone(application.getFinanceContactPhone());
+        dto.setPurchaseOrderRequired(application.getPurchaseOrderRequired());
+        dto.setNotes(application.getNotes());
+        dto.setApplicantEmail(application.getApplicantEmail());
+        dto.setRejectionReason(application.getRejectionReason());
 
-        dto.setStatus(application.status);
-        dto.setCreatedAt(application.createdAt);
-        dto.setProcessedAt(application.processedAt);
+        dto.setStatus(application.getStatus());
+        dto.setCreatedAt(application.getCreatedAt());
+        dto.setProcessedAt(application.getProcessedAt());
 
         // Null-safe customer.id navigation
-        dto.setCustomerId(application.customer != null ? application.customer.id : null);
+        dto.setCustomerId(application.getCustomer() != null ? application.getCustomer().getId() : null);
 
         return dto;
     }
@@ -93,7 +95,8 @@ public class WholesaleMapperOutputPreservationPropertyTest {
     @Property(tries = 200)
     void mapperOutputMatchesOldInlineLogic(
             @ForAll("wholesaleApplicationEntities") WholesaleApplicationEntity entity
-    ) {
+    )
+    {
         // Act
         WholesaleApplicationDetailsDto mapperResult = mapper.toDetailsDto(entity);
         WholesaleApplicationDetailsDto referenceResult = referenceToDetailsDto(entity);
@@ -140,7 +143,8 @@ public class WholesaleMapperOutputPreservationPropertyTest {
     }
 
     @Property(tries = 100)
-    void mapperReturnsNullForNullInput() {
+    void mapperReturnsNullForNullInput()
+    {
         WholesaleApplicationDetailsDto mapperResult = mapper.toDetailsDto(null);
         WholesaleApplicationDetailsDto referenceResult = referenceToDetailsDto(null);
         assertNull(mapperResult);
@@ -150,14 +154,16 @@ public class WholesaleMapperOutputPreservationPropertyTest {
     // ── Providers ────────────────────────────────────────────────────────────────
 
     @Provide
-    Arbitrary<WholesaleApplicationEntity> wholesaleApplicationEntities() {
+    Arbitrary<WholesaleApplicationEntity> wholesaleApplicationEntities()
+    {
         return buildBaseEntity().flatMap(this::addFinanceAndMeta).flatMap(this::addAddresses);
     }
 
     /**
      * Stage 1: Core identity + company fields (8 combined arbitraries → entity skeleton)
      */
-    private Arbitrary<WholesaleApplicationEntity> buildBaseEntity() {
+    private Arbitrary<WholesaleApplicationEntity> buildBaseEntity()
+    {
         Arbitrary<UUID> ids = Arbitraries.create(UUID::randomUUID);
         Arbitrary<String> requiredStrings = Arbitraries.strings().alpha().ofMinLength(1).ofMaxLength(30);
         Arbitrary<String> nullableStrings = Arbitraries.oneOf(
@@ -174,14 +180,14 @@ public class WholesaleMapperOutputPreservationPropertyTest {
                         nullableStrings, nullableStrings, requiredStrings, nullableStrings)
                 .as((id, applicantEmail, accountEmail, firstName, lastName, phone, companyName, tradingName) -> {
                     WholesaleApplicationEntity e = new WholesaleApplicationEntity();
-                    e.id = id;
-                    e.applicantEmail = applicantEmail;
-                    e.accountEmail = accountEmail;
-                    e.firstName = firstName;
-                    e.lastName = lastName;
-                    e.phone = phone;
-                    e.companyName = companyName;
-                    e.tradingName = tradingName;
+                    e.setId(id);
+                    e.setApplicantEmail(applicantEmail);
+                    e.setAccountEmail(accountEmail);
+                    e.setFirstName(firstName);
+                    e.setLastName(lastName);
+                    e.setPhone(phone);
+                    e.setCompanyName(companyName);
+                    e.setTradingName(tradingName);
                     return e;
                 });
     }
@@ -189,7 +195,8 @@ public class WholesaleMapperOutputPreservationPropertyTest {
     /**
      * Stage 2: Finance contacts, purchase order, status, notes, dates, customer (8 combined)
      */
-    private Arbitrary<WholesaleApplicationEntity> addFinanceAndMeta(WholesaleApplicationEntity entity) {
+    private Arbitrary<WholesaleApplicationEntity> addFinanceAndMeta(WholesaleApplicationEntity entity)
+    {
         Arbitrary<String> nullableStrings = Arbitraries.oneOf(
                 Arbitraries.just(null),
                 Arbitraries.strings().alpha().ofMinLength(1).ofMaxLength(30)
@@ -212,7 +219,7 @@ public class WholesaleMapperOutputPreservationPropertyTest {
                 Arbitraries.just(null),
                 Arbitraries.create(UUID::randomUUID).map(id -> {
                     CustomerEntity c = new CustomerEntity();
-                    c.id = id;
+                    c.setId(id);
                     return c;
                 })
         );
@@ -220,14 +227,14 @@ public class WholesaleMapperOutputPreservationPropertyTest {
         return Combinators.combine(nullableStrings, nullableStrings, nullableStrings,
                         nullableBooleans, statuses, nullableStrings, nullableDateTimes, nullableCustomers)
                 .as((finName, finEmail, finPhone, poRequired, status, notes, createdAt, customer) -> {
-                    entity.financeContactName = finName;
-                    entity.financeContactEmail = finEmail;
-                    entity.financeContactPhone = finPhone;
-                    entity.purchaseOrderRequired = poRequired;
-                    entity.status = status;
-                    entity.notes = notes;
-                    entity.createdAt = createdAt;
-                    entity.customer = customer;
+                    entity.setFinanceContactName(finName);
+                    entity.setFinanceContactEmail(finEmail);
+                    entity.setFinanceContactPhone(finPhone);
+                    entity.setPurchaseOrderRequired(poRequired);
+                    entity.setStatus(status);
+                    entity.setNotes(notes);
+                    entity.setCreatedAt(createdAt);
+                    entity.setCustomer(customer);
                     return entity;
                 }).flatMap(e -> {
                     // Also set processedAt + companyPhone/companyEmail/vatNumber/regNumber
@@ -243,12 +250,12 @@ public class WholesaleMapperOutputPreservationPropertyTest {
                     );
                     return Combinators.combine(processedAts, nullableStrs, nullableStrs, nullableStrs, nullableStrs, nullableStrs)
                             .as((processedAt, companyPhone, companyEmail, vatNumber, regNumber, rejectionReason) -> {
-                                e.processedAt = processedAt;
-                                e.companyPhone = companyPhone;
-                                e.companyEmail = companyEmail;
-                                e.vatNumber = vatNumber;
-                                e.regNumber = regNumber;
-                                e.rejectionReason = rejectionReason;
+                                e.setProcessedAt(processedAt);
+                                e.setCompanyPhone(companyPhone);
+                                e.setCompanyEmail(companyEmail);
+                                e.setVatNumber(vatNumber);
+                                e.setRegNumber(regNumber);
+                                e.setRejectionReason(rejectionReason);
                                 return e;
                             });
                 });
@@ -258,7 +265,8 @@ public class WholesaleMapperOutputPreservationPropertyTest {
      * Stage 3: Physical + postal address fields (8 combined: 6 physical + first 2 postal,
      * then flatMap for remaining 4 postal)
      */
-    private Arbitrary<WholesaleApplicationEntity> addAddresses(WholesaleApplicationEntity entity) {
+    private Arbitrary<WholesaleApplicationEntity> addAddresses(WholesaleApplicationEntity entity)
+    {
         Arbitrary<String> nullableStrings = Arbitraries.oneOf(
                 Arbitraries.just(null),
                 Arbitraries.strings().alpha().ofMinLength(1).ofMaxLength(30)
@@ -268,14 +276,14 @@ public class WholesaleMapperOutputPreservationPropertyTest {
                         nullableStrings, nullableStrings, nullableStrings, nullableStrings, nullableStrings)
                 .as((physLine1, physLine2, physSuburb, physCity, physProvince, physPostal,
                      postLine1, postLine2) -> {
-                    entity.physicalAddressLine1 = physLine1;
-                    entity.physicalAddressLine2 = physLine2;
-                    entity.physicalSuburb = physSuburb;
-                    entity.physicalCity = physCity;
-                    entity.physicalProvince = physProvince;
-                    entity.physicalPostalCode = physPostal;
-                    entity.postalAddressLine1 = postLine1;
-                    entity.postalAddressLine2 = postLine2;
+                    entity.setPhysicalAddressLine1(physLine1);
+                    entity.setPhysicalAddressLine2(physLine2);
+                    entity.setPhysicalSuburb(physSuburb);
+                    entity.setPhysicalCity(physCity);
+                    entity.setPhysicalProvince(physProvince);
+                    entity.setPhysicalPostalCode(physPostal);
+                    entity.setPostalAddressLine1(postLine1);
+                    entity.setPostalAddressLine2(postLine2);
                     return entity;
                 }).flatMap(e -> {
                     Arbitrary<String> ns = Arbitraries.oneOf(
@@ -284,10 +292,10 @@ public class WholesaleMapperOutputPreservationPropertyTest {
                     );
                     return Combinators.combine(ns, ns, ns, ns)
                             .as((postSuburb, postCity, postProvince, postPostal) -> {
-                                e.postalSuburb = postSuburb;
-                                e.postalCity = postCity;
-                                e.postalProvince = postProvince;
-                                e.postalPostalCode = postPostal;
+                                e.setPostalSuburb(postSuburb);
+                                e.setPostalCity(postCity);
+                                e.setPostalProvince(postProvince);
+                                e.setPostalPostalCode(postPostal);
                                 return e;
                             });
                 });

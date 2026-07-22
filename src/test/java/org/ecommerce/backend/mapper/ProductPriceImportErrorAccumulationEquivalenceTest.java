@@ -14,17 +14,21 @@ import org.ecommerce.common.entity.VariantPricesEntity;
 import org.ecommerce.common.enums.PriceTypeEn;
 import org.ecommerce.common.enums.ProductImportValidationStatusEn;
 import org.ecommerce.common.repository.ProductVariantRepository;
-import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.when;
 
 /**
  * Example-based test verifying that the decomposed price-import pipeline
@@ -39,8 +43,8 @@ import static org.mockito.Mockito.*;
  * <p><b>Validates: Requirements 3.2, 4.1, 4.2</b>
  */
 @QuarkusTest
-class ProductPriceImportErrorAccumulationEquivalenceTest {
-
+class ProductPriceImportErrorAccumulationEquivalenceTest
+{
     @Inject
     ProductPriceImportParser parser;
 
@@ -51,7 +55,8 @@ class ProductPriceImportErrorAccumulationEquivalenceTest {
     ProductVariantRepository productVariantRepository;
 
     @BeforeEach
-    void setUp() {
+    void setUp()
+    {
         PanacheMock.mock(VariantPricesEntity.class);
     }
 
@@ -61,7 +66,8 @@ class ProductPriceImportErrorAccumulationEquivalenceTest {
 
     @Test
     @DisplayName("Decomposed pipeline: all-valid rows produce VALID status and null errors")
-    void allValidRows_noErrorsAccumulated() throws Exception {
+    void allValidRows_noErrorsAccumulated() throws Exception
+    {
         ProductVariantEntity variant1 = buildVariant("SKU-001");
         ProductVariantEntity variant2 = buildVariant("SKU-002");
 
@@ -95,7 +101,8 @@ class ProductPriceImportErrorAccumulationEquivalenceTest {
 
     @Test
     @DisplayName("Decomposed pipeline: unknown SKU produces 'variant with sku 'X' not found' error")
-    void unknownSku_producesVariantNotFoundError() throws Exception {
+    void unknownSku_producesVariantNotFoundError() throws Exception
+    {
         ProductVariantEntity knownVariant = buildVariant("SKU-KNOWN");
         when(productVariantRepository.findBySku("SKU-KNOWN")).thenReturn(knownVariant);
         when(productVariantRepository.findBySku("SKU-UNKNOWN")).thenReturn(null);
@@ -128,7 +135,8 @@ class ProductPriceImportErrorAccumulationEquivalenceTest {
 
     @Test
     @DisplayName("Decomposed pipeline: missing/blank SKU produces 'sku is required' error")
-    void missingSku_producesSkuRequiredError() throws Exception {
+    void missingSku_producesSkuRequiredError() throws Exception
+    {
         String csv = """
                 sku,retail_price,wholesale_price
                 ,100.00,80.00
@@ -147,7 +155,8 @@ class ProductPriceImportErrorAccumulationEquivalenceTest {
 
     @Test
     @DisplayName("Decomposed pipeline: malformed prices produce parsing errors joined with '; '")
-    void malformedPrices_producesParsingErrors() throws Exception {
+    void malformedPrices_producesParsingErrors() throws Exception
+    {
         ProductVariantEntity variant = buildVariant("SKU-VALID");
         when(productVariantRepository.findBySku("SKU-VALID")).thenReturn(variant);
         mockLatestPrice(variant, PriceTypeEn.RETAIL_PRICE, null);
@@ -177,7 +186,8 @@ class ProductPriceImportErrorAccumulationEquivalenceTest {
 
     @Test
     @DisplayName("Decomposed pipeline: one malformed price produces single parsing error")
-    void oneMalformedPrice_producesSingleError() throws Exception {
+    void oneMalformedPrice_producesSingleError() throws Exception
+    {
         ProductVariantEntity variant = buildVariant("SKU-PARTIAL");
         when(productVariantRepository.findBySku("SKU-PARTIAL")).thenReturn(variant);
         mockLatestPrice(variant, PriceTypeEn.RETAIL_PRICE, null);
@@ -201,7 +211,8 @@ class ProductPriceImportErrorAccumulationEquivalenceTest {
 
     @Test
     @DisplayName("Decomposed pipeline: empty file (header only) produces no results")
-    void emptyFile_headerOnly_noResults() throws Exception {
+    void emptyFile_headerOnly_noResults() throws Exception
+    {
         String csv = """
                 sku,retail_price,wholesale_price
                 """;
@@ -213,7 +224,8 @@ class ProductPriceImportErrorAccumulationEquivalenceTest {
 
     @Test
     @DisplayName("Decomposed pipeline: completely empty input produces no results")
-    void emptyFile_completelyEmpty_noResults() throws Exception {
+    void emptyFile_completelyEmpty_noResults() throws Exception
+    {
         String csv = "";
 
         List<PipelineResult> results = runDecomposedPipeline(csv);
@@ -228,7 +240,8 @@ class ProductPriceImportErrorAccumulationEquivalenceTest {
 
     @Test
     @DisplayName("Decomposed pipeline: mixed file preserves per-row error isolation, content, and order")
-    void mixedFile_preservesPerRowIsolationAndOrder() throws Exception {
+    void mixedFile_preservesPerRowIsolationAndOrder() throws Exception
+    {
         ProductVariantEntity goodVariant = buildVariant("GOOD-SKU");
         when(productVariantRepository.findBySku("GOOD-SKU")).thenReturn(goodVariant);
         when(productVariantRepository.findBySku("BAD-SKU")).thenReturn(null);
@@ -271,7 +284,8 @@ class ProductPriceImportErrorAccumulationEquivalenceTest {
 
     @Test
     @DisplayName("Decomposed pipeline: parse errors passed to validator accumulate with validation errors")
-    void parseAndValidationErrors_accumulateInOrder() throws Exception {
+    void parseAndValidationErrors_accumulateInOrder() throws Exception
+    {
         // Malformed retail_price (parse error) + unknown SKU (validation error)
         when(productVariantRepository.findBySku("UNKNOWN")).thenReturn(null);
 
@@ -304,7 +318,8 @@ class ProductPriceImportErrorAccumulationEquivalenceTest {
 
     @Test
     @DisplayName("Decomposed pipeline: hasChanges is true when prices differ, false when identical")
-    void hasChanges_reflectsPriceDifferences() throws Exception {
+    void hasChanges_reflectsPriceDifferences() throws Exception
+    {
         ProductVariantEntity variant = buildVariant("SKU-SAME");
         when(productVariantRepository.findBySku("SKU-SAME")).thenReturn(variant);
 
@@ -338,7 +353,8 @@ class ProductPriceImportErrorAccumulationEquivalenceTest {
 
     @Test
     @DisplayName("Decomposed pipeline: blank prices are parsed as ZERO and flagged as changes if current differs")
-    void blankPrices_parsedAsZero() throws Exception {
+    void blankPrices_parsedAsZero() throws Exception
+    {
         ProductVariantEntity variant = buildVariant("SKU-BLANK");
         when(productVariantRepository.findBySku("SKU-BLANK")).thenReturn(variant);
 
@@ -369,7 +385,8 @@ class ProductPriceImportErrorAccumulationEquivalenceTest {
      * This is the same sequence the orchestrating service performs, but called
      * directly on the extracted collaborators.
      */
-    private List<PipelineResult> runDecomposedPipeline(String csv) throws IOException {
+    private List<PipelineResult> runDecomposedPipeline(String csv) throws IOException
+    {
         InputStream inputStream = new ByteArrayInputStream(csv.getBytes(StandardCharsets.UTF_8));
         List<ParsedPriceRow> parsedRows = parser.parseAll(inputStream);
 
@@ -381,20 +398,20 @@ class ProductPriceImportErrorAccumulationEquivalenceTest {
 
             // Apply results to a staged entity (sets status + joins errors)
             ProductPriceUploadStagedEntity staged = new ProductPriceUploadStagedEntity();
-            staged.sku = row.sku();
-            staged.retailPrice = row.retailPrice();
-            staged.wholesalePrice = row.wholesalePrice();
-            staged.currentRetailPrice = validationResult.currentRetailPrice();
-            staged.currentWholesalePrice = validationResult.currentWholesalePrice();
-            staged.hasChanges = validationResult.hasChanges();
+            staged.setSku(row.sku());
+            staged.setRetailPrice(row.retailPrice());
+            staged.setWholesalePrice(row.wholesalePrice());
+            staged.setCurrentRetailPrice(validationResult.currentRetailPrice());
+            staged.setCurrentWholesalePrice(validationResult.currentWholesalePrice());
+            staged.setHasChanges(validationResult.hasChanges());
 
             validator.applyValidationResults(staged, validationResult.validationErrors());
 
             results.add(new PipelineResult(
-                    staged.validationStatus,
-                    staged.validationErrors,
+                    staged.getValidationStatus(),
+                    staged.getValidationErrors(),
                     List.copyOf(validationResult.validationErrors()),
-                    staged.hasChanges
+                    staged.getHasChanges()
             ));
         }
 
@@ -409,29 +426,32 @@ class ProductPriceImportErrorAccumulationEquivalenceTest {
             String errorString,
             List<String> errors,
             Boolean hasChanges
-    ) {
+    )
+    {
     }
 
     // ══════════════════════════════════════════════════════════════════════════
     // Test helpers
     // ══════════════════════════════════════════════════════════════════════════
 
-    private ProductVariantEntity buildVariant(String sku) {
+    private ProductVariantEntity buildVariant(String sku)
+    {
         ProductVariantEntity variant = new ProductVariantEntity();
-        variant.id = UUID.randomUUID();
-        variant.sku = sku;
+        variant.setId(UUID.randomUUID());
+        variant.setSku(sku);
         return variant;
     }
 
-    private void mockLatestPrice(ProductVariantEntity variant, PriceTypeEn priceType, BigDecimal price) {
+    private void mockLatestPrice(ProductVariantEntity variant, PriceTypeEn priceType, BigDecimal price)
+    {
         VariantPricesEntity priceEntity = null;
         if (price != null) {
             priceEntity = new VariantPricesEntity();
-            priceEntity.id = UUID.randomUUID();
-            priceEntity.variant = variant;
-            priceEntity.priceType = priceType;
-            priceEntity.price = price;
+            priceEntity.setId(UUID.randomUUID());
+            priceEntity.setVariant(variant);
+            priceEntity.setPriceType(priceType);
+            priceEntity.setPrice(price);
         }
-        when(VariantPricesEntity.findLatestByVariantAndType(variant.id, priceType)).thenReturn(priceEntity);
+        when(VariantPricesEntity.findLatestByVariantAndType(variant.getId(), priceType)).thenReturn(priceEntity);
     }
 }

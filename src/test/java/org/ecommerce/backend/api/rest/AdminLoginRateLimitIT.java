@@ -13,7 +13,6 @@ import org.junit.jupiter.api.Test;
 
 import static io.restassured.RestAssured.given;
 import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 /**
@@ -27,8 +26,8 @@ import static org.mockito.Mockito.*;
  */
 @QuarkusTest
 @DisplayName("AdminLoginRateLimitIT — admin login rate limiting")
-class AdminLoginRateLimitIT {
-
+class AdminLoginRateLimitIT
+{
     @InjectMock
     RateLimiterService rateLimiterService;
 
@@ -36,16 +35,16 @@ class AdminLoginRateLimitIT {
     AdminAuthService adminAuthService;
 
     @BeforeEach
-    void setUp() {
+    void setUp()
+    {
         // Default: allow all requests
-        when(rateLimiterService.check(anyString(), anyString(), anyInt(), anyLong()))
-                .thenReturn(new RateLimitDecision(true, 0));
+        when(rateLimiterService.check(anyString(), anyString(), anyInt(), anyLong())).thenReturn(new RateLimitDecision(true, 0));
         // Default: authentication returns null (invalid credentials)
-        when(adminAuthService.authenticate(any(LoginRequestDto.class)))
-                .thenReturn(null);
+        when(adminAuthService.authenticate(any(LoginRequestDto.class))).thenReturn(null);
     }
 
-    private String loginPayload(String email, String password) {
+    private String loginPayload(String email, String password)
+    {
         return """
                 {
                     "email": "%s",
@@ -58,7 +57,8 @@ class AdminLoginRateLimitIT {
 
     @Test
     @DisplayName("exceeding IP rate limit returns 429 with Retry-After header")
-    void ipLimitExceeded_returns429WithRetryAfter() {
+    void ipLimitExceeded_returns429WithRetryAfter()
+    {
         when(rateLimiterService.check(eq("admin-login"), anyString(), anyInt(), anyLong()))
                 .thenReturn(new RateLimitDecision(false, 120));
 
@@ -78,7 +78,8 @@ class AdminLoginRateLimitIT {
 
     @Test
     @DisplayName("IP denial does NOT increment the email limiter counter")
-    void ipDenied_emailLimiterNotConsulted() {
+    void ipDenied_emailLimiterNotConsulted()
+    {
         when(rateLimiterService.check(eq("admin-login"), anyString(), anyInt(), anyLong()))
                 .thenReturn(new RateLimitDecision(false, 60));
 
@@ -99,7 +100,8 @@ class AdminLoginRateLimitIT {
 
     @Test
     @DisplayName("exceeding email rate limit returns 429 with Retry-After header")
-    void emailLimitExceeded_returns429WithRetryAfter() {
+    void emailLimitExceeded_returns429WithRetryAfter()
+    {
         // IP passes
         when(rateLimiterService.check(eq("admin-login"), anyString(), anyInt(), anyLong()))
                 .thenReturn(new RateLimitDecision(true, 0));
@@ -125,7 +127,8 @@ class AdminLoginRateLimitIT {
 
     @Test
     @DisplayName("email key is normalised to lowercase and trimmed for the email limiter")
-    void emailKeyNormalisedLowercaseTrimmed() {
+    void emailKeyNormalisedLowercaseTrimmed()
+    {
         given()
                 .contentType(ContentType.JSON)
                 .header("X-Forwarded-For", "192.0.2.52")
@@ -143,7 +146,8 @@ class AdminLoginRateLimitIT {
 
     @Test
     @DisplayName("request succeeds after rate limit window expires (simulated via mock)")
-    void recoveryAfterWindow_requestSucceeds() {
+    void recoveryAfterWindow_requestSucceeds()
+    {
         // First: denied
         when(rateLimiterService.check(eq("admin-login"), anyString(), anyInt(), anyLong()))
                 .thenReturn(new RateLimitDecision(false, 2));
@@ -177,7 +181,8 @@ class AdminLoginRateLimitIT {
 
     @Test
     @DisplayName("X-Forwarded-For LAST entry (proxy-appended) is the resolved client IP for the IP limiter")
-    void xForwardedForLastEntryUsedForIpLimiter() {
+    void xForwardedForLastEntryUsedForIpLimiter()
+    {
         given()
                 .contentType(ContentType.JSON)
                 .header("X-Forwarded-For", "203.0.113.99, 10.0.0.1")
@@ -192,7 +197,8 @@ class AdminLoginRateLimitIT {
 
     @Test
     @DisplayName("rotating spoofed X-Forwarded-For prefixes all resolve to the same (appended) IP")
-    void spoofedXffPrefixes_allResolveToAppendedIp() {
+    void spoofedXffPrefixes_allResolveToAppendedIp()
+    {
         for (String spoofed : new String[]{"6.6.6.1", "6.6.6.2", "6.6.6.3"}) {
             given()
                     .contentType(ContentType.JSON)
@@ -209,7 +215,8 @@ class AdminLoginRateLimitIT {
 
     @Test
     @DisplayName("CF-Connecting-IP takes precedence over X-Forwarded-For for the IP limiter")
-    void cfConnectingIpTakesPrecedence() {
+    void cfConnectingIpTakesPrecedence()
+    {
         given()
                 .contentType(ContentType.JSON)
                 .header("CF-Connecting-IP", "203.0.113.7")
@@ -225,7 +232,8 @@ class AdminLoginRateLimitIT {
 
     @Test
     @DisplayName("falls back to X-Real-IP when X-Forwarded-For is absent")
-    void xRealIpFallback() {
+    void xRealIpFallback()
+    {
         given()
                 .contentType(ContentType.JSON)
                 .header("X-Real-IP", "198.51.100.42")
@@ -242,7 +250,8 @@ class AdminLoginRateLimitIT {
 
     @Test
     @DisplayName("missing email/password returns 400 without consulting the rate limiter")
-    void missingBody_returns400_noLimiterConsulted() {
+    void missingBody_returns400_noLimiterConsulted()
+    {
         String emptyPayload = """
                 {
                     "email": "",

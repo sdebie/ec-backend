@@ -18,11 +18,11 @@ import static org.junit.jupiter.api.Assertions.*;
  *   <li>Property 2: Round-trip (entity → dto → entity) preserves the parent's {@code id} at every ancestor level</li>
  *   <li>Property 3: Forward mapping ({@code mapEntityToDto}) populates all five parent scalar fields</li>
  * </ul>
- *
+ * <p>
  * Uses the MapStruct-generated {@link CategoryMapperImpl} directly (no CDI container needed).
  */
-public class CategoryMapperPropertyTest {
-
+public class CategoryMapperPropertyTest
+{
     private final CategoryMapper mapper = new CategoryMapperImpl();
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -32,9 +32,8 @@ public class CategoryMapperPropertyTest {
     // ══════════════════════════════════════════════════════════════════════════
 
     @Property(tries = 100)
-    void roundTrip_preservesParentIdAtEveryLevel(
-            @ForAll("categoryEntitiesWithParents") CategoryEntity entity
-    ) {
+    void roundTrip_preservesParentIdAtEveryLevel(@ForAll("categoryEntitiesWithParents") CategoryEntity entity)
+    {
         // Forward: entity → dto
         CategoryDto dto = mapper.mapEntityToDto(entity);
         // Reverse: dto → entity
@@ -46,13 +45,11 @@ public class CategoryMapperPropertyTest {
         int depth = 0;
 
         while (originalCursor != null) {
-            assertNotNull(roundTrippedCursor,
-                    "Round-tripped entity is null at depth " + depth + " but original is not");
-            assertEquals(originalCursor.id, roundTrippedCursor.id,
-                    "id mismatch at depth " + depth);
+            assertNotNull(roundTrippedCursor, "Round-tripped entity is null at depth " + depth + " but original is not");
+            assertEquals(originalCursor.getId(), roundTrippedCursor.getId(), "id mismatch at depth " + depth);
 
-            originalCursor = originalCursor.parent;
-            roundTrippedCursor = roundTrippedCursor.parent;
+            originalCursor = originalCursor.getParent();
+            roundTrippedCursor = roundTrippedCursor.getParent();
             depth++;
         }
 
@@ -70,7 +67,8 @@ public class CategoryMapperPropertyTest {
     @Property(tries = 100)
     void forwardMapping_populatesAllParentScalarFields(
             @ForAll("categoryEntitiesWithPopulatedParent") CategoryEntity entity
-    ) {
+    )
+    {
         CategoryDto dto = mapper.mapEntityToDto(entity);
 
         // The entity has a non-null parent with all five scalar fields populated
@@ -91,7 +89,8 @@ public class CategoryMapperPropertyTest {
      * All scalar fields are random; products set is left as default (empty).
      */
     @Provide
-    Arbitrary<CategoryEntity> categoryEntitiesWithParents() {
+    Arbitrary<CategoryEntity> categoryEntitiesWithParents()
+    {
         // Depth 0 means just the entity itself (no parent), up to depth 3
         return Arbitraries.integers().between(1, 3).flatMap(this::buildCategoryChain);
     }
@@ -101,13 +100,14 @@ public class CategoryMapperPropertyTest {
      * (id, name, slug, description, imageUrl) are ALL populated (non-null).
      */
     @Provide
-    Arbitrary<CategoryEntity> categoryEntitiesWithPopulatedParent() {
+    Arbitrary<CategoryEntity> categoryEntitiesWithPopulatedParent()
+    {
         Arbitrary<CategoryEntity> populatedParent = buildPopulatedCategoryEntity();
         Arbitrary<CategoryEntity> child = buildCategoryEntityArbitrary();
 
         return Combinators.combine(child, populatedParent)
                 .as((childEntity, parentEntity) -> {
-                    childEntity.parent = parentEntity;
+                    childEntity.setParent(parentEntity);
                     return childEntity;
                 });
     }
@@ -120,14 +120,15 @@ public class CategoryMapperPropertyTest {
      * Builds a chain of CategoryEntity instances with the specified depth.
      * depth=1 means entity has one parent, depth=2 means entity → parent → grandparent, etc.
      */
-    private Arbitrary<CategoryEntity> buildCategoryChain(int depth) {
+    private Arbitrary<CategoryEntity> buildCategoryChain(int depth)
+    {
         if (depth <= 0) {
             return buildCategoryEntityArbitrary();
         }
 
         return buildCategoryEntityArbitrary().flatMap(entity ->
                 buildCategoryChain(depth - 1).map(parent -> {
-                    entity.parent = parent;
+                    entity.setParent(parent);
                     return entity;
                 })
         );
@@ -136,7 +137,8 @@ public class CategoryMapperPropertyTest {
     /**
      * Generates a single CategoryEntity with random scalar fields and no parent.
      */
-    private Arbitrary<CategoryEntity> buildCategoryEntityArbitrary() {
+    private Arbitrary<CategoryEntity> buildCategoryEntityArbitrary()
+    {
         Arbitrary<UUID> ids = Arbitraries.create(UUID::randomUUID);
         Arbitrary<String> names = Arbitraries.strings().alpha().ofMinLength(1).ofMaxLength(20);
         Arbitrary<String> slugs = Arbitraries.strings().alpha().ofMinLength(1).ofMaxLength(20)
@@ -154,11 +156,11 @@ public class CategoryMapperPropertyTest {
         return Combinators.combine(ids, names, slugs, nullableDescriptions, nullableImageUrls)
                 .as((id, name, slug, description, imageUrl) -> {
                     CategoryEntity e = new CategoryEntity();
-                    e.id = id;
-                    e.name = name;
-                    e.slug = slug;
-                    e.description = description;
-                    e.imageUrl = imageUrl;
+                    e.setId(id);
+                    e.setName(name);
+                    e.setSlug(slug);
+                    e.setDescription(description);
+                    e.setImageUrl(imageUrl);
                     // parent left as null — set by caller
                     // products left as default empty set
                     return e;
@@ -168,23 +170,22 @@ public class CategoryMapperPropertyTest {
     /**
      * Generates a CategoryEntity with ALL scalar fields non-null (for Property 3).
      */
-    private Arbitrary<CategoryEntity> buildPopulatedCategoryEntity() {
+    private Arbitrary<CategoryEntity> buildPopulatedCategoryEntity()
+    {
         Arbitrary<UUID> ids = Arbitraries.create(UUID::randomUUID);
         Arbitrary<String> names = Arbitraries.strings().alpha().ofMinLength(1).ofMaxLength(20);
-        Arbitrary<String> slugs = Arbitraries.strings().alpha().ofMinLength(1).ofMaxLength(20)
-                .map(String::toLowerCase);
+        Arbitrary<String> slugs = Arbitraries.strings().alpha().ofMinLength(1).ofMaxLength(20).map(String::toLowerCase);
         Arbitrary<String> descriptions = Arbitraries.strings().alpha().ofMinLength(1).ofMaxLength(50);
-        Arbitrary<String> imageUrls = Arbitraries.strings().alpha().ofMinLength(5).ofMaxLength(30)
-                .map(s -> "/images/" + s + ".png");
+        Arbitrary<String> imageUrls = Arbitraries.strings().alpha().ofMinLength(5).ofMaxLength(30).map(s -> "/images/" + s + ".png");
 
         return Combinators.combine(ids, names, slugs, descriptions, imageUrls)
                 .as((id, name, slug, description, imageUrl) -> {
                     CategoryEntity e = new CategoryEntity();
-                    e.id = id;
-                    e.name = name;
-                    e.slug = slug;
-                    e.description = description;
-                    e.imageUrl = imageUrl;
+                    e.setId(id);
+                    e.setName(name);
+                    e.setSlug(slug);
+                    e.setDescription(description);
+                    e.setImageUrl(imageUrl);
                     return e;
                 });
     }

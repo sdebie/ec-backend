@@ -19,38 +19,37 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * DB-backed characterization + guard tests for the wholesale decision (approve/reject).
- *
+ * <p>
  * Uses the REAL {@link WholesaleCustomerService#approveWholesaleApplication} and
  * {@link WholesaleCustomerService#rejectWholesaleApplication} — no mocks.
  * {@link TestTransaction} ensures each test rolls back so the shared dev DB is never mutated.
- *
+ * <p>
  * Feature: wholesale-application-review-workflow
  * Property 1: Decision guard and state transition
  * Property 2: Rejection reason invariant
  */
 @QuarkusTest
-class WholesaleDecisionGuardTest {
-
+class WholesaleDecisionGuardTest
+{
     @Inject
     WholesaleCustomerService wholesaleCustomerService;
 
     @Inject
     EntityManager em;
 
-    // ─── Helpers ────────────────────────────────────────────────────────────
-
     /**
      * Creates and persists a PENDING wholesale application with a unique applicant email.
      * No linked customer — the approve path will create one.
      */
-    private WholesaleApplicationEntity createPendingApplication() {
+    private WholesaleApplicationEntity createPendingApplication()
+    {
         WholesaleApplicationEntity app = new WholesaleApplicationEntity();
-        app.applicantEmail = "test-" + UUID.randomUUID().toString().substring(0, 8) + "@example.com";
-        app.firstName = "Test";
-        app.lastName = "Applicant";
-        app.companyName = "Test Company";
-        app.status = WholesaleApplicationStatusEn.PENDING;
-        app.createdAt = OffsetDateTime.now();
+        app.setApplicantEmail("test-" + UUID.randomUUID().toString().substring(0, 8) + "@example.com");
+        app.setFirstName("Test");
+        app.setLastName("Applicant");
+        app.setCompanyName("Test Company");
+        app.setStatus(WholesaleApplicationStatusEn.PENDING);
+        app.setCreatedAt(OffsetDateTime.now());
         em.persist(app);
         em.flush();
         return app;
@@ -60,33 +59,36 @@ class WholesaleDecisionGuardTest {
      * Creates a PENDING application and immediately approves it, returning the
      * now-APPROVED entity. Useful for testing guards on non-PENDING applications.
      */
-    private WholesaleApplicationEntity createApprovedApplication() {
+    private WholesaleApplicationEntity createApprovedApplication()
+    {
         WholesaleApplicationEntity app = createPendingApplication();
-        wholesaleCustomerService.approveWholesaleApplication(app.id);
+        wholesaleCustomerService.approveWholesaleApplication(app.getId());
         em.flush();
         em.clear();
-        return em.find(WholesaleApplicationEntity.class, app.id);
+        return em.find(WholesaleApplicationEntity.class, app.getId());
     }
 
     /**
      * Creates a PENDING application and immediately rejects it, returning the
      * now-REJECTED entity. Useful for testing guards on non-PENDING applications.
      */
-    private WholesaleApplicationEntity createRejectedApplication() {
+    private WholesaleApplicationEntity createRejectedApplication()
+    {
         WholesaleApplicationEntity app = createPendingApplication();
-        wholesaleCustomerService.rejectWholesaleApplication(app.id, "Initial rejection reason");
+        wholesaleCustomerService.rejectWholesaleApplication(app.getId(), "Initial rejection reason");
         em.flush();
         em.clear();
-        return em.find(WholesaleApplicationEntity.class, app.id);
+        return em.find(WholesaleApplicationEntity.class, app.getId());
     }
 
     // ─── Property 1: Decision guard and state transition ────────────────────
 
     @Test
     @TestTransaction
-    void approve_pendingApplication_shouldTransitionToApproved() {
+    void approve_pendingApplication_shouldTransitionToApproved()
+    {
         WholesaleApplicationEntity app = createPendingApplication();
-        UUID appId = app.id;
+        UUID appId = app.getId();
 
         WholesaleApplicationDetailsDto result = wholesaleCustomerService.approveWholesaleApplication(appId);
 
@@ -99,16 +101,17 @@ class WholesaleDecisionGuardTest {
         em.flush();
         em.clear();
         WholesaleApplicationEntity persisted = em.find(WholesaleApplicationEntity.class, appId);
-        assertEquals(WholesaleApplicationStatusEn.APPROVED, persisted.status);
-        assertNotNull(persisted.processedAt);
-        assertNull(persisted.rejectionReason);
+        assertEquals(WholesaleApplicationStatusEn.APPROVED, persisted.getStatus());
+        assertNotNull(persisted.getProcessedAt());
+        assertNull(persisted.getRejectionReason());
     }
 
     @Test
     @TestTransaction
-    void reject_pendingApplication_withReason_shouldTransitionToRejected_andTrimReason() {
+    void reject_pendingApplication_withReason_shouldTransitionToRejected_andTrimReason()
+    {
         WholesaleApplicationEntity app = createPendingApplication();
-        UUID appId = app.id;
+        UUID appId = app.getId();
 
         WholesaleApplicationDetailsDto result = wholesaleCustomerService.rejectWholesaleApplication(appId, "Some reason  ");
 
@@ -121,96 +124,88 @@ class WholesaleDecisionGuardTest {
         em.flush();
         em.clear();
         WholesaleApplicationEntity persisted = em.find(WholesaleApplicationEntity.class, appId);
-        assertEquals(WholesaleApplicationStatusEn.REJECTED, persisted.status);
-        assertNotNull(persisted.processedAt);
-        assertEquals("Some reason", persisted.rejectionReason);
+        assertEquals(WholesaleApplicationStatusEn.REJECTED, persisted.getStatus());
+        assertNotNull(persisted.getProcessedAt());
+        assertEquals("Some reason", persisted.getRejectionReason());
     }
 
     @Test
     @TestTransaction
-    void approve_nonPendingApplication_shouldThrowAndNotChangeState() {
+    void approve_nonPendingApplication_shouldThrowAndNotChangeState()
+    {
         WholesaleApplicationEntity app = createApprovedApplication();
-        UUID appId = app.id;
-        OffsetDateTime originalProcessedAt = app.processedAt;
+        UUID appId = app.getId();
+        OffsetDateTime originalProcessedAt = app.getProcessedAt();
 
-        IllegalArgumentException ex = assertThrows(
-                IllegalArgumentException.class,
-                () -> wholesaleCustomerService.approveWholesaleApplication(appId)
-        );
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () -> wholesaleCustomerService.approveWholesaleApplication(appId));
 
         assertTrue(ex.getMessage().contains("PENDING"));
 
         // Verify no state change
         em.clear();
         WholesaleApplicationEntity persisted = em.find(WholesaleApplicationEntity.class, appId);
-        assertEquals(WholesaleApplicationStatusEn.APPROVED, persisted.status);
-        assertEquals(originalProcessedAt.toInstant(), persisted.processedAt.toInstant());
+        assertEquals(WholesaleApplicationStatusEn.APPROVED, persisted.getStatus());
+        assertEquals(originalProcessedAt.toInstant(), persisted.getProcessedAt().toInstant());
     }
 
     @Test
     @TestTransaction
-    void reject_nonPendingApplication_shouldThrowAndNotChangeState() {
+    void reject_nonPendingApplication_shouldThrowAndNotChangeState()
+    {
         WholesaleApplicationEntity app = createRejectedApplication();
-        UUID appId = app.id;
-        OffsetDateTime originalProcessedAt = app.processedAt;
-        String originalReason = app.rejectionReason;
+        UUID appId = app.getId();
+        OffsetDateTime originalProcessedAt = app.getProcessedAt();
+        String originalReason = app.getRejectionReason();
 
-        IllegalArgumentException ex = assertThrows(
-                IllegalArgumentException.class,
-                () -> wholesaleCustomerService.rejectWholesaleApplication(appId, "New reason")
-        );
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () -> wholesaleCustomerService.rejectWholesaleApplication(appId, "New reason"));
 
         assertTrue(ex.getMessage().contains("PENDING"));
 
         // Verify no state change
         em.clear();
         WholesaleApplicationEntity persisted = em.find(WholesaleApplicationEntity.class, appId);
-        assertEquals(WholesaleApplicationStatusEn.REJECTED, persisted.status);
-        assertEquals(originalProcessedAt.toInstant(), persisted.processedAt.toInstant());
-        assertEquals(originalReason, persisted.rejectionReason);
+        assertEquals(WholesaleApplicationStatusEn.REJECTED, persisted.getStatus());
+        assertEquals(originalProcessedAt.toInstant(), persisted.getProcessedAt().toInstant());
+        assertEquals(originalReason, persisted.getRejectionReason());
     }
 
     // ─── Property 2: Rejection reason invariant ─────────────────────────────
 
     @Test
     @TestTransaction
-    void reject_withEmptyReason_shouldThrowAndNotChangeState() {
+    void reject_withEmptyReason_shouldThrowAndNotChangeState()
+    {
         WholesaleApplicationEntity app = createPendingApplication();
-        UUID appId = app.id;
+        UUID appId = app.getId();
 
-        IllegalArgumentException ex = assertThrows(
-                IllegalArgumentException.class,
-                () -> wholesaleCustomerService.rejectWholesaleApplication(appId, "")
-        );
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () -> wholesaleCustomerService.rejectWholesaleApplication(appId, ""));
 
         assertTrue(ex.getMessage().contains("reason"));
 
         // Verify no state change
         em.clear();
         WholesaleApplicationEntity persisted = em.find(WholesaleApplicationEntity.class, appId);
-        assertEquals(WholesaleApplicationStatusEn.PENDING, persisted.status);
-        assertNull(persisted.processedAt);
-        assertNull(persisted.rejectionReason);
+        assertEquals(WholesaleApplicationStatusEn.PENDING, persisted.getStatus());
+        assertNull(persisted.getProcessedAt());
+        assertNull(persisted.getRejectionReason());
     }
 
     @Test
     @TestTransaction
-    void reject_withWhitespaceOnlyReason_shouldThrowAndNotChangeState() {
+    void reject_withWhitespaceOnlyReason_shouldThrowAndNotChangeState()
+    {
         WholesaleApplicationEntity app = createPendingApplication();
-        UUID appId = app.id;
+        UUID appId = app.getId();
 
-        IllegalArgumentException ex = assertThrows(
-                IllegalArgumentException.class,
-                () -> wholesaleCustomerService.rejectWholesaleApplication(appId, "   ")
-        );
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () -> wholesaleCustomerService.rejectWholesaleApplication(appId, "   "));
 
         assertTrue(ex.getMessage().contains("reason"));
 
         // Verify no state change
         em.clear();
         WholesaleApplicationEntity persisted = em.find(WholesaleApplicationEntity.class, appId);
-        assertEquals(WholesaleApplicationStatusEn.PENDING, persisted.status);
-        assertNull(persisted.processedAt);
-        assertNull(persisted.rejectionReason);
+        assertEquals(WholesaleApplicationStatusEn.PENDING, persisted.getStatus());
+        assertNull(persisted.getProcessedAt());
+        assertNull(persisted.getRejectionReason());
     }
 }

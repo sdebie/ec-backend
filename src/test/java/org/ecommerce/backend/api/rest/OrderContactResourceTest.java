@@ -17,29 +17,31 @@ import static org.hamcrest.Matchers.equalTo;
 import static org.mockito.Mockito.when;
 
 @QuarkusTest
-class OrderContactResourceTest {
-
+class OrderContactResourceTest
+{
     @BeforeEach
-    void setUp() {
+    void setUp()
+    {
         PanacheMock.mock(OrderEntity.class);
         PanacheMock.mock(ShippingMethodEntity.class);
     }
 
     @Test
-    void updateContact_validBody_returns200() {
+    void updateContact_validBody_returns200()
+    {
         UUID orderId = UUID.randomUUID();
         UUID shippingMethodId = UUID.randomUUID();
 
         OrderEntity order = new OrderEntity();
-        order.id = orderId;
-        order.totalAmount = new BigDecimal("500.00");
-        order.status = OrderStatusEn.PENDING;
+        order.setId(orderId);
+        order.setTotalAmount(new BigDecimal("500.00"));
+        order.setStatus(OrderStatusEn.PENDING);
 
         ShippingMethodEntity shippingMethod = new ShippingMethodEntity();
-        shippingMethod.id = shippingMethodId;
-        shippingMethod.name = "Standard Delivery";
-        shippingMethod.isActive = true;
-        shippingMethod.baseFee = new BigDecimal("89.00");
+        shippingMethod.setId(shippingMethodId);
+        shippingMethod.setName("Standard Delivery");
+        shippingMethod.setActive(true);
+        shippingMethod.setBaseFee(new BigDecimal("89.00"));
 
         when(OrderEntity.findOrderInfoById(orderId)).thenReturn(order);
         when(ShippingMethodEntity.findById(shippingMethodId)).thenReturn(shippingMethod);
@@ -73,7 +75,8 @@ class OrderContactResourceTest {
     }
 
     @Test
-    void updateContact_invalidOrderId_returns404() {
+    void updateContact_invalidOrderId_returns404()
+    {
         UUID orderId = UUID.randomUUID();
 
         when(OrderEntity.findOrderInfoById(orderId)).thenReturn(null);
@@ -97,14 +100,15 @@ class OrderContactResourceTest {
     }
 
     @Test
-    void updateContact_invalidShippingMethodId_returns422() {
+    void updateContact_invalidShippingMethodId_returns422()
+    {
         UUID orderId = UUID.randomUUID();
         UUID invalidShippingMethodId = UUID.randomUUID();
 
         OrderEntity order = new OrderEntity();
-        order.id = orderId;
-        order.totalAmount = new BigDecimal("500.00");
-        order.status = OrderStatusEn.PENDING;
+        order.setId(orderId);
+        order.setTotalAmount(new BigDecimal("500.00"));
+        order.setStatus(OrderStatusEn.PENDING);
 
         when(OrderEntity.findOrderInfoById(orderId)).thenReturn(order);
         when(ShippingMethodEntity.findById(invalidShippingMethodId)).thenReturn(null);
@@ -129,14 +133,15 @@ class OrderContactResourceTest {
     }
 
     @Test
-    void updateContact_guestOrderNoCustomer_returns200() {
+    void updateContact_guestOrderNoCustomer_returns200()
+    {
         UUID orderId = UUID.randomUUID();
 
         OrderEntity order = new OrderEntity();
-        order.id = orderId;
-        order.totalAmount = new BigDecimal("250.00");
-        order.status = OrderStatusEn.PENDING;
-        order.customerEntity = null; // Guest order — no customer
+        order.setId(orderId);
+        order.setTotalAmount(new BigDecimal("250.00"));
+        order.setStatus(OrderStatusEn.PENDING);
+        order.setCustomerEntity(null); // Guest order — no customer
 
         when(OrderEntity.findOrderInfoById(orderId)).thenReturn(order);
 

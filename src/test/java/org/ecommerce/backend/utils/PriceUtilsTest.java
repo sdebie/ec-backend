@@ -16,21 +16,25 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.when;
 
 @QuarkusTest
-class PriceUtilsTest {
+class PriceUtilsTest
+{
 
     @BeforeEach
-    void setUp() {
+    void setUp()
+    {
         PanacheMock.mock(VariantPricesEntity.class);
     }
 
     @Test
-    void getMinimumPrice_shouldReturnZeroWhenVariantIdOrPriceTypeIsMissing() {
+    void getMinimumPrice_shouldReturnZeroWhenVariantIdOrPriceTypeIsMissing()
+    {
         assertEquals(BigDecimal.ZERO, PriceUtils.getMinimumPrice(null, PriceTypeEn.RETAIL_PRICE));
         assertEquals(BigDecimal.ZERO, PriceUtils.getMinimumPrice(UUID.randomUUID(), null));
     }
 
     @Test
-    void getMinimumPrice_shouldReturnLatestActivePriceWithinDateWindow() {
+    void getMinimumPrice_shouldReturnLatestActivePriceWithinDateWindow()
+    {
         UUID variantId = UUID.randomUUID();
         LocalDateTime now = LocalDateTime.now();
 
@@ -85,7 +89,8 @@ class PriceUtilsTest {
     }
 
     @Test
-    void getMinimumPrice_shouldUseRecencyTieBreakersWhenStartDatesMatch() {
+    void getMinimumPrice_shouldUseRecencyTieBreakersWhenStartDatesMatch()
+    {
         UUID variantId = UUID.randomUUID();
         LocalDateTime now = LocalDateTime.now();
         LocalDateTime startDate = now.minusDays(1);
@@ -118,15 +123,16 @@ class PriceUtilsTest {
             LocalDateTime startDate,
             LocalDateTime endDate,
             LocalDateTime createdAt,
-            LocalDateTime updatedAt) {
+            LocalDateTime updatedAt)
+    {
         VariantPricesEntity entity = new VariantPricesEntity();
-        entity.id = UUID.randomUUID();
-        entity.priceType = priceType;
-        entity.price = new BigDecimal(amount);
-        entity.priceStartDate = startDate;
-        entity.priceEndDate = endDate;
-        entity.createdAt = createdAt;
-        entity.updatedAt = updatedAt;
+        entity.setId(UUID.randomUUID());
+        entity.setPriceType(priceType);
+        entity.setPrice(new BigDecimal(amount));
+        entity.setPriceStartDate(startDate);
+        entity.setPriceEndDate(endDate);
+        entity.setCreatedAt(createdAt);
+        entity.setUpdatedAt(updatedAt);
         return entity;
     }
 }

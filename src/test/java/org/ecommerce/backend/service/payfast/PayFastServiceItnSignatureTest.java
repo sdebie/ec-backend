@@ -9,24 +9,27 @@ import java.nio.charset.StandardCharsets;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-class PayFastServiceItnSignatureTest {
-
+class PayFastServiceItnSignatureTest
+{
     private static final String PASSPHRASE = "test-passphrase";
 
     private PayFastService service;
 
     @BeforeEach
-    void setUp() {
+    void setUp()
+    {
         service = new PayFastService();
         service.passphrase = PASSPHRASE;
     }
 
-    private static String sign(String paramString) {
+    private static String sign(String paramString)
+    {
         return DigestUtils.md5Hex((paramString + "&passphrase=" + PASSPHRASE).getBytes(StandardCharsets.UTF_8));
     }
 
     @Test
-    void acceptsBodyWithValidSignature() {
+    void acceptsBodyWithValidSignature()
+    {
         String params = "m_payment_id=abc-123&pf_payment_id=999&payment_status=COMPLETE&amount_gross=100.00";
         String body = params + "&signature=" + sign(params);
 
@@ -34,7 +37,8 @@ class PayFastServiceItnSignatureTest {
     }
 
     @Test
-    void acceptsSignaturePairInPostedPositionMidBody() {
+    void acceptsSignaturePairInPostedPositionMidBody()
+    {
         String params = "m_payment_id=abc-123&payment_status=COMPLETE";
         String body = "m_payment_id=abc-123&signature=" + sign(params) + "&payment_status=COMPLETE";
 
@@ -42,7 +46,8 @@ class PayFastServiceItnSignatureTest {
     }
 
     @Test
-    void rejectsTamperedBody() {
+    void rejectsTamperedBody()
+    {
         String params = "m_payment_id=abc-123&payment_status=PENDING&amount_gross=100.00";
         String tampered = "m_payment_id=abc-123&payment_status=COMPLETE&amount_gross=100.00";
 
@@ -50,24 +55,28 @@ class PayFastServiceItnSignatureTest {
     }
 
     @Test
-    void rejectsMissingSignature() {
+    void rejectsMissingSignature()
+    {
         assertFalse(service.verifyItnSignature("m_payment_id=abc-123&payment_status=COMPLETE"));
     }
 
     @Test
-    void rejectsForgedSignature() {
+    void rejectsForgedSignature()
+    {
         String params = "m_payment_id=abc-123&payment_status=COMPLETE";
         assertFalse(service.verifyItnSignature(params + "&signature=deadbeefdeadbeefdeadbeefdeadbeef"));
     }
 
     @Test
-    void rejectsBlankBody() {
+    void rejectsBlankBody()
+    {
         assertFalse(service.verifyItnSignature(null));
         assertFalse(service.verifyItnSignature(""));
     }
 
     @Test
-    void signatureWithoutPassphraseWhenNoneConfigured() {
+    void signatureWithoutPassphraseWhenNoneConfigured()
+    {
         service.passphrase = "";
         String params = "m_payment_id=abc-123&payment_status=COMPLETE";
         String signature = DigestUtils.md5Hex(params.getBytes(StandardCharsets.UTF_8));

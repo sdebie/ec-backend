@@ -15,23 +15,26 @@ import static org.junit.jupiter.api.Assertions.assertNull;
  * Pure field copy — no DB access — so it runs without Quarkus.
  */
 @DisplayName("OrderMapper.toCustomerDto")
-class OrderMapperCustomerDtoTest {
+class OrderMapperCustomerDtoTest
+{
 
     private final OrderMapper mapper = new OrderMapper();
 
     @Test
     @DisplayName("null customer maps to null")
-    void nullCustomer() {
+    void nullCustomer()
+    {
         assertNull(mapper.toCustomerDto(null));
     }
 
     @Test
     @DisplayName("email is taken from the customer's user")
-    void emailFromUser() {
+    void emailFromUser()
+    {
         CustomerEntity customer = new CustomerEntity();
         UserEntity user = new UserEntity();
-        user.email = "buyer@test.co";
-        customer.user = user;
+        user.setEmail("buyer@test.co");
+        customer.setUser(user);
 
         CustomerDto dto = mapper.toCustomerDto(customer);
         assertEquals("buyer@test.co", dto.getEmail());
@@ -39,7 +42,8 @@ class OrderMapperCustomerDtoTest {
 
     @Test
     @DisplayName("email is null when the customer has no user")
-    void emailNullWhenNoUser() {
+    void emailNullWhenNoUser()
+    {
         CustomerDto dto = mapper.toCustomerDto(new CustomerEntity());
         assertNull(dto.getEmail());
     }

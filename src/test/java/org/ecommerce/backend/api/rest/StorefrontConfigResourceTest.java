@@ -12,24 +12,19 @@ import java.util.Collections;
 import java.util.List;
 
 import static io.restassured.RestAssured.given;
-import static org.hamcrest.Matchers.equalTo;
-import static org.hamcrest.Matchers.hasItems;
-import static org.hamcrest.Matchers.hasKey;
-import static org.hamcrest.Matchers.hasSize;
-import static org.hamcrest.Matchers.not;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.hamcrest.Matchers.*;
+import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.when;
 
 @QuarkusTest
-class StorefrontConfigResourceTest {
-
+class StorefrontConfigResourceTest
+{
     @InjectMock
     SettingsRepository settingsRepository;
 
     @Test
-    void getConfig_shouldReturnDefaultHeaderAnnouncementWhenNoRowExists() {
+    void getConfig_shouldReturnDefaultHeaderAnnouncementWhenNoRowExists()
+    {
         // No storefront.header row in store_settings
         when(settingsRepository.getAllStoreSettings()).thenReturn(Collections.emptyList());
 
@@ -44,10 +39,11 @@ class StorefrontConfigResourceTest {
     }
 
     @Test
-    void getConfig_shouldReturnStoredHeaderAnnouncementWhenRowExists() {
+    void getConfig_shouldReturnStoredHeaderAnnouncementWhenRowExists()
+    {
         StoreSettingsEntity headerSetting = new StoreSettingsEntity();
-        headerSetting.key = "storefront.header";
-        headerSetting.value = "{\"announcement\":{\"enabled\":true,\"text\":\"Free shipping over R500!\",\"backgroundColor\":\"#ff0000\",\"textColor\":\"#000000\"}}";
+        headerSetting.setKey("storefront.header");
+        headerSetting.setValue("{\"announcement\":{\"enabled\":true,\"text\":\"Free shipping over R500!\",\"backgroundColor\":\"#ff0000\",\"textColor\":\"#000000\"}}");
 
         when(settingsRepository.getAllStoreSettings()).thenReturn(List.of(headerSetting));
 
@@ -62,7 +58,8 @@ class StorefrontConfigResourceTest {
     }
 
     @Test
-    void getConfig_shouldReturnDefaultLoginStylePageWhenAuthSettingAbsent() {
+    void getConfig_shouldReturnDefaultLoginStylePageWhenAuthSettingAbsent()
+    {
         when(settingsRepository.getAllStoreSettings()).thenReturn(Collections.emptyList());
 
         given()
@@ -73,10 +70,11 @@ class StorefrontConfigResourceTest {
     }
 
     @Test
-    void getConfig_shouldReturnLoginStyleModalWhenAuthSettingIsModal() {
+    void getConfig_shouldReturnLoginStyleModalWhenAuthSettingIsModal()
+    {
         StoreSettingsEntity authSetting = new StoreSettingsEntity();
-        authSetting.key = "storefront.auth.login_style";
-        authSetting.value = "modal";
+        authSetting.setKey("storefront.auth.login_style");
+        authSetting.setValue("modal");
 
         when(settingsRepository.getAllStoreSettings()).thenReturn(List.of(authSetting));
 
@@ -88,10 +86,11 @@ class StorefrontConfigResourceTest {
     }
 
     @Test
-    void getConfig_shouldAssembleNavigationWithoutRemovedItems() {
+    void getConfig_shouldAssembleNavigationWithoutRemovedItems()
+    {
         StoreSettingsEntity navigationSetting = new StoreSettingsEntity();
-        navigationSetting.key = "storefront.navigation";
-        navigationSetting.value = "{\"items\":[{\"id\":\"home\",\"label\":\"Home\",\"path\":\"/\",\"external\":false,\"sortOrder\":0},{\"id\":\"products\",\"label\":\"Products\",\"path\":\"/products\",\"external\":false,\"sortOrder\":1},{\"id\":\"about\",\"label\":\"About Us\",\"path\":\"/about-us\",\"external\":false,\"sortOrder\":2},{\"id\":\"contact\",\"label\":\"Contact Us\",\"path\":\"/contact-us\",\"external\":false,\"sortOrder\":3}]}";
+        navigationSetting.setKey("storefront.navigation");
+        navigationSetting.setValue("{\"items\":[{\"id\":\"home\",\"label\":\"Home\",\"path\":\"/\",\"external\":false,\"sortOrder\":0},{\"id\":\"products\",\"label\":\"Products\",\"path\":\"/products\",\"external\":false,\"sortOrder\":1},{\"id\":\"about\",\"label\":\"About Us\",\"path\":\"/about-us\",\"external\":false,\"sortOrder\":2},{\"id\":\"contact\",\"label\":\"Contact Us\",\"path\":\"/contact-us\",\"external\":false,\"sortOrder\":3}]}");
 
         when(settingsRepository.getAllStoreSettings()).thenReturn(List.of(navigationSetting));
 
@@ -109,10 +108,11 @@ class StorefrontConfigResourceTest {
     // ── Contact assembly tests ────────────────────────────────────────────────
 
     @Test
-    void getConfig_shouldIncludeContactObjectWhenStorefrontContactSettingExists() {
+    void getConfig_shouldIncludeContactObjectWhenStorefrontContactSettingExists()
+    {
         StoreSettingsEntity contactSetting = new StoreSettingsEntity();
-        contactSetting.key = "storefront.contact";
-        contactSetting.value = "{\"emails\":[\"info@store.co.za\",\"support@store.co.za\"],\"phones\":[\"+27123456789\"],\"landline\":\"+27219876543\",\"physicalAddress\":\"123 Main Street\\nCape Town\\n8001\",\"businessHours\":\"Mon-Fri 08:00-17:00\",\"responseSla\":\"We respond within 24 hours\",\"mapUrl\":\"https://www.google.com/maps/place/test\",\"mapEmbedUrl\":\"https://www.google.com/maps/embed?pb=abc\"}";
+        contactSetting.setKey("storefront.contact");
+        contactSetting.setValue("{\"emails\":[\"info@store.co.za\",\"support@store.co.za\"],\"phones\":[\"+27123456789\"],\"landline\":\"+27219876543\",\"physicalAddress\":\"123 Main Street\\nCape Town\\n8001\",\"businessHours\":\"Mon-Fri 08:00-17:00\",\"responseSla\":\"We respond within 24 hours\",\"mapUrl\":\"https://www.google.com/maps/place/test\",\"mapEmbedUrl\":\"https://www.google.com/maps/embed?pb=abc\"}");
 
         when(settingsRepository.getAllStoreSettings()).thenReturn(List.of(contactSetting));
 
@@ -131,11 +131,12 @@ class StorefrontConfigResourceTest {
     }
 
     @Test
-    void getConfig_shouldOmitContactKeyWhenStorefrontContactSettingAbsent() {
+    void getConfig_shouldOmitContactKeyWhenStorefrontContactSettingAbsent()
+    {
         // Only non-contact settings present — contact should not appear in response
         StoreSettingsEntity headerSetting = new StoreSettingsEntity();
-        headerSetting.key = "storefront.header";
-        headerSetting.value = "{\"announcement\":{\"enabled\":false,\"text\":\"\",\"backgroundColor\":\"#1a1f35\",\"textColor\":\"#ffffff\"}}";
+        headerSetting.setKey("storefront.header");
+        headerSetting.setValue("{\"announcement\":{\"enabled\":false,\"text\":\"\",\"backgroundColor\":\"#1a1f35\",\"textColor\":\"#ffffff\"}}");
 
         when(settingsRepository.getAllStoreSettings()).thenReturn(List.of(headerSetting));
 
@@ -148,10 +149,11 @@ class StorefrontConfigResourceTest {
     }
 
     @Test
-    void getConfig_shouldPassThroughEnquiryEmailInContact() {
+    void getConfig_shouldPassThroughEnquiryEmailInContact()
+    {
         StoreSettingsEntity contactSetting = new StoreSettingsEntity();
-        contactSetting.key = "storefront.contact";
-        contactSetting.value = "{\"emails\":[\"info@store.co.za\"],\"phones\":[\"+27123456789\"],\"enquiryEmail\":\"enquiries@store.co.za\"}";
+        contactSetting.setKey("storefront.contact");
+        contactSetting.setValue("{\"emails\":[\"info@store.co.za\"],\"phones\":[\"+27123456789\"],\"enquiryEmail\":\"enquiries@store.co.za\"}");
 
         when(settingsRepository.getAllStoreSettings()).thenReturn(List.of(contactSetting));
 
@@ -165,10 +167,11 @@ class StorefrontConfigResourceTest {
     }
 
     @Test
-    void getConfig_shouldOmitEnquiryEmailFromContactWhenNotInSetting() {
+    void getConfig_shouldOmitEnquiryEmailFromContactWhenNotInSetting()
+    {
         StoreSettingsEntity contactSetting = new StoreSettingsEntity();
-        contactSetting.key = "storefront.contact";
-        contactSetting.value = "{\"emails\":[\"info@store.co.za\"],\"phones\":[\"+27123456789\"]}";
+        contactSetting.setKey("storefront.contact");
+        contactSetting.setValue("{\"emails\":[\"info@store.co.za\"],\"phones\":[\"+27123456789\"]}");
 
         when(settingsRepository.getAllStoreSettings()).thenReturn(List.of(contactSetting));
 
@@ -183,10 +186,11 @@ class StorefrontConfigResourceTest {
     // ── aboutSections tests ───────────────────────────────────────────────────
 
     @Test
-    void getConfig_shouldReturnAboutSectionsWhenRowPresent() {
+    void getConfig_shouldReturnAboutSectionsWhenRowPresent()
+    {
         StoreSettingsEntity aboutSetting = new StoreSettingsEntity();
-        aboutSetting.key = "storefront.about_sections";
-        aboutSetting.value = "[{\"id\":\"s1\",\"type\":\"hero\",\"enabled\":true,\"props\":{\"title\":\"Hello\"}},{\"id\":\"s2\",\"type\":\"stats\",\"enabled\":true,\"props\":{\"items\":[]}}]";
+        aboutSetting.setKey("storefront.about_sections");
+        aboutSetting.setValue("[{\"id\":\"s1\",\"type\":\"hero\",\"enabled\":true,\"props\":{\"title\":\"Hello\"}},{\"id\":\"s2\",\"type\":\"stats\",\"enabled\":true,\"props\":{\"items\":[]}}]");
 
         when(settingsRepository.getAllStoreSettings()).thenReturn(List.of(aboutSetting));
 
@@ -203,10 +207,11 @@ class StorefrontConfigResourceTest {
     }
 
     @Test
-    void getConfig_shouldFilterDisabledAboutSectionsAndStripEnabledField() {
+    void getConfig_shouldFilterDisabledAboutSectionsAndStripEnabledField()
+    {
         StoreSettingsEntity aboutSetting = new StoreSettingsEntity();
-        aboutSetting.key = "storefront.about_sections";
-        aboutSetting.value = "[{\"id\":\"s1\",\"type\":\"hero\",\"enabled\":true,\"props\":{\"title\":\"Keep\"}},{\"id\":\"s2\",\"type\":\"stats\",\"enabled\":false,\"props\":{\"items\":[]}},{\"id\":\"s3\",\"type\":\"cta\",\"props\":{\"text\":\"No enabled field\"}}]";
+        aboutSetting.setKey("storefront.about_sections");
+        aboutSetting.setValue("[{\"id\":\"s1\",\"type\":\"hero\",\"enabled\":true,\"props\":{\"title\":\"Keep\"}},{\"id\":\"s2\",\"type\":\"stats\",\"enabled\":false,\"props\":{\"items\":[]}},{\"id\":\"s3\",\"type\":\"cta\",\"props\":{\"text\":\"No enabled field\"}}]");
 
         when(settingsRepository.getAllStoreSettings()).thenReturn(List.of(aboutSetting));
 
@@ -225,7 +230,8 @@ class StorefrontConfigResourceTest {
     }
 
     @Test
-    void getConfig_shouldReturnEmptyAboutSectionsWhenRowMissing() {
+    void getConfig_shouldReturnEmptyAboutSectionsWhenRowMissing()
+    {
         // No storefront.about_sections row at all
         when(settingsRepository.getAllStoreSettings()).thenReturn(Collections.emptyList());
 
@@ -237,14 +243,15 @@ class StorefrontConfigResourceTest {
     }
 
     @Test
-    void getConfig_shouldReturnEmptyAboutSectionsWhenMalformedJsonWithRestOfConfigIntact() {
+    void getConfig_shouldReturnEmptyAboutSectionsWhenMalformedJsonWithRestOfConfigIntact()
+    {
         StoreSettingsEntity aboutSetting = new StoreSettingsEntity();
-        aboutSetting.key = "storefront.about_sections";
-        aboutSetting.value = "NOT VALID JSON [[[";
+        aboutSetting.setKey("storefront.about_sections");
+        aboutSetting.setValue("NOT VALID JSON [[[");
 
         StoreSettingsEntity configSetting = new StoreSettingsEntity();
-        configSetting.key = "storefront.config";
-        configSetting.value = "{\"clientId\":\"test-client\",\"clientName\":\"Test Store\"}";
+        configSetting.setKey("storefront.config");
+        configSetting.setValue("{\"clientId\":\"test-client\",\"clientName\":\"Test Store\"}");
 
         when(settingsRepository.getAllStoreSettings()).thenReturn(List.of(aboutSetting, configSetting));
 
@@ -260,12 +267,13 @@ class StorefrontConfigResourceTest {
     }
 
     @Test
-    void getConfig_shouldReturnHomeSectionsUnchanged_regressionPin() throws Exception {
+    void getConfig_shouldReturnHomeSectionsUnchanged_regressionPin() throws Exception
+    {
         // This is a regression pin: the existing `sections` (home) output must be
         // semantically identical to its pre-refactor behaviour.
         StoreSettingsEntity homeSetting = new StoreSettingsEntity();
-        homeSetting.key = "storefront.home_sections";
-        homeSetting.value = "[{\"id\":\"hero-1\",\"type\":\"hero\",\"enabled\":true,\"props\":{\"title\":\"Welcome\",\"subtitle\":\"Shop now\"}},{\"id\":\"feat-1\",\"type\":\"featured-products\",\"enabled\":false,\"props\":{}},{\"id\":\"cta-1\",\"type\":\"cta\",\"props\":{\"text\":\"Get started\",\"to\":\"/products\"}}]";
+        homeSetting.setKey("storefront.home_sections");
+        homeSetting.setValue("[{\"id\":\"hero-1\",\"type\":\"hero\",\"enabled\":true,\"props\":{\"title\":\"Welcome\",\"subtitle\":\"Shop now\"}},{\"id\":\"feat-1\",\"type\":\"featured-products\",\"enabled\":false,\"props\":{}},{\"id\":\"cta-1\",\"type\":\"cta\",\"props\":{\"text\":\"Get started\",\"to\":\"/products\"}}]");
 
         when(settingsRepository.getAllStoreSettings()).thenReturn(List.of(homeSetting));
 

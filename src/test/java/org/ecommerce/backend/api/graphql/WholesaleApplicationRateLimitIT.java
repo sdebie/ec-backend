@@ -2,7 +2,6 @@ package org.ecommerce.backend.api.graphql;
 
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
-import org.ecommerce.backend.service.WholesaleApplicationSubmittedEvent;
 import org.ecommerce.backend.service.WholesaleCustomerService;
 import org.ecommerce.common.dto.WholesaleCustomerDto;
 import org.junit.jupiter.api.BeforeEach;
@@ -30,15 +29,16 @@ import static org.mockito.Mockito.*;
  */
 @QuarkusTest
 @DisplayName("Wholesale Application Rate Limiting — integration")
-class WholesaleApplicationRateLimitIT {
-
+class WholesaleApplicationRateLimitIT
+{
     private static final String RATE_LIMIT_IP = "10.99.0." + System.nanoTime() % 200;
 
     @InjectMock
     WholesaleCustomerService wholesaleCustomerService;
 
     @BeforeEach
-    void setUp() {
+    void setUp()
+    {
         WholesaleCustomerDto resultDto = new WholesaleCustomerDto();
         resultDto.setId(UUID.randomUUID());
         resultDto.setFirstName("Test");
@@ -50,7 +50,8 @@ class WholesaleApplicationRateLimitIT {
 
     @Test
     @DisplayName("exceeding the wholesale-application limit yields GraphQL rate-limit error")
-    void exceedLimit_returnsRateLimitError() {
+    void exceedLimit_returnsRateLimitError()
+    {
         // Use a unique IP per test run to avoid cross-test interference
         String testIp = "10.99.1." + (System.nanoTime() % 250);
 
@@ -85,7 +86,8 @@ class WholesaleApplicationRateLimitIT {
 
     @Test
     @DisplayName("denied request does not persist an application row or fire a submitted event")
-    void deniedRequest_noPersistence_noEvent() {
+    void deniedRequest_noPersistence_noEvent()
+    {
         // Use a unique IP for this test
         String testIp = "10.99.2." + (System.nanoTime() % 250);
 
@@ -131,7 +133,8 @@ class WholesaleApplicationRateLimitIT {
      * Each call uses a unique applicantEmail so the mutation won't fail on
      * duplicate-email checks within the allowed window.
      */
-    private String createApplicationMutation(int index) {
+    private String createApplicationMutation(int index)
+    {
         return """
                 {
                     "query": "mutation CreateWholesaleApplication($customer: WholesaleCustomerDtoInput!) { createWholesaleApplication(customer: $customer) { firstName } }",
