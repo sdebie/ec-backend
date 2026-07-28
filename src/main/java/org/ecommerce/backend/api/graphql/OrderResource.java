@@ -8,7 +8,6 @@ import org.eclipse.microprofile.graphql.*;
 import org.eclipse.microprofile.jwt.JsonWebToken;
 import org.ecommerce.backend.service.OrderService;
 import org.ecommerce.common.dto.OrderDetailRespDto;
-import org.ecommerce.common.dto.OrderDto;
 import org.ecommerce.common.dto.OrderResponseDto;
 import org.ecommerce.common.dto.OrderSummaryDto;
 import org.ecommerce.common.entity.CustomerEntity;
@@ -35,17 +34,15 @@ public class OrderResource
     @Inject
     SecurityIdentity securityIdentity;
 
-    @Mutation("createOrder")
-    @Description("Create an order")
-    public OrderResponseDto createOrder(@Name("order") OrderDto orderDto) throws GraphQLException
-    {
-        if (orderDto.getSessionId() == null) {
-            throw new GraphQLException("Invalid Order Session info");
-        }
-
-        LOG.debug("createOrder for sessionId=" + orderDto.getSessionId() + " with " + (orderDto.getItems() == null ? 0 : orderDto.getItems().size()) + " items");
-        return orderService.createOrderFromDto(orderDto);
-    }
+    // NOTE: there is deliberately no createOrder mutation here.
+    // Order creation is REST-only (`POST /api/orders` → OrderService.createOrderFromCart),
+    // where the request carries {variantId, quantity} and the server prices every
+    // line from the signature-verified shopperType claim. The mutation that used
+    // to live here accepted client-supplied unit prices and totals, so any caller
+    // could persist an order at a price of their choosing. Guest checkout does not
+    // need it — the REST endpoint is deliberately unauthenticated and resolves an
+    // absent token to the GUEST tier. Do not reintroduce a price-carrying mutation;
+    // OrderResourceContractTest guards its absence.
 
     @Mutation("updateOrderStatus")
     @Description("Update the status of the latest order for a given sessionId")
