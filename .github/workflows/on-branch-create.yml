@@ -38,7 +38,9 @@ jobs:
             git config user.name "github-actions[bot]"
             git config user.email "github-actions[bot]@users.noreply.github.com"
             git commit -am "chore(version): set feature branch snapshot version [skip ci]"
-            git push origin ${{ github.event.ref }}
+          
+            # 🚀 FIX: Dynamic push to whatever branch triggered this action
+            git push origin ${{ github.event.ref_name }}
           else
             echo "Version is already a SNAPSHOT ($CURRENT_VERSION). Skipping bump."
           fi
