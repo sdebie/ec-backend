@@ -1,0 +1,45 @@
+name: Finalize Release Version on Main
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  strip-snapshot:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'maven'
+
+      - name: Strip SNAPSHOT from pom.xml
+        run: |
+          CURRENT_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
+          
+          if [[ "$CURRENT_VERSION" == *"-SNAPSHOT"* ]]; then
+            RELEASE_VERSION=${CURRENT_VERSION%-SNAPSHOT}
+            echo "Stripping SNAPSHOT: $CURRENT_VERSION -> $RELEASE_VERSION"
+          
+            mvn versions:set -DnewVersion=${RELEASE_VERSION} -DgenerateBackupPoms=false
+          
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git commit -am "chore(release): set clean main release v${RELEASE_VERSION} [skip ci]"
+            git tag "v${RELEASE_VERSION}"
+            git push origin main --tags
+          else
+            echo "Main branch is already on clean version ($CURRENT_VERSION). No action needed."
+          fi
