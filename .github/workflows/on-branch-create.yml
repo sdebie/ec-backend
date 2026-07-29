@@ -1,0 +1,44 @@
+name: Setup Feature Branch Snapshot Version
+
+on:
+  create:
+
+jobs:
+  bump-snapshot:
+    # 🚀 Only run when a branch (not a tag) is created, and ignore main
+    if: github.event.ref_type == 'branch' && github.event.ref != 'main'
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.ref }}
+          fetch-depth: 0
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'maven'
+
+      - name: Set Next SNAPSHOT Version
+        run: |
+          CURRENT_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
+          
+          # Only bump if the branch currently doesn't already have -SNAPSHOT
+          if [[ "$CURRENT_VERSION" != *"-SNAPSHOT"* ]]; then
+            echo "Bumping version $CURRENT_VERSION to next SNAPSHOT..."
+            mvn versions:set -DnextSnapshot=true -DgenerateBackupPoms=false
+          
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git commit -am "chore(version): set feature branch snapshot version [skip ci]"
+            git push origin ${{ github.event.ref }}
+          else
+            echo "Version is already a SNAPSHOT ($CURRENT_VERSION). Skipping bump."
+          fi
