@@ -25,15 +25,22 @@ jobs:
           distribution: 'temurin'
           cache: 'maven'
 
-      - name: Strip SNAPSHOT from pom.xml
+      - name: Strip SNAPSHOT from pom.xml and Internal Properties
         run: |
           CURRENT_VERSION=$(mvn -B help:evaluate -Dexpression=project.version -q -DforceStdout)
           
           if [[ "$CURRENT_VERSION" == *"-SNAPSHOT"* ]]; then
             RELEASE_VERSION=${CURRENT_VERSION%-SNAPSHOT}
-            echo "Stripping SNAPSHOT: $CURRENT_VERSION -> $RELEASE_VERSION"
+            echo "Stripping SNAPSHOT from project: $CURRENT_VERSION -> $RELEASE_VERSION"
           
+            # 1. Strip -SNAPSHOT from main project version
             mvn -B versions:set -DnewVersion=${RELEASE_VERSION} -DgenerateBackupPoms=false
+          
+            # 2. 🚀 Strip -SNAPSHOT from your specific custom property
+            mvn -B versions:update-property \
+              -Dproperty=ec-common.version \
+              -DnewVersion=${RELEASE_VERSION} \
+              -DgenerateBackupPoms=false
           
             git config user.name "github-actions[bot]"
             git config user.email "github-actions[bot]@users.noreply.github.com"
