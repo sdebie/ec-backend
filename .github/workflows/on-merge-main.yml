@@ -27,13 +27,13 @@ jobs:
 
       - name: Strip SNAPSHOT from pom.xml
         run: |
-          CURRENT_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
+          CURRENT_VERSION=$(mvn -B help:evaluate -Dexpression=project.version -q -DforceStdout)
           
           if [[ "$CURRENT_VERSION" == *"-SNAPSHOT"* ]]; then
             RELEASE_VERSION=${CURRENT_VERSION%-SNAPSHOT}
             echo "Stripping SNAPSHOT: $CURRENT_VERSION -> $RELEASE_VERSION"
           
-            mvn versions:set -DnewVersion=${RELEASE_VERSION} -DgenerateBackupPoms=false
+            mvn -B versions:set -DnewVersion=${RELEASE_VERSION} -DgenerateBackupPoms=false
           
             git config user.name "github-actions[bot]"
             git config user.email "github-actions[bot]@users.noreply.github.com"
