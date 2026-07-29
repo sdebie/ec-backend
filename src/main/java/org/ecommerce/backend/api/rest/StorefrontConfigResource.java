@@ -91,10 +91,19 @@ public class StorefrontConfigResource
 
     private void applyBranding(ObjectNode out, JsonNode section)
     {
-        if (section == null) return;
+        // branding is boot-critical: the storefront header/footer dereference
+        // config.branding.name unconditionally. Never omit it — a missing or
+        // misconfigured storefront.branding row must degrade to the store name,
+        // not white-screen the whole storefront.
         ObjectNode branding = objectMapper.createObjectNode();
-        if (section.has("name")) {
+        if (section != null && section.has("name")) {
             branding.put("name", section.get("name").asText());
+        } else {
+            branding.put("name", out.has("clientName") ? out.get("clientName").asText() : "Storefront");
+        }
+        if (section == null) {
+            out.set("branding", branding);
+            return;
         }
         if (section.has("tagline")) {
             branding.put("tagline", section.get("tagline").asText());

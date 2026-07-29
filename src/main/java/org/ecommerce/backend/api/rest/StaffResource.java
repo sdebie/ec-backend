@@ -7,6 +7,7 @@ import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import lombok.extern.slf4j.Slf4j;
+import org.eclipse.microprofile.jwt.JsonWebToken;
 import org.ecommerce.backend.service.AdminAuthService;
 import org.ecommerce.backend.service.RateLimitDecision;
 import org.ecommerce.backend.service.RateLimiterService;
@@ -34,6 +35,9 @@ public class StaffResource
 
     @Inject
     RateLimiterService rateLimiterService;
+
+    @Inject
+    JsonWebToken jwt;
 
     @POST
     @Path("/login")
@@ -84,9 +88,21 @@ public class StaffResource
                 .build();
     }
 
+    /**
+     * Two distinct capabilities share this endpoint:
+     * <ul>
+     *   <li><b>Self-service</b> — any authenticated staff member may reset <i>their own</i>
+     *       password, whatever their role. This is what makes the forced-password-change
+     *       flow completable: that flow is reachable by every role, so gating it on
+     *       SUPER_ADMIN locked out everyone else.</li>
+     *   <li><b>Administrative</b> — a SUPER_ADMIN may reset <i>another</i> account's password.</li>
+     * </ul>
+     * The role check therefore cannot live in {@code @RolesAllowed}, which cannot see the
+     * request body. It is enforced below by comparing the target against {@code jwt.getName()}.
+     */
     @POST
     @Path("/reset-password")
-    @RolesAllowed("SUPER_ADMIN")
+    @RolesAllowed({"SUPER_ADMIN", "CATALOG_MANAGER", "ORDER_MANAGER", "VIEWER"})
     public Response resetPassword(@Valid ResetPasswordRequest req)
     {
         if (req == null || req.email() == null || req.email().isBlank() || req.password() == null || req.password().isBlank()) {
@@ -95,6 +111,16 @@ public class StaffResource
 
         if (req.confirmPassword() == null || !req.password().equals(req.confirmPassword())) {
             return Response.status(Response.Status.BAD_REQUEST).entity("Passwords do not match").build();
+        }
+
+        String callerEmail = jwt.getName();
+        boolean targetsSelf = callerEmail != null && callerEmail.equalsIgnoreCase(req.email().trim());
+
+        if (!targetsSelf && !jwt.getGroups().contains("SUPER_ADMIN")) {
+            log.warn("Staff user attempted to reset another account's password without SUPER_ADMIN");
+            return Response.status(Response.Status.FORBIDDEN)
+                    .entity("You may only reset your own password")
+                    .build();
         }
 
         staffService.resetStaffPassword(req.email(), req.password());
