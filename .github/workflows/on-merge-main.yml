@@ -26,24 +26,24 @@ jobs:
           cache: 'maven'
 
       - name: Strip SNAPSHOT from project version and properties
-          run: |
-            CURRENT_VERSION=$(mvn -B help:evaluate -Dexpression=project.version -q -DforceStdout)
-            
-            if [[ "$CURRENT_VERSION" == *"-SNAPSHOT"* ]]; then
-              RELEASE_VERSION=${CURRENT_VERSION%-SNAPSHOT}
-              echo "Stripping SNAPSHOT from project: $CURRENT_VERSION -> $RELEASE_VERSION"
-            
-              # 1. Update project main version cleanly
-              mvn -B versions:set -DnewVersion=${RELEASE_VERSION} -DgenerateBackupPoms=false
-            
-              # 2. 🚀 Strip -SNAPSHOT from ec-common.version (and any internal dependency property)
-              sed -i 's/-SNAPSHOT<\/ec-common.version>/<\/ec-common.version>/g' pom.xml
-            
-              git config user.name "github-actions[bot]"
-              git config user.email "github-actions[bot]@users.noreply.github.com"
-              git commit -am "chore(release): set clean main release v${RELEASE_VERSION} [skip ci]"
-              git tag "v${RELEASE_VERSION}"
-              git push origin main --tags
-            else
-              echo "Main branch is already on clean version ($CURRENT_VERSION). No action needed."
-            fi
+        run: |
+          CURRENT_VERSION=$(mvn -B help:evaluate -Dexpression=project.version -q -DforceStdout)
+          
+          if [[ "$CURRENT_VERSION" == *"-SNAPSHOT"* ]]; then
+            RELEASE_VERSION=${CURRENT_VERSION%-SNAPSHOT}
+            echo "Stripping SNAPSHOT from project: $CURRENT_VERSION -> $RELEASE_VERSION"
+          
+            # 1. Update project main version cleanly
+            mvn -B versions:set -DnewVersion=${RELEASE_VERSION} -DgenerateBackupPoms=false
+          
+            # 2. 🚀 Strip -SNAPSHOT from ec-common.version (and any internal dependency property)
+            sed -i 's/-SNAPSHOT<\/ec-common.version>/<\/ec-common.version>/g' pom.xml
+          
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git commit -am "chore(release): set clean main release v${RELEASE_VERSION} [skip ci]"
+            git tag "v${RELEASE_VERSION}"
+            git push origin main --tags
+          else
+            echo "Main branch is already on clean version ($CURRENT_VERSION). No action needed."
+          fi
