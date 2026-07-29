@@ -56,6 +56,7 @@ public class ContactEnquiryResource {
     @POST
     public Response submitEnquiry(
             ContactEnquiryRequestDto dto,
+            @HeaderParam("CF-Connecting-IP") String cfConnectingIp,
             @HeaderParam("X-Forwarded-For") String xForwardedFor,
             @HeaderParam("X-Real-IP") String xRealIp
     ) {
@@ -68,7 +69,7 @@ public class ContactEnquiryResource {
             return Response.status(422).build();
         }
 
-        String clientIp = ClientIpUtils.resolveClientIp(xForwardedFor, xRealIp);
+        String clientIp = ClientIpUtils.resolveClientIp(cfConnectingIp, xForwardedFor, xRealIp);
 
         // 2. Honeypot check — non-empty means bot; silent accept, no send
         if (dto.website() != null && !dto.website().isBlank()) {

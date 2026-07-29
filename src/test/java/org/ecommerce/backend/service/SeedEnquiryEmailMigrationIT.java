@@ -10,25 +10,26 @@ import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * DB-backed integration test for V2.9.6__seed_storefront_contact_enquiry_email.sql.
- *
+ * <p>
  * Verifies the migration SQL logic against a real PostgreSQL database:
  * <ol>
  *   <li>After migration: {@code enquiryEmail} is present with the seeded value.</li>
  *   <li>Idempotent: re-running the migration is a no-op.</li>
  *   <li>Operator preservation: a pre-existing {@code enquiryEmail} is never overwritten.</li>
  * </ol>
- *
+ * <p>
  * Each test sets up its own precondition via native SQL inside a {@link TestTransaction}
  * (rolled back afterward), then executes the exact migration SQL and asserts outcomes.
  */
 @QuarkusTest
 @DisplayName("V2.9.6 — Seed storefront.contact.enquiryEmail")
-class SeedEnquiryEmailMigrationIT {
-
+class SeedEnquiryEmailMigrationIT
+{
     @Inject
     EntityManager em;
 
@@ -48,12 +49,13 @@ class SeedEnquiryEmailMigrationIT {
      * Helper: upsert the storefront.contact row with the given JSON value.
      * Uses ON CONFLICT to handle both fresh and pre-existing rows.
      */
-    private void upsertContact(String jsonValue) {
+    private void upsertContact(String jsonValue)
+    {
         em.createNativeQuery("""
-                INSERT INTO store_settings (setting_key, setting_value, description)
-                VALUES ('storefront.contact', ?1, 'test')
-                ON CONFLICT (setting_key) DO UPDATE SET setting_value = ?2
-                """)
+                        INSERT INTO store_settings (setting_key, setting_value, description)
+                        VALUES ('storefront.contact', ?1, 'test')
+                        ON CONFLICT (setting_key) DO UPDATE SET setting_value = ?2
+                        """)
                 .setParameter(1, jsonValue)
                 .setParameter(2, jsonValue)
                 .executeUpdate();
@@ -63,9 +65,10 @@ class SeedEnquiryEmailMigrationIT {
     /**
      * Helper: read the current setting_value for storefront.contact.
      */
-    private String readContactValue() {
+    private String readContactValue()
+    {
         return (String) em.createNativeQuery(
-                "SELECT setting_value FROM store_settings WHERE setting_key = 'storefront.contact'")
+                        "SELECT setting_value FROM store_settings WHERE setting_key = 'storefront.contact'")
                 .getSingleResult();
     }
 
@@ -74,7 +77,8 @@ class SeedEnquiryEmailMigrationIT {
     @Test
     @TestTransaction
     @DisplayName("enquiryEmail is seeded when absent")
-    void enquiryEmailPresentAfterMigration() {
+    void enquiryEmailPresentAfterMigration()
+    {
         // Precondition: storefront.contact exists without enquiryEmail
         String baseJson = "{\"emails\":[\"info@uvhholdings.co.za\"],\"phones\":[\"+27 76 819 5245\"]}";
         upsertContact(baseJson);
@@ -90,7 +94,7 @@ class SeedEnquiryEmailMigrationIT {
 
         // Verify it's valid JSON with the expected field via jsonb extraction
         String extracted = (String) em.createNativeQuery(
-                "SELECT setting_value::jsonb->>'enquiryEmail' FROM store_settings WHERE setting_key = 'storefront.contact'")
+                        "SELECT setting_value::jsonb->>'enquiryEmail' FROM store_settings WHERE setting_key = 'storefront.contact'")
                 .getSingleResult();
         assertEquals("info@uvhholdings.co.za", extracted);
     }
@@ -100,7 +104,8 @@ class SeedEnquiryEmailMigrationIT {
     @Test
     @TestTransaction
     @DisplayName("re-run is a no-op (idempotent)")
-    void reRunIsNoOp() {
+    void reRunIsNoOp()
+    {
         // Precondition: storefront.contact exists without enquiryEmail
         String baseJson = "{\"emails\":[\"info@uvhholdings.co.za\"],\"phones\":[\"+27 76 819 5245\"]}";
         upsertContact(baseJson);
@@ -123,7 +128,8 @@ class SeedEnquiryEmailMigrationIT {
     @Test
     @TestTransaction
     @DisplayName("pre-existing operator enquiryEmail is preserved")
-    void operatorEditedValuePreserved() {
+    void operatorEditedValuePreserved()
+    {
         // Precondition: storefront.contact already has an operator-set enquiryEmail
         String operatorJson = "{\"emails\":[\"info@uvhholdings.co.za\"],\"enquiryEmail\":\"custom@operator.co.za\"}";
         upsertContact(operatorJson);
@@ -134,7 +140,7 @@ class SeedEnquiryEmailMigrationIT {
 
         // Assert: operator value is preserved, NOT overwritten
         String extracted = (String) em.createNativeQuery(
-                "SELECT setting_value::jsonb->>'enquiryEmail' FROM store_settings WHERE setting_key = 'storefront.contact'")
+                        "SELECT setting_value::jsonb->>'enquiryEmail' FROM store_settings WHERE setting_key = 'storefront.contact'")
                 .getSingleResult();
         assertEquals("custom@operator.co.za", extracted,
                 "Migration must NOT overwrite an operator-configured enquiryEmail");

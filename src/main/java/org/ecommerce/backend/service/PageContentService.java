@@ -31,7 +31,8 @@ public class PageContentService
     public List<PageContentSummaryDto> listByCategory(String category)
     {
         List<PageContentEntity> entities = pageContentRepository.findByCategory(category);
-        return entities.stream()
+        return entities
+                .stream()
                 .map(this::toSummaryDto)
                 .toList();
     }
@@ -61,19 +62,19 @@ public class PageContentService
     public PageContentDto getPublishedBySlug(String slug)
     {
         PageContentEntity entity = pageContentRepository.findBySlug(slug);
-        if (entity == null || entity.publishedAt == null) {
+        if (entity == null || entity.getPublishedAt() == null) {
             return null;
         }
 
         return new PageContentDto(
-                entity.id,
-                entity.slug,
-                entity.title,
-                entity.category,
+                entity.getId(),
+                entity.getSlug(),
+                entity.getTitle(),
+                entity.getCategory(),
                 null,
-                entity.publishedContent,
-                entity.publishedAt,
-                entity.updatedAt
+                entity.getPublishedContent(),
+                entity.getPublishedAt(),
+                entity.getUpdatedAt()
         );
     }
 
@@ -98,11 +99,11 @@ public class PageContentService
         }
 
         String sanitisedContent = htmlSanitizer.sanitize(content);
-        entity.draftContent = sanitisedContent;
-        entity.updatedAt = OffsetDateTime.now();
+        entity.setDraftContent(sanitisedContent);
+        entity.setUpdatedAt(OffsetDateTime.now());
 
         pageContentRepository.persist(entity);
-        log.info("Draft saved for page '{}' (id={})", entity.title, entity.id);
+        log.info("Draft saved for page '{}' (id={})", entity.getTitle(), entity.getId());
 
         return toDto(entity);
     }
@@ -127,12 +128,12 @@ public class PageContentService
             return null;
         }
 
-        entity.publishedContent = entity.draftContent;
-        entity.publishedAt = OffsetDateTime.now();
-        entity.updatedAt = OffsetDateTime.now();
+        entity.setPublishedContent(entity.getDraftContent());
+        entity.setPublishedAt(OffsetDateTime.now());
+        entity.setUpdatedAt(OffsetDateTime.now());
 
         pageContentRepository.persist(entity);
-        log.info("Page '{}' (id={}) published", entity.title, entity.id);
+        log.info("Page '{}' (id={}) published", entity.getTitle(), entity.getId());
 
         return toDto(entity);
     }
@@ -140,28 +141,28 @@ public class PageContentService
     private PageContentDto toDto(PageContentEntity entity)
     {
         return new PageContentDto(
-                entity.id,
-                entity.slug,
-                entity.title,
-                entity.category,
-                entity.draftContent,
-                entity.publishedContent,
-                entity.publishedAt,
-                entity.updatedAt
+                entity.getId(),
+                entity.getSlug(),
+                entity.getTitle(),
+                entity.getCategory(),
+                entity.getDraftContent(),
+                entity.getPublishedContent(),
+                entity.getPublishedAt(),
+                entity.getUpdatedAt()
         );
     }
 
     private PageContentSummaryDto toSummaryDto(PageContentEntity entity)
     {
-        boolean hasUnpublishedChanges = !Objects.equals(entity.draftContent, entity.publishedContent);
+        boolean hasUnpublishedChanges = !Objects.equals(entity.getDraftContent(), entity.getPublishedContent());
 
         return new PageContentSummaryDto(
-                entity.id,
-                entity.slug,
-                entity.title,
-                entity.category,
-                entity.publishedAt,
-                entity.updatedAt,
+                entity.getId(),
+                entity.getSlug(),
+                entity.getTitle(),
+                entity.getCategory(),
+                entity.getPublishedAt(),
+                entity.getUpdatedAt(),
                 hasUnpublishedChanges
         );
     }

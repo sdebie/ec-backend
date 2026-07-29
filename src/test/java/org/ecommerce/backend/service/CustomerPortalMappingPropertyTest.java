@@ -25,22 +25,24 @@ import static org.junit.jupiter.api.Assertions.*;
  * Property-based test verifying that the CustomerPortalService mapping logic
  * correctly transforms any combination of CustomerEntity state into the expected
  * StorefrontCustomerPortalDto shape.
- *
+ * <p>
  * Validates: Requirements 1.3, 1.4, 1.5, 1.6, 1.7
  */
-public class CustomerPortalMappingPropertyTest {
-
+public class CustomerPortalMappingPropertyTest
+{
     private MockedStatic<CustomerEntity> mockedCustomerEntity;
     private CustomerPortalService service;
 
     @BeforeTry
-    void setup() {
+    void setup()
+    {
         service = new CustomerPortalService();
         mockedCustomerEntity = Mockito.mockStatic(CustomerEntity.class);
     }
 
     @AfterTry
-    void teardown() {
+    void teardown()
+    {
         if (mockedCustomerEntity != null) {
             mockedCustomerEntity.close();
         }
@@ -49,66 +51,63 @@ public class CustomerPortalMappingPropertyTest {
     @Property(tries = 100)
     void profileMappingCorrectness(
             @ForAll("customerEntities") CustomerEntity customer
-    ) {
+    )
+    {
         // Arrange: stub the static finder to return our generated customer
-        String email = customer.user.email;
+        String email = customer.getUser().getEmail();
         mockedCustomerEntity.when(() -> CustomerEntity.findByEmail(email)).thenReturn(customer);
 
         // Act
         StorefrontCustomerPortalDto dto = service.getPortalProfile(email);
 
         // Assert physicalAddress mapping (Requirement 1.4)
-        CustomerAddressEntity expectedPhysical = customer.addresses.stream()
-                .filter(a -> a.addressType == AddressTypeEn.PHYSICAL)
+        CustomerAddressEntity expectedPhysical = customer.getAddresses().stream()
+                .filter(a -> a.getAddressType() == AddressTypeEn.PHYSICAL)
                 .findFirst()
                 .orElse(null);
 
         if (expectedPhysical == null) {
-            assertNull(dto.physicalAddress, "physicalAddress should be null when no PHYSICAL address exists");
+            assertNull(dto.getPhysicalAddress(), "physicalAddress should be null when no PHYSICAL address exists");
         } else {
-            assertNotNull(dto.physicalAddress, "physicalAddress should not be null when PHYSICAL address exists");
-            assertEquals(expectedPhysical.addressLine1, dto.physicalAddress.line1);
-            assertEquals(expectedPhysical.addressLine2, dto.physicalAddress.line2);
-            assertEquals(expectedPhysical.suburb, dto.physicalAddress.suburb);
-            assertEquals(expectedPhysical.city, dto.physicalAddress.city);
-            assertEquals(expectedPhysical.province, dto.physicalAddress.province);
-            assertEquals(expectedPhysical.postalCode, dto.physicalAddress.postalCode);
+            assertNotNull(dto.getPhysicalAddress(), "physicalAddress should not be null when PHYSICAL address exists");
+            assertEquals(expectedPhysical.getAddressLine1(), dto.getPhysicalAddress().getLine1());
+            assertEquals(expectedPhysical.getAddressLine2(), dto.getPhysicalAddress().getLine2());
+            assertEquals(expectedPhysical.getSuburb(), dto.getPhysicalAddress().getSuburb());
+            assertEquals(expectedPhysical.getCity(), dto.getPhysicalAddress().getCity());
+            assertEquals(expectedPhysical.getProvince(), dto.getPhysicalAddress().getProvince());
+            assertEquals(expectedPhysical.getPostalCode(), dto.getPhysicalAddress().getPostalCode());
         }
 
         // Assert postalAddress mapping (Requirement 1.5)
-        CustomerAddressEntity expectedPostal = customer.addresses.stream()
-                .filter(a -> a.addressType == AddressTypeEn.POSTAL)
+        CustomerAddressEntity expectedPostal = customer.getAddresses().stream()
+                .filter(a -> a.getAddressType() == AddressTypeEn.POSTAL)
                 .findFirst()
                 .orElse(null);
 
         if (expectedPostal == null) {
-            assertNull(dto.postalAddress, "postalAddress should be null when no POSTAL address exists");
+            assertNull(dto.getPostalAddress(), "postalAddress should be null when no POSTAL address exists");
         } else {
-            assertNotNull(dto.postalAddress, "postalAddress should not be null when POSTAL address exists");
-            assertEquals(expectedPostal.addressLine1, dto.postalAddress.line1);
-            assertEquals(expectedPostal.addressLine2, dto.postalAddress.line2);
-            assertEquals(expectedPostal.suburb, dto.postalAddress.suburb);
-            assertEquals(expectedPostal.city, dto.postalAddress.city);
-            assertEquals(expectedPostal.province, dto.postalAddress.province);
-            assertEquals(expectedPostal.postalCode, dto.postalAddress.postalCode);
+            assertNotNull(dto.getPostalAddress(), "postalAddress should not be null when POSTAL address exists");
+            assertEquals(expectedPostal.getAddressLine1(), dto.getPostalAddress().getLine1());
+            assertEquals(expectedPostal.getAddressLine2(), dto.getPostalAddress().getLine2());
+            assertEquals(expectedPostal.getSuburb(), dto.getPostalAddress().getSuburb());
+            assertEquals(expectedPostal.getCity(), dto.getPostalAddress().getCity());
+            assertEquals(expectedPostal.getProvince(), dto.getPostalAddress().getProvince());
+            assertEquals(expectedPostal.getPostalCode(), dto.getPostalAddress().getPostalCode());
         }
 
         // Assert hasPassword (Requirement 1.6)
-        boolean expectedHasPassword = customer.user.passwordHash != null
-                && !customer.user.passwordHash.isEmpty();
-        assertEquals(expectedHasPassword, dto.hasPassword,
-                "hasPassword should be true iff passwordHash is non-null and non-empty");
+        boolean expectedHasPassword = customer.getUser().getPasswordHash() != null && !customer.getUser().getPasswordHash().isEmpty();
+        assertEquals(expectedHasPassword, dto.isHasPassword(), "hasPassword should be true iff passwordHash is non-null and non-empty");
 
         // Assert shopperType (Requirement 1.7)
-        String expectedShopperType = customer.shopperType != null
-                ? customer.shopperType.name()
-                : "GUEST";
-        assertEquals(expectedShopperType, dto.shopperType,
-                "shopperType should equal enum name or 'GUEST' when null");
+        String expectedShopperType = customer.getShopperType() != null ? customer.getShopperType().name() : "GUEST";
+        assertEquals(expectedShopperType, dto.getShopperType(), "shopperType should equal enum name or 'GUEST' when null");
     }
 
     @Provide
-    Arbitrary<CustomerEntity> customerEntities() {
+    Arbitrary<CustomerEntity> customerEntities()
+    {
         Arbitrary<String> emails = Arbitraries.strings()
                 .alpha().ofMinLength(3).ofMaxLength(10)
                 .map(s -> s.toLowerCase() + "@test.com");
@@ -135,24 +134,25 @@ public class CustomerPortalMappingPropertyTest {
         return Combinators.combine(emails, passwordHashStates, shopperTypes, addressLists, names, names, phones)
                 .as((email, passwordHash, shopperType, addresses, firstName, lastName, phone) -> {
                     CustomerEntity customer = new CustomerEntity();
-                    customer.id = UUID.randomUUID();
-                    customer.firstName = firstName;
-                    customer.lastName = lastName;
-                    customer.phone = phone;
-                    customer.shopperType = shopperType;
+                    customer.setId(UUID.randomUUID());
+                    customer.setFirstName(firstName);
+                    customer.setLastName(lastName);
+                    customer.setPhone(phone);
+                    customer.setShopperType(shopperType);
 
                     UserEntity user = new UserEntity();
-                    user.id = UUID.randomUUID();
-                    user.email = email;
-                    user.passwordHash = passwordHash;
-                    customer.user = user;
+                    user.setId(UUID.randomUUID());
+                    user.setEmail(email);
+                    user.setPasswordHash(passwordHash);
+                    customer.setUser(user);
 
-                    customer.addresses = addresses;
+                    customer.setAddresses(addresses);
                     return customer;
                 });
     }
 
-    private Arbitrary<List<CustomerAddressEntity>> addressListArbitrary() {
+    private Arbitrary<List<CustomerAddressEntity>> addressListArbitrary()
+    {
         Arbitrary<CustomerAddressEntity> addressArbitrary = addressArbitrary();
 
         // Generate 0-4 addresses with various types, ensuring at most one of each type
@@ -166,7 +166,7 @@ public class CustomerPortalMappingPropertyTest {
                 for (int i = 0; i < list.size() && !availableTypes.isEmpty(); i++) {
                     CustomerAddressEntity addr = list.get(i);
                     int typeIndex = i % availableTypes.size();
-                    addr.addressType = availableTypes.remove(typeIndex);
+                    addr.setAddressType(availableTypes.remove(typeIndex));
                     result.add(addr);
                 }
                 return result;
@@ -174,7 +174,8 @@ public class CustomerPortalMappingPropertyTest {
         });
     }
 
-    private Arbitrary<CustomerAddressEntity> addressArbitrary() {
+    private Arbitrary<CustomerAddressEntity> addressArbitrary()
+    {
         Arbitrary<String> lines = Arbitraries.strings().alpha().ofMinLength(3).ofMaxLength(30);
         Arbitrary<String> nullableLines = Arbitraries.oneOf(
                 Arbitraries.just(null),
@@ -184,13 +185,13 @@ public class CustomerPortalMappingPropertyTest {
         return Combinators.combine(lines, nullableLines, nullableLines, lines, lines, lines)
                 .as((line1, line2, suburb, city, province, postalCode) -> {
                     CustomerAddressEntity addr = new CustomerAddressEntity();
-                    addr.id = UUID.randomUUID();
-                    addr.addressLine1 = line1;
-                    addr.addressLine2 = line2;
-                    addr.suburb = suburb;
-                    addr.city = city;
-                    addr.province = province;
-                    addr.postalCode = postalCode;
+                    addr.setId(UUID.randomUUID());
+                    addr.setAddressLine1(line1);
+                    addr.setAddressLine2(line2);
+                    addr.setSuburb(suburb);
+                    addr.setCity(city);
+                    addr.setProvince(province);
+                    addr.setPostalCode(postalCode);
                     return addr;
                 });
     }

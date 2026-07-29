@@ -16,17 +16,11 @@ import static org.mapstruct.NullValuePropertyMappingStrategy.SET_TO_NULL;
         nullValueMappingStrategy = RETURN_NULL,
         nullValuePropertyMappingStrategy = SET_TO_NULL,
         nullValueCheckStrategy = ALWAYS)
-public interface WholesaleMapper {
-
-    // ── WholesaleApplicationEntity → WholesaleApplicationDetailsDto ──────
-
+public interface WholesaleMapper
+{
     @Mapping(source = "accountEmail", target = "email")
     @Mapping(source = "customer.id", target = "customerId")
     WholesaleApplicationDetailsDto toDetailsDto(WholesaleApplicationEntity application);
-
-    // ── WholesaleApplicationEntity → WholesaleCustomerDto ────────────────
-    // Mirrors WholesaleCustomerService.toDto(WholesaleApplicationEntity):
-    // only a subset of fields is mapped; the rest remain null.
 
     @Mapping(source = "accountEmail", target = "email")
     @Mapping(target = "applicantEmail", ignore = true)
@@ -39,9 +33,8 @@ public interface WholesaleMapper {
     @Mapping(target = "purchaseOrderRequired", ignore = true)
     WholesaleCustomerDto toDto(WholesaleApplicationEntity application);
 
-    // ── Enum mapping: WholesaleApplicationStatusEn → WholesaleCustomerStatusEn ──
-
-    default WholesaleCustomerStatusEn mapApplicationStatusToCustomerStatus(WholesaleApplicationStatusEn status) {
+    default WholesaleCustomerStatusEn mapApplicationStatusToCustomerStatus(WholesaleApplicationStatusEn status)
+    {
         if (status == null) {
             return null;
         }

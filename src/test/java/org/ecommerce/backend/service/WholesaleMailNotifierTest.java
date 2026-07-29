@@ -39,8 +39,8 @@ import static org.mockito.Mockito.*;
  */
 @ExtendWith(MockitoExtension.class)
 @DisplayName("WholesaleMailNotifier — store name resolution, from-address & recipient guards")
-class WholesaleMailNotifierTest {
-
+class WholesaleMailNotifierTest
+{
     @InjectMocks
     private WholesaleMailNotifier notifier;
 
@@ -65,7 +65,8 @@ class WholesaleMailNotifierTest {
     private static final String CONFIGURED_FROM = "no-reply@store.co.za";
 
     @BeforeEach
-    void setUp() throws Exception {
+    void setUp() throws Exception
+    {
         // Reflectively set the @ConfigProperty field since @InjectMocks won't inject it
         var fromField = WholesaleMailNotifier.class.getDeclaredField("mailerFrom");
         fromField.setAccessible(true);
@@ -74,14 +75,16 @@ class WholesaleMailNotifierTest {
 
     // ── Helpers ─────────────────────────────────────────────────────────────
 
-    private StoreSettingsEntity brandingSetting(String jsonValue) {
+    private StoreSettingsEntity brandingSetting(String jsonValue)
+    {
         StoreSettingsEntity entity = new StoreSettingsEntity();
-        entity.key = "storefront.branding";
-        entity.value = jsonValue;
+        entity.setKey("storefront.branding");
+        entity.setValue(jsonValue);
         return entity;
     }
 
-    private WholesaleDecisionEvent approvalEvent(String recipientEmail) {
+    private WholesaleDecisionEvent approvalEvent(String recipientEmail)
+    {
         return new WholesaleDecisionEvent(
                 UUID.randomUUID(),
                 WholesaleApplicationStatusEn.APPROVED,
@@ -92,7 +95,8 @@ class WholesaleMailNotifierTest {
         );
     }
 
-    private WholesaleDecisionEvent rejectionEvent(String recipientEmail) {
+    private WholesaleDecisionEvent rejectionEvent(String recipientEmail)
+    {
         return new WholesaleDecisionEvent(
                 UUID.randomUUID(),
                 WholesaleApplicationStatusEn.REJECTED,
@@ -107,7 +111,8 @@ class WholesaleMailNotifierTest {
      * Stubs the MailTemplate fluent API chain so .to().from().subject().data()...send()
      * returns a completed Uni, allowing send() to complete without error.
      */
-    private MailTemplate.MailTemplateInstance stubMailTemplateChain() {
+    private MailTemplate.MailTemplateInstance stubMailTemplateChain()
+    {
         MailTemplate.MailTemplateInstance instance = mock(MailTemplate.MailTemplateInstance.class);
         when(wholesale_status.to(anyString())).thenReturn(instance);
         when(instance.from(anyString())).thenReturn(instance);
@@ -121,11 +126,13 @@ class WholesaleMailNotifierTest {
 
     @Nested
     @DisplayName("store name resolution from storefront.branding")
-    class StoreNameResolutionTests {
+    class StoreNameResolutionTests
+    {
 
         @Test
         @DisplayName("resolves store name from storefront.branding JSON name field")
-        void resolvesStoreNameFromBranding() {
+        void resolvesStoreNameFromBranding()
+        {
             when(settingsRepository.findById("storefront.branding"))
                     .thenReturn(brandingSetting("{\"name\": \"My Store\"}"));
             MailTemplate.MailTemplateInstance instance = stubMailTemplateChain();
@@ -138,7 +145,8 @@ class WholesaleMailNotifierTest {
 
         @Test
         @DisplayName("missing branding setting → sends with bare from-address as store name + logs warning")
-        void missingBrandingSendsWithBareAddress() {
+        void missingBrandingSendsWithBareAddress()
+        {
             when(settingsRepository.findById("storefront.branding")).thenReturn(null);
             MailTemplate.MailTemplateInstance instance = stubMailTemplateChain();
 
@@ -151,7 +159,8 @@ class WholesaleMailNotifierTest {
 
         @Test
         @DisplayName("branding with blank name → sends with bare from-address as store name + logs warning")
-        void blankBrandingNameSendsWithBareAddress() {
+        void blankBrandingNameSendsWithBareAddress()
+        {
             when(settingsRepository.findById("storefront.branding"))
                     .thenReturn(brandingSetting("{\"name\": \"   \"}"));
             MailTemplate.MailTemplateInstance instance = stubMailTemplateChain();
@@ -164,7 +173,8 @@ class WholesaleMailNotifierTest {
 
         @Test
         @DisplayName("branding with null name node → sends with bare from-address as store name")
-        void nullNameNodeSendsWithBareAddress() {
+        void nullNameNodeSendsWithBareAddress()
+        {
             when(settingsRepository.findById("storefront.branding"))
                     .thenReturn(brandingSetting("{\"name\": null}"));
             MailTemplate.MailTemplateInstance instance = stubMailTemplateChain();
@@ -177,7 +187,8 @@ class WholesaleMailNotifierTest {
 
         @Test
         @DisplayName("malformed branding JSON → sends with bare from-address as store name")
-        void malformedJsonSendsWithBareAddress() {
+        void malformedJsonSendsWithBareAddress()
+        {
             when(settingsRepository.findById("storefront.branding"))
                     .thenReturn(brandingSetting("not valid json {{{"));
             MailTemplate.MailTemplateInstance instance = stubMailTemplateChain();
@@ -193,11 +204,13 @@ class WholesaleMailNotifierTest {
 
     @Nested
     @DisplayName("blank from-address → sends nothing + logs error")
-    class BlankFromAddressTests {
+    class BlankFromAddressTests
+    {
 
         @Test
         @DisplayName("blank from-address skips send entirely")
-        void blankFromSkipsSend() throws Exception {
+        void blankFromSkipsSend() throws Exception
+        {
             // Set mailerFrom to blank
             var fromField = WholesaleMailNotifier.class.getDeclaredField("mailerFrom");
             fromField.setAccessible(true);
@@ -211,7 +224,8 @@ class WholesaleMailNotifierTest {
 
         @Test
         @DisplayName("null from-address skips send entirely")
-        void nullFromSkipsSend() throws Exception {
+        void nullFromSkipsSend() throws Exception
+        {
             var fromField = WholesaleMailNotifier.class.getDeclaredField("mailerFrom");
             fromField.setAccessible(true);
             fromField.set(notifier, null);
@@ -226,11 +240,13 @@ class WholesaleMailNotifierTest {
 
     @Nested
     @DisplayName("missing/blank recipient → skip send + log")
-    class RecipientGuardTests {
+    class RecipientGuardTests
+    {
 
         @Test
         @DisplayName("null recipient skips send")
-        void nullRecipientSkipsSend() {
+        void nullRecipientSkipsSend()
+        {
             notifier.onDecision(approvalEvent(null));
 
             verifyNoInteractions(wholesale_status);
@@ -239,7 +255,8 @@ class WholesaleMailNotifierTest {
 
         @Test
         @DisplayName("blank recipient skips send")
-        void blankRecipientSkipsSend() {
+        void blankRecipientSkipsSend()
+        {
             notifier.onDecision(approvalEvent("   "));
 
             verifyNoInteractions(wholesale_status);
@@ -251,9 +268,11 @@ class WholesaleMailNotifierTest {
 
     @Nested
     @DisplayName("onSubmitted — admin notification + applicant confirmation")
-    class SubmittedNotificationTests {
+    class SubmittedNotificationTests
+    {
 
-        private WholesaleCustomerDto submittedDto() {
+        private WholesaleCustomerDto submittedDto()
+        {
             WholesaleCustomerDto dto = new WholesaleCustomerDto();
             dto.setApplicantEmail("applicant@test.com");
             dto.setFirstName("Jane");
@@ -265,7 +284,8 @@ class WholesaleMailNotifierTest {
             return dto;
         }
 
-        private WholesaleApplicationSubmittedEvent submittedEvent(WholesaleCustomerDto dto) {
+        private WholesaleApplicationSubmittedEvent submittedEvent(WholesaleCustomerDto dto)
+        {
             return new WholesaleApplicationSubmittedEvent(UUID.randomUUID(), dto);
         }
 
@@ -273,7 +293,8 @@ class WholesaleMailNotifierTest {
          * Stubs a MailTemplate fluent chain. replyTo is stubbed leniently — only the
          * admin notification uses it, and only when an applicant email is present.
          */
-        private MailTemplate.MailTemplateInstance stubChain(MailTemplate template) {
+        private MailTemplate.MailTemplateInstance stubChain(MailTemplate template)
+        {
             MailTemplate.MailTemplateInstance instance = mock(MailTemplate.MailTemplateInstance.class);
             when(template.to(anyString())).thenReturn(instance);
             when(instance.from(anyString())).thenReturn(instance);
@@ -286,7 +307,8 @@ class WholesaleMailNotifierTest {
 
         @Test
         @DisplayName("admin notification delivered to the resolved enquiryEmail with full snapshot + replyTo")
-        void adminNotificationDelivered() {
+        void adminNotificationDelivered()
+        {
             when(contactEnquiryMailer.resolveRecipient()).thenReturn("enquiries@store.co.za");
             when(settingsRepository.findById("storefront.branding"))
                     .thenReturn(brandingSetting("{\"name\": \"My Store\"}"));
@@ -306,7 +328,8 @@ class WholesaleMailNotifierTest {
 
         @Test
         @DisplayName("applicant confirmation delivered to applicantEmail with store name + full snapshot")
-        void applicantConfirmationDelivered() {
+        void applicantConfirmationDelivered()
+        {
             when(contactEnquiryMailer.resolveRecipient()).thenReturn("enquiries@store.co.za");
             when(settingsRepository.findById("storefront.branding"))
                     .thenReturn(brandingSetting("{\"name\": \"My Store\"}"));
@@ -326,7 +349,8 @@ class WholesaleMailNotifierTest {
 
         @Test
         @DisplayName("enquiryEmail not configured → admin skipped, applicant confirmation still delivered")
-        void recipientNotConfiguredStillSendsApplicantConfirmation() {
+        void recipientNotConfiguredStillSendsApplicantConfirmation()
+        {
             when(contactEnquiryMailer.resolveRecipient())
                     .thenThrow(new RecipientNotConfiguredException("enquiryEmail is absent or blank in storefront.contact"));
             when(settingsRepository.findById("storefront.branding"))
@@ -342,7 +366,8 @@ class WholesaleMailNotifierTest {
 
         @Test
         @DisplayName("blank applicantEmail → confirmation skipped, admin notified without replyTo")
-        void blankApplicantEmailSkipsConfirmation() {
+        void blankApplicantEmailSkipsConfirmation()
+        {
             when(contactEnquiryMailer.resolveRecipient()).thenReturn("enquiries@store.co.za");
             MailTemplate.MailTemplateInstance admin = stubChain(wholesale_application_received);
             WholesaleCustomerDto dto = submittedDto();
@@ -358,7 +383,8 @@ class WholesaleMailNotifierTest {
 
         @Test
         @DisplayName("blank from-address → skips both emails without resolving anything")
-        void blankFromSkipsBothEmails() throws Exception {
+        void blankFromSkipsBothEmails() throws Exception
+        {
             var fromField = WholesaleMailNotifier.class.getDeclaredField("mailerFrom");
             fromField.setAccessible(true);
             fromField.set(notifier, "   ");
@@ -375,11 +401,13 @@ class WholesaleMailNotifierTest {
 
     @Nested
     @DisplayName("mail composition passes correct template data")
-    class MailCompositionTests {
+    class MailCompositionTests
+    {
 
         @Test
         @DisplayName("approval event sets approved=true and no rejectionReason")
-        void approvalEventData() {
+        void approvalEventData()
+        {
             when(settingsRepository.findById("storefront.branding"))
                     .thenReturn(brandingSetting("{\"name\": \"My Store\"}"));
             MailTemplate.MailTemplateInstance instance = stubMailTemplateChain();
@@ -397,7 +425,8 @@ class WholesaleMailNotifierTest {
 
         @Test
         @DisplayName("rejection event sets approved=false and includes rejectionReason")
-        void rejectionEventData() {
+        void rejectionEventData()
+        {
             when(settingsRepository.findById("storefront.branding"))
                     .thenReturn(brandingSetting("{\"name\": \"My Store\"}"));
             MailTemplate.MailTemplateInstance instance = stubMailTemplateChain();

@@ -13,16 +13,17 @@ import java.util.List;
 
 /**
  * Hand-written CDI mapper for CustomerAdminService entity→DTO mappings.
- *
+ * <p>
  * This is NOT a MapStruct @Mapper interface because {@link #toListItemDto(CustomerEntity)}
  * runs a Panache query to fetch the customer's wholesale application — something a
  * MapStruct interface cannot do.
- *
+ * <p>
  * Pure field-copy parts delegate to {@link WholesaleMapper} for the nested
  * {@code WholesaleApplicationDetailsDto}.
  */
 @ApplicationScoped
-public class CustomerAdminMapper {
+public class CustomerAdminMapper
+{
 
     @Inject
     WholesaleMapper wholesaleMapper;
@@ -33,11 +34,12 @@ public class CustomerAdminMapper {
      * Maps a customer entity to a list-item DTO, fetching the wholesale application
      * from the database.
      */
-    public AdminCustomerListItemDto toListItemDto(CustomerEntity c) {
+    public AdminCustomerListItemDto toListItemDto(CustomerEntity customerEntity)
+    {
         WholesaleApplicationEntity app = WholesaleApplicationEntity
-                .find("customer.id = ?1", c.id)
+                .find("customer.id = ?1", customerEntity.getId())
                 .firstResult();
-        return toListItemDto(c, app);
+        return toListItemDto(customerEntity, app);
     }
 
     // ── Pure field-copy methods ─────────────────────────────────────────────
@@ -46,20 +48,17 @@ public class CustomerAdminMapper {
      * Maps a customer entity and a pre-fetched wholesale application to a list-item DTO.
      * Pure — no database access.
      */
-    public AdminCustomerListItemDto toListItemDto(CustomerEntity c, WholesaleApplicationEntity app) {
+    public AdminCustomerListItemDto toListItemDto(CustomerEntity customerEntity, WholesaleApplicationEntity app)
+    {
         AdminCustomerListItemDto dto = new AdminCustomerListItemDto();
-        dto.id         = c.id.toString();
-        dto.firstName  = c.firstName;
-        dto.lastName   = c.lastName;
-        dto.email      = c.user != null ? c.user.email : null;
-        dto.status     = c.status != null ? c.status.name() : null;
-        dto.shopperType = c.shopperType != null ? c.shopperType.name() : null;
-        dto.registeredAt = c.user != null && c.user.createdAt != null
-                ? c.user.createdAt.toString()
-                : null;
-        dto.wholesaleApplicationStatus = app != null && app.status != null
-                ? app.status.name()
-                : null;
+        dto.setId(customerEntity.getId().toString());
+        dto.setFirstName(customerEntity.getFirstName());
+        dto.setLastName(customerEntity.getLastName());
+        dto.setEmail(customerEntity.getUser() != null ? customerEntity.getUser().getEmail() : null);
+        dto.setStatus(customerEntity.getStatus() != null ? customerEntity.getStatus().name() : null);
+        dto.setShopperType(customerEntity.getShopperType() != null ? customerEntity.getShopperType().name() : null);
+        dto.setRegisteredAt(customerEntity.getUser() != null && customerEntity.getUser().getCreatedAt() != null ? customerEntity.getUser().getCreatedAt().toString() : null);
+        dto.setWholesaleApplicationStatus(app != null && app.getStatus() != null ? app.getStatus().name() : null);
         return dto;
     }
 
@@ -67,26 +66,23 @@ public class CustomerAdminMapper {
      * Maps a customer entity, wholesale application, and recent orders to a detail DTO.
      * Pure — no database access; delegates wholesale application mapping to WholesaleMapper.
      */
-    public AdminCustomerDetailDto toDetailDto(CustomerEntity c,
-                                              WholesaleApplicationEntity app,
-                                              List<OrderEntity> orders) {
+    public AdminCustomerDetailDto toDetailDto(CustomerEntity customerEntity, WholesaleApplicationEntity app, List<OrderEntity> orders)
+    {
         AdminCustomerDetailDto dto = new AdminCustomerDetailDto();
-        dto.id          = c.id.toString();
-        dto.firstName   = c.firstName;
-        dto.lastName    = c.lastName;
-        dto.email       = c.user != null ? c.user.email : null;
-        dto.phone       = c.phone;
-        dto.status      = c.status != null ? c.status.name() : null;
-        dto.shopperType = c.shopperType != null ? c.shopperType.name() : null;
-        dto.registeredAt = c.user != null && c.user.createdAt != null
-                ? c.user.createdAt.toString()
-                : null;
+        dto.setId(customerEntity.getId().toString());
+        dto.setFirstName(customerEntity.getFirstName());
+        dto.setLastName(customerEntity.getLastName());
+        dto.setEmail(customerEntity.getUser() != null ? customerEntity.getUser().getEmail() : null);
+        dto.setPhone(customerEntity.getPhone());
+        dto.setStatus(customerEntity.getStatus() != null ? customerEntity.getStatus().name() : null);
+        dto.setShopperType(customerEntity.getShopperType() != null ? customerEntity.getShopperType().name() : null);
+        dto.setRegisteredAt(customerEntity.getUser() != null && customerEntity.getUser().getCreatedAt() != null ? customerEntity.getUser().getCreatedAt().toString() : null);
 
-        dto.wholesaleApplication = app != null ? wholesaleMapper.toDetailsDto(app) : null;
+        dto.setWholesaleApplication(app != null ? wholesaleMapper.toDetailsDto(app) : null);
 
-        dto.recentOrders = orders.stream()
+        dto.setRecentOrders(orders.stream()
                 .map(this::toOrderRefDto)
-                .toList();
+                .toList());
 
         return dto;
     }
@@ -95,13 +91,14 @@ public class CustomerAdminMapper {
      * Maps an order entity to an order reference DTO.
      * Pure — no database access.
      */
-    public AdminOrderRefDto toOrderRefDto(OrderEntity o) {
+    public AdminOrderRefDto toOrderRefDto(OrderEntity orderEntity)
+    {
         AdminOrderRefDto dto = new AdminOrderRefDto();
-        dto.id        = o.id.toString();
-        dto.reference = "ORD-" + o.id.toString().substring(0, 8).toUpperCase();
-        dto.placedAt  = o.createdAt != null ? o.createdAt.toString() : null;
-        dto.total     = o.totalAmount != null ? o.totalAmount.doubleValue() : 0.0;
-        dto.status    = o.status != null ? o.status.name() : null;
+        dto.setId(orderEntity.getId().toString());
+        dto.setReference("ORD-" + orderEntity.getId().toString().substring(0, 8).toUpperCase());
+        dto.setPlacedAt(orderEntity.getCreatedAt() != null ? orderEntity.getCreatedAt().toString() : null);
+        dto.setTotal(orderEntity.getTotalAmount() != null ? orderEntity.getTotalAmount().doubleValue() : 0.0);
+        dto.setStatus(orderEntity.getStatus() != null ? orderEntity.getStatus().name() : null);
         return dto;
     }
 }

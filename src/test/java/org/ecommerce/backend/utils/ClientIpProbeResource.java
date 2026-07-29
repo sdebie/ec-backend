@@ -12,13 +12,14 @@ import org.eclipse.microprofile.graphql.Query;
  * This class lives in {@code src/test} and is only discovered during {@code @QuarkusTest}.
  */
 @GraphQLApi
-public class ClientIpProbeResource {
-
+public class ClientIpProbeResource
+{
     @Inject
     CurrentRequestClientIp currentRequestClientIp;
 
     @Query("probeClientIp")
-    public String probeClientIp() {
+    public String probeClientIp()
+    {
         return currentRequestClientIp.resolve();
     }
 }

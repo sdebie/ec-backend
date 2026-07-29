@@ -2,32 +2,13 @@ package org.ecommerce.backend.mapper;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
-import org.ecommerce.common.dto.CustomerDetailDto;
-import org.ecommerce.common.dto.CustomerDto;
-import org.ecommerce.common.dto.ImageDetailDto;
-import org.ecommerce.common.dto.OrderDetailRespDto;
-import org.ecommerce.common.dto.OrderItemDetailDto;
-import org.ecommerce.common.dto.OrderItemResponseDto;
-import org.ecommerce.common.dto.OrderResponseDto;
-import org.ecommerce.common.dto.OrderSummaryDto;
-import org.ecommerce.common.dto.ProductDetailDto;
-import org.ecommerce.common.dto.ProductDto;
-import org.ecommerce.common.dto.ProductImageDto;
-import org.ecommerce.common.dto.ProductVariantDetailDto;
-import org.ecommerce.common.dto.ProductVariantDto;
-import org.ecommerce.common.entity.CustomerEntity;
-import org.ecommerce.common.entity.OrderEntity;
-import org.ecommerce.common.entity.OrderItemEntity;
-import org.ecommerce.common.entity.OrderStatusHistoryEntity;
-import org.ecommerce.common.entity.ProductEntity;
-import org.ecommerce.common.entity.ProductImageEntity;
-import org.ecommerce.common.entity.ProductVariantEntity;
+import org.ecommerce.common.dto.*;
+import org.ecommerce.common.entity.*;
 
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.UUID;
 
 @ApplicationScoped
 public class OrderMapper
@@ -35,62 +16,67 @@ public class OrderMapper
     @Inject
     ProductMapper productMapper;
 
-    public OrderResponseDto toResponseDto(OrderEntity entity)
+    public OrderResponseDto toResponseDto(OrderEntity orderEntity)
     {
-        if (entity == null) {
+        if (orderEntity == null) {
             return null;
         }
 
         OrderResponseDto dto = new OrderResponseDto();
-        dto.id = entity.id == null ? null : entity.id.toString();
-        dto.sessionId = entity.sessionId == null ? null : entity.sessionId.toString();
-        dto.status = entity.status == null ? null : entity.status.name();
-        dto.createDate = entity.createdAt == null ? null : entity.createdAt.toString();
-        dto.totalAmount = entity.totalAmount;
-        dto.customer = toCustomerDto(entity.customerEntity);
+        dto.setId(orderEntity.getId() == null ? null : orderEntity.getId().toString());
+        dto.setSessionId(orderEntity.getSessionId() == null ? null : orderEntity.getSessionId().toString());
+        dto.setStatus(orderEntity.getStatus() == null ? null : orderEntity.getStatus().name());
+        dto.setCreateDate(orderEntity.getCreatedAt() == null ? null : orderEntity.getCreatedAt().toString());
+        dto.setTotalAmount(orderEntity.getTotalAmount());
+        dto.setCustomer(toCustomerDto(orderEntity.getCustomerEntity()));
 
-        if (entity.items != null) {
-            dto.items = new ArrayList<>(entity.items.size());
-            for (OrderItemEntity item : entity.items) {
-                OrderItemResponseDto itemDto = toItemDto(item);
+        if (orderEntity.getItems() != null) {
+            dto.setItems(new ArrayList<>(orderEntity.getItems().size()));
+            for (OrderItemEntity item : orderEntity.getItems()) {
+                OrderItemDetailDto itemDto = toItemDetailDto(item);
                 if (itemDto != null) {
-                    dto.items.add(itemDto);
+                    dto.getItems().add(itemDto);
                 }
             }
         }
 
-        dto.itemCount = dto.items == null ? 0 : dto.items.size();
-
+        dto.setItemCount(dto.getItems() == null ? 0 : dto.getItems().size());
         return dto;
     }
 
-    private OrderItemResponseDto toItemDto(OrderItemEntity item)
+    /**
+     * Maps an OrderItemEntity to the canonical order-item output DTO.
+     * Uses ProductVariantDetailDto (reduced variant — no sku/status/prices)
+     * with ProductDetailDto (name only) as the nested product reference.
+     */
+    private OrderItemDetailDto toItemDetailDto(OrderItemEntity orderItemEntity)
     {
-        if (item == null) {
+        if (orderItemEntity == null) {
             return null;
         }
 
-        OrderItemResponseDto dto = new OrderItemResponseDto();
-        dto.id = item.id == null ? null : item.id.toString();
-        dto.unitPrice = item.unitPrice;
-        dto.quantity = item.quantity;
-        dto.variant = toVariantDto(item.variant);
-        return dto;
-    }
+        OrderItemDetailDto dto = new OrderItemDetailDto();
+        dto.setId(orderItemEntity.getId() == null ? null : orderItemEntity.getId().toString());
+        dto.setUnitPrice(orderItemEntity.getUnitPrice());
+        dto.setQuantity(orderItemEntity.getQuantity());
 
-    private ProductVariantDto toVariantDto(ProductVariantEntity variant)
-    {
-        if (variant == null) {
-            return null;
+        if (orderItemEntity.getVariant() != null) {
+            ProductVariantDetailDto variantDetailDto = new ProductVariantDetailDto();
+            variantDetailDto.setId(orderItemEntity.getVariant().getId());
+            variantDetailDto.setStockQuantity(orderItemEntity.getVariant().getStockQuantity());
+            variantDetailDto.setAttributesJson(orderItemEntity.getVariant().getAttributesJson());
+            variantDetailDto.setWeightKg(orderItemEntity.getVariant().getWeightKg());
+
+            if (orderItemEntity.getVariant().getProduct() != null) {
+                ProductDetailDto productDetailDto = new ProductDetailDto();
+                productDetailDto.setName(orderItemEntity.getVariant().getProduct().getName());
+                variantDetailDto.setProduct(productDetailDto);
+            }
+
+            variantDetailDto.setImages(toImageDtos(orderItemEntity.getVariant().getImages()));
+            dto.setVariant(variantDetailDto);
         }
 
-        ProductVariantDto dto = new ProductVariantDto();
-        dto.id = variant.id == null ? null : variant.id.toString();
-        dto.stockQuantity = variant.stockQuantity;
-        dto.attributesJson = variant.attributesJson;
-        dto.weightKg = variant.weightKg;
-        dto.product = toProductDto(variant.product);
-        dto.images = toImageDtos(variant.images);
         return dto;
     }
 
@@ -108,18 +94,6 @@ public class OrderMapper
         return result;
     }
 
-    private ProductDto toProductDto(ProductEntity product)
-    {
-        if (product == null) {
-            return null;
-        }
-
-        ProductDto dto = new ProductDto();
-        dto.id = product.id == null ? null : product.id.toString();
-        dto.name = product.name;
-        return dto;
-    }
-
     public CustomerDto toCustomerDto(CustomerEntity customer)
     {
         if (customer == null) {
@@ -127,7 +101,7 @@ public class OrderMapper
         }
 
         CustomerDto dto = new CustomerDto();
-        dto.setEmail(customer.user != null ? customer.user.email : null);
+        dto.setEmail(customer.getUser() != null ? customer.getUser().getEmail() : null);
         return dto;
     }
 
@@ -136,48 +110,46 @@ public class OrderMapper
      * variant details, images, and status history.
      * The status history is queried via Panache.
      */
-    public OrderDetailRespDto toDetailDto(OrderEntity order)
+    public OrderDetailRespDto toDetailDto(OrderEntity orderEntity)
     {
-        if (order == null) {
+        if (orderEntity == null) {
             return null;
         }
 
         OrderDetailRespDto detail = new OrderDetailRespDto();
 
         // Map OrderEntity fields
-        detail.id = order.id;
-        detail.totalAmount = order.totalAmount;
-        detail.sessionId = order.sessionId;
-        detail.status = order.status;
-        detail.shippingPhone = null; // Legacy field — no longer on OrderEntity
-        detail.shippingAddressLine1 = order.streetAddress;
-        detail.shippingAddressLine2 = null; // Legacy field — merged into streetAddress
-        detail.shippingCity = order.city;
-        detail.shippingProvince = order.province;
-        detail.shippingPostalCode = order.postalCode;
-        detail.createdAt = order.createdAt;
+        detail.setId(orderEntity.getId());
+        detail.setTotalAmount(orderEntity.getTotalAmount());
+        detail.setSessionId(orderEntity.getSessionId());
+        detail.setStatus(orderEntity.getStatus());
+        detail.setShippingPhone(null); // Legacy field — no longer on OrderEntity
+        detail.setShippingAddressLine1(orderEntity.getStreetAddress());
+        detail.setShippingAddressLine2(null); // Legacy field — merged into streetAddress
+        detail.setShippingCity(orderEntity.getCity());
+        detail.setShippingProvince(orderEntity.getProvince());
+        detail.setShippingPostalCode(orderEntity.getPostalCode());
+        detail.setCreatedAt(orderEntity.getCreatedAt());
 
-        // Customer detail
-        if (order.customerEntity != null && order.customerEntity.user != null) {
-            CustomerDetailDto customerDetail = new CustomerDetailDto();
-            customerDetail.email = order.customerEntity.user.email;
-            detail.customerEntity = customerDetail;
+        // Customer reference — same canonical CustomerDto as toResponseDto
+        if (orderEntity.getCustomerEntity() != null && orderEntity.getCustomerEntity().getUser() != null) {
+            detail.setCustomerEntity(toCustomerDto(orderEntity.getCustomerEntity()));
         }
 
-        // Items
-        if (order.items != null) {
-            detail.items = new ArrayList<>();
-            for (OrderItemEntity orderItemEntity : order.items) {
+        // Items — same canonical DTO as toResponseDto
+        if (orderEntity.getItems() != null) {
+            detail.setItems(new ArrayList<>());
+            for (OrderItemEntity orderItemEntity : orderEntity.getItems()) {
                 OrderItemDetailDto itemDetailDto = toItemDetailDto(orderItemEntity);
                 if (itemDetailDto != null) {
-                    detail.items.add(itemDetailDto);
+                    detail.getItems().add(itemDetailDto);
                 }
             }
         }
 
         // Status history (Panache query)
         List<OrderStatusHistoryEntity> histories = OrderStatusHistoryEntity
-                .find("select h from OrderStatusHistoryEntity h where h.order.id = ?1 order by h.createdAt desc", order.id)
+                .find("select h from OrderStatusHistoryEntity h where h.order.id = ?1 order by h.createdAt desc", orderEntity.getId())
                 .list();
 
         if (histories != null) {
@@ -185,86 +157,39 @@ public class OrderMapper
                 if (history == null) {
                     continue;
                 }
-                OrderDetailRespDto.OrderStatusHistoryDetailRespDto historyDto =
-                        new OrderDetailRespDto.OrderStatusHistoryDetailRespDto();
-                historyDto.id = history.id;
-                historyDto.order = history.order;
-                historyDto.status = history.status;
-                historyDto.comment = history.comment;
-                historyDto.changedBy = history.changedBy;
-                historyDto.createdAt = history.createdAt;
-                detail.statusHistory.add(historyDto);
+                OrderDetailRespDto.OrderStatusHistoryDetailRespDto historyDto = new OrderDetailRespDto.OrderStatusHistoryDetailRespDto();
+                historyDto.setId(history.getId());
+                historyDto.setStatus(history.getStatus());
+                historyDto.setComment(history.getComment());
+                historyDto.setChangedBy(history.getChangedBy());
+                historyDto.setCreatedAt(history.getCreatedAt());
+                detail.getStatusHistory().add(historyDto);
             }
         }
 
         return detail;
     }
 
-    private OrderItemDetailDto toItemDetailDto(OrderItemEntity item)
-    {
-        if (item == null) {
-            return null;
-        }
-
-        OrderItemDetailDto dto = new OrderItemDetailDto();
-        dto.id = item.id;
-        dto.unitPrice = item.unitPrice;
-        dto.quantity = item.quantity;
-
-        if (item.variant != null) {
-            ProductVariantDetailDto variantDetailDto = new ProductVariantDetailDto();
-            variantDetailDto.id = item.variant.id;
-            variantDetailDto.stockQuantity = item.variant.stockQuantity;
-            variantDetailDto.attributesJson = item.variant.attributesJson;
-            variantDetailDto.weightKg = item.variant.weightKg;
-
-            if (item.variant.product != null) {
-                ProductDetailDto productDetailDto = new ProductDetailDto();
-                productDetailDto.name = item.variant.product.name;
-                variantDetailDto.product = productDetailDto;
-            }
-
-            if (item.variant.images != null) {
-                List<ImageDetailDto> imageDetailDtos = new ArrayList<>();
-                for (ProductImageEntity imageEntity : item.variant.images) {
-                    ImageDetailDto imageDetailDto = new ImageDetailDto();
-                    imageDetailDto.id = imageEntity.id;
-                    imageDetailDto.imageUrl = imageEntity.imageUrl;
-                    imageDetailDto.sortOrder = imageEntity.sortOrder;
-                    imageDetailDtos.add(imageDetailDto);
-                }
-                variantDetailDto.images = imageDetailDtos;
-            }
-            dto.variant = variantDetailDto;
-        }
-
-        return dto;
-    }
-
     /**
      * Maps an OrderEntity to an OrderSummaryDto.
      * Computes itemCount as the sum of quantities across all line items.
      */
-    public OrderSummaryDto toSummaryDto(OrderEntity order)
+    public OrderSummaryDto toSummaryDto(OrderEntity orderEntity)
     {
-        if (order == null) {
+        if (orderEntity == null) {
             return null;
         }
 
         OrderSummaryDto dto = new OrderSummaryDto();
-        dto.id = order.id != null ? order.id.toString() : null;
-        dto.orderDate = order.createdAt != null
-                ? order.createdAt.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
-                : null;
-        dto.status = order.status != null ? order.status.name() : null;
-        dto.itemCount = order.items != null
-                ? order.items.stream()
-                    .mapToInt(item -> item.quantity != null ? item.quantity : 0)
-                    .sum()
-                : 0;
-        dto.totalAmount = order.totalAmount != null
-                ? order.totalAmount.doubleValue()
-                : 0.0;
+        dto.setId(orderEntity.getId() != null ? orderEntity.getId().toString() : null);
+        dto.setOrderDate(orderEntity.getCreatedAt() != null ? orderEntity.getCreatedAt().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME) : null);
+        dto.setStatus(orderEntity.getStatus() != null ? orderEntity.getStatus().name() : null);
+        dto.setItemCount(orderEntity.getItems() != null ? orderEntity.getItems()
+                .stream()
+                .mapToInt(item -> item.getQuantity() != null ? item.getQuantity() : 0)
+                .sum() : 0);
+
+        dto.setTotalAmount(orderEntity.getTotalAmount() != null ? orderEntity.getTotalAmount().doubleValue() : 0.0);
         return dto;
     }
 }

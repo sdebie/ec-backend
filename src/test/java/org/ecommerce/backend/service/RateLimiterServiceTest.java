@@ -21,13 +21,14 @@ import static org.mockito.Mockito.*;
  *
  * <strong>Validates: Requirements 1, 9.1</strong>
  */
-class RateLimiterServiceTest {
-
+class RateLimiterServiceTest
+{
     private TestableRateLimiterService service;
     private Config config;
 
     @BeforeEach
-    void setUp() throws Exception {
+    void setUp() throws Exception
+    {
         config = mock(Config.class);
         // Default: no config overrides — fall back to code defaults
         when(config.getOptionalValue(anyString(), any())).thenReturn(Optional.empty());
@@ -42,14 +43,16 @@ class RateLimiterServiceTest {
     // ── Allowance under the limit ───────────────────────────────────────────
 
     @Test
-    void check_shouldAllowFirstRequest() {
+    void check_shouldAllowFirstRequest()
+    {
         RateLimitDecision decision = service.check("test", "192.168.1.1", 5, 3600);
         assertTrue(decision.allowed());
         assertEquals(0, decision.retryAfterSeconds());
     }
 
     @Test
-    void check_shouldAllowRequestsUpToLimit() {
+    void check_shouldAllowRequestsUpToLimit()
+    {
         for (int i = 0; i < 5; i++) {
             RateLimitDecision decision = service.check("test", "10.0.0.1", 5, 3600);
             assertTrue(decision.allowed(),
@@ -58,7 +61,8 @@ class RateLimiterServiceTest {
     }
 
     @Test
-    void check_shouldAllowExactlyMaxRequests() {
+    void check_shouldAllowExactlyMaxRequests()
+    {
         for (int i = 0; i < 3; i++) {
             assertTrue(service.check("test", "10.0.0.2", 3, 60).allowed());
         }
@@ -67,7 +71,8 @@ class RateLimiterServiceTest {
     // ── Denial over the limit ───────────────────────────────────────────────
 
     @Test
-    void check_shouldDenyWhenLimitExceeded() {
+    void check_shouldDenyWhenLimitExceeded()
+    {
         for (int i = 0; i < 3; i++) {
             service.check("test", "10.0.0.3", 3, 60);
         }
@@ -76,7 +81,8 @@ class RateLimiterServiceTest {
     }
 
     @Test
-    void check_shouldKeepDenyingAfterLimitExceeded() {
+    void check_shouldKeepDenyingAfterLimitExceeded()
+    {
         for (int i = 0; i < 2; i++) {
             service.check("test", "10.0.0.4", 2, 60);
         }
@@ -88,7 +94,8 @@ class RateLimiterServiceTest {
     // ── Window rollover restoring allowance ─────────────────────────────────
 
     @Test
-    void check_shouldReAllowAfterWindowExpires() {
+    void check_shouldReAllowAfterWindowExpires()
+    {
         // Exhaust the limit
         for (int i = 0; i < 3; i++) {
             service.check("test", "10.0.0.5", 3, 60);
@@ -104,7 +111,8 @@ class RateLimiterServiceTest {
     }
 
     @Test
-    void check_shouldNotResetBeforeWindowExpires() {
+    void check_shouldNotResetBeforeWindowExpires()
+    {
         for (int i = 0; i < 2; i++) {
             service.check("test", "10.0.0.6", 2, 60);
         }
@@ -119,7 +127,8 @@ class RateLimiterServiceTest {
     // ── Per-(name, key) isolation ───────────────────────────────────────────
 
     @Test
-    void check_shouldIsolateDifferentKeys() {
+    void check_shouldIsolateDifferentKeys()
+    {
         String key1 = "192.168.1.100";
         String key2 = "192.168.1.200";
 
@@ -135,7 +144,8 @@ class RateLimiterServiceTest {
     }
 
     @Test
-    void check_shouldIsolateDifferentNames() {
+    void check_shouldIsolateDifferentNames()
+    {
         String key = "10.0.0.1";
 
         // Exhaust "enquiry" limit
@@ -150,7 +160,8 @@ class RateLimiterServiceTest {
     }
 
     @Test
-    void check_shouldNotCrossContaminateBetweenNamesAndKeys() {
+    void check_shouldNotCrossContaminateBetweenNamesAndKeys()
+    {
         // Use 2 of enquiry/ipA budget
         assertTrue(service.check("enquiry", "ipA", 3, 60).allowed());
         assertTrue(service.check("enquiry", "ipA", 3, 60).allowed());
@@ -172,7 +183,8 @@ class RateLimiterServiceTest {
     // ── Retry-after calculation ─────────────────────────────────────────────
 
     @Test
-    void check_shouldReturnRetryAfterOnDenial() {
+    void check_shouldReturnRetryAfterOnDenial()
+    {
         // Window is 60 seconds
         for (int i = 0; i < 3; i++) {
             service.check("test", "ip1", 3, 60);
@@ -188,7 +200,8 @@ class RateLimiterServiceTest {
     }
 
     @Test
-    void check_shouldReturnMinimumOneSecondRetryAfter() {
+    void check_shouldReturnMinimumOneSecondRetryAfter()
+    {
         // Window is 2 seconds
         for (int i = 0; i < 2; i++) {
             service.check("test", "ip2", 2, 2);
@@ -205,7 +218,8 @@ class RateLimiterServiceTest {
     }
 
     @Test
-    void check_shouldReturnZeroRetryAfterWhenAllowed() {
+    void check_shouldReturnZeroRetryAfterWhenAllowed()
+    {
         RateLimitDecision decision = service.check("test", "ip3", 5, 60);
         assertTrue(decision.allowed());
         assertEquals(0, decision.retryAfterSeconds());
@@ -214,7 +228,8 @@ class RateLimiterServiceTest {
     // ── Expired-bucket sweep ────────────────────────────────────────────────
 
     @Test
-    void check_shouldSweepExpiredBucketsWhenThresholdExceeded() throws Exception {
+    void check_shouldSweepExpiredBucketsWhenThresholdExceeded() throws Exception
+    {
         // Fill the map beyond CLEANUP_THRESHOLD with expired buckets
         injectExpiredBuckets(RateLimiterService.CLEANUP_THRESHOLD + 1, 60);
 
@@ -227,7 +242,8 @@ class RateLimiterServiceTest {
     }
 
     @Test
-    void check_shouldNotSweepActiveBuckets() throws Exception {
+    void check_shouldNotSweepActiveBuckets() throws Exception
+    {
         // Fill with active buckets (recent windowStart, long window)
         injectActiveBuckets(RateLimiterService.CLEANUP_THRESHOLD + 1, 3600);
 
@@ -242,7 +258,8 @@ class RateLimiterServiceTest {
     // ── "unknown" key still limited ─────────────────────────────────────────
 
     @Test
-    void check_shouldLimitUnknownKey() {
+    void check_shouldLimitUnknownKey()
+    {
         for (int i = 0; i < 3; i++) {
             assertTrue(service.check("login", "unknown", 3, 60).allowed());
         }
@@ -252,22 +269,26 @@ class RateLimiterServiceTest {
     // ── Key masking for denial logs (no plaintext PII) ──────────────────────
 
     @Test
-    void maskKey_shouldMaskEmailLocalPart() {
+    void maskKey_shouldMaskEmailLocalPart()
+    {
         assertEquals("c***@example.com", RateLimiterService.maskKey("customer@example.com"));
     }
 
     @Test
-    void maskKey_shouldMaskSingleCharacterLocalPart() {
+    void maskKey_shouldMaskSingleCharacterLocalPart()
+    {
         assertEquals("a***@test.com", RateLimiterService.maskKey("a@test.com"));
     }
 
     @Test
-    void maskKey_shouldMaskEmptyLocalPart() {
+    void maskKey_shouldMaskEmptyLocalPart()
+    {
         assertEquals("***@test.com", RateLimiterService.maskKey("@test.com"));
     }
 
     @Test
-    void maskKey_shouldPassThroughIpKeys() {
+    void maskKey_shouldPassThroughIpKeys()
+    {
         assertEquals("192.168.1.1", RateLimiterService.maskKey("192.168.1.1"));
         assertEquals("unknown", RateLimiterService.maskKey("unknown"));
         assertNull(RateLimiterService.maskKey(null));
@@ -276,7 +297,8 @@ class RateLimiterServiceTest {
     // ── Config override ─────────────────────────────────────────────────────
 
     @Test
-    void check_shouldUseConfigOverrideForMax() {
+    void check_shouldUseConfigOverrideForMax()
+    {
         when(config.getOptionalValue("ratelimit.enquiry.max", Integer.class))
                 .thenReturn(Optional.of(2));
 
@@ -287,7 +309,8 @@ class RateLimiterServiceTest {
     }
 
     @Test
-    void check_shouldUseConfigOverrideForWindow() {
+    void check_shouldUseConfigOverrideForWindow()
+    {
         when(config.getOptionalValue("ratelimit.fast.window-seconds", Long.class))
                 .thenReturn(Optional.of(10L));
 
@@ -308,7 +331,8 @@ class RateLimiterServiceTest {
      * Injects expired buckets directly into the map via reflection.
      */
     @SuppressWarnings("unchecked")
-    private void injectExpiredBuckets(int count, long windowSeconds) throws Exception {
+    private void injectExpiredBuckets(int count, long windowSeconds) throws Exception
+    {
         Field bucketsField = RateLimiterService.class.getDeclaredField("buckets");
         bucketsField.setAccessible(true);
         ConcurrentHashMap<String, RateLimiterService.WindowBucket> map =
@@ -325,7 +349,8 @@ class RateLimiterServiceTest {
      * Injects active (non-expired) buckets directly into the map via reflection.
      */
     @SuppressWarnings("unchecked")
-    private void injectActiveBuckets(int count, long windowSeconds) throws Exception {
+    private void injectActiveBuckets(int count, long windowSeconds) throws Exception
+    {
         Field bucketsField = RateLimiterService.class.getDeclaredField("buckets");
         bucketsField.setAccessible(true);
         ConcurrentHashMap<String, RateLimiterService.WindowBucket> map =
@@ -341,15 +366,18 @@ class RateLimiterServiceTest {
     /**
      * Testable subclass that lets us control time without Thread.sleep.
      */
-    private static class TestableRateLimiterService extends RateLimiterService {
+    private static class TestableRateLimiterService extends RateLimiterService
+    {
         private long timeOffset = 0;
 
         @Override
-        long currentTimeMillis() {
+        long currentTimeMillis()
+        {
             return System.currentTimeMillis() + timeOffset;
         }
 
-        void advanceTime(long millis) {
+        void advanceTime(long millis)
+        {
             timeOffset += millis;
         }
     }

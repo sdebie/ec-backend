@@ -19,7 +19,8 @@ import java.util.UUID;
 
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.*;
-import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.when;
 
 /**
@@ -29,12 +30,12 @@ import static org.mockito.Mockito.when;
  * - adminProductList query
  * - updateProductStatus mutation
  * - deleteProduct mutation
- *
+ * <p>
  * Validates: Requirements 9.1, 9.2, 9.3, 9.4, 9.5
  */
 @QuarkusTest
-class AdminProductGraphQLTest {
-
+class AdminProductGraphQLTest
+{
     private static final String STAFF_EMAIL = "admin@test.com";
     private static final String VIEWER_EMAIL = "viewer@test.com";
 
@@ -45,28 +46,29 @@ class AdminProductGraphQLTest {
     private PageResponse<AdminProductListItemDto> mockPage;
 
     @BeforeEach
-    void setUp() {
+    void setUp()
+    {
         // Set up mock stats
         mockStats = new AdminProductStatsDto();
-        mockStats.total = 50;
-        mockStats.active = 30;
-        mockStats.pending = 12;
-        mockStats.disabled = 8;
+        mockStats.setTotal(50);
+        mockStats.setActive(30);
+        mockStats.setPending(12);
+        mockStats.setDisabled(8);
 
         // Set up mock product list item
         AdminProductListItemDto item = new AdminProductListItemDto();
-        item.id = UUID.randomUUID().toString();
-        item.name = "Test Product";
-        item.slug = "test-product";
-        item.sku = "SKU-001";
-        item.category = new CategoryDto();
-        item.category.id = UUID.randomUUID();
-        item.category.name = "Electronics";
-        item.status = "ACTIVE";
-        item.thumbnailUrl = "https://example.com/thumb.jpg";
-        item.retailPrice = "199.99";
-        item.stockCount = 25;
-        item.stockLevel = "IN_STOCK";
+        item.setId(UUID.randomUUID().toString());
+        item.setName("Test Product");
+        item.setSlug("test-product");
+        item.setSku("SKU-001");
+        item.setCategory(new CategoryDto());
+        item.getCategory().setId(UUID.randomUUID());
+        item.getCategory().setName("Electronics");
+        item.setStatus("ACTIVE");
+        item.setThumbnailUrl("https://example.com/thumb.jpg");
+        item.setRetailPrice("199.99");
+        item.setStockCount(25);
+        item.setStockLevel("IN_STOCK");
 
         mockPage = new PageResponse<>(List.of(item), 1, 1, 0, 10);
 
@@ -76,9 +78,8 @@ class AdminProductGraphQLTest {
                 .thenReturn(mockPage);
     }
 
-    // ─── Helper Methods ─────────────────────────────────────────────────────
-
-    private String generateStaffJwt(String email, String role) {
+    private String generateStaffJwt(String email, String role)
+    {
         return Jwt.subject(email)
                 .issuer("http://localhost:8080")
                 .groups(role)
@@ -88,7 +89,8 @@ class AdminProductGraphQLTest {
     /**
      * Builds a proper JSON body for a GraphQL request using variables.
      */
-    private String graphqlBody(String query, Map<String, Object> variables) {
+    private String graphqlBody(String query, Map<String, Object> variables)
+    {
         StringBuilder sb = new StringBuilder();
         sb.append("{\"query\":\"").append(query.replace("\"", "\\\"")).append("\"");
         if (variables != null && !variables.isEmpty()) {
@@ -113,19 +115,20 @@ class AdminProductGraphQLTest {
         return sb.toString();
     }
 
-    private String graphqlBody(String query) {
+    private String graphqlBody(String query)
+    {
         return graphqlBody(query, null);
     }
 
-    // ─── adminProductStats Tests ────────────────────────────────────────────
-
     @Nested
     @DisplayName("adminProductStats query")
-    class AdminProductStatsTests {
+    class AdminProductStatsTests
+    {
 
         @Test
         @DisplayName("returns correct shape with staff JWT")
-        void adminProductStats_withStaffJwt_returnsCorrectShape() {
+        void adminProductStats_withStaffJwt_returnsCorrectShape()
+        {
             String token = generateStaffJwt(STAFF_EMAIL, "SUPER_ADMIN");
 
             given()
@@ -145,7 +148,8 @@ class AdminProductGraphQLTest {
 
         @Test
         @DisplayName("accessible with VIEWER role")
-        void adminProductStats_withViewerRole_returnsData() {
+        void adminProductStats_withViewerRole_returnsData()
+        {
             String token = generateStaffJwt(VIEWER_EMAIL, "VIEWER");
 
             given()
@@ -162,7 +166,8 @@ class AdminProductGraphQLTest {
 
         @Test
         @DisplayName("unauthenticated request returns UNAUTHORIZED error")
-        void adminProductStats_withoutJwt_returnsUnauthorized() {
+        void adminProductStats_withoutJwt_returnsUnauthorized()
+        {
             given()
                     .contentType("application/json")
                     .body(graphqlBody("{ adminProductStats { total active pending disabled } }"))
@@ -176,20 +181,20 @@ class AdminProductGraphQLTest {
         }
     }
 
-    // ─── adminProductList Tests ─────────────────────────────────────────────
-
     @Nested
     @DisplayName("adminProductList query")
-    class AdminProductListTests {
+    class AdminProductListTests
+    {
 
         private static final String ADMIN_PRODUCT_LIST_QUERY =
                 "query($pageIndex: Int, $pageSize: Int, $status: String, $categoryId: String, $brandId: String, $search: String) " +
-                "{ adminProductList(pageIndex: $pageIndex, pageSize: $pageSize, status: $status, categoryId: $categoryId, brandId: $brandId, search: $search) " +
-                "{ content { id name slug sku category { id name } status thumbnailUrl retailPrice stockCount stockLevel } totalElements totalPages pageIndex pageSize } }";
+                        "{ adminProductList(pageIndex: $pageIndex, pageSize: $pageSize, status: $status, categoryId: $categoryId, brandId: $brandId, search: $search) " +
+                        "{ content { id name slug sku category { id name } status thumbnailUrl retailPrice stockCount stockLevel } totalElements totalPages pageIndex pageSize } }";
 
         @Test
         @DisplayName("supports pagination parameters")
-        void adminProductList_withPagination_returnsPagedResults() {
+        void adminProductList_withPagination_returnsPagedResults()
+        {
             String token = generateStaffJwt(STAFF_EMAIL, "SUPER_ADMIN");
 
             given()
@@ -214,7 +219,8 @@ class AdminProductGraphQLTest {
 
         @Test
         @DisplayName("supports filtering by status")
-        void adminProductList_withStatusFilter_callsServiceWithStatus() {
+        void adminProductList_withStatusFilter_callsServiceWithStatus()
+        {
             String token = generateStaffJwt(STAFF_EMAIL, "SUPER_ADMIN");
 
             given()
@@ -231,7 +237,8 @@ class AdminProductGraphQLTest {
 
         @Test
         @DisplayName("supports filtering by categoryId")
-        void adminProductList_withCategoryFilter_callsServiceWithCategoryId() {
+        void adminProductList_withCategoryFilter_callsServiceWithCategoryId()
+        {
             String token = generateStaffJwt(STAFF_EMAIL, "SUPER_ADMIN");
             String categoryId = UUID.randomUUID().toString();
 
@@ -249,7 +256,8 @@ class AdminProductGraphQLTest {
 
         @Test
         @DisplayName("supports filtering by brandId")
-        void adminProductList_withBrandFilter_callsServiceWithBrandId() {
+        void adminProductList_withBrandFilter_callsServiceWithBrandId()
+        {
             String token = generateStaffJwt(STAFF_EMAIL, "SUPER_ADMIN");
             String brandId = UUID.randomUUID().toString();
 
@@ -267,7 +275,8 @@ class AdminProductGraphQLTest {
 
         @Test
         @DisplayName("supports search filter")
-        void adminProductList_withSearchFilter_callsServiceWithSearch() {
+        void adminProductList_withSearchFilter_callsServiceWithSearch()
+        {
             String token = generateStaffJwt(STAFF_EMAIL, "SUPER_ADMIN");
 
             given()
@@ -284,7 +293,8 @@ class AdminProductGraphQLTest {
 
         @Test
         @DisplayName("returns full product item shape including category and stock")
-        void adminProductList_returnsFullItemShape() {
+        void adminProductList_returnsFullItemShape()
+        {
             String token = generateStaffJwt(STAFF_EMAIL, "SUPER_ADMIN");
 
             given()
@@ -310,7 +320,8 @@ class AdminProductGraphQLTest {
 
         @Test
         @DisplayName("unauthenticated request returns UNAUTHORIZED error")
-        void adminProductList_withoutJwt_returnsUnauthorized() {
+        void adminProductList_withoutJwt_returnsUnauthorized()
+        {
             given()
                     .contentType("application/json")
                     .body(graphqlBody(ADMIN_PRODUCT_LIST_QUERY))
@@ -324,18 +335,18 @@ class AdminProductGraphQLTest {
         }
     }
 
-    // ─── updateProductStatus Tests ──────────────────────────────────────────
-
     @Nested
     @DisplayName("updateProductStatus mutation")
-    class UpdateProductStatusTests {
+    class UpdateProductStatusTests
+    {
 
         private static final String UPDATE_STATUS_MUTATION =
                 "mutation($id: String!, $status: String!) { updateProductStatus(id: $id, status: $status) }";
 
         @Test
         @DisplayName("succeeds with SUPER_ADMIN role")
-        void updateProductStatus_withSuperAdmin_succeeds() {
+        void updateProductStatus_withSuperAdmin_succeeds()
+        {
             String token = generateStaffJwt(STAFF_EMAIL, "SUPER_ADMIN");
             String productId = UUID.randomUUID().toString();
 
@@ -352,7 +363,8 @@ class AdminProductGraphQLTest {
 
         @Test
         @DisplayName("denied for VIEWER role")
-        void updateProductStatus_withViewerRole_returnsForbidden() {
+        void updateProductStatus_withViewerRole_returnsForbidden()
+        {
             String token = generateStaffJwt(VIEWER_EMAIL, "VIEWER");
             String productId = UUID.randomUUID().toString();
 
@@ -370,7 +382,8 @@ class AdminProductGraphQLTest {
 
         @Test
         @DisplayName("unauthenticated request returns UNAUTHORIZED error")
-        void updateProductStatus_withoutJwt_returnsUnauthorized() {
+        void updateProductStatus_withoutJwt_returnsUnauthorized()
+        {
             String productId = UUID.randomUUID().toString();
 
             given()
@@ -385,18 +398,18 @@ class AdminProductGraphQLTest {
         }
     }
 
-    // ─── deleteProduct Tests ────────────────────────────────────────────────
-
     @Nested
     @DisplayName("deleteProduct mutation")
-    class DeleteProductTests {
+    class DeleteProductTests
+    {
 
         private static final String DELETE_MUTATION =
                 "mutation($id: String!) { deleteProduct(id: $id) }";
 
         @Test
         @DisplayName("succeeds with SUPER_ADMIN role")
-        void deleteProduct_withSuperAdmin_succeeds() {
+        void deleteProduct_withSuperAdmin_succeeds()
+        {
             String token = generateStaffJwt(STAFF_EMAIL, "SUPER_ADMIN");
             String productId = UUID.randomUUID().toString();
 
@@ -413,7 +426,8 @@ class AdminProductGraphQLTest {
 
         @Test
         @DisplayName("denied for VIEWER role")
-        void deleteProduct_withViewerRole_returnsForbidden() {
+        void deleteProduct_withViewerRole_returnsForbidden()
+        {
             String token = generateStaffJwt(VIEWER_EMAIL, "VIEWER");
             String productId = UUID.randomUUID().toString();
 
@@ -431,7 +445,8 @@ class AdminProductGraphQLTest {
 
         @Test
         @DisplayName("unauthenticated request returns UNAUTHORIZED error")
-        void deleteProduct_withoutJwt_returnsUnauthorized() {
+        void deleteProduct_withoutJwt_returnsUnauthorized()
+        {
             String productId = UUID.randomUUID().toString();
 
             given()

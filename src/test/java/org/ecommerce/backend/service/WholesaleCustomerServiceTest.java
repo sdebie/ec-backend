@@ -17,14 +17,12 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.when;
 
 @QuarkusTest
-class WholesaleCustomerServiceTest {
-
+class WholesaleCustomerServiceTest
+{
     @Inject
     WholesaleCustomerService wholesaleCustomerService;
 
@@ -32,32 +30,34 @@ class WholesaleCustomerServiceTest {
     WholesaleApplicationRepository wholesaleApplicationRepository;
 
     @Test
-    void getWholesaleApplications_shouldReturnMinimalDtos() {
+    void getWholesaleApplications_shouldReturnMinimalDtos()
+    {
         PageRequest pageRequest = new PageRequest();
         FilterRequest filterRequest = new FilterRequest();
 
         WholesaleApplicationEntity first = new WholesaleApplicationEntity();
-        first.id = UUID.randomUUID();
-        first.createdAt = OffsetDateTime.parse("2026-05-14T08:00:00Z");
-        first.status = WholesaleApplicationStatusEn.PENDING;
+        first.setId(UUID.randomUUID());
+        first.setCreatedAt(OffsetDateTime.parse("2026-05-14T08:00:00Z"));
+        first.setStatus(WholesaleApplicationStatusEn.PENDING);
 
         WholesaleApplicationEntity second = new WholesaleApplicationEntity();
-        second.id = UUID.randomUUID();
-        second.createdAt = OffsetDateTime.parse("2026-05-14T09:00:00Z");
-        second.status = WholesaleApplicationStatusEn.APPROVED;
+        second.setId(UUID.randomUUID());
+        second.setCreatedAt(OffsetDateTime.parse("2026-05-14T09:00:00Z"));
+        second.setStatus(WholesaleApplicationStatusEn.APPROVED);
 
         when(wholesaleApplicationRepository.findAll(pageRequest, filterRequest)).thenReturn(List.of(first, second));
 
         List<WholesaleApplicationListItemDto> result = wholesaleCustomerService.getWholesaleApplications(pageRequest, filterRequest);
 
         assertEquals(2, result.size());
-        assertEquals(first.id, result.getFirst().getId());
-        assertEquals(first.createdAt, result.getFirst().getCreatedAt());
-        assertEquals(first.status, result.getFirst().getStatus());
+        assertEquals(first.getId(), result.getFirst().getId());
+        assertEquals(first.getCreatedAt(), result.getFirst().getCreatedAt());
+        assertEquals(first.getStatus(), result.getFirst().getStatus());
     }
 
     @Test
-    void wholesaleApplicationCount_shouldReturnRepositoryCount() {
+    void wholesaleApplicationCount_shouldReturnRepositoryCount()
+    {
         FilterRequest filterRequest = new FilterRequest();
         when(wholesaleApplicationRepository.count(filterRequest)).thenReturn(7L);
 
@@ -67,46 +67,43 @@ class WholesaleCustomerServiceTest {
     }
 
     @Test
-    void getWholesaleApplicationById_shouldThrowWhenIdIsNull() {
-        IllegalArgumentException ex = assertThrows(
-                IllegalArgumentException.class,
-                () -> wholesaleCustomerService.getWholesaleApplicationById(null)
-        );
+    void getWholesaleApplicationById_shouldThrowWhenIdIsNull()
+    {
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () -> wholesaleCustomerService.getWholesaleApplicationById(null));
 
         assertEquals("id is required", ex.getMessage());
     }
 
     @Test
-    void getWholesaleApplicationById_shouldThrowWhenNotFound() {
+    void getWholesaleApplicationById_shouldThrowWhenNotFound()
+    {
         UUID id = UUID.randomUUID();
         when(wholesaleApplicationRepository.findById(id)).thenReturn(null);
 
-        IllegalArgumentException ex = assertThrows(
-                IllegalArgumentException.class,
-                () -> wholesaleCustomerService.getWholesaleApplicationById(id)
-        );
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () -> wholesaleCustomerService.getWholesaleApplicationById(id));
 
         assertEquals("wholesale application not found: " + id, ex.getMessage());
     }
 
     @Test
-    void getWholesaleApplicationById_shouldReturnFullDetails() {
+    void getWholesaleApplicationById_shouldReturnFullDetails()
+    {
         UUID id = UUID.randomUUID();
         UUID customerId = UUID.randomUUID();
 
         CustomerEntity customer = new CustomerEntity();
-        customer.id = customerId;
+        customer.setId(customerId);
 
         WholesaleApplicationEntity application = new WholesaleApplicationEntity();
-        application.id = id;
-        application.accountEmail = "buyer@example.com";
-        application.firstName = "Ana";
-        application.lastName = "Smith";
-        application.companyName = "ACME";
-        application.status = WholesaleApplicationStatusEn.CONVERTED;
-        application.createdAt = OffsetDateTime.parse("2026-05-14T10:00:00Z");
-        application.processedAt = OffsetDateTime.parse("2026-05-14T12:00:00Z");
-        application.customer = customer;
+        application.setId(id);
+        application.setAccountEmail("buyer@example.com");
+        application.setFirstName("Ana");
+        application.setLastName("Smith");
+        application.setCompanyName("ACME");
+        application.setStatus(WholesaleApplicationStatusEn.CONVERTED);
+        application.setCreatedAt(OffsetDateTime.parse("2026-05-14T10:00:00Z"));
+        application.setProcessedAt(OffsetDateTime.parse("2026-05-14T12:00:00Z"));
+        application.setCustomer(customer);
 
         when(wholesaleApplicationRepository.findById(id)).thenReturn(application);
 
@@ -118,54 +115,55 @@ class WholesaleCustomerServiceTest {
         assertEquals("Smith", result.getLastName());
         assertEquals("ACME", result.getCompanyName());
         assertEquals(WholesaleApplicationStatusEn.CONVERTED, result.getStatus());
-        assertEquals(application.createdAt, result.getCreatedAt());
-        assertEquals(application.processedAt, result.getProcessedAt());
+        assertEquals(application.getCreatedAt(), result.getCreatedAt());
+        assertEquals(application.getProcessedAt(), result.getProcessedAt());
         assertEquals(customerId, result.getCustomerId());
         assertNull(result.getNotes());
     }
 
     @Test
-    void toDetailsDto_shouldMapAllNewFieldsFromEntity() {
+    void toDetailsDto_shouldMapAllNewFieldsFromEntity()
+    {
         UUID id = UUID.randomUUID();
         UUID customerId = UUID.randomUUID();
 
         CustomerEntity customer = new CustomerEntity();
-        customer.id = customerId;
+        customer.setId(customerId);
 
         WholesaleApplicationEntity application = new WholesaleApplicationEntity();
-        application.id = id;
-        application.applicantEmail = "applicant@example.com";
-        application.accountEmail = "account@example.com";
-        application.firstName = "John";
-        application.lastName = "Doe";
-        application.phone = "0821234567";
-        application.companyName = "Wholesale Corp";
-        application.tradingName = "WC Trading";
-        application.companyPhone = "0111234567";
-        application.companyEmail = "info@wholesalecorp.co.za";
-        application.vatNumber = "VAT123456";
-        application.regNumber = "REG789012";
-        application.financeContactName = "Jane Finance";
-        application.financeContactEmail = "jane@wholesalecorp.co.za";
-        application.financeContactPhone = "0119876543";
-        application.purchaseOrderRequired = true;
-        application.notes = "We order in bulk monthly";
-        application.status = WholesaleApplicationStatusEn.PENDING;
-        application.createdAt = OffsetDateTime.parse("2026-06-01T09:00:00Z");
-        application.processedAt = null;
-        application.physicalAddressLine1 = "10 Main Road";
-        application.physicalAddressLine2 = "Unit 5";
-        application.physicalSuburb = "Sandton";
-        application.physicalCity = "Johannesburg";
-        application.physicalProvince = "Gauteng";
-        application.physicalPostalCode = "2196";
-        application.postalAddressLine1 = "PO Box 100";
-        application.postalAddressLine2 = null;
-        application.postalSuburb = "Braamfontein";
-        application.postalCity = "Johannesburg";
-        application.postalProvince = "Gauteng";
-        application.postalPostalCode = "2001";
-        application.customer = customer;
+        application.setId(id);
+        application.setApplicantEmail("applicant@example.com");
+        application.setAccountEmail("account@example.com");
+        application.setFirstName("John");
+        application.setLastName("Doe");
+        application.setPhone("0821234567");
+        application.setCompanyName("Wholesale Corp");
+        application.setTradingName("WC Trading");
+        application.setCompanyPhone("0111234567");
+        application.setCompanyEmail("info@wholesalecorp.co.za");
+        application.setVatNumber("VAT123456");
+        application.setRegNumber("REG789012");
+        application.setFinanceContactName("Jane Finance");
+        application.setFinanceContactEmail("jane@wholesalecorp.co.za");
+        application.setFinanceContactPhone("0119876543");
+        application.setPurchaseOrderRequired(true);
+        application.setNotes("We order in bulk monthly");
+        application.setStatus(WholesaleApplicationStatusEn.PENDING);
+        application.setCreatedAt(OffsetDateTime.parse("2026-06-01T09:00:00Z"));
+        application.setProcessedAt(null);
+        application.setPhysicalAddressLine1("10 Main Road");
+        application.setPhysicalAddressLine2("Unit 5");
+        application.setPhysicalSuburb("Sandton");
+        application.setPhysicalCity("Johannesburg");
+        application.setPhysicalProvince("Gauteng");
+        application.setPhysicalPostalCode("2196");
+        application.setPostalAddressLine1("PO Box 100");
+        application.setPostalAddressLine2(null);
+        application.setPostalSuburb("Braamfontein");
+        application.setPostalCity("Johannesburg");
+        application.setPostalProvince("Gauteng");
+        application.setPostalPostalCode("2001");
+        application.setCustomer(customer);
 
         when(wholesaleApplicationRepository.findById(id)).thenReturn(application);
 

@@ -22,37 +22,38 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * DB-backed integration tests for {@link FeaturedProductService} query correctness.
- *
+ * <p>
  * PanacheMock cannot validate the JPQL in getFeaturedProductsForAdmin /
  * getFeaturedShoppingProducts (filter, ordering, {@code MEMBER OF categories}); those
  * are exercised here against the real datasource. Each test persists real
  * {@link ProductEntity} rows inside a {@link TestTransaction} (rolled back afterward, so
  * the shared dev DB is never mutated) and asserts the REAL service returns correctly
  * ordered / filtered results.
- *
+ * <p>
  * A unique per-test marker isolates assertions from any pre-existing rows in the DB.
- *
+ * <p>
  * Covers:
- *   Property 5: Admin List Ordering Invariant  (Requirements 3.1, 3.2)
- *   Property 6: Storefront Query Filter Correctness  (Requirements 4.1)
- *   Property 8: Category Filter Correctness  (Requirements 4.3)
+ * Property 5: Admin List Ordering Invariant  (Requirements 3.1, 3.2)
+ * Property 6: Storefront Query Filter Correctness  (Requirements 4.1)
+ * Property 8: Category Filter Correctness  (Requirements 4.3)
  */
 @QuarkusTest
-class FeaturedProductServiceIT {
-
+class FeaturedProductServiceIT
+{
     @Inject
     FeaturedProductService featuredProductService;
 
     @Inject
     EntityManager em;
 
-    private ProductEntity newProduct(String marker, String nameSuffix, boolean featured, ProductStatusEn status) {
+    private ProductEntity newProduct(String marker, String nameSuffix, boolean featured, ProductStatusEn status)
+    {
         ProductEntity p = new ProductEntity();
-        p.name = marker + nameSuffix;
-        p.slug = (marker + nameSuffix + "-" + UUID.randomUUID()).toLowerCase();
-        p.status = status;
-        p.isFeatured = featured;
-        p.productType = ProductTypeEn.SIMPLE;
+        p.setName(marker + nameSuffix);
+        p.setSlug((marker + nameSuffix + "-" + UUID.randomUUID()).toLowerCase());
+        p.setStatus(status);
+        p.setFeatured(featured);
+        p.setProductType(ProductTypeEn.SIMPLE);
         p.persist();
         return p;
     }
@@ -61,7 +62,8 @@ class FeaturedProductServiceIT {
 
     @Test
     @TestTransaction
-    void adminListReturnsAllFeaturedRegardlessOfStatusSortedByName() {
+    void adminListReturnsAllFeaturedRegardlessOfStatusSortedByName()
+    {
         String marker = "ZZITADMIN-" + UUID.randomUUID().toString().substring(0, 8) + "-";
 
         newProduct(marker, "Apple", true, ProductStatusEn.ACTIVE);
@@ -76,7 +78,7 @@ class FeaturedProductServiceIT {
         // (Ordering is asserted on our controlled ASCII subset; the DB applies ORDER BY name ASC
         // under its own collation, which need not match Java String.compareTo on unrelated seed rows.)
         List<String> mine = all.stream()
-                .map(d -> d.name)
+                .map(d -> d.getName())
                 .filter(n -> n.startsWith(marker))
                 .collect(Collectors.toList());
 
@@ -89,7 +91,8 @@ class FeaturedProductServiceIT {
 
     @Test
     @TestTransaction
-    void storefrontListReturnsOnlyFeaturedActiveSortedByName() {
+    void storefrontListReturnsOnlyFeaturedActiveSortedByName()
+    {
         String marker = "ZZITSF-" + UUID.randomUUID().toString().substring(0, 8) + "-";
 
         newProduct(marker, "Apple", true, ProductStatusEn.ACTIVE);   // qualifies
@@ -103,30 +106,29 @@ class FeaturedProductServiceIT {
 
         // Every returned product is ACTIVE.
         for (ProductShoppingListItemDto d : all) {
-            assertEquals(ProductStatusEn.ACTIVE.name(), d.status,
-                    "Storefront list must only contain ACTIVE products");
+            assertEquals(ProductStatusEn.ACTIVE.name(), d.getStatus(), "Storefront list must only contain ACTIVE products");
         }
 
         List<String> mine = all.stream()
-                .map(d -> d.name)
+                .map(ProductShoppingListItemDto::getName)
                 .filter(n -> n.startsWith(marker))
                 .collect(Collectors.toList());
 
-        assertEquals(List.of(marker + "Apple"), mine,
-                "Only the featured + ACTIVE product must appear from this test set");
+        assertEquals(List.of(marker + "Apple"), mine, "Only the featured + ACTIVE product must appear from this test set");
     }
 
     // ── Property 8: Category Filter Correctness ─────────────────────────────
 
     @Test
     @TestTransaction
-    void categoryFilterReturnsOnlyFeaturedActiveMembersOfCategory() {
+    void categoryFilterReturnsOnlyFeaturedActiveMembersOfCategory()
+    {
         String marker = "ZZITCAT-" + UUID.randomUUID().toString().substring(0, 8) + "-";
         String slug = "zzitcat-slug-" + UUID.randomUUID();
 
         CategoryEntity category = new CategoryEntity();
-        category.name = marker + "Category";
-        category.slug = slug;
+        category.setName(marker + "Category");
+        category.setSlug(slug);
         category.persist();
 
         ProductEntity inCatActiveFeatured = newProduct(marker, "Apple", true, ProductStatusEn.ACTIVE);
@@ -140,14 +142,12 @@ class FeaturedProductServiceIT {
         // notInCatActiveFeatured deliberately has no category
         em.flush();
 
-        List<ProductShoppingListItemDto> result =
-                featuredProductService.getFeaturedShoppingProducts(50, slug);
+        List<ProductShoppingListItemDto> result = featuredProductService.getFeaturedShoppingProducts(50, slug);
 
         // The category is unique to this test, so the entire result is ours: only the
         // featured + ACTIVE member of the category qualifies.
-        List<String> names = result.stream().map(d -> d.name).collect(Collectors.toList());
-        assertEquals(List.of(marker + "Apple"), names,
-                "Only featured + ACTIVE products that are MEMBER OF the category must be returned");
+        List<String> names = result.stream().map(ProductShoppingListItemDto::getName).collect(Collectors.toList());
+        assertEquals(List.of(marker + "Apple"), names, "Only featured + ACTIVE products that are MEMBER OF the category must be returned");
 
         assertFalse(names.contains(marker + "Cherry"), "PENDING member must be excluded");
         assertFalse(names.contains(marker + "Damson"), "Non-featured member must be excluded");
@@ -156,13 +156,13 @@ class FeaturedProductServiceIT {
 
     @Test
     @TestTransaction
-    void unknownCategorySlugReturnsEmptyList() {
+    void unknownCategorySlugReturnsEmptyList()
+    {
         String marker = "ZZITCATX-" + UUID.randomUUID().toString().substring(0, 8) + "-";
         newProduct(marker, "Apple", true, ProductStatusEn.ACTIVE);
         em.flush();
 
-        List<ProductShoppingListItemDto> result =
-                featuredProductService.getFeaturedShoppingProducts(50, "no-such-category-" + UUID.randomUUID());
+        List<ProductShoppingListItemDto> result = featuredProductService.getFeaturedShoppingProducts(50, "no-such-category-" + UUID.randomUUID());
 
         assertTrue(result.isEmpty(), "Unknown category slug must yield an empty list");
     }

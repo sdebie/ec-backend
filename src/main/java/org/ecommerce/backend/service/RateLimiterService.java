@@ -25,8 +25,8 @@ import java.util.concurrent.atomic.AtomicInteger;
  * The window resets lazily: the first request in a new window replaces the old bucket.
  */
 @ApplicationScoped
-public class RateLimiterService {
-
+public class RateLimiterService
+{
     private static final Logger LOG = Logger.getLogger(RateLimiterService.class);
 
     /**
@@ -49,9 +49,10 @@ public class RateLimiterService {
      * @param defaultMax           maximum requests per window (used when no config override exists)
      * @param defaultWindowSeconds window length in seconds (used when no config override exists)
      * @return a {@link RateLimitDecision} indicating whether the request is allowed and,
-     *         if denied, how many seconds remain in the current window
+     * if denied, how many seconds remain in the current window
      */
-    public RateLimitDecision check(String name, String key, int defaultMax, long defaultWindowSeconds) {
+    public RateLimitDecision check(String name, String key, int defaultMax, long defaultWindowSeconds)
+    {
         int max = resolveMax(name, defaultMax);
         long windowSeconds = resolveWindowSeconds(name, defaultWindowSeconds);
         long windowMillis = Duration.ofSeconds(windowSeconds).toMillis();
@@ -95,7 +96,8 @@ public class RateLimiterService {
      * Non-email keys (IPs, "unknown") pass through unchanged. Bucket keys themselves
      * are never masked — only the log line.
      */
-    static String maskKey(String key) {
+    static String maskKey(String key)
+    {
         if (key == null) {
             return null;
         }
@@ -107,12 +109,14 @@ public class RateLimiterService {
         return maskedLocal + key.substring(at);
     }
 
-    private int resolveMax(String name, int defaultMax) {
+    private int resolveMax(String name, int defaultMax)
+    {
         return config.getOptionalValue("ratelimit." + name + ".max", Integer.class)
                 .orElse(defaultMax);
     }
 
-    private long resolveWindowSeconds(String name, long defaultWindowSeconds) {
+    private long resolveWindowSeconds(String name, long defaultWindowSeconds)
+    {
         return config.getOptionalValue("ratelimit." + name + ".window-seconds", Long.class)
                 .orElse(defaultWindowSeconds);
     }
@@ -120,23 +124,27 @@ public class RateLimiterService {
     /**
      * Visible for testing — allows subclasses/mocks to override the clock.
      */
-    long currentTimeMillis() {
+    long currentTimeMillis()
+    {
         return System.currentTimeMillis();
     }
 
     /**
      * Visible for testing — exposes the bucket map size.
      */
-    int bucketCount() {
+    int bucketCount()
+    {
         return buckets.size();
     }
 
-    static class WindowBucket {
+    static class WindowBucket
+    {
         final long windowStart;
         final AtomicInteger count;
         final long windowSeconds;
 
-        WindowBucket(long windowStart, AtomicInteger count, long windowSeconds) {
+        WindowBucket(long windowStart, AtomicInteger count, long windowSeconds)
+        {
             this.windowStart = windowStart;
             this.count = count;
             this.windowSeconds = windowSeconds;

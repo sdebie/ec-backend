@@ -12,14 +12,14 @@ import java.time.OffsetDateTime;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 /**
  * Unit tests for {@link PageContentService}.
  * Uses Mockito mocking for PageContentRepository and HtmlSanitizer.
- *
+ * <p>
  * Validates: Requirements 3.3, 3.4, 3.7, 5.5
  */
 @QuarkusTest
@@ -39,9 +39,9 @@ class PageContentServiceTest
     {
         UUID id = UUID.randomUUID();
         PageContentEntity entity = createEntity(id, "privacy-policy", "Privacy Policy");
-        entity.publishedContent = "<p>Old published</p>";
-        entity.publishedAt = OffsetDateTime.now().minusDays(5);
-        OffsetDateTime originalPublishedAt = entity.publishedAt;
+        entity.setPublishedContent("<p>Old published</p>");
+        entity.setPublishedAt(OffsetDateTime.now().minusDays(5));
+        OffsetDateTime originalPublishedAt = entity.getPublishedAt();
 
         when(pageContentRepository.findById(id)).thenReturn(entity);
         when(htmlSanitizer.sanitize(anyString())).thenReturn("<p>New draft</p>");
@@ -67,7 +67,7 @@ class PageContentServiceTest
 
         pageContentService.saveDraft(id, "<script>alert('xss')</script><p>sanitised</p>");
 
-        assertEquals("<p>sanitised</p>", entity.draftContent);
+        assertEquals("<p>sanitised</p>", entity.getDraftContent());
         verify(htmlSanitizer).sanitize("<script>alert('xss')</script><p>sanitised</p>");
     }
 
@@ -83,7 +83,7 @@ class PageContentServiceTest
 
         pageContentService.saveDraft(id, "<p>content</p>");
 
-        assertTrue(entity.updatedAt.isAfter(before));
+        assertTrue(entity.getUpdatedAt().isAfter(before));
     }
 
     @Test
@@ -91,18 +91,18 @@ class PageContentServiceTest
     {
         UUID id = UUID.randomUUID();
         PageContentEntity entity = createEntity(id, "terms", "Terms");
-        entity.publishedContent = "<p>Published version</p>";
-        entity.publishedAt = OffsetDateTime.now().minusDays(10);
-        String originalPublished = entity.publishedContent;
-        OffsetDateTime originalPublishedAt = entity.publishedAt;
+        entity.setPublishedContent("<p>Published version</p>");
+        entity.setPublishedAt(OffsetDateTime.now().minusDays(10));
+        String originalPublished = entity.getPublishedContent();
+        OffsetDateTime originalPublishedAt = entity.getPublishedAt();
 
         when(pageContentRepository.findById(id)).thenReturn(entity);
         when(htmlSanitizer.sanitize(anyString())).thenReturn("<p>Draft version</p>");
 
         pageContentService.saveDraft(id, "<p>Draft version</p>");
 
-        assertEquals(originalPublished, entity.publishedContent);
-        assertEquals(originalPublishedAt, entity.publishedAt);
+        assertEquals(originalPublished, entity.getPublishedContent());
+        assertEquals(originalPublishedAt, entity.getPublishedAt());
     }
 
     @Test
@@ -110,9 +110,9 @@ class PageContentServiceTest
     {
         UUID id = UUID.randomUUID();
         PageContentEntity entity = createEntity(id, "terms", "Terms");
-        entity.draftContent = "<h2>Draft heading</h2><p>Content</p>";
-        entity.publishedContent = null;
-        entity.publishedAt = null;
+        entity.setDraftContent("<h2>Draft heading</h2><p>Content</p>");
+        entity.setPublishedContent(null);
+        entity.setPublishedAt(null);
 
         when(pageContentRepository.findById(id)).thenReturn(entity);
 
@@ -121,7 +121,7 @@ class PageContentServiceTest
         assertNotNull(result);
         assertEquals("<h2>Draft heading</h2><p>Content</p>", result.publishedContent());
         assertNotNull(result.publishedAt());
-        assertEquals(entity.draftContent, entity.publishedContent);
+        assertEquals(entity.getDraftContent(), entity.getPublishedContent());
         verify(pageContentRepository).persist(entity);
     }
 
@@ -130,14 +130,14 @@ class PageContentServiceTest
     {
         UUID id = UUID.randomUUID();
         PageContentEntity entity = createEntity(id, "terms", "Terms");
-        entity.draftContent = "<p>content</p>";
+        entity.setDraftContent("<p>content</p>");
         OffsetDateTime before = OffsetDateTime.now().minusSeconds(1);
 
         when(pageContentRepository.findById(id)).thenReturn(entity);
 
         pageContentService.publish(id);
 
-        assertTrue(entity.updatedAt.isAfter(before));
+        assertTrue(entity.getUpdatedAt().isAfter(before));
     }
 
     @Test
@@ -145,24 +145,24 @@ class PageContentServiceTest
     {
         UUID id = UUID.randomUUID();
         PageContentEntity entity = createEntity(id, "privacy-policy", "Privacy Policy");
-        entity.draftContent = "<p>Version 1</p>";
-        entity.publishedContent = null;
-        entity.publishedAt = null;
+        entity.setDraftContent("<p>Version 1</p>");
+        entity.setPublishedContent(null);
+        entity.setPublishedAt(null);
 
         when(pageContentRepository.findById(id)).thenReturn(entity);
 
         // Publish: copies draftContent → publishedContent
         pageContentService.publish(id);
-        assertEquals("<p>Version 1</p>", entity.publishedContent);
-        assertNotNull(entity.publishedAt);
+        assertEquals("<p>Version 1</p>", entity.getPublishedContent());
+        assertNotNull(entity.getPublishedAt());
 
         // Save a new draft (edit-after-publish)
         when(htmlSanitizer.sanitize(anyString())).thenReturn("<p>Version 2 draft</p>");
         pageContentService.saveDraft(id, "<p>Version 2 draft</p>");
 
         // Verify the entity now has the new draft but the published content is unchanged
-        assertEquals("<p>Version 2 draft</p>", entity.draftContent);
-        assertEquals("<p>Version 1</p>", entity.publishedContent);
+        assertEquals("<p>Version 2 draft</p>", entity.getDraftContent());
+        assertEquals("<p>Version 1</p>", entity.getPublishedContent());
 
         // Now test getPublishedBySlug returns the published version
         when(pageContentRepository.findBySlug("privacy-policy")).thenReturn(entity);
@@ -195,8 +195,8 @@ class PageContentServiceTest
     void getPublishedBySlug_withUnpublishedPage_shouldReturnNull()
     {
         PageContentEntity entity = createEntity(UUID.randomUUID(), "terms", "Terms");
-        entity.publishedAt = null;
-        entity.publishedContent = null;
+        entity.setPublishedAt(null);
+        entity.setPublishedContent(null);
 
         when(pageContentRepository.findBySlug("terms")).thenReturn(entity);
 
@@ -218,15 +218,15 @@ class PageContentServiceTest
     private PageContentEntity createEntity(UUID id, String slug, String title)
     {
         PageContentEntity entity = new PageContentEntity();
-        entity.id = id;
-        entity.slug = slug;
-        entity.title = title;
-        entity.category = "LEGAL";
-        entity.draftContent = null;
-        entity.publishedContent = null;
-        entity.publishedAt = null;
-        entity.createdAt = OffsetDateTime.now();
-        entity.updatedAt = OffsetDateTime.now();
+        entity.setId(id);
+        entity.setSlug(slug);
+        entity.setTitle(title);
+        entity.setCategory("LEGAL");
+        entity.setDraftContent(null);
+        entity.setPublishedContent(null);
+        entity.setPublishedAt(null);
+        entity.setCreatedAt(OffsetDateTime.now());
+        entity.setUpdatedAt(OffsetDateTime.now());
         return entity;
     }
 }

@@ -21,33 +21,35 @@ import org.junit.jupiter.api.Test;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 /**
  * DB-backed (PanacheMock) test for the query-bearing {@code CustomerAdminMapper.toListItemDto(c)}
  * which internally queries {@code WholesaleApplicationEntity.find("customer.id = ?1", c.id)}.
- *
+ * <p>
  * Asserts that the query-bearing method output equals the pinned inline-method baseline —
  * does NOT re-implement the query in the test (per Requirement 4.4).
- *
+ * <p>
  * Tests representative scenarios:
  * - Customer with an approved wholesale application
  * - Customer without a wholesale application
  * - Customer with null user (email/registeredAt should be null)
  * - Customer with null status and shopperType
- *
+ * <p>
  * Validates: Requirements 1.3, 2.4, 4.2, 4.4
  */
 @QuarkusTest
-class CustomerAdminMapperQueryBearingIT {
-
+class CustomerAdminMapperQueryBearingIT
+{
     @Inject
     CustomerAdminMapper customerAdminMapper;
 
     @BeforeEach
-    void setUp() {
+    void setUp()
+    {
         PanacheMock.mock(WholesaleApplicationEntity.class);
     }
 
@@ -55,20 +57,17 @@ class CustomerAdminMapperQueryBearingIT {
     // Reference: old inline toListItemDto logic (the baseline to compare against)
     // ══════════════════════════════════════════════════════════════════════════
 
-    private AdminCustomerListItemDto referenceToListItemDto(CustomerEntity c, WholesaleApplicationEntity app) {
+    private AdminCustomerListItemDto referenceToListItemDto(CustomerEntity c, WholesaleApplicationEntity app)
+    {
         AdminCustomerListItemDto dto = new AdminCustomerListItemDto();
-        dto.id = c.id.toString();
-        dto.firstName = c.firstName;
-        dto.lastName = c.lastName;
-        dto.email = c.user != null ? c.user.email : null;
-        dto.status = c.status != null ? c.status.name() : null;
-        dto.shopperType = c.shopperType != null ? c.shopperType.name() : null;
-        dto.registeredAt = c.user != null && c.user.createdAt != null
-                ? c.user.createdAt.toString()
-                : null;
-        dto.wholesaleApplicationStatus = app != null && app.status != null
-                ? app.status.name()
-                : null;
+        dto.setId(c.getId().toString());
+        dto.setFirstName(c.getFirstName());
+        dto.setLastName(c.getLastName());
+        dto.setEmail(c.getUser() != null ? c.getUser().getEmail() : null);
+        dto.setStatus(c.getStatus() != null ? c.getStatus().name() : null);
+        dto.setShopperType(c.getShopperType() != null ? c.getShopperType().name() : null);
+        dto.setRegisteredAt(c.getUser() != null && c.getUser().getCreatedAt() != null ? c.getUser().getCreatedAt().toString() : null);
+        dto.setWholesaleApplicationStatus(app != null && app.getStatus() != null ? app.getStatus().name() : null);
         return dto;
     }
 
@@ -78,7 +77,8 @@ class CustomerAdminMapperQueryBearingIT {
 
     @Test
     @SuppressWarnings("unchecked")
-    void toListItemDto_queryBearing_customerWithWholesaleApp_matchesBaseline() {
+    void toListItemDto_queryBearing_customerWithWholesaleApp_matchesBaseline()
+    {
         UUID customerId = UUID.randomUUID();
         CustomerEntity customer = buildFullCustomer(customerId);
         WholesaleApplicationEntity app = buildApp(WholesaleApplicationStatusEn.APPROVED);
@@ -93,7 +93,8 @@ class CustomerAdminMapperQueryBearingIT {
 
     @Test
     @SuppressWarnings("unchecked")
-    void toListItemDto_queryBearing_customerWithoutWholesaleApp_matchesBaseline() {
+    void toListItemDto_queryBearing_customerWithoutWholesaleApp_matchesBaseline()
+    {
         UUID customerId = UUID.randomUUID();
         CustomerEntity customer = buildRetailCustomer(customerId);
 
@@ -107,10 +108,11 @@ class CustomerAdminMapperQueryBearingIT {
 
     @Test
     @SuppressWarnings("unchecked")
-    void toListItemDto_queryBearing_nullUser_emailAndRegisteredAtNull() {
+    void toListItemDto_queryBearing_nullUser_emailAndRegisteredAtNull()
+    {
         UUID customerId = UUID.randomUUID();
         CustomerEntity customer = buildFullCustomer(customerId);
-        customer.user = null;
+        customer.setUser(null);
 
         stubWholesaleAppQuery(customerId, null);
 
@@ -118,17 +120,18 @@ class CustomerAdminMapperQueryBearingIT {
         AdminCustomerListItemDto baseline = referenceToListItemDto(customer, null);
 
         assertListItemDtoEquals(baseline, mapperResult);
-        assertNull(mapperResult.email);
-        assertNull(mapperResult.registeredAt);
+        assertNull(mapperResult.getEmail());
+        assertNull(mapperResult.getRegisteredAt());
     }
 
     @Test
     @SuppressWarnings("unchecked")
-    void toListItemDto_queryBearing_nullStatusAndShopperType_mapsToNull() {
+    void toListItemDto_queryBearing_nullStatusAndShopperType_mapsToNull()
+    {
         UUID customerId = UUID.randomUUID();
         CustomerEntity customer = buildFullCustomer(customerId);
-        customer.status = null;
-        customer.shopperType = null;
+        customer.setStatus(null);
+        customer.setShopperType(null);
 
         stubWholesaleAppQuery(customerId, null);
 
@@ -136,13 +139,14 @@ class CustomerAdminMapperQueryBearingIT {
         AdminCustomerListItemDto baseline = referenceToListItemDto(customer, null);
 
         assertListItemDtoEquals(baseline, mapperResult);
-        assertNull(mapperResult.status);
-        assertNull(mapperResult.shopperType);
+        assertNull(mapperResult.getStatus());
+        assertNull(mapperResult.getShopperType());
     }
 
     @Test
     @SuppressWarnings("unchecked")
-    void toListItemDto_queryBearing_pendingWholesaleApp_statusMapped() {
+    void toListItemDto_queryBearing_pendingWholesaleApp_statusMapped()
+    {
         UUID customerId = UUID.randomUUID();
         CustomerEntity customer = buildFullCustomer(customerId);
         WholesaleApplicationEntity app = buildApp(WholesaleApplicationStatusEn.PENDING);
@@ -153,12 +157,13 @@ class CustomerAdminMapperQueryBearingIT {
         AdminCustomerListItemDto baseline = referenceToListItemDto(customer, app);
 
         assertListItemDtoEquals(baseline, mapperResult);
-        assertEquals("PENDING", mapperResult.wholesaleApplicationStatus);
+        assertEquals("PENDING", mapperResult.getWholesaleApplicationStatus());
     }
 
     @Test
     @SuppressWarnings("unchecked")
-    void toListItemDto_queryBearing_appWithNullStatus_wholesaleStatusIsNull() {
+    void toListItemDto_queryBearing_appWithNullStatus_wholesaleStatusIsNull()
+    {
         UUID customerId = UUID.randomUUID();
         CustomerEntity customer = buildFullCustomer(customerId);
         WholesaleApplicationEntity app = buildApp(null);
@@ -169,71 +174,74 @@ class CustomerAdminMapperQueryBearingIT {
         AdminCustomerListItemDto baseline = referenceToListItemDto(customer, app);
 
         assertListItemDtoEquals(baseline, mapperResult);
-        assertNull(mapperResult.wholesaleApplicationStatus);
+        assertNull(mapperResult.getWholesaleApplicationStatus());
     }
 
     // ══════════════════════════════════════════════════════════════════════════
     // Assertions
     // ══════════════════════════════════════════════════════════════════════════
 
-    private void assertListItemDtoEquals(AdminCustomerListItemDto expected, AdminCustomerListItemDto actual) {
-        assertEquals(expected.id, actual.id, "id mismatch");
-        assertEquals(expected.firstName, actual.firstName, "firstName mismatch");
-        assertEquals(expected.lastName, actual.lastName, "lastName mismatch");
-        assertEquals(expected.email, actual.email, "email mismatch");
-        assertEquals(expected.status, actual.status, "status mismatch");
-        assertEquals(expected.shopperType, actual.shopperType, "shopperType mismatch");
-        assertEquals(expected.registeredAt, actual.registeredAt, "registeredAt mismatch");
-        assertEquals(expected.wholesaleApplicationStatus, actual.wholesaleApplicationStatus,
-                "wholesaleApplicationStatus mismatch");
+    private void assertListItemDtoEquals(AdminCustomerListItemDto expected, AdminCustomerListItemDto actual)
+    {
+        assertEquals(expected.getId(), actual.getId(), "id mismatch");
+        assertEquals(expected.getFirstName(), actual.getFirstName(), "firstName mismatch");
+        assertEquals(expected.getLastName(), actual.getLastName(), "lastName mismatch");
+        assertEquals(expected.getEmail(), actual.getEmail(), "email mismatch");
+        assertEquals(expected.getStatus(), actual.getStatus(), "status mismatch");
+        assertEquals(expected.getShopperType(), actual.getShopperType(), "shopperType mismatch");
+        assertEquals(expected.getRegisteredAt(), actual.getRegisteredAt(), "registeredAt mismatch");
+        assertEquals(expected.getWholesaleApplicationStatus(), actual.getWholesaleApplicationStatus(), "wholesaleApplicationStatus mismatch");
     }
 
     // ══════════════════════════════════════════════════════════════════════════
     // Builders
     // ══════════════════════════════════════════════════════════════════════════
 
-    private CustomerEntity buildFullCustomer(UUID customerId) {
+    private CustomerEntity buildFullCustomer(UUID customerId)
+    {
         CustomerEntity customer = new CustomerEntity();
-        customer.id = customerId;
-        customer.firstName = "Johan";
-        customer.lastName = "van der Merwe";
-        customer.phone = "0821234567";
-        customer.status = CustomerStatusEn.ACTIVE;
-        customer.shopperType = CustomerTypeEn.WHOLESALER;
+        customer.setId(customerId);
+        customer.setFirstName("Johan");
+        customer.setLastName("van der Merwe");
+        customer.setPhone("0821234567");
+        customer.setStatus(CustomerStatusEn.ACTIVE);
+        customer.setShopperType(CustomerTypeEn.WHOLESALER);
 
         UserEntity user = new UserEntity();
-        user.id = UUID.randomUUID();
-        user.email = "johan@example.com";
-        user.createdAt = OffsetDateTime.parse("2026-01-15T09:00:00Z");
-        customer.user = user;
+        user.setId(UUID.randomUUID());
+        user.setEmail("johan@example.com");
+        user.setCreatedAt(OffsetDateTime.parse("2026-01-15T09:00:00Z"));
+        customer.setUser(user);
 
         return customer;
     }
 
-    private CustomerEntity buildRetailCustomer(UUID customerId) {
+    private CustomerEntity buildRetailCustomer(UUID customerId)
+    {
         CustomerEntity customer = new CustomerEntity();
-        customer.id = customerId;
-        customer.firstName = "Sarah";
-        customer.lastName = "Smith";
-        customer.phone = null;
-        customer.status = CustomerStatusEn.ACTIVE;
-        customer.shopperType = CustomerTypeEn.RETAILER;
+        customer.setId(customerId);
+        customer.setFirstName("Sarah");
+        customer.setLastName("Smith");
+        customer.setPhone(null);
+        customer.setStatus(CustomerStatusEn.ACTIVE);
+        customer.setShopperType(CustomerTypeEn.RETAILER);
 
         UserEntity user = new UserEntity();
-        user.id = UUID.randomUUID();
-        user.email = "sarah@example.com";
-        user.createdAt = OffsetDateTime.parse("2026-03-20T14:30:00Z");
-        customer.user = user;
+        user.setId(UUID.randomUUID());
+        user.setEmail("sarah@example.com");
+        user.setCreatedAt(OffsetDateTime.parse("2026-03-20T14:30:00Z"));
+        customer.setUser(user);
 
         return customer;
     }
 
-    private WholesaleApplicationEntity buildApp(WholesaleApplicationStatusEn status) {
+    private WholesaleApplicationEntity buildApp(WholesaleApplicationStatusEn status)
+    {
         WholesaleApplicationEntity app = new WholesaleApplicationEntity();
-        app.id = UUID.randomUUID();
-        app.status = status;
-        app.firstName = "Test";
-        app.companyName = "Test Co";
+        app.setId(UUID.randomUUID());
+        app.setStatus(status);
+        app.setFirstName("Test");
+        app.setCompanyName("Test Co");
         return app;
     }
 
@@ -242,7 +250,8 @@ class CustomerAdminMapperQueryBearingIT {
     // ══════════════════════════════════════════════════════════════════════════
 
     @SuppressWarnings("unchecked")
-    private void stubWholesaleAppQuery(UUID customerId, WholesaleApplicationEntity app) {
+    private void stubWholesaleAppQuery(UUID customerId, WholesaleApplicationEntity app)
+    {
         PanacheQuery<PanacheEntityBase> appQuery = mock(PanacheQuery.class);
         when(appQuery.firstResult()).thenReturn(app);
         when(WholesaleApplicationEntity.find("customer.id = ?1", customerId)).thenReturn(appQuery);

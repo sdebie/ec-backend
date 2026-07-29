@@ -1,5 +1,8 @@
 package org.ecommerce.backend.service;
 
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+import jakarta.transaction.Transactional;
 import lombok.extern.slf4j.Slf4j;
 import org.ecommerce.backend.mapper.CategoryMapper;
 import org.ecommerce.common.dto.CategoryDto;
@@ -12,12 +15,8 @@ import org.ecommerce.common.query.PageRequest;
 import org.ecommerce.common.query.enums.FilterOperator;
 import org.ecommerce.common.repository.CategoryRepository;
 
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
-import jakarta.transaction.Transactional;
-
-import java.util.List;
 import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -42,15 +41,14 @@ public class CategoryService
         if (filterRequest != null) {
             resolvedFilterRequest.setSort(filterRequest.getSort());
             resolvedFilterRequest.setFilterGroups(filterRequest.getFilterGroups());
-            resolvedFilterRequest.setFilters(filterRequest.getFilters() != null
-                    ? new ArrayList<>(filterRequest.getFilters())
-                    : new ArrayList<>());
+            resolvedFilterRequest.setFilters(filterRequest.getFilters() != null ? new ArrayList<>(filterRequest.getFilters()) : new ArrayList<>());
         } else {
             resolvedFilterRequest.setFilters(new ArrayList<>());
         }
 
         if (!includeSubCategories) {
-            boolean alreadyFilteredToRoots = resolvedFilterRequest.getFilters().stream()
+            boolean alreadyFilteredToRoots = resolvedFilterRequest.getFilters()
+                    .stream()
                     .anyMatch(filter -> "parent.id".equals(filter.getKey()) && filter.getOperator() == FilterOperator.IS_NULL);
 
             if (!alreadyFilteredToRoots) {
@@ -182,11 +180,11 @@ public class CategoryService
             long count = 0;
 
             for (CategoryEntity category : categoriesToFix) {
-                String originalName = category.name;
-                category.name = category.name.replace("&amp;", "&");
+                String originalName = category.getName();
+                category.setName(category.getName().replace("&amp;", "&"));
                 categoryRepository.persist(category);
                 count++;
-                log.info("Fixed category name: '{}' -> '{}'", originalName, category.name);
+                log.info("Fixed category name: '{}' -> '{}'", originalName, category.getName());
             }
 
             log.info("Total categories fixed: {}", count);

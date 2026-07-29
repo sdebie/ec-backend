@@ -24,28 +24,29 @@ import java.util.UUID;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.*;
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 /**
  * DB-backed integration test for the product-write aggregate (edit path + deletion policy).
- *
+ * <p>
  * Uses the REAL {@link ProductService#updateProductInformation} and
  * {@link ProductService#deleteProduct} — no mocks.
  * {@link TestTransaction} ensures each test rolls back so the shared dev DB is never mutated.
- *
+ * <p>
  * Covers:
- *   - Edit persists every change: add/remove variant, change price, scalar changes (Req 3.2, 3.3, 3.4, 4.2)
- *   - Active-only editor/storefront reads exclude disabled variants (Req 9.6)
- *   - Draft unreferenced hard delete (Req 9.1)
- *   - Draft order-referenced soft delete (Req 9.3)
- *   - Non-draft soft delete (Req 9.2)
- *   - Whole-product deletion (Req 9.1, 9.2)
- *   - Order/history preservation (Req 9.3)
- *   - Real service coverage (Req 8.1)
+ * - Edit persists every change: add/remove variant, change price, scalar changes (Req 3.2, 3.3, 3.4, 4.2)
+ * - Active-only editor/storefront reads exclude disabled variants (Req 9.6)
+ * - Draft unreferenced hard delete (Req 9.1)
+ * - Draft order-referenced soft delete (Req 9.3)
+ * - Non-draft soft delete (Req 9.2)
+ * - Whole-product deletion (Req 9.1, 9.2)
+ * - Order/history preservation (Req 9.3)
+ * - Real service coverage (Req 8.1)
  */
 @QuarkusTest
-class ProductEditIntegrationTest {
-
+class ProductEditIntegrationTest
+{
     @Inject
     ProductService productService;
 
@@ -57,54 +58,54 @@ class ProductEditIntegrationTest {
 
     // ─── Helpers ────────────────────────────────────────────────────────────
 
-    private ProductInformationDto createProduct(String marker, String status, int variantCount) {
+    private ProductInformationDto createProduct(String marker, String status, int variantCount)
+    {
         ProductDto product = new ProductDto();
-        product.name = marker + "Product";
-        product.slug = (marker + "slug-" + UUID.randomUUID()).toLowerCase();
-        product.shortDescription = "Short " + marker;
-        product.description = "Description " + marker;
-        product.status = status;
+        product.setName(marker + "Product");
+        product.setSlug((marker + "slug-" + UUID.randomUUID()).toLowerCase());
+        product.setShortDescription("Short " + marker);
+        product.setDescription("Description " + marker);
+        product.setStatus(status);
 
         List<ProductVariantDto> variants = new ArrayList<>();
         for (int i = 0; i < variantCount; i++) {
             ProductVariantDto variant = new ProductVariantDto();
-            variant.sku = marker + "SKU-" + (char) ('A' + i) + "-" + UUID.randomUUID().toString().substring(0, 8);
-            variant.stockQuantity = 10 + i * 5;
+            variant.setSku(marker + "SKU-" + (char) ('A' + i) + "-" + UUID.randomUUID().toString().substring(0, 8));
+            variant.setStockQuantity(10 + i * 5);
             VariantPriceDto price = new VariantPriceDto();
-            price.priceType = "RETAIL_PRICE";
-            price.price = new BigDecimal("100.00").add(new BigDecimal(i * 50));
-            variant.prices = List.of(price);
-            variant.images = (i == 0)
-                    ? List.of(new ProductImageDto(null, "/images/" + marker + "img.jpg", 0, true))
-                    : List.of();
+            price.setPriceType("RETAIL_PRICE");
+            price.setPrice(new BigDecimal("100.00").add(new BigDecimal(i * 50)));
+            variant.setPrices(List.of(price));
+            variant.setImages((i == 0) ? List.of(new ProductImageDto(null, "/images/" + marker + "img.jpg", 0, true)) : List.of());
             variants.add(variant);
         }
 
         ProductInformationDto input = new ProductInformationDto();
-        input.product = product;
-        input.variants = variants;
+        input.setProduct(product);
+        input.setVariants(variants);
         return productService.addProductInformation(input);
     }
 
     /**
      * Inserts a minimal order + order_item referencing the given variant directly via EntityManager.
      */
-    private void insertOrderReferencing(UUID variantId) {
+    private void insertOrderReferencing(UUID variantId)
+    {
         OrderEntity order = new OrderEntity();
-        order.totalAmount = new BigDecimal("100.00");
-        order.status = OrderStatusEn.PENDING;
-        order.contactEmail = "test@example.com";
-        order.contactFirstName = "Test";
-        order.contactLastName = "User";
-        order.sessionId = UUID.randomUUID();
+        order.setTotalAmount(new BigDecimal("100.00"));
+        order.setStatus(OrderStatusEn.PENDING);
+        order.setContactEmail("test@example.com");
+        order.setContactFirstName("Test");
+        order.setContactLastName("User");
+        order.setSessionId(UUID.randomUUID());
         em.persist(order);
         em.flush();
 
         OrderItemEntity item = new OrderItemEntity();
-        item.orderEntity = order;
-        item.variant = em.find(ProductVariantEntity.class, variantId);
-        item.quantity = 1;
-        item.unitPrice = new BigDecimal("100.00");
+        item.setOrderEntity(order);
+        item.setVariant(em.find(ProductVariantEntity.class, variantId));
+        item.setQuantity(1);
+        item.setUnitPrice(new BigDecimal("100.00"));
         em.persist(item);
         em.flush();
     }
@@ -113,64 +114,65 @@ class ProductEditIntegrationTest {
 
     @Test
     @TestTransaction
-    void editPersistsEveryChange_addRemoveVariantAndChangePrice() {
+    void editPersistsEveryChange_addRemoveVariantAndChangePrice()
+    {
         String marker = "ZZED-CHNG-" + UUID.randomUUID().toString().substring(0, 6) + "-";
 
         // Create a product with 2 variants (ACTIVE so removal triggers soft-delete)
         ProductInformationDto created = createProduct(marker, "ACTIVE", 2);
-        String productId = created.product.id;
+        String productId = created.getProduct().getId();
         em.flush();
         em.clear();
 
         // Read it back to get the full state
         ProductInformationDto original = productService.getProductInformationDto(productId);
-        assertThat(original.variants, hasSize(2));
+        assertThat(original.getVariants(), hasSize(2));
 
-        String variantToKeepId = original.variants.get(0).id;
-        String variantToKeepSku = original.variants.get(0).sku;
-        String variantToRemoveSku = original.variants.get(1).sku;
+        String variantToKeepId = original.getVariants().get(0).getId();
+        String variantToKeepSku = original.getVariants().get(0).getSku();
+        String variantToRemoveSku = original.getVariants().get(1).getSku();
 
         // Build the update payload:
         // - Keep variant 0 with a CHANGED price
         // - Remove variant 1 (not in payload)
         // - Add a brand new variant 2
         ProductInformationDto updateInput = new ProductInformationDto();
-        updateInput.product = new ProductDto();
-        updateInput.product.id = productId;
-        updateInput.product.name = marker + "Updated Name";
-        updateInput.product.description = "Updated description";
-        updateInput.product.status = "ACTIVE";
+        updateInput.setProduct(new ProductDto());
+        updateInput.getProduct().setId(productId);
+        updateInput.getProduct().setName(marker + "Updated Name");
+        updateInput.getProduct().setDescription("Updated description");
+        updateInput.getProduct().setStatus("ACTIVE");
 
         List<ProductVariantDto> updateVariants = new ArrayList<>();
 
         // Kept variant with changed price
         ProductVariantDto keptVariant = new ProductVariantDto();
-        keptVariant.id = variantToKeepId;
-        keptVariant.sku = variantToKeepSku;
-        keptVariant.stockQuantity = 99;
+        keptVariant.setId(variantToKeepId);
+        keptVariant.setSku(variantToKeepSku);
+        keptVariant.setStockQuantity(99);
         VariantPriceDto changedPrice = new VariantPriceDto();
-        changedPrice.priceType = "RETAIL_PRICE";
-        changedPrice.price = new BigDecimal("777.77");
+        changedPrice.setPriceType("RETAIL_PRICE");
+        changedPrice.setPrice(new BigDecimal("777.77"));
         // Use existing price id so it's an upsert
-        if (original.variants.get(0).prices != null && !original.variants.get(0).prices.isEmpty()) {
-            changedPrice.id = original.variants.get(0).prices.get(0).id;
+        if (original.getVariants().get(0).getPrices() != null && !original.getVariants().get(0).getPrices().isEmpty()) {
+            changedPrice.setId(original.getVariants().get(0).getPrices().get(0).getId());
         }
-        keptVariant.prices = List.of(changedPrice);
-        keptVariant.images = List.of(new ProductImageDto(null, "/images/updated.jpg", 0, true));
+        keptVariant.setPrices(List.of(changedPrice));
+        keptVariant.setImages(List.of(new ProductImageDto(null, "/images/updated.jpg", 0, true)));
         updateVariants.add(keptVariant);
 
         // New variant
         ProductVariantDto newVariant = new ProductVariantDto();
-        newVariant.sku = marker + "SKU-NEW-" + UUID.randomUUID().toString().substring(0, 8);
-        newVariant.stockQuantity = 42;
+        newVariant.setSku(marker + "SKU-NEW-" + UUID.randomUUID().toString().substring(0, 8));
+        newVariant.setStockQuantity(42);
         VariantPriceDto newPrice = new VariantPriceDto();
-        newPrice.priceType = "RETAIL_PRICE";
-        newPrice.price = new BigDecimal("555.55");
-        newVariant.prices = List.of(newPrice);
-        newVariant.images = List.of();
+        newPrice.setPriceType("RETAIL_PRICE");
+        newPrice.setPrice(new BigDecimal("555.55"));
+        newVariant.setPrices(List.of(newPrice));
+        newVariant.setImages(List.of());
         updateVariants.add(newVariant);
 
-        updateInput.variants = updateVariants;
+        updateInput.setVariants(updateVariants);
 
         // Perform the update
         ProductInformationDto updated = productService.updateProductInformation(productId, updateInput);
@@ -182,70 +184,67 @@ class ProductEditIntegrationTest {
         assertNotNull(read);
 
         // Scalar fields persisted
-        assertThat(read.product.name, equalTo(marker + "Updated Name"));
-        assertThat(read.product.description, equalTo("Updated description"));
+        assertThat(read.getProduct().getName(), equalTo(marker + "Updated Name"));
+        assertThat(read.getProduct().getDescription(), equalTo("Updated description"));
 
         // Active-only read: should have 2 variants (kept + new), removed variant absent
-        assertThat(read.variants, hasSize(2));
+        assertThat(read.getVariants(), hasSize(2));
 
-        List<String> readSkus = read.variants.stream().map(v -> v.sku).toList();
+        List<String> readSkus = read.getVariants().stream().map(v -> v.getSku()).toList();
         assertThat(readSkus, hasItem(variantToKeepSku));
-        assertThat(readSkus, hasItem(newVariant.sku));
+        assertThat(readSkus, hasItem(newVariant.getSku()));
         assertThat(readSkus, not(hasItem(variantToRemoveSku)));
 
         // Price updated in place (not duplicated)
-        ProductVariantDto readKeptVariant = read.variants.stream()
-                .filter(v -> v.sku.equals(variantToKeepSku)).findFirst().orElseThrow();
-        List<VariantPriceDto> retailPrices = readKeptVariant.prices.stream()
-                .filter(p -> "RETAIL_PRICE".equals(p.priceType)).toList();
+        ProductVariantDto readKeptVariant = read.getVariants().stream().filter(v -> v.getSku().equals(variantToKeepSku)).findFirst().orElseThrow();
+        List<VariantPriceDto> retailPrices = readKeptVariant.getPrices().stream().filter(p -> "RETAIL_PRICE".equals(p.getPriceType())).toList();
         assertThat("Price updated, not duplicated", retailPrices, hasSize(1));
-        assertThat(retailPrices.get(0).price.compareTo(new BigDecimal("777.77")), equalTo(0));
+        assertThat(retailPrices.get(0).getPrice().compareTo(new BigDecimal("777.77")), equalTo(0));
 
         // Stock updated
-        assertThat(readKeptVariant.stockQuantity, equalTo(99));
+        assertThat(readKeptVariant.getStockQuantity(), equalTo(99));
 
         // New variant present with correct price
-        ProductVariantDto readNewVariant = read.variants.stream()
-                .filter(v -> v.sku.equals(newVariant.sku)).findFirst().orElseThrow();
-        assertThat(readNewVariant.stockQuantity, equalTo(42));
-        VariantPriceDto newRetail = readNewVariant.prices.stream()
-                .filter(p -> "RETAIL_PRICE".equals(p.priceType)).findFirst().orElseThrow();
-        assertThat(newRetail.price.compareTo(new BigDecimal("555.55")), equalTo(0));
+        ProductVariantDto readNewVariant = read.getVariants().stream().filter(v -> v.getSku().equals(newVariant.getSku())).findFirst().orElseThrow();
+        assertThat(readNewVariant.getStockQuantity(), equalTo(42));
+        VariantPriceDto newRetail = readNewVariant.getPrices().stream().filter(p -> "RETAIL_PRICE".equals(p.getPriceType())).findFirst().orElseThrow();
+        assertThat(newRetail.getPrice().compareTo(new BigDecimal("555.55")), equalTo(0));
     }
 
     @Test
     @TestTransaction
-    void editPersistsEveryChange_storefrontReadExcludesDisabledVariant() {
+    void editPersistsEveryChange_storefrontReadExcludesDisabledVariant()
+    {
         String marker = "ZZED-SFRD-" + UUID.randomUUID().toString().substring(0, 6) + "-";
 
         // Create an ACTIVE product with 2 variants
         ProductInformationDto created = createProduct(marker, "ACTIVE", 2);
-        String productId = created.product.id;
-        String slug = created.product.slug;
+        String productId = created.getProduct().getId();
+        String slug = created.getProduct().getSlug();
         em.flush();
         em.clear();
 
         ProductInformationDto original = productService.getProductInformationDto(productId);
-        String variantToKeepSku = original.variants.get(0).sku;
-        String variantToRemoveSku = original.variants.get(1).sku;
+        String variantToKeepSku = original.getVariants().get(0).getSku();
+        String variantToRemoveSku = original.getVariants().get(1).getSku();
 
         // Update: keep only variant 0, remove variant 1
         ProductInformationDto updateInput = new ProductInformationDto();
-        updateInput.product = new ProductDto();
-        updateInput.product.id = productId;
-        updateInput.product.status = "ACTIVE";
+        updateInput.setProduct(new ProductDto());
+        updateInput.getProduct().setId(productId);
+        updateInput.getProduct().setStatus("ACTIVE");
 
         ProductVariantDto keptVariant = new ProductVariantDto();
-        keptVariant.id = original.variants.get(0).id;
-        keptVariant.sku = variantToKeepSku;
-        keptVariant.stockQuantity = original.variants.get(0).stockQuantity;
+        keptVariant.setId(original.getVariants().get(0).getId());
+        keptVariant.setSku(variantToKeepSku);
+        keptVariant.setStockQuantity(original.getVariants().get(0).getStockQuantity());
         VariantPriceDto price = new VariantPriceDto();
-        price.priceType = "RETAIL_PRICE";
-        price.price = original.variants.get(0).prices.get(0).price;
-        price.id = original.variants.get(0).prices.get(0).id;
-        keptVariant.prices = List.of(price);
-        keptVariant.images = List.of(new ProductImageDto(null, "/images/kept.jpg", 0, true));
-        updateInput.variants = List.of(keptVariant);
+        price.setPriceType("RETAIL_PRICE");
+        price.setPrice(original.getVariants().get(0).getPrices().get(0).getPrice());
+        price.setId(original.getVariants().get(0).getPrices().get(0).getId());
+        keptVariant.setPrices(List.of(price));
+        keptVariant.setImages(List.of(new ProductImageDto(null, "/images/kept.jpg", 0, true)));
+        updateInput.setVariants(List.of(keptVariant));
 
         productService.updateProductInformation(productId, updateInput);
         em.flush();
@@ -254,45 +253,46 @@ class ProductEditIntegrationTest {
         // Storefront detail read (by slug) must exclude the disabled variant
         ProductInformationDto storefrontRead = productService.getProductInformationBySlug(slug);
         assertNotNull(storefrontRead);
-        assertThat(storefrontRead.variants, hasSize(1));
-        assertThat(storefrontRead.variants.get(0).sku, equalTo(variantToKeepSku));
+        assertThat(storefrontRead.getVariants(), hasSize(1));
+        assertThat(storefrontRead.getVariants().get(0).getSku(), equalTo(variantToKeepSku));
     }
 
     // ─── Deletion Policy: Variant removal ───────────────────────────────────
 
     @Test
     @TestTransaction
-    void deletionPolicy_draftUnreferenced_hardDeletesVariant() {
+    void deletionPolicy_draftUnreferenced_hardDeletesVariant()
+    {
         String marker = "ZZED-DHRD-" + UUID.randomUUID().toString().substring(0, 6) + "-";
 
         // Create a PENDING (draft) product with 2 variants
         ProductInformationDto created = createProduct(marker, "PENDING", 2);
-        String productId = created.product.id;
+        String productId = created.getProduct().getId();
         em.flush();
         em.clear();
 
         ProductInformationDto original = productService.getProductInformationDto(productId);
-        String variantToKeepId = original.variants.get(0).id;
-        String variantToKeepSku = original.variants.get(0).sku;
-        String variantToRemoveId = original.variants.get(1).id;
+        String variantToKeepId = original.getVariants().get(0).getId();
+        String variantToKeepSku = original.getVariants().get(0).getSku();
+        String variantToRemoveId = original.getVariants().get(1).getId();
 
         // Update: keep only variant 0, remove variant 1
         ProductInformationDto updateInput = new ProductInformationDto();
-        updateInput.product = new ProductDto();
-        updateInput.product.id = productId;
-        updateInput.product.status = "PENDING";
+        updateInput.setProduct(new ProductDto());
+        updateInput.getProduct().setId(productId);
+        updateInput.getProduct().setStatus("PENDING");
 
         ProductVariantDto kept = new ProductVariantDto();
-        kept.id = variantToKeepId;
-        kept.sku = variantToKeepSku;
-        kept.stockQuantity = 10;
+        kept.setId(variantToKeepId);
+        kept.setSku(variantToKeepSku);
+        kept.setStockQuantity(10);
         VariantPriceDto price = new VariantPriceDto();
-        price.priceType = "RETAIL_PRICE";
-        price.price = original.variants.get(0).prices.get(0).price;
-        price.id = original.variants.get(0).prices.get(0).id;
-        kept.prices = List.of(price);
-        kept.images = List.of(new ProductImageDto(null, "/images/kept.jpg", 0, true));
-        updateInput.variants = List.of(kept);
+        price.setPriceType("RETAIL_PRICE");
+        price.setPrice(original.getVariants().get(0).getPrices().get(0).getPrice());
+        price.setId(original.getVariants().get(0).getPrices().get(0).getId());
+        kept.setPrices(List.of(price));
+        kept.setImages(List.of(new ProductImageDto(null, "/images/kept.jpg", 0, true)));
+        updateInput.setVariants(List.of(kept));
 
         productService.updateProductInformation(productId, updateInput);
         em.flush();
@@ -305,19 +305,20 @@ class ProductEditIntegrationTest {
 
     @Test
     @TestTransaction
-    void deletionPolicy_draftOrderReferenced_softDeletesVariant() {
+    void deletionPolicy_draftOrderReferenced_softDeletesVariant()
+    {
         String marker = "ZZED-DREF-" + UUID.randomUUID().toString().substring(0, 6) + "-";
 
         // Create a PENDING (draft) product with 2 variants
         ProductInformationDto created = createProduct(marker, "PENDING", 2);
-        String productId = created.product.id;
+        String productId = created.getProduct().getId();
         em.flush();
         em.clear();
 
         ProductInformationDto original = productService.getProductInformationDto(productId);
-        String variantToKeepId = original.variants.get(0).id;
-        String variantToKeepSku = original.variants.get(0).sku;
-        String variantToRemoveId = original.variants.get(1).id;
+        String variantToKeepId = original.getVariants().get(0).getId();
+        String variantToKeepSku = original.getVariants().get(0).getSku();
+        String variantToRemoveId = original.getVariants().get(1).getId();
 
         // Simulate an order referencing variant 1
         insertOrderReferencing(UUID.fromString(variantToRemoveId));
@@ -326,21 +327,21 @@ class ProductEditIntegrationTest {
 
         // Update: keep only variant 0, remove variant 1
         ProductInformationDto updateInput = new ProductInformationDto();
-        updateInput.product = new ProductDto();
-        updateInput.product.id = productId;
-        updateInput.product.status = "PENDING";
+        updateInput.setProduct(new ProductDto());
+        updateInput.getProduct().setId(productId);
+        updateInput.getProduct().setStatus("PENDING");
 
         ProductVariantDto kept = new ProductVariantDto();
-        kept.id = variantToKeepId;
-        kept.sku = variantToKeepSku;
-        kept.stockQuantity = 10;
+        kept.setId(variantToKeepId);
+        kept.setSku(variantToKeepSku);
+        kept.setStockQuantity(10);
         VariantPriceDto price = new VariantPriceDto();
-        price.priceType = "RETAIL_PRICE";
-        price.price = original.variants.get(0).prices.get(0).price;
-        price.id = original.variants.get(0).prices.get(0).id;
-        kept.prices = List.of(price);
-        kept.images = List.of(new ProductImageDto(null, "/images/kept.jpg", 0, true));
-        updateInput.variants = List.of(kept);
+        price.setPriceType("RETAIL_PRICE");
+        price.setPrice(original.getVariants().get(0).getPrices().get(0).getPrice());
+        price.setId(original.getVariants().get(0).getPrices().get(0).getId());
+        kept.setPrices(List.of(price));
+        kept.setImages(List.of(new ProductImageDto(null, "/images/kept.jpg", 0, true)));
+        updateInput.setVariants(List.of(kept));
 
         productService.updateProductInformation(productId, updateInput);
         em.flush();
@@ -349,42 +350,43 @@ class ProductEditIntegrationTest {
         // The removed variant must still exist with DISABLED status (soft-deleted)
         ProductVariantEntity removedVariant = em.find(ProductVariantEntity.class, UUID.fromString(variantToRemoveId));
         assertNotNull(removedVariant, "Order-referenced variant must NOT be hard-deleted");
-        assertThat(removedVariant.status, equalTo(ProductStatusEn.DISABLED));
+        assertThat(removedVariant.getStatus(), equalTo(ProductStatusEn.DISABLED));
     }
 
     @Test
     @TestTransaction
-    void deletionPolicy_nonDraft_softDeletesVariant() {
+    void deletionPolicy_nonDraft_softDeletesVariant()
+    {
         String marker = "ZZED-NDSD-" + UUID.randomUUID().toString().substring(0, 6) + "-";
 
         // Create an ACTIVE (non-draft) product with 2 variants
         ProductInformationDto created = createProduct(marker, "ACTIVE", 2);
-        String productId = created.product.id;
+        String productId = created.getProduct().getId();
         em.flush();
         em.clear();
 
         ProductInformationDto original = productService.getProductInformationDto(productId);
-        String variantToKeepId = original.variants.get(0).id;
-        String variantToKeepSku = original.variants.get(0).sku;
-        String variantToRemoveId = original.variants.get(1).id;
+        String variantToKeepId = original.getVariants().get(0).getId();
+        String variantToKeepSku = original.getVariants().get(0).getSku();
+        String variantToRemoveId = original.getVariants().get(1).getId();
 
         // Update: keep only variant 0, remove variant 1 — no order reference
         ProductInformationDto updateInput = new ProductInformationDto();
-        updateInput.product = new ProductDto();
-        updateInput.product.id = productId;
-        updateInput.product.status = "ACTIVE";
+        updateInput.setProduct(new ProductDto());
+        updateInput.getProduct().setId(productId);
+        updateInput.getProduct().setStatus("ACTIVE");
 
         ProductVariantDto kept = new ProductVariantDto();
-        kept.id = variantToKeepId;
-        kept.sku = variantToKeepSku;
-        kept.stockQuantity = 10;
+        kept.setId(variantToKeepId);
+        kept.setSku(variantToKeepSku);
+        kept.setStockQuantity(10);
         VariantPriceDto price = new VariantPriceDto();
-        price.priceType = "RETAIL_PRICE";
-        price.price = original.variants.get(0).prices.get(0).price;
-        price.id = original.variants.get(0).prices.get(0).id;
-        kept.prices = List.of(price);
-        kept.images = List.of(new ProductImageDto(null, "/images/kept.jpg", 0, true));
-        updateInput.variants = List.of(kept);
+        price.setPriceType("RETAIL_PRICE");
+        price.setPrice(original.getVariants().get(0).getPrices().get(0).getPrice());
+        price.setId(original.getVariants().get(0).getPrices().get(0).getId());
+        kept.setPrices(List.of(price));
+        kept.setImages(List.of(new ProductImageDto(null, "/images/kept.jpg", 0, true)));
+        updateInput.setVariants(List.of(kept));
 
         productService.updateProductInformation(productId, updateInput);
         em.flush();
@@ -393,24 +395,25 @@ class ProductEditIntegrationTest {
         // The removed variant must still exist with DISABLED status (soft-deleted, not hard)
         ProductVariantEntity removedVariant = em.find(ProductVariantEntity.class, UUID.fromString(variantToRemoveId));
         assertNotNull(removedVariant, "Non-draft variant must NOT be hard-deleted");
-        assertThat(removedVariant.status, equalTo(ProductStatusEn.DISABLED));
+        assertThat(removedVariant.getStatus(), equalTo(ProductStatusEn.DISABLED));
 
         // Active-only read must NOT include the disabled variant
         ProductInformationDto read = productService.getProductInformationDto(productId);
-        assertThat(read.variants, hasSize(1));
-        assertThat(read.variants.get(0).sku, equalTo(variantToKeepSku));
+        assertThat(read.getVariants(), hasSize(1));
+        assertThat(read.getVariants().get(0).getSku(), equalTo(variantToKeepSku));
     }
 
     // ─── Deletion Policy: Whole-product deletion ────────────────────────────
 
     @Test
     @TestTransaction
-    void deletionPolicy_wholeProductDelete_pendingNoReferences_hardDeletes() {
+    void deletionPolicy_wholeProductDelete_pendingNoReferences_hardDeletes()
+    {
         String marker = "ZZED-WPHD-" + UUID.randomUUID().toString().substring(0, 6) + "-";
 
         // Create a PENDING product with no order references
         ProductInformationDto created = createProduct(marker, "PENDING", 2);
-        String productId = created.product.id;
+        String productId = created.getProduct().getId();
         em.flush();
         em.clear();
 
@@ -424,20 +427,21 @@ class ProductEditIntegrationTest {
         assertNull(deletedProduct, "PENDING product with no order references must be hard-deleted");
 
         // Variants must also be physically gone (cascade)
-        for (ProductVariantDto v : created.variants) {
-            ProductVariantEntity variant = em.find(ProductVariantEntity.class, UUID.fromString(v.id));
+        for (ProductVariantDto v : created.getVariants()) {
+            ProductVariantEntity variant = em.find(ProductVariantEntity.class, UUID.fromString(v.getId()));
             assertNull(variant, "Variants of hard-deleted product must also be physically removed");
         }
     }
 
     @Test
     @TestTransaction
-    void deletionPolicy_wholeProductDelete_activeProduct_softDeletes() {
+    void deletionPolicy_wholeProductDelete_activeProduct_softDeletes()
+    {
         String marker = "ZZED-WPSD-" + UUID.randomUUID().toString().substring(0, 6) + "-";
 
         // Create an ACTIVE product
         ProductInformationDto created = createProduct(marker, "ACTIVE", 2);
-        String productId = created.product.id;
+        String productId = created.getProduct().getId();
         em.flush();
         em.clear();
 
@@ -449,28 +453,29 @@ class ProductEditIntegrationTest {
         // Product must still exist with DISABLED status
         ProductEntity product = em.find(ProductEntity.class, UUID.fromString(productId));
         assertNotNull(product, "ACTIVE product must NOT be hard-deleted");
-        assertThat(product.status, equalTo(ProductStatusEn.DISABLED));
+        assertThat(product.getStatus(), equalTo(ProductStatusEn.DISABLED));
 
         // All child variants that were ACTIVE must now be DISABLED
-        for (ProductVariantDto v : created.variants) {
-            ProductVariantEntity variant = em.find(ProductVariantEntity.class, UUID.fromString(v.id));
+        for (ProductVariantDto v : created.getVariants()) {
+            ProductVariantEntity variant = em.find(ProductVariantEntity.class, UUID.fromString(v.getId()));
             assertNotNull(variant, "Variants of soft-deleted product must still exist");
-            assertThat(variant.status, equalTo(ProductStatusEn.DISABLED));
+            assertThat(variant.getStatus(), equalTo(ProductStatusEn.DISABLED));
         }
     }
 
     @Test
     @TestTransaction
-    void deletionPolicy_wholeProductDelete_pendingWithOrderRef_softDeletes() {
+    void deletionPolicy_wholeProductDelete_pendingWithOrderRef_softDeletes()
+    {
         String marker = "ZZED-WPOR-" + UUID.randomUUID().toString().substring(0, 6) + "-";
 
         // Create a PENDING product
         ProductInformationDto created = createProduct(marker, "PENDING", 2);
-        String productId = created.product.id;
+        String productId = created.getProduct().getId();
         em.flush();
 
         // Insert an order referencing one of the variants
-        UUID referencedVariantId = UUID.fromString(created.variants.get(0).id);
+        UUID referencedVariantId = UUID.fromString(created.getVariants().get(0).getId());
         insertOrderReferencing(referencedVariantId);
         em.flush();
         em.clear();
@@ -483,13 +488,13 @@ class ProductEditIntegrationTest {
         // Product must still exist with DISABLED status (order-referenced prevents hard delete)
         ProductEntity product = em.find(ProductEntity.class, UUID.fromString(productId));
         assertNotNull(product, "PENDING product with order-referenced variant must NOT be hard-deleted");
-        assertThat(product.status, equalTo(ProductStatusEn.DISABLED));
+        assertThat(product.getStatus(), equalTo(ProductStatusEn.DISABLED));
 
         // Active child variants must be DISABLED
-        for (ProductVariantDto v : created.variants) {
-            ProductVariantEntity variant = em.find(ProductVariantEntity.class, UUID.fromString(v.id));
+        for (ProductVariantDto v : created.getVariants()) {
+            ProductVariantEntity variant = em.find(ProductVariantEntity.class, UUID.fromString(v.getId()));
             assertNotNull(variant, "Variant rows must be preserved for order history");
-            assertThat(variant.status, equalTo(ProductStatusEn.DISABLED));
+            assertThat(variant.getStatus(), equalTo(ProductStatusEn.DISABLED));
         }
     }
 
@@ -497,16 +502,17 @@ class ProductEditIntegrationTest {
 
     @Test
     @TestTransaction
-    void deletionPolicy_orderHistoryPreserved_afterSoftDelete() {
+    void deletionPolicy_orderHistoryPreserved_afterSoftDelete()
+    {
         String marker = "ZZED-OHST-" + UUID.randomUUID().toString().substring(0, 6) + "-";
 
         // Create an ACTIVE product with 2 variants
         ProductInformationDto created = createProduct(marker, "ACTIVE", 2);
-        String productId = created.product.id;
+        String productId = created.getProduct().getId();
         em.flush();
 
         // Insert an order referencing variant 1
-        UUID referencedVariantId = UUID.fromString(created.variants.get(1).id);
+        UUID referencedVariantId = UUID.fromString(created.getVariants().get(1).getId());
         insertOrderReferencing(referencedVariantId);
         em.flush();
         em.clear();
@@ -515,37 +521,34 @@ class ProductEditIntegrationTest {
         ProductInformationDto original = productService.getProductInformationDto(productId);
 
         ProductInformationDto updateInput = new ProductInformationDto();
-        updateInput.product = new ProductDto();
-        updateInput.product.id = productId;
-        updateInput.product.status = "ACTIVE";
+        updateInput.setProduct(new ProductDto());
+        updateInput.getProduct().setId(productId);
+        updateInput.getProduct().setStatus("ACTIVE");
 
         // Keep only variant 0
         ProductVariantDto kept = new ProductVariantDto();
-        kept.id = original.variants.get(0).id;
-        kept.sku = original.variants.get(0).sku;
-        kept.stockQuantity = original.variants.get(0).stockQuantity;
+        kept.setId(original.getVariants().get(0).getId());
+        kept.setSku(original.getVariants().get(0).getSku());
+        kept.setStockQuantity(original.getVariants().get(0).getStockQuantity());
         VariantPriceDto price = new VariantPriceDto();
-        price.priceType = "RETAIL_PRICE";
-        price.price = original.variants.get(0).prices.get(0).price;
-        price.id = original.variants.get(0).prices.get(0).id;
-        kept.prices = List.of(price);
-        kept.images = List.of(new ProductImageDto(null, "/images/kept.jpg", 0, true));
-        updateInput.variants = List.of(kept);
+        price.setPriceType("RETAIL_PRICE");
+        price.setPrice(original.getVariants().get(0).getPrices().get(0).getPrice());
+        price.setId(original.getVariants().get(0).getPrices().get(0).getId());
+        kept.setPrices(List.of(price));
+        kept.setImages(List.of(new ProductImageDto(null, "/images/kept.jpg", 0, true)));
+        updateInput.setVariants(List.of(kept));
 
         productService.updateProductInformation(productId, updateInput);
         em.flush();
         em.clear();
 
         // The order_items row still references a valid variant (row exists with DISABLED status)
-        Long orderItemCount = em.createQuery(
-                        "SELECT COUNT(oi) FROM OrderItemEntity oi WHERE oi.variant.id = :variantId", Long.class)
-                .setParameter("variantId", referencedVariantId)
-                .getSingleResult();
+        Long orderItemCount = em.createQuery("SELECT COUNT(oi) FROM OrderItemEntity oi WHERE oi.variant.id = :variantId", Long.class).setParameter("variantId", referencedVariantId).getSingleResult();
         assertThat("Order item reference must still be valid", orderItemCount, equalTo(1L));
 
         // The variant row exists with DISABLED status
         ProductVariantEntity softDeleted = em.find(ProductVariantEntity.class, referencedVariantId);
         assertNotNull(softDeleted, "Soft-deleted variant must still exist for order history");
-        assertThat(softDeleted.status, equalTo(ProductStatusEn.DISABLED));
+        assertThat(softDeleted.getStatus(), equalTo(ProductStatusEn.DISABLED));
     }
 }

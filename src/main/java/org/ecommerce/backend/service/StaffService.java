@@ -1,9 +1,9 @@
 package org.ecommerce.backend.service;
 
+import io.quarkus.elytron.security.common.BcryptUtil;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
-import io.quarkus.elytron.security.common.BcryptUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.ecommerce.backend.mapper.StaffMapper;
 import org.ecommerce.common.dto.StaffDto;
@@ -20,7 +20,8 @@ import java.util.UUID;
 
 @Slf4j
 @ApplicationScoped
-public class StaffService {
+public class StaffService
+{
     @Inject
     StaffRepository staffRepository;
 
@@ -73,9 +74,9 @@ public class StaffService {
                 }
 
                 StaffUserEntity staffEntity = staffMapper.mapDtoToEntity(staffDto, new StaffUserEntity());
-                staffEntity.passwordHash = BcryptUtil.bcryptHash(staffDto.getTemporaryPassword());
-                staffEntity.resetPassword = true;
-                staffEntity.createdAt = LocalDateTime.now();
+                staffEntity.setPasswordHash(BcryptUtil.bcryptHash(staffDto.getTemporaryPassword()));
+                staffEntity.setResetPassword(true);
+                staffEntity.setCreatedAt(LocalDateTime.now());
                 staffRepository.persist(staffEntity);
             }
         } catch (StaffNotFoundException | StaffAlreadyExistsException e) {
@@ -104,17 +105,17 @@ public class StaffService {
                 }
 
                 // Preserve immutable audit data before DTO mapping.
-                var createdAt = staffEntity.createdAt;
+                var createdAt = staffEntity.getCreatedAt();
                 staffMapper.mapDtoToEntity(staffDto, staffEntity);
 
                 // Never allow update payloads to overwrite the original create timestamp.
-                staffEntity.createdAt = createdAt;
+                staffEntity.setCreatedAt(createdAt);
 
-                staffEntity.resetPassword = staffDto.isResetPassword();
+                staffEntity.setResetPassword(staffDto.isResetPassword());
 
                 if (staffDto.getTemporaryPassword() != null && !staffDto.getTemporaryPassword().isBlank()) {
-                    staffEntity.passwordHash = BcryptUtil.bcryptHash(staffDto.getTemporaryPassword());
-                    staffEntity.resetPassword = true;
+                    staffEntity.setPasswordHash(BcryptUtil.bcryptHash(staffDto.getTemporaryPassword()));
+                    staffEntity.setResetPassword(true);
                 }
 
                 staffRepository.persist(staffEntity);
@@ -143,8 +144,8 @@ public class StaffService {
             throw new StaffNotFoundException("Staff user with email '" + email + "' not found");
         }
 
-        staffEntity.passwordHash = BcryptUtil.bcryptHash(password);
-        staffEntity.resetPassword = false;
+        staffEntity.setPasswordHash(BcryptUtil.bcryptHash(password));
+        staffEntity.setResetPassword(false);
         staffRepository.persist(staffEntity);
     }
 

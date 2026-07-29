@@ -27,8 +27,8 @@ import org.jboss.logging.Logger;
  * propagated — the submission/decision is already persisted.
  */
 @ApplicationScoped
-public class WholesaleMailNotifier {
-
+public class WholesaleMailNotifier
+{
     private static final Logger LOG = Logger.getLogger(WholesaleMailNotifier.class);
 
     private static final String BRANDING_SETTING_KEY = "storefront.branding";
@@ -66,11 +66,11 @@ public class WholesaleMailNotifier {
      * </ul>
      * A skip or failure of one never blocks the other.
      */
-    public void onSubmitted(@Observes(during = TransactionPhase.AFTER_SUCCESS) WholesaleApplicationSubmittedEvent event) {
+    public void onSubmitted(@Observes(during = TransactionPhase.AFTER_SUCCESS) WholesaleApplicationSubmittedEvent event)
+    {
         // Guard: blank from-address — defensive (config validation prevents it)
         if (mailerFrom == null || mailerFrom.isBlank()) {
-            LOG.errorf("[WholesaleMailNotifier] from-address is blank — skipping submission emails for application %s",
-                    event.applicationId());
+            LOG.errorf("[WholesaleMailNotifier] from-address is blank — skipping submission emails for application %s", event.applicationId());
             return;
         }
 
@@ -78,13 +78,13 @@ public class WholesaleMailNotifier {
         sendApplicantConfirmation(event);
     }
 
-    private void sendAdminNotification(WholesaleApplicationSubmittedEvent event) {
+    private void sendAdminNotification(WholesaleApplicationSubmittedEvent event)
+    {
         String enquiryEmail;
         try {
             enquiryEmail = contactEnquiryMailer.resolveRecipient();
         } catch (RecipientNotConfiguredException e) {
-            LOG.warnf("[WholesaleMailNotifier] admin notification skipped for application %s: %s",
-                    event.applicationId(), e.getMessage());
+            LOG.warnf("[WholesaleMailNotifier] admin notification skipped for application %s: %s", event.applicationId(), e.getMessage());
             return;
         }
 
@@ -100,20 +100,17 @@ public class WholesaleMailNotifier {
             mail = mail.replyTo(applicantEmail);
         }
 
-        mail.send()
-                .subscribe().with(
-                        success -> LOG.infof("[WholesaleMailNotifier] admin notification delivered for application %s to %s",
-                                event.applicationId(), enquiryEmail),
-                        failure -> LOG.errorf(failure, "[WholesaleMailNotifier] admin notification failed for application %s to %s",
-                                event.applicationId(), enquiryEmail)
-                );
+        mail.send().subscribe().with(
+                success -> LOG.infof("[WholesaleMailNotifier] admin notification delivered for application %s to %s", event.applicationId(), enquiryEmail),
+                failure -> LOG.errorf(failure, "[WholesaleMailNotifier] admin notification failed for application %s to %s", event.applicationId(), enquiryEmail)
+        );
     }
 
-    private void sendApplicantConfirmation(WholesaleApplicationSubmittedEvent event) {
+    private void sendApplicantConfirmation(WholesaleApplicationSubmittedEvent event)
+    {
         String applicantEmail = event.application().getApplicantEmail();
         if (applicantEmail == null || applicantEmail.isBlank()) {
-            LOG.warnf("[WholesaleMailNotifier] applicant confirmation skipped: no valid applicantEmail for application %s",
-                    event.applicationId());
+            LOG.warnf("[WholesaleMailNotifier] applicant confirmation skipped: no valid applicantEmail for application %s", event.applicationId());
             return;
         }
 
@@ -127,10 +124,8 @@ public class WholesaleMailNotifier {
                 .data("app", event.application())
                 .send()
                 .subscribe().with(
-                        success -> LOG.infof("[WholesaleMailNotifier] applicant confirmation delivered for application %s to %s",
-                                event.applicationId(), applicantEmail),
-                        failure -> LOG.errorf(failure, "[WholesaleMailNotifier] applicant confirmation failed for application %s to %s",
-                                event.applicationId(), applicantEmail)
+                        success -> LOG.infof("[WholesaleMailNotifier] applicant confirmation delivered for application %s to %s", event.applicationId(), applicantEmail),
+                        failure -> LOG.errorf(failure, "[WholesaleMailNotifier] applicant confirmation failed for application %s to %s", event.applicationId(), applicantEmail)
                 );
     }
 
@@ -138,18 +133,17 @@ public class WholesaleMailNotifier {
      * Fires after the decision transaction commits successfully. Composes and sends a
      * wholesale status notification email to the applicant.
      */
-    public void onDecision(@Observes(during = TransactionPhase.AFTER_SUCCESS) WholesaleDecisionEvent event) {
+    public void onDecision(@Observes(during = TransactionPhase.AFTER_SUCCESS) WholesaleDecisionEvent event)
+    {
         // Guard: blank from-address — defensive (config validation prevents it)
         if (mailerFrom == null || mailerFrom.isBlank()) {
-            LOG.errorf("[WholesaleMailNotifier] from-address is blank — skipping send for application %s to %s",
-                    event.applicationId(), event.recipientEmail());
+            LOG.errorf("[WholesaleMailNotifier] from-address is blank — skipping send for application %s to %s", event.applicationId(), event.recipientEmail());
             return;
         }
 
         // Guard: missing/invalid recipient
         if (event.recipientEmail() == null || event.recipientEmail().isBlank()) {
-            LOG.warnf("[WholesaleMailNotifier] skipped: no valid recipient for application %s",
-                    event.applicationId());
+            LOG.warnf("[WholesaleMailNotifier] skipped: no valid recipient for application %s", event.applicationId());
             return;
         }
 
@@ -165,10 +159,8 @@ public class WholesaleMailNotifier {
                 .data("rejectionReason", event.rejectionReason())
                 .send()
                 .subscribe().with(
-                        success -> LOG.infof("[WholesaleMailNotifier] delivered for application %s to %s",
-                                event.applicationId(), event.recipientEmail()),
-                        failure -> LOG.errorf(failure, "[WholesaleMailNotifier] delivery failed for application %s to %s",
-                                event.applicationId(), event.recipientEmail())
+                        success -> LOG.infof("[WholesaleMailNotifier] delivered for application %s to %s", event.applicationId(), event.recipientEmail()),
+                        failure -> LOG.errorf(failure, "[WholesaleMailNotifier] delivery failed for application %s to %s", event.applicationId(), event.recipientEmail())
                 );
     }
 
@@ -176,28 +168,26 @@ public class WholesaleMailNotifier {
      * Resolves the store display name from the {@code storefront.branding} setting.
      * Returns the bare from-address as fallback if the setting is missing or the name is blank.
      */
-    private String resolveStoreName(java.util.UUID applicationId) {
+    private String resolveStoreName(java.util.UUID applicationId)
+    {
         try {
             StoreSettingsEntity setting = settingsRepository.findById(BRANDING_SETTING_KEY);
-            if (setting == null || setting.value == null || setting.value.isBlank()) {
-                LOG.warnf("[WholesaleMailNotifier] storefront.branding setting missing — using bare from-address for application %s",
-                        applicationId);
+            if (setting == null || setting.getValue() == null || setting.getValue().isBlank()) {
+                LOG.warnf("[WholesaleMailNotifier] storefront.branding setting missing — using bare from-address for application %s", applicationId);
                 return mailerFrom;
             }
 
-            JsonNode brandingNode = objectMapper.readTree(setting.value);
+            JsonNode brandingNode = objectMapper.readTree(setting.getValue());
             JsonNode nameNode = brandingNode.get("name");
 
             if (nameNode == null || nameNode.isNull() || nameNode.asText().isBlank()) {
-                LOG.warnf("[WholesaleMailNotifier] storefront.branding name is blank — using bare from-address for application %s",
-                        applicationId);
+                LOG.warnf("[WholesaleMailNotifier] storefront.branding name is blank — using bare from-address for application %s", applicationId);
                 return mailerFrom;
             }
 
             return nameNode.asText();
         } catch (Exception e) {
-            LOG.warnf(e, "[WholesaleMailNotifier] failed to parse storefront.branding — using bare from-address for application %s",
-                    applicationId);
+            LOG.warnf(e, "[WholesaleMailNotifier] failed to parse storefront.branding — using bare from-address for application %s", applicationId);
             return mailerFrom;
         }
     }

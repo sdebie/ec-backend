@@ -7,14 +7,14 @@ import jakarta.inject.Inject;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
+import org.eclipse.microprofile.jwt.JsonWebToken;
 import org.ecommerce.backend.service.WishlistHydrationService;
 import org.ecommerce.backend.service.WishlistService;
+import org.ecommerce.common.dto.WishlistHydratedItemDto;
 import org.ecommerce.common.dto.WishlistHydrationRequestDto;
 import org.ecommerce.common.dto.WishlistHydrationResponseDto;
-import org.ecommerce.common.dto.WishlistHydratedItemDto;
 import org.ecommerce.common.dto.WishlistResponseDto;
 import org.ecommerce.common.entity.CustomerEntity;
-import org.eclipse.microprofile.jwt.JsonWebToken;
 import org.jboss.logging.Logger;
 
 import java.util.List;
@@ -24,8 +24,8 @@ import java.util.UUID;
 @Path("/api/storefront/wishlist")
 @Produces(MediaType.APPLICATION_JSON)
 @ApplicationScoped
-public class StorefrontWishlistResource {
-
+public class StorefrontWishlistResource
+{
     private static final Logger LOG = Logger.getLogger(StorefrontWishlistResource.class);
 
     @Inject
@@ -39,7 +39,8 @@ public class StorefrontWishlistResource {
 
     @GET
     @RolesAllowed("customer")
-    public Response getWishlist() {
+    public Response getWishlist()
+    {
         UUID customerId = resolveCustomerId();
         if (customerId == null) {
             return Response.status(Response.Status.NOT_FOUND)
@@ -48,7 +49,7 @@ public class StorefrontWishlistResource {
         }
 
         WishlistResponseDto dto = new WishlistResponseDto();
-        dto.variantIds = wishlistService.getWishlistVariantIds(customerId);
+        dto.setVariantIds(wishlistService.getWishlistVariantIds(customerId));
         return Response.ok(dto).build();
     }
 
@@ -56,23 +57,25 @@ public class StorefrontWishlistResource {
     @Path("/hydrate")
     @PermitAll
     @Consumes(MediaType.APPLICATION_JSON)
-    public Response hydrateWishlist(WishlistHydrationRequestDto request) {
-        if (request == null || request.variantIds == null || request.variantIds.isEmpty()) {
+    public Response hydrateWishlist(WishlistHydrationRequestDto request)
+    {
+        if (request == null || request.getVariantIds() == null || request.getVariantIds().isEmpty()) {
             return Response.ok(new WishlistHydrationResponseDto(List.of())).build();
         }
-        if (request.variantIds.size() > 50) {
+        if (request.getVariantIds().size() > 50) {
             return Response.status(Response.Status.BAD_REQUEST)
                     .entity(Map.of("error", "Maximum 50 variant IDs per request"))
                     .build();
         }
-        List<WishlistHydratedItemDto> items = wishlistHydrationService.hydrate(request.variantIds);
+        List<WishlistHydratedItemDto> items = wishlistHydrationService.hydrate(request.getVariantIds());
         return Response.ok(new WishlistHydrationResponseDto(items)).build();
     }
 
     @POST
     @Path("/{variantId}")
     @RolesAllowed("customer")
-    public Response addToWishlist(@PathParam("variantId") String variantId) {
+    public Response addToWishlist(@PathParam("variantId") String variantId)
+    {
         UUID parsedVariantId;
         try {
             parsedVariantId = UUID.fromString(variantId);
@@ -104,7 +107,8 @@ public class StorefrontWishlistResource {
     @DELETE
     @Path("/{variantId}")
     @RolesAllowed("customer")
-    public Response removeFromWishlist(@PathParam("variantId") String variantId) {
+    public Response removeFromWishlist(@PathParam("variantId") String variantId)
+    {
         UUID parsedVariantId;
         try {
             parsedVariantId = UUID.fromString(variantId);
@@ -126,13 +130,14 @@ public class StorefrontWishlistResource {
         return Response.noContent().build();
     }
 
-    private UUID resolveCustomerId() {
+    private UUID resolveCustomerId()
+    {
         String email = jwt.getSubject();
         CustomerEntity customer = CustomerEntity.findByEmail(email);
         if (customer == null) {
             LOG.warn("Customer not found for JWT subject: " + email);
             return null;
         }
-        return customer.id;
+        return customer.getId();
     }
 }

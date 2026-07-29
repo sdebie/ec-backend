@@ -12,7 +12,6 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
@@ -36,8 +35,8 @@ import static org.mockito.Mockito.*;
  */
 @ExtendWith(MockitoExtension.class)
 @DisplayName("ContactEnquiryMailer — recipient resolution & mail composition")
-class ContactEnquiryMailerTest {
-
+class ContactEnquiryMailerTest
+{
     @InjectMocks
     private ContactEnquiryMailer mailer;
 
@@ -53,7 +52,8 @@ class ContactEnquiryMailerTest {
     private static final String CONFIGURED_FROM = "no-reply@store.co.za";
 
     @BeforeEach
-    void setUp() throws Exception {
+    void setUp() throws Exception
+    {
         // Reflectively set the @ConfigProperty field since @InjectMocks won't inject it
         var fromField = ContactEnquiryMailer.class.getDeclaredField("mailerFrom");
         fromField.setAccessible(true);
@@ -62,14 +62,16 @@ class ContactEnquiryMailerTest {
 
     // ── Helpers ─────────────────────────────────────────────────────────────
 
-    private StoreSettingsEntity settingWith(String jsonValue) {
+    private StoreSettingsEntity settingWith(String jsonValue)
+    {
         StoreSettingsEntity entity = new StoreSettingsEntity();
-        entity.key = "storefront.contact";
-        entity.value = jsonValue;
+        entity.setKey("storefront.contact");
+        entity.setValue(jsonValue);
         return entity;
     }
 
-    private ContactEnquiryRequestDto validDto() {
+    private ContactEnquiryRequestDto validDto()
+    {
         return new ContactEnquiryRequestDto(
                 "Jane Doe",
                 "jane@visitor.com",
@@ -84,7 +86,8 @@ class ContactEnquiryMailerTest {
      * Stubs the MailTemplate fluent API chain so .to().from().replyTo().subject().data()...send()
      * returns a completed Uni, allowing send() to complete without error.
      */
-    private MailTemplate.MailTemplateInstance stubMailTemplateChain() {
+    private MailTemplate.MailTemplateInstance stubMailTemplateChain()
+    {
         MailTemplate.MailTemplateInstance instance = mock(MailTemplate.MailTemplateInstance.class);
         when(contact_enquiry.to(anyString())).thenReturn(instance);
         when(instance.from(anyString())).thenReturn(instance);
@@ -99,11 +102,13 @@ class ContactEnquiryMailerTest {
 
     @Nested
     @DisplayName("resolveRecipient — reads enquiryEmail from storefront.contact config")
-    class RecipientResolutionTests {
+    class RecipientResolutionTests
+    {
 
         @Test
         @DisplayName("resolves enquiryEmail when present in the storefront.contact JSON")
-        void resolvesFromConfig() {
+        void resolvesFromConfig()
+        {
             when(settingsRepository.findById("storefront.contact"))
                     .thenReturn(settingWith("{\"enquiryEmail\":\"info@store.co.za\",\"emails\":[\"accounts@store.co.za\"]}"));
 
@@ -114,7 +119,8 @@ class ContactEnquiryMailerTest {
 
         @Test
         @DisplayName("recipient is never taken from the emails array — only enquiryEmail")
-        void neverFallsBackToEmailsList() {
+        void neverFallsBackToEmailsList()
+        {
             // enquiryEmail absent but emails list has values — must NOT fall back
             when(settingsRepository.findById("storefront.contact"))
                     .thenReturn(settingWith("{\"emails\":[\"info@store.co.za\",\"support@store.co.za\"]}"));
@@ -124,7 +130,8 @@ class ContactEnquiryMailerTest {
 
         @Test
         @DisplayName("throws RecipientNotConfiguredException when setting row is null")
-        void throwsWhenSettingRowMissing() {
+        void throwsWhenSettingRowMissing()
+        {
             when(settingsRepository.findById("storefront.contact")).thenReturn(null);
 
             RecipientNotConfiguredException ex = assertThrows(
@@ -136,7 +143,8 @@ class ContactEnquiryMailerTest {
 
         @Test
         @DisplayName("throws RecipientNotConfiguredException when setting value is blank")
-        void throwsWhenSettingValueBlank() {
+        void throwsWhenSettingValueBlank()
+        {
             when(settingsRepository.findById("storefront.contact"))
                     .thenReturn(settingWith("   "));
 
@@ -145,7 +153,8 @@ class ContactEnquiryMailerTest {
 
         @Test
         @DisplayName("throws RecipientNotConfiguredException when enquiryEmail field is blank")
-        void throwsWhenEnquiryEmailBlank() {
+        void throwsWhenEnquiryEmailBlank()
+        {
             when(settingsRepository.findById("storefront.contact"))
                     .thenReturn(settingWith("{\"enquiryEmail\":\"   \"}"));
 
@@ -158,7 +167,8 @@ class ContactEnquiryMailerTest {
 
         @Test
         @DisplayName("throws RecipientNotConfiguredException when enquiryEmail field is null in JSON")
-        void throwsWhenEnquiryEmailNull() {
+        void throwsWhenEnquiryEmailNull()
+        {
             when(settingsRepository.findById("storefront.contact"))
                     .thenReturn(settingWith("{\"enquiryEmail\":null}"));
 
@@ -167,7 +177,8 @@ class ContactEnquiryMailerTest {
 
         @Test
         @DisplayName("throws RecipientNotConfiguredException when JSON is malformed")
-        void throwsWhenJsonMalformed() {
+        void throwsWhenJsonMalformed()
+        {
             when(settingsRepository.findById("storefront.contact"))
                     .thenReturn(settingWith("not valid json {{{"));
 
@@ -183,11 +194,13 @@ class ContactEnquiryMailerTest {
 
     @Nested
     @DisplayName("send — mail built with correct to/from/replyTo")
-    class MailCompositionTests {
+    class MailCompositionTests
+    {
 
         @Test
         @DisplayName("to is set to the resolved enquiryEmail, not the submitter's email")
-        void toIsEnquiryEmail() {
+        void toIsEnquiryEmail()
+        {
             when(settingsRepository.findById("storefront.contact"))
                     .thenReturn(settingWith("{\"enquiryEmail\":\"enquiries@store.co.za\"}"));
             MailTemplate.MailTemplateInstance instance = stubMailTemplateChain();
@@ -199,7 +212,8 @@ class ContactEnquiryMailerTest {
 
         @Test
         @DisplayName("from is set to quarkus.mailer.from config value, not submitter")
-        void fromIsMailerConfig() {
+        void fromIsMailerConfig()
+        {
             when(settingsRepository.findById("storefront.contact"))
                     .thenReturn(settingWith("{\"enquiryEmail\":\"enquiries@store.co.za\"}"));
             MailTemplate.MailTemplateInstance instance = stubMailTemplateChain();
@@ -211,7 +225,8 @@ class ContactEnquiryMailerTest {
 
         @Test
         @DisplayName("replyTo is set to the submitter's email for direct staff replies")
-        void replyToIsSubmitterEmail() {
+        void replyToIsSubmitterEmail()
+        {
             when(settingsRepository.findById("storefront.contact"))
                     .thenReturn(settingWith("{\"enquiryEmail\":\"enquiries@store.co.za\"}"));
             MailTemplate.MailTemplateInstance instance = stubMailTemplateChain();
@@ -223,7 +238,8 @@ class ContactEnquiryMailerTest {
 
         @Test
         @DisplayName("subject includes the submitter's name")
-        void subjectIncludesName() {
+        void subjectIncludesName()
+        {
             when(settingsRepository.findById("storefront.contact"))
                     .thenReturn(settingWith("{\"enquiryEmail\":\"enquiries@store.co.za\"}"));
             MailTemplate.MailTemplateInstance instance = stubMailTemplateChain();
@@ -235,7 +251,8 @@ class ContactEnquiryMailerTest {
 
         @Test
         @DisplayName("template data includes all DTO fields")
-        void templateDataIncludesAllFields() {
+        void templateDataIncludesAllFields()
+        {
             when(settingsRepository.findById("storefront.contact"))
                     .thenReturn(settingWith("{\"enquiryEmail\":\"enquiries@store.co.za\"}"));
             MailTemplate.MailTemplateInstance instance = stubMailTemplateChain();
@@ -251,7 +268,8 @@ class ContactEnquiryMailerTest {
 
         @Test
         @DisplayName("send is invoked on the template instance (real mailer path triggered)")
-        void sendIsInvoked() {
+        void sendIsInvoked()
+        {
             when(settingsRepository.findById("storefront.contact"))
                     .thenReturn(settingWith("{\"enquiryEmail\":\"enquiries@store.co.za\"}"));
             MailTemplate.MailTemplateInstance instance = stubMailTemplateChain();
@@ -263,7 +281,8 @@ class ContactEnquiryMailerTest {
 
         @Test
         @DisplayName("send throws RecipientNotConfiguredException before reaching MailTemplate when no recipient")
-        void noRecipientPreventsMailSend() {
+        void noRecipientPreventsMailSend()
+        {
             when(settingsRepository.findById("storefront.contact")).thenReturn(null);
 
             assertThrows(RecipientNotConfiguredException.class, () -> mailer.send(validDto()));

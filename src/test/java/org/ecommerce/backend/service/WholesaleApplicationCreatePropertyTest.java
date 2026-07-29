@@ -17,7 +17,6 @@ import org.ecommerce.common.entity.CustomerEntity;
 import org.ecommerce.common.entity.UserEntity;
 import org.ecommerce.common.entity.WholesaleApplicationEntity;
 import org.ecommerce.common.entity.WholesaleProfileEntity;
-import org.ecommerce.common.enums.WholesaleApplicationStatusEn;
 import org.ecommerce.common.enums.WholesaleCustomerStatusEn;
 import org.ecommerce.common.repository.WholesaleApplicationRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -33,22 +32,22 @@ import static org.mockito.Mockito.when;
 
 /**
  * Property-based tests for the wholesale application create path.
- *
+ * <p>
  * Tests the WholesaleCustomerService.createWholesaleApplication method to verify:
  * - Property 3: DTO-to-entity field mapping preserves values
  * - Property 5: Partial unique constraint permits multiple null account_email values
  * - Property 6: applicantEmail and accountEmail are independently stored
  * - Property 7: Created applications default to PENDING status
- *
+ * <p>
  * Uses @QuarkusTest with PanacheMock to properly mock Panache entity methods.
  * Property-based testing is achieved by running 100 iterations with random inputs.
- *
+ * <p>
  * Validates: Requirements 4.1, 4.2, 4.5, 4.6, 4.7, 5.1, 7.1
  */
 @QuarkusTest
 @Tag("Feature: wholesale-application-enhancements")
-public class WholesaleApplicationCreatePropertyTest {
-
+public class WholesaleApplicationCreatePropertyTest
+{
     private static final int TRIES = 100;
     private final Random random = new Random(42); // Fixed seed for reproducibility
 
@@ -60,7 +59,8 @@ public class WholesaleApplicationCreatePropertyTest {
 
     @SuppressWarnings("unchecked")
     @BeforeEach
-    void setup() {
+    void setup()
+    {
         PanacheMock.mock(WholesaleApplicationEntity.class);
         PanacheMock.mock(UserEntity.class);
         PanacheMock.mock(CustomerEntity.class);
@@ -81,12 +81,13 @@ public class WholesaleApplicationCreatePropertyTest {
      * For any valid WholesaleCustomerDto input, the returned DTO from
      * createWholesaleApplication SHALL have each mapped field equal to the
      * normalized (trimmed, null-if-blank) input value.
-     *
+     * <p>
      * Validates: Requirements 4.1, 4.2
      */
     @Test
     @Tag("Property 3: DTO-to-entity field mapping preserves values")
-    void dtoToEntityFieldMappingPreservesValues() {
+    void dtoToEntityFieldMappingPreservesValues()
+    {
         for (int i = 0; i < TRIES; i++) {
             WholesaleCustomerDto dto = generateValidDto();
 
@@ -94,56 +95,36 @@ public class WholesaleApplicationCreatePropertyTest {
             WholesaleCustomerDto result = service.createWholesaleApplication(dto);
 
             // Assert: the returned DTO reflects the normalized field values
-            assertEquals(normalize(dto.getEmail()), result.getEmail(),
-                    "Iteration " + i + ": accountEmail mismatch");
-            assertEquals(normalize(dto.getFirstName()), result.getFirstName(),
-                    "Iteration " + i + ": firstName mismatch");
-            assertEquals(normalize(dto.getLastName()), result.getLastName(),
-                    "Iteration " + i + ": lastName mismatch");
-            assertEquals(normalize(dto.getPhone()), result.getPhone(),
-                    "Iteration " + i + ": phone mismatch");
-            assertEquals(normalize(dto.getVatNumber()), result.getVatNumber(),
-                    "Iteration " + i + ": vatNumber mismatch");
-            assertEquals(normalize(dto.getRegNumber()), result.getRegNumber(),
-                    "Iteration " + i + ": regNumber mismatch");
-            assertEquals(normalize(dto.getNotes()), result.getNotes(),
-                    "Iteration " + i + ": notes mismatch");
+            assertEquals(normalize(dto.getEmail()), result.getEmail(), "Iteration " + i + ": accountEmail mismatch");
+            assertEquals(normalize(dto.getFirstName()), result.getFirstName(), "Iteration " + i + ": firstName mismatch");
+            assertEquals(normalize(dto.getLastName()), result.getLastName(), "Iteration " + i + ": lastName mismatch");
+            assertEquals(normalize(dto.getPhone()), result.getPhone(), "Iteration " + i + ": phone mismatch");
+            assertEquals(normalize(dto.getVatNumber()), result.getVatNumber(), "Iteration " + i + ": vatNumber mismatch");
+            assertEquals(normalize(dto.getRegNumber()), result.getRegNumber(), "Iteration " + i + ": regNumber mismatch");
+            assertEquals(normalize(dto.getNotes()), result.getNotes(), "Iteration " + i + ": notes mismatch");
 
             // Company name uses firstNonBlank(companyName, firstName)
             String expectedCompanyName = normalize(dto.getCompanyName());
             if (expectedCompanyName == null) {
                 expectedCompanyName = normalize(dto.getFirstName());
             }
-            assertEquals(expectedCompanyName, result.getCompanyName(),
-                    "Iteration " + i + ": companyName mismatch");
+            assertEquals(expectedCompanyName, result.getCompanyName(), "Iteration " + i + ": companyName mismatch");
 
             // Address fields — physical
-            assertEquals(normalize(dto.getPhysicalAddressLine1()), result.getPhysicalAddressLine1(),
-                    "Iteration " + i + ": physicalAddressLine1 mismatch");
-            assertEquals(normalize(dto.getPhysicalAddressLine2()), result.getPhysicalAddressLine2(),
-                    "Iteration " + i + ": physicalAddressLine2 mismatch");
-            assertEquals(normalize(dto.getPhysicalSuburb()), result.getPhysicalSuburb(),
-                    "Iteration " + i + ": physicalSuburb mismatch");
-            assertEquals(normalize(dto.getPhysicalCity()), result.getPhysicalCity(),
-                    "Iteration " + i + ": physicalCity mismatch");
-            assertEquals(normalize(dto.getPhysicalProvince()), result.getPhysicalProvince(),
-                    "Iteration " + i + ": physicalProvince mismatch");
-            assertEquals(normalize(dto.getPhysicalPostalCode()), result.getPhysicalPostalCode(),
-                    "Iteration " + i + ": physicalPostalCode mismatch");
+            assertEquals(normalize(dto.getPhysicalAddressLine1()), result.getPhysicalAddressLine1(), "Iteration " + i + ": physicalAddressLine1 mismatch");
+            assertEquals(normalize(dto.getPhysicalAddressLine2()), result.getPhysicalAddressLine2(), "Iteration " + i + ": physicalAddressLine2 mismatch");
+            assertEquals(normalize(dto.getPhysicalSuburb()), result.getPhysicalSuburb(), "Iteration " + i + ": physicalSuburb mismatch");
+            assertEquals(normalize(dto.getPhysicalCity()), result.getPhysicalCity(), "Iteration " + i + ": physicalCity mismatch");
+            assertEquals(normalize(dto.getPhysicalProvince()), result.getPhysicalProvince(), "Iteration " + i + ": physicalProvince mismatch");
+            assertEquals(normalize(dto.getPhysicalPostalCode()), result.getPhysicalPostalCode(), "Iteration " + i + ": physicalPostalCode mismatch");
 
             // Address fields — postal
-            assertEquals(normalize(dto.getPostalAddressLine1()), result.getPostalAddressLine1(),
-                    "Iteration " + i + ": postalAddressLine1 mismatch");
-            assertEquals(normalize(dto.getPostalAddressLine2()), result.getPostalAddressLine2(),
-                    "Iteration " + i + ": postalAddressLine2 mismatch");
-            assertEquals(normalize(dto.getPostalSuburb()), result.getPostalSuburb(),
-                    "Iteration " + i + ": postalSuburb mismatch");
-            assertEquals(normalize(dto.getPostalCity()), result.getPostalCity(),
-                    "Iteration " + i + ": postalCity mismatch");
-            assertEquals(normalize(dto.getPostalProvince()), result.getPostalProvince(),
-                    "Iteration " + i + ": postalProvince mismatch");
-            assertEquals(normalize(dto.getPostalPostalCode()), result.getPostalPostalCode(),
-                    "Iteration " + i + ": postalPostalCode mismatch");
+            assertEquals(normalize(dto.getPostalAddressLine1()), result.getPostalAddressLine1(), "Iteration " + i + ": postalAddressLine1 mismatch");
+            assertEquals(normalize(dto.getPostalAddressLine2()), result.getPostalAddressLine2(), "Iteration " + i + ": postalAddressLine2 mismatch");
+            assertEquals(normalize(dto.getPostalSuburb()), result.getPostalSuburb(), "Iteration " + i + ": postalSuburb mismatch");
+            assertEquals(normalize(dto.getPostalCity()), result.getPostalCity(), "Iteration " + i + ": postalCity mismatch");
+            assertEquals(normalize(dto.getPostalProvince()), result.getPostalProvince(), "Iteration " + i + ": postalProvince mismatch");
+            assertEquals(normalize(dto.getPostalPostalCode()), result.getPostalPostalCode(), "Iteration " + i + ": postalPostalCode mismatch");
         }
     }
 
@@ -155,12 +136,13 @@ public class WholesaleApplicationCreatePropertyTest {
      * For any two valid application inputs where account_email is null (empty/omitted),
      * both applications SHALL persist successfully without unique constraint violation.
      * The service skips the duplicate check entirely when account_email is null.
-     *
+     * <p>
      * Validates: Requirements 4.5
      */
     @Test
     @Tag("Property 5: Partial unique constraint permits multiple null account_email values")
-    void multipleNullAccountEmailsPermitted() {
+    void multipleNullAccountEmailsPermitted()
+    {
         for (int i = 0; i < TRIES; i++) {
             WholesaleCustomerDto dto1 = generateValidDto();
             WholesaleCustomerDto dto2 = generateValidDto();
@@ -171,23 +153,22 @@ public class WholesaleApplicationCreatePropertyTest {
             WholesaleCustomerDto result1 = service.createWholesaleApplication(dto1);
             WholesaleCustomerDto result2 = service.createWholesaleApplication(dto2);
 
-            assertNull(result1.getEmail(),
-                    "Iteration " + i + ": first application's account_email should be null");
-            assertNull(result2.getEmail(),
-                    "Iteration " + i + ": second application's account_email should be null");
+            assertNull(result1.getEmail(), "Iteration " + i + ": first application's account_email should be null");
+            assertNull(result2.getEmail(), "Iteration " + i + ": second application's account_email should be null");
         }
     }
 
     /**
      * For any two inputs where account_email is the same non-null value, the second
      * SHALL be rejected with an IllegalArgumentException.
-     *
+     * <p>
      * Validates: Requirements 4.5
      */
     @Test
     @Tag("Property 5: Partial unique constraint permits multiple null account_email values")
     @SuppressWarnings("unchecked")
-    void duplicateNonNullAccountEmailIsRejected() {
+    void duplicateNonNullAccountEmailIsRejected()
+    {
         for (int i = 0; i < TRIES; i++) {
             WholesaleCustomerDto dto1 = generateValidDto();
             WholesaleCustomerDto dto2 = generateValidDto();
@@ -199,26 +180,21 @@ public class WholesaleApplicationCreatePropertyTest {
             // Reset mock: no duplicate found (for first call)
             PanacheQuery<PanacheEntityBase> freshQuery = mock(PanacheQuery.class);
             when(freshQuery.firstResult()).thenReturn(null);
-            when(WholesaleApplicationEntity.find(anyString(), org.mockito.ArgumentMatchers.<Object[]>any()))
-                    .thenReturn(freshQuery);
+            when(WholesaleApplicationEntity.find(anyString(), org.mockito.ArgumentMatchers.<Object[]>any())).thenReturn(freshQuery);
 
             // First call succeeds
             service.createWholesaleApplication(dto1);
 
             // Simulate existing entity found on duplicate check
             WholesaleApplicationEntity existing = new WholesaleApplicationEntity();
-            existing.accountEmail = sharedEmail.trim();
+            existing.setAccountEmail(sharedEmail.trim());
             PanacheQuery<PanacheEntityBase> mockQuery = mock(PanacheQuery.class);
             when(mockQuery.firstResult()).thenReturn(existing);
-            when(WholesaleApplicationEntity.find(anyString(), org.mockito.ArgumentMatchers.<Object[]>any()))
-                    .thenReturn(mockQuery);
+            when(WholesaleApplicationEntity.find(anyString(), org.mockito.ArgumentMatchers.<Object[]>any())).thenReturn(mockQuery);
 
             // Second call with same email should throw
-            IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
-                    () -> service.createWholesaleApplication(dto2),
-                    "Iteration " + i + ": should reject duplicate non-null account_email");
-            assertTrue(ex.getMessage().contains("wholesale application already exists with email"),
-                    "Iteration " + i + ": error should indicate duplicate email, got: " + ex.getMessage());
+            IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () -> service.createWholesaleApplication(dto2), "Iteration " + i + ": should reject duplicate non-null account_email");
+            assertTrue(ex.getMessage().contains("wholesale application already exists with email"), "Iteration " + i + ": error should indicate duplicate email, got: " + ex.getMessage());
         }
     }
 
@@ -230,12 +206,13 @@ public class WholesaleApplicationCreatePropertyTest {
      * When applicantEmail and accountEmail are both provided with distinct values,
      * each is stored in its own column without cross-contamination.
      * We verify via the returned DTO (toDto maps entity.accountEmail → getEmail()).
-     *
+     * <p>
      * Validates: Requirements 4.6
      */
     @Test
     @Tag("Property 6: applicantEmail and accountEmail independently stored")
-    void applicantEmailAndAccountEmailAreIndependentlyStored() {
+    void applicantEmailAndAccountEmailAreIndependentlyStored()
+    {
         int verified = 0;
         for (int i = 0; verified < TRIES && i < TRIES * 2; i++) {
             String applicantEmail = generateEmail();
@@ -254,11 +231,9 @@ public class WholesaleApplicationCreatePropertyTest {
             WholesaleCustomerDto result = service.createWholesaleApplication(dto);
 
             // Assert: accountEmail is stored independently (toDto maps it to getEmail())
-            assertEquals(accountEmail.trim(), result.getEmail(),
-                    "Iteration " + verified + ": accountEmail should be stored as provided (trimmed)");
+            assertEquals(accountEmail.trim(), result.getEmail(), "Iteration " + verified + ": accountEmail should be stored as provided (trimmed)");
             // The returned DTO's getEmail() (accountEmail) should NOT equal the applicantEmail
-            assertNotEquals(applicantEmail.trim(), result.getEmail(),
-                    "Iteration " + verified + ": accountEmail must not be contaminated by applicantEmail");
+            assertNotEquals(applicantEmail.trim(), result.getEmail(), "Iteration " + verified + ": accountEmail must not be contaminated by applicantEmail");
             verified++;
         }
         assertTrue(verified >= TRIES, "Should have verified at least " + TRIES + " cases");
@@ -272,12 +247,13 @@ public class WholesaleApplicationCreatePropertyTest {
      * For any valid createWholesaleApplication invocation — including inputs that
      * explicitly supply status = APPROVED/REJECTED/CONVERTED — the resulting entity
      * SHALL have status = PENDING.
-     *
+     * <p>
      * Validates: Requirements 4.7, 5.1, 7.1
      */
     @Test
     @Tag("Property 7: Created applications default to PENDING status")
-    void createdApplicationsAlwaysHavePendingStatus() {
+    void createdApplicationsAlwaysHavePendingStatus()
+    {
         WholesaleCustomerStatusEn[] statuses = WholesaleCustomerStatusEn.values();
 
         for (int i = 0; i < TRIES; i++) {
@@ -290,9 +266,7 @@ public class WholesaleApplicationCreatePropertyTest {
             WholesaleCustomerDto result = service.createWholesaleApplication(dto);
 
             // Assert: returned status is always PENDING regardless of supplied status
-            assertEquals(WholesaleCustomerStatusEn.PENDING, result.getStatus(),
-                    "Iteration " + i + ": created application must always have PENDING status, "
-                            + "regardless of client-supplied status: " + suppliedStatus);
+            assertEquals(WholesaleCustomerStatusEn.PENDING, result.getStatus(), "Iteration " + i + ": created application must always have PENDING status, " + "regardless of client-supplied status: " + suppliedStatus);
         }
     }
 
@@ -305,7 +279,8 @@ public class WholesaleApplicationCreatePropertyTest {
      * Required fields (applicantEmail, firstName, companyName) are always non-blank.
      * Optional fields are randomly null, blank, or populated.
      */
-    private WholesaleCustomerDto generateValidDto() {
+    private WholesaleCustomerDto generateValidDto()
+    {
         WholesaleCustomerDto dto = new WholesaleCustomerDto();
         dto.setApplicantEmail(generateEmail());
         dto.setEmail(randomNullableEmail());
@@ -338,15 +313,18 @@ public class WholesaleApplicationCreatePropertyTest {
         return dto;
     }
 
-    private String generateEmail() {
+    private String generateEmail()
+    {
         return generateAlphaString(3, 10).toLowerCase() + "@example.com";
     }
 
-    private String generateNonBlankString() {
+    private String generateNonBlankString()
+    {
         return generateAlphaString(2, 20);
     }
 
-    private String randomNullableString() {
+    private String randomNullableString()
+    {
         int choice = random.nextInt(4);
         return switch (choice) {
             case 0 -> null;
@@ -356,7 +334,8 @@ public class WholesaleApplicationCreatePropertyTest {
         };
     }
 
-    private String randomNullableEmail() {
+    private String randomNullableEmail()
+    {
         int choice = random.nextInt(3);
         return switch (choice) {
             case 0 -> null;
@@ -365,7 +344,8 @@ public class WholesaleApplicationCreatePropertyTest {
         };
     }
 
-    private Boolean randomNullableBoolean() {
+    private Boolean randomNullableBoolean()
+    {
         int choice = random.nextInt(3);
         return switch (choice) {
             case 0 -> null;
@@ -374,7 +354,8 @@ public class WholesaleApplicationCreatePropertyTest {
         };
     }
 
-    private String generateAlphaString(int minLen, int maxLen) {
+    private String generateAlphaString(int minLen, int maxLen)
+    {
         int length = minLen + random.nextInt(maxLen - minLen + 1);
         StringBuilder sb = new StringBuilder(length);
         for (int i = 0; i < length; i++) {
@@ -390,7 +371,8 @@ public class WholesaleApplicationCreatePropertyTest {
      * Replicates the normalize logic from WholesaleCustomerService:
      * trim, then return null if blank.
      */
-    private String normalize(String value) {
+    private String normalize(String value)
+    {
         if (value == null) return null;
         String trimmed = value.trim();
         return trimmed.isEmpty() ? null : trimmed;
@@ -399,7 +381,8 @@ public class WholesaleApplicationCreatePropertyTest {
     /**
      * Creates a minimal valid DTO with required fields populated.
      */
-    private WholesaleCustomerDto buildMinimalValidDto() {
+    private WholesaleCustomerDto buildMinimalValidDto()
+    {
         WholesaleCustomerDto dto = new WholesaleCustomerDto();
         dto.setApplicantEmail("applicant@example.com");
         dto.setFirstName("John");

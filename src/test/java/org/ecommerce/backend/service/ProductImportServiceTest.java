@@ -54,8 +54,8 @@ import static org.mockito.Mockito.when;
  */
 @Disabled("See assessment comment above — PanacheMock does not propagate into QuarkusTransaction.requiringNew() contexts")
 @QuarkusTest
-class ProductImportServiceTest {
-
+class ProductImportServiceTest
+{
     @Inject
     ProductImportService productImportService;
 
@@ -63,7 +63,8 @@ class ProductImportServiceTest {
     ProductImportValidator productImportValidator;
 
     @BeforeEach
-    void setUp() {
+    void setUp()
+    {
         PanacheMock.mock(ProductUploadBatchEntity.class);
         PanacheMock.mock(ProductUploadStagedEntity.class);
         PanacheMock.mock(ProductEntity.class);
@@ -102,11 +103,13 @@ class ProductImportServiceTest {
 
 
     @Test
-    void validateAndDiff_shouldAddValidationErrorsWhenRequiredFieldsAreMissing() throws Exception {
+    void validateAndDiff_shouldAddValidationErrorsWhenRequiredFieldsAreMissing() throws Exception
+    {
         ProductUploadStagedEntity staged = new ProductUploadStagedEntity();
-        staged.sku = "TSHIRT-ERR-1";
-        staged.name = null;
-        staged.categorySlug = null;
+        staged.setSku("TSHIRT-ERR-1");
+        staged.setName(null);
+        staged.setCategorySlug(null);
+        staged.setBrandSlug(null);
 
         ArrayList<String> validationErrors = new ArrayList<>();
 
@@ -118,12 +121,13 @@ class ProductImportServiceTest {
     }
 
     @Test
-    void validateAndDiff_shouldAddValidationErrorsWhenCategoryOrBrandDoNotExist() throws Exception {
+    void validateAndDiff_shouldAddValidationErrorsWhenCategoryOrBrandDoNotExist() throws Exception
+    {
         ProductUploadStagedEntity staged = new ProductUploadStagedEntity();
-        staged.sku = "TSHIRT-NEW-1";
-        staged.name = "Blue Cotton Tee";
-        staged.categorySlug = "apparel";
-        staged.brandSlug = "nike";
+        staged.setSku("TSHIRT-NEW-1");
+        staged.setName("Blue Cotton Tee");
+        staged.setCategorySlug("apparel");
+        staged.setBrandSlug("nike");
 
         ArrayList<String> validationErrors = new ArrayList<>();
 
@@ -131,32 +135,34 @@ class ProductImportServiceTest {
 
         assertTrue(validationErrors.contains("Unknown category_slug: apparel"));
         assertTrue(validationErrors.contains("Unknown brand_slug: nike"));
-        assertTrue(staged.isNewProduct);
+        assertTrue(staged.getIsNewProduct());
     }
 
     @Test
-    void validateAndDiff_shouldAddValidationErrorWhenSkuBelongsToAnotherProduct() throws Exception {
+    void validateAndDiff_shouldAddValidationErrorWhenSkuBelongsToAnotherProduct() throws Exception
+    {
         ProductUploadStagedEntity staged = new ProductUploadStagedEntity();
-        staged.sku = "TSHIRT-CONFLICT";
-        staged.name = "Blue Cotton Tee";
-        staged.categorySlug = "apparel";
+        staged.setSku("TSHIRT-CONFLICT");
+        staged.setName("Blue Cotton Tee");
+        staged.setCategorySlug("apparel");
+        staged.setBrandSlug("nike");
 
         CategoryEntity category = new CategoryEntity();
-        category.slug = "apparel";
+        category.setSlug("apparel");
         BrandEntity brand = new BrandEntity();
-        brand.slug = "nike";
+        brand.setSlug("nike");
 
         ProductEntity matchedProduct = new ProductEntity();
-        matchedProduct.id = UUID.randomUUID();
-        matchedProduct.name = "Blue Cotton Tee";
+        matchedProduct.setId(UUID.randomUUID());
+        matchedProduct.setName("Blue Cotton Tee");
         matchedProduct.setCategory(category);
-        matchedProduct.brand = brand;
+        matchedProduct.setBrand(brand);
 
         ProductVariantEntity existingVariant = new ProductVariantEntity();
         ProductEntity existingProduct = new ProductEntity();
-        existingProduct.id = UUID.randomUUID();
-        existingProduct.name = "Other Tee";
-        existingVariant.product = existingProduct;
+        existingProduct.setId(UUID.randomUUID());
+        existingProduct.setName("Other Tee");
+        existingVariant.setProduct(existingProduct);
 
         @SuppressWarnings("unchecked")
         PanacheQuery<PanacheEntityBase> categoryQuery = (PanacheQuery<PanacheEntityBase>) mock(PanacheQuery.class);
@@ -186,29 +192,30 @@ class ProductImportServiceTest {
     }
 
     @Test
-    void validateAndDiff_shouldNotMutateExistingVariantDuringValidation() throws Exception {
+    void validateAndDiff_shouldNotMutateExistingVariantDuringValidation() throws Exception
+    {
         ProductUploadStagedEntity staged = new ProductUploadStagedEntity();
-        staged.sku = "TSHIRT-EXISTING";
-        staged.name = "Blue Cotton Tee";
-        staged.categorySlug = "apparel";
-        staged.brandSlug = "nike";
+        staged.setSku("TSHIRT-EXISTING");
+        staged.setName("Blue Cotton Tee");
+        staged.setCategorySlug("apparel");
+        staged.setBrandSlug("nike");
 
         CategoryEntity category = new CategoryEntity();
-        category.slug = "apparel";
+        category.setSlug("apparel");
         BrandEntity brand = new BrandEntity();
-        brand.slug = "nike";
+        brand.setSlug("nike");
 
         ProductEntity product = new ProductEntity();
-        product.id = UUID.randomUUID();
-        product.name = "Blue Cotton Tee";
+        product.setId(UUID.randomUUID());
+        product.setName("Blue Cotton Tee");
         product.setCategory(category);
-        product.brand = brand;
+        product.setBrand(brand);
 
         ProductVariantEntity variant = new ProductVariantEntity();
-        variant.id = UUID.randomUUID();
-        variant.product = product;
-        variant.stockQuantity = 5;
-        variant.attributesJson = "{\"color\":\"Blue\"}";
+        variant.setId(UUID.randomUUID());
+        variant.setProduct(product);
+        variant.setStockQuantity(5);
+        variant.setAttributesJson("{\"color\":\"Blue\"}");
 
         @SuppressWarnings("unchecked")
         PanacheQuery<PanacheEntityBase> categoryQuery = (PanacheQuery<PanacheEntityBase>) mock(PanacheQuery.class);
@@ -234,13 +241,14 @@ class ProductImportServiceTest {
 
         invokeValidateAndDiff(staged, validationErrors, 99, "nike", "TSHIRT-EXISTING.jpg", "{\"color\":\"Blue\",\"size\":\"L\"}");
 
-        assertEquals(Integer.valueOf(5), variant.stockQuantity);
-        assertEquals("{\"color\":\"Blue\"}", variant.attributesJson);
+        assertEquals(Integer.valueOf(5), variant.getStockQuantity());
+        assertEquals("{\"color\":\"Blue\"}", variant.getAttributesJson());
         assertTrue(validationErrors.isEmpty());
     }
 
     @Test
-    void handleCsvUploadForBatch_shouldLoadExistingBatchByIdAndUpdateItsStatus() throws Exception {
+    void handleCsvUploadForBatch_shouldLoadExistingBatchByIdAndUpdateItsStatus() throws Exception
+    {
         String csv = """
                 sku,name,category_slug,brand_slug,retail_price,wholesale_price,stock,images,attributes
                 TSHIRT-BLU-L,"Blue Cotton Tee",apparel,nike,299.00,150.00,100,,"{""color"": ""Blue"", ""size"": ""L""}"
@@ -248,8 +256,8 @@ class ProductImportServiceTest {
 
         UUID batchId = UUID.randomUUID();
         ProductUploadBatchEntity batch = new ProductUploadBatchEntity();
-        batch.id = batchId;
-        batch.productUploadStatusEn = ProductUploadStatusEn.IMPORTING;
+        batch.setId(batchId);
+        batch.setProductUploadStatusEn(ProductUploadStatusEn.IMPORTING);
 
         when(ProductUploadBatchEntity.findById(batchId)).thenReturn(batch);
 
@@ -257,13 +265,14 @@ class ProductImportServiceTest {
 
         productImportService.handleCsvUploadForBatch(inputStream, batchId);
 
-        assertEquals(1, batch.totalRows);
-        assertEquals(Integer.valueOf(2), batch.validationErrorCount);
-        assertEquals(ProductUploadStatusEn.PENDING, batch.productUploadStatusEn);
+        assertEquals(1, batch.getTotalRows());
+        assertEquals(Integer.valueOf(2), batch.getValidationErrorCount());
+        assertEquals(ProductUploadStatusEn.PENDING, batch.getProductUploadStatusEn());
     }
 
     @Test
-    void applyValidationResults_shouldStoreValidationStatusAndMessage() throws Exception {
+    void applyValidationResults_shouldStoreValidationStatusAndMessage() throws Exception
+    {
         ProductUploadStagedEntity staged = new ProductUploadStagedEntity();
         ArrayList<String> validationErrors = new ArrayList<>();
         validationErrors.add("Unknown category: apparel");
@@ -271,8 +280,8 @@ class ProductImportServiceTest {
 
         productImportValidator.applyValidationResults(staged, validationErrors);
 
-        assertEquals(ProductImportValidationStatusEn.INVALID, staged.validationStatus);
-        assertEquals("Unknown category: apparel; Unknown brand: nike", staged.validationErrors);
+        assertEquals(ProductImportValidationStatusEn.INVALID, staged.getValidationStatus());
+        assertEquals("Unknown category: apparel; Unknown brand: nike", staged.getValidationErrors());
     }
 
     private void invokeValidateAndDiff(
@@ -282,7 +291,8 @@ class ProductImportServiceTest {
             String brandSlug,
             String imagesValue,
             String attributesJson
-    ) throws Exception {
+    ) throws Exception
+    {
         productImportValidator.validateAndDiff(staged, validationErrors, stock, brandSlug, imagesValue, attributesJson);
     }
 }

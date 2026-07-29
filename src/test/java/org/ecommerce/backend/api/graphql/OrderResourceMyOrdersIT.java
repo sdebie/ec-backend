@@ -28,8 +28,8 @@ import static org.mockito.Mockito.when;
  * Validates: Requirements 2.1, 2.2, 2.3, 2.4, 2.5
  */
 @QuarkusTest
-class OrderResourceMyOrdersIT {
-
+class OrderResourceMyOrdersIT
+{
     private static final String CUSTOMER_A_EMAIL = "alice@test.com";
     private static final String CUSTOMER_B_EMAIL = "bob@test.com";
 
@@ -50,7 +50,8 @@ class OrderResourceMyOrdersIT {
     private OrderSummaryDto summaryB1;
 
     @BeforeEach
-    void setUp() {
+    void setUp()
+    {
         PanacheMock.mock(CustomerEntity.class);
 
         customerAId = UUID.randomUUID();
@@ -58,62 +59,62 @@ class OrderResourceMyOrdersIT {
 
         // Set up Customer A
         UserEntity userA = new UserEntity();
-        userA.id = UUID.randomUUID();
-        userA.email = CUSTOMER_A_EMAIL;
-        userA.passwordHash = "somehash";
-        userA.isActive = true;
+        userA.setId(UUID.randomUUID());
+        userA.setEmail(CUSTOMER_A_EMAIL);
+        userA.setPasswordHash("somehash");
+        userA.setActive(true);
 
         customerA = new CustomerEntity();
-        customerA.id = customerAId;
-        customerA.user = userA;
-        customerA.firstName = "Alice";
-        customerA.lastName = "Smith";
-        customerA.shopperType = CustomerTypeEn.RETAILER;
-        customerA.status = CustomerStatusEn.ACTIVE;
-        customerA.addresses = new ArrayList<>();
-        userA.customer = customerA;
+        customerA.setId(customerAId);
+        customerA.setUser(userA);
+        customerA.setFirstName("Alice");
+        customerA.setLastName("Smith");
+        customerA.setShopperType(CustomerTypeEn.RETAILER);
+        customerA.setStatus(CustomerStatusEn.ACTIVE);
+        customerA.setAddresses(new ArrayList<>());
+        userA.setCustomer(customerA);
 
         // Set up Customer B
         UserEntity userB = new UserEntity();
-        userB.id = UUID.randomUUID();
-        userB.email = CUSTOMER_B_EMAIL;
-        userB.passwordHash = "somehash";
-        userB.isActive = true;
+        userB.setId(UUID.randomUUID());
+        userB.setEmail(CUSTOMER_B_EMAIL);
+        userB.setPasswordHash("somehash");
+        userB.setActive(true);
 
         customerB = new CustomerEntity();
-        customerB.id = customerBId;
-        customerB.user = userB;
-        customerB.firstName = "Bob";
-        customerB.lastName = "Jones";
-        customerB.shopperType = CustomerTypeEn.WHOLESALER;
-        customerB.status = CustomerStatusEn.ACTIVE;
-        customerB.addresses = new ArrayList<>();
-        userB.customer = customerB;
+        customerB.setId(customerBId);
+        customerB.setUser(userB);
+        customerB.setFirstName("Bob");
+        customerB.setLastName("Jones");
+        customerB.setShopperType(CustomerTypeEn.WHOLESALER);
+        customerB.setStatus(CustomerStatusEn.ACTIVE);
+        customerB.setAddresses(new ArrayList<>());
+        userB.setCustomer(customerB);
 
         // Set up OrderSummaryDto for Customer A
         // summaryA1: newest, PAID, 5 items, total 150.00
         summaryA1 = new OrderSummaryDto();
-        summaryA1.id = UUID.randomUUID().toString();
-        summaryA1.orderDate = "2024-06-15T10:30:00";
-        summaryA1.status = "PAID";
-        summaryA1.itemCount = 5;
-        summaryA1.totalAmount = 150.00;
+        summaryA1.setId(UUID.randomUUID().toString());
+        summaryA1.setOrderDate("2024-06-15T10:30:00");
+        summaryA1.setStatus("PAID");
+        summaryA1.setItemCount(5);
+        summaryA1.setTotalAmount(150.00);
 
         // summaryA2: oldest, CREATED, 1 item, total 45.50
         summaryA2 = new OrderSummaryDto();
-        summaryA2.id = UUID.randomUUID().toString();
-        summaryA2.orderDate = "2024-05-10T08:00:00";
-        summaryA2.status = "CREATED";
-        summaryA2.itemCount = 1;
-        summaryA2.totalAmount = 45.50;
+        summaryA2.setId(UUID.randomUUID().toString());
+        summaryA2.setOrderDate("2024-05-10T08:00:00");
+        summaryA2.setStatus("CREATED");
+        summaryA2.setItemCount(1);
+        summaryA2.setTotalAmount(45.50);
 
         // summaryB1: belongs to Customer B, DELIVERED, 7 items, total 320.00
         summaryB1 = new OrderSummaryDto();
-        summaryB1.id = UUID.randomUUID().toString();
-        summaryB1.orderDate = "2024-06-12T14:00:00";
-        summaryB1.status = "DELIVERED";
-        summaryB1.itemCount = 7;
-        summaryB1.totalAmount = 320.00;
+        summaryB1.setId(UUID.randomUUID().toString());
+        summaryB1.setOrderDate("2024-06-12T14:00:00");
+        summaryB1.setStatus("DELIVERED");
+        summaryB1.setItemCount(7);
+        summaryB1.setTotalAmount(320.00);
 
         // Mock CustomerEntity.findByEmail for both customers
         when(CustomerEntity.findByEmail(CUSTOMER_A_EMAIL)).thenReturn(customerA);
@@ -126,7 +127,8 @@ class OrderResourceMyOrdersIT {
 
     @Test
     @DisplayName("myOrders returns only the authenticated customer's orders, not others'")
-    void myOrders_returnsOnlyAuthenticatedCustomerOrders() {
+    void myOrders_returnsOnlyAuthenticatedCustomerOrders()
+    {
         String token = generateCustomerJwt(CUSTOMER_A_EMAIL);
 
         given()
@@ -139,12 +141,12 @@ class OrderResourceMyOrdersIT {
                 .statusCode(200)
                 .body("data.myOrders", hasSize(2))
                 // Verify summaryA1 (newest) is first
-                .body("data.myOrders[0].id", equalTo(summaryA1.id))
+                .body("data.myOrders[0].id", equalTo(summaryA1.getId()))
                 .body("data.myOrders[0].status", equalTo("PAID"))
                 .body("data.myOrders[0].itemCount", equalTo(5))
                 .body("data.myOrders[0].totalAmount", equalTo(150.0f))
                 // Verify summaryA2 (oldest) is second
-                .body("data.myOrders[1].id", equalTo(summaryA2.id))
+                .body("data.myOrders[1].id", equalTo(summaryA2.getId()))
                 .body("data.myOrders[1].status", equalTo("CREATED"))
                 .body("data.myOrders[1].itemCount", equalTo(1))
                 .body("data.myOrders[1].totalAmount", equalTo(45.5f));
@@ -152,7 +154,8 @@ class OrderResourceMyOrdersIT {
 
     @Test
     @DisplayName("myOrders does not include orders belonging to other customers")
-    void myOrders_excludesOtherCustomerOrders() {
+    void myOrders_excludesOtherCustomerOrders()
+    {
         String token = generateCustomerJwt(CUSTOMER_B_EMAIL);
 
         given()
@@ -164,13 +167,14 @@ class OrderResourceMyOrdersIT {
                 .then()
                 .statusCode(200)
                 .body("data.myOrders", hasSize(1))
-                .body("data.myOrders[0].id", equalTo(summaryB1.id))
+                .body("data.myOrders[0].id", equalTo(summaryB1.getId()))
                 .body("data.myOrders[0].status", equalTo("DELIVERED"));
     }
 
     @Test
     @DisplayName("myOrders returns orders in descending createdAt order (newest first)")
-    void myOrders_ordersReturnedNewestFirst() {
+    void myOrders_ordersReturnedNewestFirst()
+    {
         String token = generateCustomerJwt(CUSTOMER_A_EMAIL);
 
         given()
@@ -183,15 +187,16 @@ class OrderResourceMyOrdersIT {
                 .statusCode(200)
                 .body("data.myOrders", hasSize(2))
                 // summaryA1 (2024-06-15) should come before summaryA2 (2024-05-10)
-                .body("data.myOrders[0].id", equalTo(summaryA1.id))
+                .body("data.myOrders[0].id", equalTo(summaryA1.getId()))
                 .body("data.myOrders[0].orderDate", containsString("2024-06-15"))
-                .body("data.myOrders[1].id", equalTo(summaryA2.id))
+                .body("data.myOrders[1].id", equalTo(summaryA2.getId()))
                 .body("data.myOrders[1].orderDate", containsString("2024-05-10"));
     }
 
     @Test
     @DisplayName("myOrders field mapping: id, orderDate, status, itemCount, totalAmount all correct")
-    void myOrders_fieldMappingCorrect() {
+    void myOrders_fieldMappingCorrect()
+    {
         // Override mock for this test to return only one order for verification
         when(orderService.getMyOrders(eq(customerAId))).thenReturn(List.of(summaryA1));
 
@@ -206,7 +211,7 @@ class OrderResourceMyOrdersIT {
                 .then()
                 .statusCode(200)
                 .body("data.myOrders", hasSize(1))
-                .body("data.myOrders[0].id", equalTo(summaryA1.id))
+                .body("data.myOrders[0].id", equalTo(summaryA1.getId()))
                 .body("data.myOrders[0].orderDate", equalTo("2024-06-15T10:30:00"))
                 .body("data.myOrders[0].status", equalTo("PAID"))
                 .body("data.myOrders[0].itemCount", equalTo(5))
@@ -215,7 +220,8 @@ class OrderResourceMyOrdersIT {
 
     @Test
     @DisplayName("myOrders without JWT returns GraphQL error (Unauthorized)")
-    void myOrders_withoutJwt_returnsUnauthorized() {
+    void myOrders_withoutJwt_returnsUnauthorized()
+    {
         given()
                 .contentType("application/json")
                 .body(graphqlQuery("{ myOrders { id } }"))
@@ -227,16 +233,16 @@ class OrderResourceMyOrdersIT {
                 .body("errors[0].message", containsString("Unauthorized"));
     }
 
-    // ─── Helper Methods ─────────────────────────────────────────────────────
-
-    private String generateCustomerJwt(String email) {
+    private String generateCustomerJwt(String email)
+    {
         return Jwt.subject(email)
                 .issuer("http://localhost:8080")
                 .groups("customer")
                 .sign();
     }
 
-    private String graphqlQuery(String query) {
+    private String graphqlQuery(String query)
+    {
         return "{\"query\": \"" + query.replace("\"", "\\\"") + "\"}";
     }
 }

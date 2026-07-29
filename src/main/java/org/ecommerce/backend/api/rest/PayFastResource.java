@@ -2,24 +2,27 @@ package org.ecommerce.backend.api.rest;
 
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
-import jakarta.ws.rs.*;
+import jakarta.ws.rs.Consumes;
+import jakarta.ws.rs.POST;
+import jakarta.ws.rs.Path;
+import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.MultivaluedMap;
 import jakarta.ws.rs.core.Response;
-import java.net.URLDecoder;
-import java.nio.charset.StandardCharsets;
-import java.util.LinkedHashMap;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.ecommerce.backend.service.OrderNotificationService;
+import org.ecommerce.backend.service.OrderService;
 import org.ecommerce.backend.service.payfast.HtmlFormField;
-import org.ecommerce.common.enums.OrderStatusEn;
+import org.ecommerce.backend.service.payfast.PayFastService;
 import org.ecommerce.common.entity.OrderEntity;
 import org.ecommerce.common.entity.PaymentLogEntity;
-import org.ecommerce.backend.service.OrderService;
-import org.ecommerce.backend.service.OrderNotificationService;
-import org.ecommerce.backend.service.payfast.PayFastService;
+import org.ecommerce.common.enums.OrderStatusEn;
 import org.jboss.logging.Logger;
 
 import java.math.BigDecimal;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -72,7 +75,7 @@ public class PayFastResource
                     .entity(Map.of("error", "Email is required")).build();
         }
 
-        LOG.debug("Got Order from DB with ID: " + quote.id);
+        LOG.debug("Got Order from DB with ID: " + quote.getId());
 
         List<HtmlFormField> hiddenHTMLFormFields = payFastService.generateHiddenHTMLForm(quote, email);
 
@@ -90,9 +93,9 @@ public class PayFastResource
         if (formEmail != null && !formEmail.isBlank()) {
             return formEmail.trim();
         }
-        if (order.customerEntity != null && order.customerEntity.user != null
-                && order.customerEntity.user.email != null && !order.customerEntity.user.email.isBlank()) {
-            return order.customerEntity.user.email;
+        if (order.getCustomerEntity() != null && order.getCustomerEntity().getUser() != null
+                && order.getCustomerEntity().getUser().getEmail() != null && !order.getCustomerEntity().getUser().getEmail().isBlank()) {
+            return order.getCustomerEntity().getUser().getEmail();
         }
         return null;
     }
@@ -120,13 +123,13 @@ public class PayFastResource
         try {
             // 2. Generic Logging
             PaymentLogEntity log = new PaymentLogEntity();
-            log.gatewayName = "PAYFAST";
-            log.internalReference = params.get("m_payment_id");
-            log.externalReference = params.get("pf_payment_id");
-            log.amountGross = new BigDecimal(params.get("amount_gross"));
-            log.status = params.get("payment_status");
+            log.setGatewayName("PAYFAST");
+            log.setInternalReference(params.get("m_payment_id"));
+            log.setExternalReference(params.get("pf_payment_id"));
+            log.setAmountGross(new BigDecimal(params.get("amount_gross")));
+            log.setStatus(params.get("payment_status"));
             // Store raw JSON for auditing
-            log.rawResponse = params.toString();
+            log.setRawResponse(params.toString());
             log.persist();
         } catch (Exception e) {
             LOG.error("Error logging payment: " + e.getMessage());
@@ -139,7 +142,7 @@ public class PayFastResource
                 UUID orderId = UUID.fromString(orderIdStr);
                 OrderEntity order = OrderEntity.findById(orderId);
                 if (order != null) {
-                    order.status = OrderStatusEn.PAID;
+                    order.setStatus(OrderStatusEn.PAID);
                     // Panache will auto-dirty-check within @Transactional, but call persist() to be explicit
                     order.persist();
                     LOG.debug("Updated Order " + orderId + " to PAID (entity update)");

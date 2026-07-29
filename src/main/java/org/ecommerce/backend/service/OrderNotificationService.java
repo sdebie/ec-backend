@@ -15,8 +15,8 @@ import org.jboss.logging.Logger;
  * never hardcoded — aligning with the wholesale-application-review-workflow mail pattern.
  */
 @ApplicationScoped
-public class OrderNotificationService {
-
+public class OrderNotificationService
+{
     private static final Logger LOG = Logger.getLogger(OrderNotificationService.class);
 
     @Inject
@@ -31,15 +31,16 @@ public class OrderNotificationService {
      *
      * @param order the persisted order entity (must have customerEntity populated)
      */
-    public void sendConfirmationEmail(OrderEntity order) {
+    public void sendConfirmationEmail(OrderEntity order)
+    {
         String firstName = resolveDisplayName(order);
         String customerEmail = resolveRecipient(order);
 
         order_confirmation.to(customerEmail)
                 .from(senderAddress)
-                .subject("Your Order #" + order.id)
+                .subject("Your Order #" + order.getId())
                 .data("order", order)
-                .data("orderItems", order.items)
+                .data("orderItems", order.getItems())
                 .data("customerName", firstName)
                 .send()
                 .subscribe().with(
@@ -48,17 +49,23 @@ public class OrderNotificationService {
                 );
     }
 
-    /** Display name for the greeting; falls back to "Guest" when no usable first name. */
-    String resolveDisplayName(OrderEntity order) {
-        String firstName = order.customerEntity != null ? order.customerEntity.firstName : null;
+    /**
+     * Display name for the greeting; falls back to "Guest" when no usable first name.
+     */
+    String resolveDisplayName(OrderEntity order)
+    {
+        String firstName = order.getCustomerEntity() != null ? order.getCustomerEntity().getFirstName() : null;
         return (firstName != null && !firstName.isBlank()) ? firstName : "Guest";
     }
 
-    /** Recipient email resolved from the order's customer→user, or null when unavailable. */
-    String resolveRecipient(OrderEntity order) {
-        if (order.customerEntity == null || order.customerEntity.user == null) {
+    /**
+     * Recipient email resolved from the order's customer→user, or null when unavailable.
+     */
+    String resolveRecipient(OrderEntity order)
+    {
+        if (order.getCustomerEntity() == null || order.getCustomerEntity().getUser() == null) {
             return null;
         }
-        return order.customerEntity.user.email;
+        return order.getCustomerEntity().getUser().getEmail();
     }
 }

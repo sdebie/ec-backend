@@ -29,7 +29,7 @@ import static org.mockito.Mockito.when;
 
 /**
  * Producer→consumer contract test for the customer JWT.
- *
+ * <p>
  * Every other IT mints its own token with Jwt.subject(...), which lets the real
  * issuer drift from what the consumers expect — exactly the defect shipped on
  * 2026-07-19, where CustomerAuthService set only upn while every endpoint read
@@ -38,8 +38,8 @@ import static org.mockito.Mockito.when;
  * real consumer endpoints.
  */
 @QuarkusTest
-class CustomerTokenContractIT {
-
+class CustomerTokenContractIT
+{
     private static final String EMAIL = "contract-test@test.com";
 
     @Inject
@@ -58,59 +58,61 @@ class CustomerTokenContractIT {
     private UUID customerId;
 
     @BeforeEach
-    void setUp() {
+    void setUp()
+    {
         PanacheMock.mock(CustomerEntity.class);
 
         customerId = UUID.randomUUID();
 
         UserEntity user = new UserEntity();
-        user.id = UUID.randomUUID();
-        user.email = EMAIL;
-        user.passwordHash = "somehash";
-        user.isActive = true;
+        user.setId(UUID.randomUUID());
+        user.setEmail(EMAIL);
+        user.setPasswordHash("somehash");
+        user.setActive(true);
 
         customer = new CustomerEntity();
-        customer.id = customerId;
-        customer.user = user;
-        customer.firstName = "Contract";
-        customer.lastName = "Test";
-        customer.shopperType = CustomerTypeEn.RETAILER;
-        customer.status = CustomerStatusEn.ACTIVE;
-        user.customer = customer;
+        customer.setId(customerId);
+        customer.setUser(user);
+        customer.setFirstName("Contract");
+        customer.setLastName("Test");
+        customer.setShopperType(CustomerTypeEn.RETAILER);
+        customer.setStatus(CustomerStatusEn.ACTIVE);
+        user.setCustomer(customer);
 
         when(CustomerEntity.findByEmail(EMAIL)).thenReturn(customer);
         when(orderService.getMyOrders(eq(customerId))).thenReturn(List.of());
         when(wishlistService.getWishlistVariantIds(eq(customerId))).thenReturn(List.of());
 
         StorefrontCustomerPortalDto profile = new StorefrontCustomerPortalDto();
-        profile.email = EMAIL;
-        profile.shopperType = "RETAILER";
-        profile.firstName = "Contract";
-        profile.lastName = "Test";
-        profile.hasPassword = true;
+        profile.setEmail(EMAIL);
+        profile.setShopperType("RETAILER");
+        profile.setFirstName("Contract");
+        profile.setLastName("Test");
+        profile.setHasPassword(true);
         when(customerPortalService.getPortalProfile(eq(EMAIL))).thenReturn(profile);
     }
 
-    private String realToken() {
+    private String realToken()
+    {
         return customerAuthService.generateToken(customer);
     }
 
     @Test
     @DisplayName("Production token carries sub = email (consumers resolve identity via jwt.getSubject())")
-    void productionToken_hasSubjectClaim() {
+    void productionToken_hasSubjectClaim()
+    {
         String[] parts = realToken().split("\\.");
         String payloadJson = new String(Base64.getUrlDecoder().decode(parts[1]), StandardCharsets.UTF_8);
         JsonObject payload = Json.createReader(new StringReader(payloadJson)).readObject();
 
-        assertEquals(EMAIL, payload.getString("sub", null),
-                "CustomerAuthService must set .subject(email): every customer endpoint resolves identity via jwt.getSubject()");
-        assertEquals(EMAIL, payload.getString("upn", null),
-                "upn must also be set (MP-JWT principal name)");
+        assertEquals(EMAIL, payload.getString("sub", null), "CustomerAuthService must set .subject(email): every customer endpoint resolves identity via jwt.getSubject()");
+        assertEquals(EMAIL, payload.getString("upn", null), "upn must also be set (MP-JWT principal name)");
     }
 
     @Test
     @DisplayName("Production token is accepted by myOrders (GraphQL)")
-    void productionToken_acceptedByMyOrders() {
+    void productionToken_acceptedByMyOrders()
+    {
         given()
                 .header("Authorization", "Bearer " + realToken())
                 .contentType("application/json")
@@ -125,7 +127,8 @@ class CustomerTokenContractIT {
 
     @Test
     @DisplayName("Production token is accepted by GET /api/storefront/customer-portal")
-    void productionToken_acceptedByCustomerPortal() {
+    void productionToken_acceptedByCustomerPortal()
+    {
         given()
                 .header("Authorization", "Bearer " + realToken())
                 .when()
@@ -137,7 +140,8 @@ class CustomerTokenContractIT {
 
     @Test
     @DisplayName("Production token is accepted by GET /api/storefront/wishlist")
-    void productionToken_acceptedByWishlist() {
+    void productionToken_acceptedByWishlist()
+    {
         given()
                 .header("Authorization", "Bearer " + realToken())
                 .when()

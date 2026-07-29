@@ -9,14 +9,15 @@ import java.math.BigDecimal;
 import java.util.UUID;
 
 @ApplicationScoped
-public class PricingService {
-
+public class PricingService
+{
     /**
      * Returns the active price for the given variant and customer tier.
      * Prefers sale price if active; falls back to base price.
      * Returns BigDecimal.ZERO if no price is found.
      */
-    public BigDecimal getActivePrice(UUID variantId, CustomerTypeEn tier) {
+    public BigDecimal getActivePrice(UUID variantId, CustomerTypeEn tier)
+    {
         if (variantId == null || tier == null) {
             return BigDecimal.ZERO;
         }

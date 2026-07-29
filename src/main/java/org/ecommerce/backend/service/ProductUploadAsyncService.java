@@ -9,8 +9,8 @@ import java.io.InputStream;
 import java.util.UUID;
 
 @ApplicationScoped
-public class ProductUploadAsyncService extends AbstractImportAsyncService {
-
+public class ProductUploadAsyncService extends AbstractImportAsyncService
+{
     private static final Logger LOG = Logger.getLogger(ProductUploadAsyncService.class);
 
     @Inject
@@ -19,26 +19,31 @@ public class ProductUploadAsyncService extends AbstractImportAsyncService {
     @Inject
     DataSource dataSource;
 
-    public void handleProductCsvUploadAsync(InputStream is, UUID batchId) {
+    public void handleProductCsvUploadAsync(InputStream is, UUID batchId)
+    {
         runCsvStagingAsync(is, batchId);
     }
 
-    public void processProductImportRowsAsync(UUID batchId) {
+    public void processProductImportRowsAsync(UUID batchId)
+    {
         runRowProcessingAsync(batchId);
     }
 
     @Override
-    protected Logger logger() {
+    protected Logger logger()
+    {
         return LOG;
     }
 
     @Override
-    protected AsyncImportOperations importOperations() {
+    protected AsyncImportOperations importOperations()
+    {
         return importService;
     }
 
     @Override
-    protected DataSource dataSource() {
+    protected DataSource dataSource()
+    {
         return dataSource;
     }
 }

@@ -23,22 +23,24 @@ import static org.junit.jupiter.api.Assertions.*;
  * Unit tests for {@link CustomerPortalService}.
  * Tests profile mapping with various address combinations, hasPassword logic,
  * shopperType mapping, and changePassword scenarios.
- *
+ * <p>
  * Requirements: 1.3, 1.4, 1.5, 1.6, 1.7, 5.4, 5.5, 5.6, 5.7
  */
-class CustomerPortalServiceTest {
-
+class CustomerPortalServiceTest
+{
     private CustomerPortalService service;
     private MockedStatic<CustomerEntity> customerEntityMock;
 
     @BeforeEach
-    void setUp() {
+    void setUp()
+    {
         service = new CustomerPortalService();
         customerEntityMock = Mockito.mockStatic(CustomerEntity.class);
     }
 
     @AfterEach
-    void tearDown() {
+    void tearDown()
+    {
         customerEntityMock.close();
     }
 
@@ -47,239 +49,225 @@ class CustomerPortalServiceTest {
     private CustomerEntity buildCustomer(String email, String firstName, String lastName,
                                          String phone, CustomerTypeEn shopperType,
                                          String passwordHash,
-                                         List<CustomerAddressEntity> addresses) {
+                                         List<CustomerAddressEntity> addresses)
+    {
         CustomerEntity customer = new CustomerEntity();
-        customer.id = UUID.randomUUID();
-        customer.firstName = firstName;
-        customer.lastName = lastName;
-        customer.phone = phone;
-        customer.shopperType = shopperType;
+        customer.setId(UUID.randomUUID());
+        customer.setFirstName(firstName);
+        customer.setLastName(lastName);
+        customer.setPhone(phone);
+        customer.setShopperType(shopperType);
 
         UserEntity user = new UserEntity();
-        user.id = UUID.randomUUID();
-        user.email = email;
-        user.passwordHash = passwordHash;
-        customer.user = user;
+        user.setId(UUID.randomUUID());
+        user.setEmail(email);
+        user.setPasswordHash(passwordHash);
+        customer.setUser(user);
 
-        customer.addresses = addresses != null ? addresses : new ArrayList<>();
+        customer.setAddresses(addresses != null ? addresses : new ArrayList<>());
         return customer;
     }
 
     private CustomerAddressEntity buildAddress(AddressTypeEn type, String line1, String line2,
                                                String suburb, String city, String province,
-                                               String postalCode) {
+                                               String postalCode)
+    {
         CustomerAddressEntity address = new CustomerAddressEntity();
-        address.id = UUID.randomUUID();
-        address.addressType = type;
-        address.addressLine1 = line1;
-        address.addressLine2 = line2;
-        address.suburb = suburb;
-        address.city = city;
-        address.province = province;
-        address.postalCode = postalCode;
+        address.setId(UUID.randomUUID());
+        address.setAddressType(type);
+        address.setAddressLine1(line1);
+        address.setAddressLine2(line2);
+        address.setSuburb(suburb);
+        address.setCity(city);
+        address.setProvince(province);
+        address.setPostalCode(postalCode);
         return address;
     }
 
     // ── getPortalProfile: Address mapping tests ─────────────────────────────
 
     @Test
-    void getPortalProfile_noAddresses_bothNull() {
-        CustomerEntity customer = buildCustomer("test@example.com", "John", "Doe",
-                "0821234567", CustomerTypeEn.RETAILER, "somehash", new ArrayList<>());
+    void getPortalProfile_noAddresses_bothNull()
+    {
+        CustomerEntity customer = buildCustomer("test@example.com", "John", "Doe", "0821234567", CustomerTypeEn.RETAILER, "somehash", new ArrayList<>());
 
-        customerEntityMock.when(() -> CustomerEntity.findByEmail("test@example.com"))
-                .thenReturn(customer);
-
-        StorefrontCustomerPortalDto result = service.getPortalProfile("test@example.com");
-
-        assertNull(result.physicalAddress);
-        assertNull(result.postalAddress);
-    }
-
-    @Test
-    void getPortalProfile_onlyPhysicalAddress_physicalPopulated_postalNull() {
-        CustomerAddressEntity physical = buildAddress(AddressTypeEn.PHYSICAL,
-                "123 Main St", "Apt 4", "Sandton", "Johannesburg", "Gauteng", "2196");
-
-        CustomerEntity customer = buildCustomer("test@example.com", "Jane", "Smith",
-                null, CustomerTypeEn.WHOLESALER, "hash123", List.of(physical));
-
-        customerEntityMock.when(() -> CustomerEntity.findByEmail("test@example.com"))
-                .thenReturn(customer);
+        customerEntityMock.when(() -> CustomerEntity.findByEmail("test@example.com")).thenReturn(customer);
 
         StorefrontCustomerPortalDto result = service.getPortalProfile("test@example.com");
 
-        assertNotNull(result.physicalAddress);
-        assertEquals("123 Main St", result.physicalAddress.line1);
-        assertEquals("Apt 4", result.physicalAddress.line2);
-        assertEquals("Sandton", result.physicalAddress.suburb);
-        assertEquals("Johannesburg", result.physicalAddress.city);
-        assertEquals("Gauteng", result.physicalAddress.province);
-        assertEquals("2196", result.physicalAddress.postalCode);
-        assertNull(result.postalAddress);
+        assertNull(result.getPhysicalAddress());
+        assertNull(result.getPostalAddress());
     }
 
     @Test
-    void getPortalProfile_onlyPostalAddress_physicalNull_postalPopulated() {
-        CustomerAddressEntity postal = buildAddress(AddressTypeEn.POSTAL,
-                "PO Box 500", null, null, "Cape Town", "Western Cape", "8001");
+    void getPortalProfile_onlyPhysicalAddress_physicalPopulated_postalNull()
+    {
+        CustomerAddressEntity physical = buildAddress(AddressTypeEn.PHYSICAL, "123 Main St", "Apt 4", "Sandton", "Johannesburg", "Gauteng", "2196");
 
-        CustomerEntity customer = buildCustomer("test@example.com", "Bob", "Brown",
-                "0839876543", CustomerTypeEn.GUEST, "passwordhash", List.of(postal));
+        CustomerEntity customer = buildCustomer("test@example.com", "Jane", "Smith", null, CustomerTypeEn.WHOLESALER, "hash123", List.of(physical));
 
-        customerEntityMock.when(() -> CustomerEntity.findByEmail("test@example.com"))
-                .thenReturn(customer);
+        customerEntityMock.when(() -> CustomerEntity.findByEmail("test@example.com")).thenReturn(customer);
 
         StorefrontCustomerPortalDto result = service.getPortalProfile("test@example.com");
 
-        assertNull(result.physicalAddress);
-        assertNotNull(result.postalAddress);
-        assertEquals("PO Box 500", result.postalAddress.line1);
-        assertNull(result.postalAddress.line2);
-        assertNull(result.postalAddress.suburb);
-        assertEquals("Cape Town", result.postalAddress.city);
-        assertEquals("Western Cape", result.postalAddress.province);
-        assertEquals("8001", result.postalAddress.postalCode);
+        assertNotNull(result.getPhysicalAddress());
+        assertEquals("123 Main St", result.getPhysicalAddress().getLine1());
+        assertEquals("Apt 4", result.getPhysicalAddress().getLine2());
+        assertEquals("Sandton", result.getPhysicalAddress().getSuburb());
+        assertEquals("Johannesburg", result.getPhysicalAddress().getCity());
+        assertEquals("Gauteng", result.getPhysicalAddress().getProvince());
+        assertEquals("2196", result.getPhysicalAddress().getPostalCode());
+        assertNull(result.getPostalAddress());
     }
 
     @Test
-    void getPortalProfile_bothAddresses_bothPopulatedWithCorrectFieldMapping() {
-        CustomerAddressEntity physical = buildAddress(AddressTypeEn.PHYSICAL,
-                "10 Oak Ave", "Unit 2B", "Rosebank", "Johannesburg", "Gauteng", "2196");
-        CustomerAddressEntity postal = buildAddress(AddressTypeEn.POSTAL,
-                "PO Box 100", null, null, "Pretoria", "Gauteng", "0001");
+    void getPortalProfile_onlyPostalAddress_physicalNull_postalPopulated()
+    {
+        CustomerAddressEntity postal = buildAddress(AddressTypeEn.POSTAL, "PO Box 500", null, null, "Cape Town", "Western Cape", "8001");
 
-        CustomerEntity customer = buildCustomer("test@example.com", "Alice", "Green",
-                "0115551234", CustomerTypeEn.RETAILER, "hash", List.of(physical, postal));
+        CustomerEntity customer = buildCustomer("test@example.com", "Bob", "Brown", "0839876543", CustomerTypeEn.GUEST, "passwordhash", List.of(postal));
 
-        customerEntityMock.when(() -> CustomerEntity.findByEmail("test@example.com"))
-                .thenReturn(customer);
+        customerEntityMock.when(() -> CustomerEntity.findByEmail("test@example.com")).thenReturn(customer);
+
+        StorefrontCustomerPortalDto result = service.getPortalProfile("test@example.com");
+
+        assertNull(result.getPhysicalAddress());
+        assertNotNull(result.getPostalAddress());
+        assertEquals("PO Box 500", result.getPostalAddress().getLine1());
+        assertNull(result.getPostalAddress().getLine2());
+        assertNull(result.getPostalAddress().getSuburb());
+        assertEquals("Cape Town", result.getPostalAddress().getCity());
+        assertEquals("Western Cape", result.getPostalAddress().getProvince());
+        assertEquals("8001", result.getPostalAddress().getPostalCode());
+    }
+
+    @Test
+    void getPortalProfile_bothAddresses_bothPopulatedWithCorrectFieldMapping()
+    {
+        CustomerAddressEntity physical = buildAddress(AddressTypeEn.PHYSICAL, "10 Oak Ave", "Unit 2B", "Rosebank", "Johannesburg", "Gauteng", "2196");
+        CustomerAddressEntity postal = buildAddress(AddressTypeEn.POSTAL, "PO Box 100", null, null, "Pretoria", "Gauteng", "0001");
+
+        CustomerEntity customer = buildCustomer("test@example.com", "Alice", "Green", "0115551234", CustomerTypeEn.RETAILER, "hash", List.of(physical, postal));
+
+        customerEntityMock.when(() -> CustomerEntity.findByEmail("test@example.com")).thenReturn(customer);
 
         StorefrontCustomerPortalDto result = service.getPortalProfile("test@example.com");
 
         // Physical address field mapping: addressLine1→line1, addressLine2→line2
-        assertNotNull(result.physicalAddress);
-        assertEquals("10 Oak Ave", result.physicalAddress.line1);
-        assertEquals("Unit 2B", result.physicalAddress.line2);
-        assertEquals("Rosebank", result.physicalAddress.suburb);
-        assertEquals("Johannesburg", result.physicalAddress.city);
-        assertEquals("Gauteng", result.physicalAddress.province);
-        assertEquals("2196", result.physicalAddress.postalCode);
+        assertNotNull(result.getPhysicalAddress());
+        assertEquals("10 Oak Ave", result.getPhysicalAddress().getLine1());
+        assertEquals("Unit 2B", result.getPhysicalAddress().getLine2());
+        assertEquals("Rosebank", result.getPhysicalAddress().getSuburb());
+        assertEquals("Johannesburg", result.getPhysicalAddress().getCity());
+        assertEquals("Gauteng", result.getPhysicalAddress().getProvince());
+        assertEquals("2196", result.getPhysicalAddress().getPostalCode());
 
         // Postal address field mapping
-        assertNotNull(result.postalAddress);
-        assertEquals("PO Box 100", result.postalAddress.line1);
-        assertNull(result.postalAddress.line2);
-        assertNull(result.postalAddress.suburb);
-        assertEquals("Pretoria", result.postalAddress.city);
-        assertEquals("Gauteng", result.postalAddress.province);
-        assertEquals("0001", result.postalAddress.postalCode);
+        assertNotNull(result.getPostalAddress());
+        assertEquals("PO Box 100", result.getPostalAddress().getLine1());
+        assertNull(result.getPostalAddress().getLine2());
+        assertNull(result.getPostalAddress().getSuburb());
+        assertEquals("Pretoria", result.getPostalAddress().getCity());
+        assertEquals("Gauteng", result.getPostalAddress().getProvince());
+        assertEquals("0001", result.getPostalAddress().getPostalCode());
     }
 
     // ── getPortalProfile: hasPassword tests ─────────────────────────────────
 
     @Test
-    void getPortalProfile_passwordHashNull_hasPasswordFalse() {
-        CustomerEntity customer = buildCustomer("test@example.com", "John", "Doe",
-                null, CustomerTypeEn.RETAILER, null, new ArrayList<>());
+    void getPortalProfile_passwordHashNull_hasPasswordFalse()
+    {
+        CustomerEntity customer = buildCustomer("test@example.com", "John", "Doe", null, CustomerTypeEn.RETAILER, null, new ArrayList<>());
 
-        customerEntityMock.when(() -> CustomerEntity.findByEmail("test@example.com"))
-                .thenReturn(customer);
+        customerEntityMock.when(() -> CustomerEntity.findByEmail("test@example.com")).thenReturn(customer);
 
         StorefrontCustomerPortalDto result = service.getPortalProfile("test@example.com");
 
-        assertFalse(result.hasPassword);
+        assertFalse(result.isHasPassword());
     }
 
     @Test
-    void getPortalProfile_passwordHashEmpty_hasPasswordFalse() {
-        CustomerEntity customer = buildCustomer("test@example.com", "John", "Doe",
-                null, CustomerTypeEn.RETAILER, "", new ArrayList<>());
+    void getPortalProfile_passwordHashEmpty_hasPasswordFalse()
+    {
+        CustomerEntity customer = buildCustomer("test@example.com", "John", "Doe", null, CustomerTypeEn.RETAILER, "", new ArrayList<>());
 
-        customerEntityMock.when(() -> CustomerEntity.findByEmail("test@example.com"))
-                .thenReturn(customer);
+        customerEntityMock.when(() -> CustomerEntity.findByEmail("test@example.com")).thenReturn(customer);
 
         StorefrontCustomerPortalDto result = service.getPortalProfile("test@example.com");
 
-        assertFalse(result.hasPassword);
+        assertFalse(result.isHasPassword());
     }
 
     @Test
-    void getPortalProfile_passwordHashNonEmpty_hasPasswordTrue() {
-        CustomerEntity customer = buildCustomer("test@example.com", "John", "Doe",
-                null, CustomerTypeEn.RETAILER, "abc123hash", new ArrayList<>());
+    void getPortalProfile_passwordHashNonEmpty_hasPasswordTrue()
+    {
+        CustomerEntity customer = buildCustomer("test@example.com", "John", "Doe", null, CustomerTypeEn.RETAILER, "abc123hash", new ArrayList<>());
 
-        customerEntityMock.when(() -> CustomerEntity.findByEmail("test@example.com"))
-                .thenReturn(customer);
+        customerEntityMock.when(() -> CustomerEntity.findByEmail("test@example.com")).thenReturn(customer);
 
         StorefrontCustomerPortalDto result = service.getPortalProfile("test@example.com");
 
-        assertTrue(result.hasPassword);
+        assertTrue(result.isHasPassword());
     }
 
     // ── getPortalProfile: shopperType mapping tests ─────────────────────────
 
     @Test
-    void getPortalProfile_shopperTypeRetailer_mapsToRETAILER() {
-        CustomerEntity customer = buildCustomer("test@example.com", "John", "Doe",
-                null, CustomerTypeEn.RETAILER, "hash", new ArrayList<>());
+    void getPortalProfile_shopperTypeRetailer_mapsToRETAILER()
+    {
+        CustomerEntity customer = buildCustomer("test@example.com", "John", "Doe", null, CustomerTypeEn.RETAILER, "hash", new ArrayList<>());
 
-        customerEntityMock.when(() -> CustomerEntity.findByEmail("test@example.com"))
-                .thenReturn(customer);
+        customerEntityMock.when(() -> CustomerEntity.findByEmail("test@example.com")).thenReturn(customer);
 
         StorefrontCustomerPortalDto result = service.getPortalProfile("test@example.com");
 
-        assertEquals("RETAILER", result.shopperType);
+        assertEquals("RETAILER", result.getShopperType());
     }
 
     @Test
-    void getPortalProfile_shopperTypeWholesaler_mapsToWHOLESALER() {
-        CustomerEntity customer = buildCustomer("test@example.com", "John", "Doe",
-                null, CustomerTypeEn.WHOLESALER, "hash", new ArrayList<>());
+    void getPortalProfile_shopperTypeWholesaler_mapsToWHOLESALER()
+    {
+        CustomerEntity customer = buildCustomer("test@example.com", "John", "Doe", null, CustomerTypeEn.WHOLESALER, "hash", new ArrayList<>());
 
-        customerEntityMock.when(() -> CustomerEntity.findByEmail("test@example.com"))
-                .thenReturn(customer);
+        customerEntityMock.when(() -> CustomerEntity.findByEmail("test@example.com")).thenReturn(customer);
 
         StorefrontCustomerPortalDto result = service.getPortalProfile("test@example.com");
 
-        assertEquals("WHOLESALER", result.shopperType);
+        assertEquals("WHOLESALER", result.getShopperType());
     }
 
     @Test
-    void getPortalProfile_shopperTypeGuest_mapsToGUEST() {
-        CustomerEntity customer = buildCustomer("test@example.com", "John", "Doe",
-                null, CustomerTypeEn.GUEST, "hash", new ArrayList<>());
+    void getPortalProfile_shopperTypeGuest_mapsToGUEST()
+    {
+        CustomerEntity customer = buildCustomer("test@example.com", "John", "Doe", null, CustomerTypeEn.GUEST, "hash", new ArrayList<>());
 
-        customerEntityMock.when(() -> CustomerEntity.findByEmail("test@example.com"))
-                .thenReturn(customer);
+        customerEntityMock.when(() -> CustomerEntity.findByEmail("test@example.com")).thenReturn(customer);
 
         StorefrontCustomerPortalDto result = service.getPortalProfile("test@example.com");
 
-        assertEquals("GUEST", result.shopperType);
+        assertEquals("GUEST", result.getShopperType());
     }
 
     @Test
-    void getPortalProfile_shopperTypeNull_defaultsToGUEST() {
-        CustomerEntity customer = buildCustomer("test@example.com", "John", "Doe",
-                null, null, "hash", new ArrayList<>());
+    void getPortalProfile_shopperTypeNull_defaultsToGUEST()
+    {
+        CustomerEntity customer = buildCustomer("test@example.com", "John", "Doe", null, null, "hash", new ArrayList<>());
 
-        customerEntityMock.when(() -> CustomerEntity.findByEmail("test@example.com"))
-                .thenReturn(customer);
+        customerEntityMock.when(() -> CustomerEntity.findByEmail("test@example.com")).thenReturn(customer);
 
         StorefrontCustomerPortalDto result = service.getPortalProfile("test@example.com");
 
-        assertEquals("GUEST", result.shopperType);
+        assertEquals("GUEST", result.getShopperType());
     }
 
     // ── getPortalProfile: Customer not found ────────────────────────────────
 
     @Test
-    void getPortalProfile_customerNotFound_throws404() {
-        customerEntityMock.when(() -> CustomerEntity.findByEmail("unknown@example.com"))
-                .thenReturn(null);
+    void getPortalProfile_customerNotFound_throws404()
+    {
+        customerEntityMock.when(() -> CustomerEntity.findByEmail("unknown@example.com")).thenReturn(null);
 
-        WebApplicationException ex = assertThrows(WebApplicationException.class,
-                () -> service.getPortalProfile("unknown@example.com"));
+        WebApplicationException ex = assertThrows(WebApplicationException.class, () -> service.getPortalProfile("unknown@example.com"));
 
         assertEquals(404, ex.getResponse().getStatus());
     }
@@ -287,7 +275,8 @@ class CustomerPortalServiceTest {
     // ── changePassword: Success scenario ────────────────────────────────────
 
     @Test
-    void changePassword_success_correctCurrentPasswordAndValidNew() {
+    void changePassword_success_correctCurrentPasswordAndValidNew()
+    {
         String email = "test@example.com";
         String currentPassword = "oldPassword1";
         String newPassword = "newSecure8";
@@ -295,32 +284,32 @@ class CustomerPortalServiceTest {
 
         // Build customer with a spy on UserEntity so persist() is a no-op
         CustomerEntity customer = new CustomerEntity();
-        customer.id = UUID.randomUUID();
-        customer.firstName = "Test";
-        customer.lastName = "User";
-        customer.addresses = new ArrayList<>();
+        customer.setId(UUID.randomUUID());
+        customer.setFirstName("Test");
+        customer.setLastName("User");
+        customer.setAddresses(new ArrayList<>());
 
         UserEntity user = Mockito.spy(new UserEntity());
-        user.id = UUID.randomUUID();
-        user.email = email;
-        user.passwordHash = currentHash;
+        user.setId(UUID.randomUUID());
+        user.setEmail(email);
+        user.setPasswordHash(currentHash);
         Mockito.doNothing().when(user).persist();
-        customer.user = user;
+        customer.setUser(user);
 
-        customerEntityMock.when(() -> CustomerEntity.findByEmail(email))
-                .thenReturn(customer);
+        customerEntityMock.when(() -> CustomerEntity.findByEmail(email)).thenReturn(customer);
 
         // Should not throw — validates current password matches and new password is long enough
         assertDoesNotThrow(() -> service.changePassword(email, currentPassword, newPassword));
 
         // Verify the password was actually updated to the new hash
-        assertEquals(org.ecommerce.backend.utils.PasswordHashUtil.hash(newPassword), user.passwordHash);
+        assertEquals(org.ecommerce.backend.utils.PasswordHashUtil.hash(newPassword), user.getPasswordHash());
     }
 
     // ── changePassword: Failure scenarios ───────────────────────────────────
 
     @Test
-    void changePassword_incorrectCurrentPassword_throws401() {
+    void changePassword_incorrectCurrentPassword_throws401()
+    {
         String email = "test@example.com";
         String currentPassword = "wrongPassword";
         String newPassword = "newSecure8";
@@ -330,17 +319,16 @@ class CustomerPortalServiceTest {
                 org.ecommerce.backend.utils.PasswordHashUtil.hash("correctPassword"),
                 new ArrayList<>());
 
-        customerEntityMock.when(() -> CustomerEntity.findByEmail(email))
-                .thenReturn(customer);
+        customerEntityMock.when(() -> CustomerEntity.findByEmail(email)).thenReturn(customer);
 
-        WebApplicationException ex = assertThrows(WebApplicationException.class,
-                () -> service.changePassword(email, currentPassword, newPassword));
+        WebApplicationException ex = assertThrows(WebApplicationException.class, () -> service.changePassword(email, currentPassword, newPassword));
 
         assertEquals(401, ex.getResponse().getStatus());
     }
 
     @Test
-    void changePassword_newPasswordTooShort_throws400() {
+    void changePassword_newPasswordTooShort_throws400()
+    {
         String email = "test@example.com";
         String currentPassword = "correctPass";
         String newPassword = "short";  // less than 8 characters
@@ -350,41 +338,37 @@ class CustomerPortalServiceTest {
                 org.ecommerce.backend.utils.PasswordHashUtil.hash(currentPassword),
                 new ArrayList<>());
 
-        customerEntityMock.when(() -> CustomerEntity.findByEmail(email))
-                .thenReturn(customer);
+        customerEntityMock.when(() -> CustomerEntity.findByEmail(email)).thenReturn(customer);
 
-        WebApplicationException ex = assertThrows(WebApplicationException.class,
-                () -> service.changePassword(email, currentPassword, newPassword));
+        WebApplicationException ex = assertThrows(WebApplicationException.class, () -> service.changePassword(email, currentPassword, newPassword));
 
         assertEquals(400, ex.getResponse().getStatus());
     }
 
     @Test
-    void changePassword_noLocalPasswordSet_throws400() {
+    void changePassword_noLocalPasswordSet_throws400()
+    {
         String email = "test@example.com";
         String currentPassword = "anyPassword";
         String newPassword = "newSecure8";
 
         // passwordHash is null — Google-only account
-        CustomerEntity customer = buildCustomer(email, "Test", "User",
-                null, CustomerTypeEn.RETAILER, null, new ArrayList<>());
+        CustomerEntity customer = buildCustomer(email, "Test", "User", null, CustomerTypeEn.RETAILER, null, new ArrayList<>());
 
-        customerEntityMock.when(() -> CustomerEntity.findByEmail(email))
-                .thenReturn(customer);
+        customerEntityMock.when(() -> CustomerEntity.findByEmail(email)).thenReturn(customer);
 
-        WebApplicationException ex = assertThrows(WebApplicationException.class,
-                () -> service.changePassword(email, currentPassword, newPassword));
+        WebApplicationException ex = assertThrows(WebApplicationException.class, () -> service.changePassword(email, currentPassword, newPassword));
 
         assertEquals(400, ex.getResponse().getStatus());
     }
 
     @Test
-    void changePassword_customerNotFound_throws404() {
+    void changePassword_customerNotFound_throws404()
+    {
         customerEntityMock.when(() -> CustomerEntity.findByEmail("unknown@example.com"))
                 .thenReturn(null);
 
-        WebApplicationException ex = assertThrows(WebApplicationException.class,
-                () -> service.changePassword("unknown@example.com", "pass", "newPass123"));
+        WebApplicationException ex = assertThrows(WebApplicationException.class, () -> service.changePassword("unknown@example.com", "pass", "newPass123"));
 
         assertEquals(404, ex.getResponse().getStatus());
     }
@@ -392,20 +376,19 @@ class CustomerPortalServiceTest {
     // ── getPortalProfile: General field mapping ─────────────────────────────
 
     @Test
-    void getPortalProfile_mapsAllProfileFields() {
-        CustomerEntity customer = buildCustomer("alice@shop.co.za", "Alice", "Wonder",
-                "0821112233", CustomerTypeEn.WHOLESALER, "hashed", new ArrayList<>());
+    void getPortalProfile_mapsAllProfileFields()
+    {
+        CustomerEntity customer = buildCustomer("alice@shop.co.za", "Alice", "Wonder", "0821112233", CustomerTypeEn.WHOLESALER, "hashed", new ArrayList<>());
 
-        customerEntityMock.when(() -> CustomerEntity.findByEmail("alice@shop.co.za"))
-                .thenReturn(customer);
+        customerEntityMock.when(() -> CustomerEntity.findByEmail("alice@shop.co.za")).thenReturn(customer);
 
         StorefrontCustomerPortalDto result = service.getPortalProfile("alice@shop.co.za");
 
-        assertEquals("alice@shop.co.za", result.email);
-        assertEquals("Alice", result.firstName);
-        assertEquals("Wonder", result.lastName);
-        assertEquals("0821112233", result.phone);
-        assertEquals("WHOLESALER", result.shopperType);
-        assertTrue(result.hasPassword);
+        assertEquals("alice@shop.co.za", result.getEmail());
+        assertEquals("Alice", result.getFirstName());
+        assertEquals("Wonder", result.getLastName());
+        assertEquals("0821112233", result.getPhone());
+        assertEquals("WHOLESALER", result.getShopperType());
+        assertTrue(result.isHasPassword());
     }
 }

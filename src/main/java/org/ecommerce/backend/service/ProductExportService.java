@@ -10,8 +10,8 @@ import java.io.PrintWriter;
 import java.util.stream.Stream;
 
 @ApplicationScoped
-public class ProductExportService {
-
+public class ProductExportService
+{
     @Inject
     ProductImportRepository productImportRepository;
 
@@ -85,7 +85,8 @@ public class ProductExportService {
             """;
 
     @Transactional(Transactional.TxType.SUPPORTS)
-    public void writeFullProductsInfoCsv(PrintWriter writer) {
+    public void writeFullProductsInfoCsv(PrintWriter writer)
+    {
         writer.println(CSV_INFO_HEADER);
 
         @SuppressWarnings("unchecked")
@@ -101,7 +102,8 @@ public class ProductExportService {
     }
 
     @Transactional(Transactional.TxType.SUPPORTS)
-    public void writeProductsListCsv(PrintWriter writer) {
+    public void writeProductsListCsv(PrintWriter writer)
+    {
         writer.println(CSV_LIST_HEADER);
 
         @SuppressWarnings("unchecked")
@@ -117,7 +119,8 @@ public class ProductExportService {
     }
 
     @Transactional(Transactional.TxType.SUPPORTS)
-    public void writeProductsPriceCsv(PrintWriter writer) {
+    public void writeProductsPriceCsv(PrintWriter writer)
+    {
         writer.println(CSV_PRICE_HEADER);
 
         @SuppressWarnings("unchecked")
@@ -132,7 +135,8 @@ public class ProductExportService {
         writer.flush();
     }
 
-    private String formatCsvLine(Object[] row) {
+    private String formatCsvLine(Object[] row)
+    {
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < row.length; i++) {
             if (i > 0) {
@@ -143,7 +147,8 @@ public class ProductExportService {
         return sb.toString();
     }
 
-    private String escapeCsvValue(Object value) {
+    private String escapeCsvValue(Object value)
+    {
         if (value == null) {
             return "";
         }

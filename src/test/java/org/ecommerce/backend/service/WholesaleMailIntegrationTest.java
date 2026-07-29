@@ -37,8 +37,8 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 @QuarkusTest
 @DisplayName("WholesaleMailIntegrationTest — observer lifecycle and isolation")
-class WholesaleMailIntegrationTest {
-
+class WholesaleMailIntegrationTest
+{
     @Inject
     WholesaleCustomerService wholesaleCustomerService;
 
@@ -47,28 +47,30 @@ class WholesaleMailIntegrationTest {
 
     // ─── Helpers ────────────────────────────────────────────────────────────
 
-    private WholesaleApplicationEntity createPendingApplication() {
+    private WholesaleApplicationEntity createPendingApplication()
+    {
         WholesaleApplicationEntity app = new WholesaleApplicationEntity();
-        app.applicantEmail = "test-" + UUID.randomUUID().toString().substring(0, 8) + "@example.com";
-        app.firstName = "Test";
-        app.lastName = "Applicant";
-        app.companyName = "Test Company";
-        app.status = WholesaleApplicationStatusEn.PENDING;
-        app.createdAt = OffsetDateTime.now();
+        app.setApplicantEmail("test-" + UUID.randomUUID().toString().substring(0, 8) + "@example.com");
+        app.setFirstName("Test");
+        app.setLastName("Applicant");
+        app.setCompanyName("Test Company");
+        app.setStatus(WholesaleApplicationStatusEn.PENDING);
+        app.setCreatedAt(OffsetDateTime.now());
         em.persist(app);
         em.flush();
         return app;
     }
 
-    private WholesaleApplicationEntity createConvertedApplication() {
+    private WholesaleApplicationEntity createConvertedApplication()
+    {
         WholesaleApplicationEntity app = new WholesaleApplicationEntity();
-        app.applicantEmail = "converted-" + UUID.randomUUID().toString().substring(0, 8) + "@example.com";
-        app.firstName = "Converted";
-        app.lastName = "User";
-        app.companyName = "Converted Corp";
-        app.status = WholesaleApplicationStatusEn.CONVERTED;
-        app.processedAt = OffsetDateTime.now();
-        app.createdAt = OffsetDateTime.now();
+        app.setApplicantEmail("converted-" + UUID.randomUUID().toString().substring(0, 8) + "@example.com");
+        app.setFirstName("Converted");
+        app.setLastName("User");
+        app.setCompanyName("Converted Corp");
+        app.setStatus(WholesaleApplicationStatusEn.CONVERTED);
+        app.setProcessedAt(OffsetDateTime.now());
+        app.setCreatedAt(OffsetDateTime.now());
         em.persist(app);
         em.flush();
         return app;
@@ -79,9 +81,10 @@ class WholesaleMailIntegrationTest {
     @Test
     @TestTransaction
     @DisplayName("reject on non-PENDING throws guard error — no event fired, no state change")
-    void rejectNonPendingThrowsNoEvent() {
+    void rejectNonPendingThrowsNoEvent()
+    {
         WholesaleApplicationEntity app = createPendingApplication();
-        UUID appId = app.id;
+        UUID appId = app.getId();
         wholesaleCustomerService.approveWholesaleApplication(appId);
         em.flush();
         em.clear();
@@ -91,55 +94,55 @@ class WholesaleMailIntegrationTest {
 
         em.clear();
         WholesaleApplicationEntity persisted = em.find(WholesaleApplicationEntity.class, appId);
-        assertEquals(WholesaleApplicationStatusEn.APPROVED, persisted.status);
+        assertEquals(WholesaleApplicationStatusEn.APPROVED, persisted.getStatus());
     }
 
     @Test
     @TestTransaction
     @DisplayName("approve on non-PENDING (already REJECTED) throws guard error — no event fired")
-    void approveNonPendingThrowsNoEvent() {
+    void approveNonPendingThrowsNoEvent()
+    {
         WholesaleApplicationEntity app = createPendingApplication();
-        UUID appId = app.id;
+        UUID appId = app.getId();
         wholesaleCustomerService.rejectWholesaleApplication(appId, "Rejected");
         em.flush();
         em.clear();
 
-        assertThrows(IllegalArgumentException.class,
-                () -> wholesaleCustomerService.approveWholesaleApplication(appId));
+        assertThrows(IllegalArgumentException.class, () -> wholesaleCustomerService.approveWholesaleApplication(appId));
 
         em.clear();
         WholesaleApplicationEntity persisted = em.find(WholesaleApplicationEntity.class, appId);
-        assertEquals(WholesaleApplicationStatusEn.REJECTED, persisted.status);
+        assertEquals(WholesaleApplicationStatusEn.REJECTED, persisted.getStatus());
     }
 
     @Test
     @TestTransaction
     @DisplayName("CONVERTED application cannot be approved — no event fired")
-    void convertedCannotBeApproved() {
+    void convertedCannotBeApproved()
+    {
         WholesaleApplicationEntity app = createConvertedApplication();
-        UUID appId = app.id;
+        UUID appId = app.getId();
 
-        assertThrows(IllegalArgumentException.class,
-                () -> wholesaleCustomerService.approveWholesaleApplication(appId));
+        assertThrows(IllegalArgumentException.class, () -> wholesaleCustomerService.approveWholesaleApplication(appId));
 
         em.clear();
         WholesaleApplicationEntity persisted = em.find(WholesaleApplicationEntity.class, appId);
-        assertEquals(WholesaleApplicationStatusEn.CONVERTED, persisted.status);
+        assertEquals(WholesaleApplicationStatusEn.CONVERTED, persisted.getStatus());
     }
 
     @Test
     @TestTransaction
     @DisplayName("CONVERTED application cannot be rejected — no event fired")
-    void convertedCannotBeRejected() {
+    void convertedCannotBeRejected()
+    {
         WholesaleApplicationEntity app = createConvertedApplication();
-        UUID appId = app.id;
+        UUID appId = app.getId();
 
-        assertThrows(IllegalArgumentException.class,
-                () -> wholesaleCustomerService.rejectWholesaleApplication(appId, "Nope"));
+        assertThrows(IllegalArgumentException.class, () -> wholesaleCustomerService.rejectWholesaleApplication(appId, "Nope"));
 
         em.clear();
         WholesaleApplicationEntity persisted = em.find(WholesaleApplicationEntity.class, appId);
-        assertEquals(WholesaleApplicationStatusEn.CONVERTED, persisted.status);
+        assertEquals(WholesaleApplicationStatusEn.CONVERTED, persisted.getStatus());
     }
 
     // ─── Property 3: Rollback produces zero emails ──────────────────────────
@@ -147,12 +150,13 @@ class WholesaleMailIntegrationTest {
     @Test
     @TestTransaction
     @DisplayName("@TestTransaction rolls back → AFTER_SUCCESS observer never fires (by design)")
-    void testTransactionRollsBackSoObserverNeverFires() {
+    void testTransactionRollsBackSoObserverNeverFires()
+    {
         // Under @TestTransaction the transaction is rolled back at test end.
         // AFTER_SUCCESS observers only fire on commit — so this verifies
         // the "no email on rollback" requirement structurally.
         WholesaleApplicationEntity app = createPendingApplication();
-        UUID appId = app.id;
+        UUID appId = app.getId();
 
         var result = wholesaleCustomerService.approveWholesaleApplication(appId);
         assertEquals(WholesaleApplicationStatusEn.APPROVED, result.getStatus());
@@ -165,23 +169,24 @@ class WholesaleMailIntegrationTest {
     @Test
     @TestTransaction
     @DisplayName("application with blank applicantEmail and null accountEmail — decision still persists")
-    void decisionPersistsWithBlankRecipient() {
+    void decisionPersistsWithBlankRecipient()
+    {
         // applicant_email is NOT NULL in the DB, but can be blank (whitespace).
         // The buildDecisionEvent treats blank as "missing" and falls back to accountEmail.
         // When accountEmail is also null, the event carries a null recipient →
         // notifier skips + logs (but never throws).
         WholesaleApplicationEntity app = new WholesaleApplicationEntity();
-        app.applicantEmail = "   "; // blank — column constraint satisfied, treated as missing
-        app.accountEmail = null;
-        app.firstName = "NoEmail";
-        app.lastName = "User";
-        app.companyName = "Ghost Corp";
-        app.status = WholesaleApplicationStatusEn.PENDING;
-        app.createdAt = OffsetDateTime.now();
+        app.setApplicantEmail("   "); // blank — column constraint satisfied, treated as missing
+        app.setAccountEmail(null);
+        app.setFirstName("NoEmail");
+        app.setLastName("User");
+        app.setCompanyName("Ghost Corp");
+        app.setStatus(WholesaleApplicationStatusEn.PENDING);
+        app.setCreatedAt(OffsetDateTime.now());
         em.persist(app);
         em.flush();
 
-        UUID appId = app.id;
+        UUID appId = app.getId();
 
         // The reject call should still succeed — the event carries a null recipient
         // (blank applicantEmail + null accountEmail = null), and the notifier skips
@@ -193,16 +198,17 @@ class WholesaleMailIntegrationTest {
         em.flush();
         em.clear();
         WholesaleApplicationEntity persisted = em.find(WholesaleApplicationEntity.class, appId);
-        assertEquals(WholesaleApplicationStatusEn.REJECTED, persisted.status);
-        assertEquals("No email provided", persisted.rejectionReason);
+        assertEquals(WholesaleApplicationStatusEn.REJECTED, persisted.getStatus());
+        assertEquals("No email provided", persisted.getRejectionReason());
     }
 
     @Test
     @TestTransaction
     @DisplayName("approval decision persists regardless of notification outcome")
-    void approvalPersistsRegardlessly() {
+    void approvalPersistsRegardlessly()
+    {
         WholesaleApplicationEntity app = createPendingApplication();
-        UUID appId = app.id;
+        UUID appId = app.getId();
 
         var result = wholesaleCustomerService.approveWholesaleApplication(appId);
 
@@ -212,8 +218,8 @@ class WholesaleMailIntegrationTest {
         em.flush();
         em.clear();
         WholesaleApplicationEntity persisted = em.find(WholesaleApplicationEntity.class, appId);
-        assertEquals(WholesaleApplicationStatusEn.APPROVED, persisted.status);
-        assertNotNull(persisted.processedAt);
+        assertEquals(WholesaleApplicationStatusEn.APPROVED, persisted.getStatus());
+        assertNotNull(persisted.getProcessedAt());
     }
 
     // ─── Recipient chain: applicantEmail first, accountEmail fallback ────────
@@ -221,38 +227,40 @@ class WholesaleMailIntegrationTest {
     @Test
     @TestTransaction
     @DisplayName("event uses applicantEmail as primary recipient — approval succeeds")
-    void eventUsesApplicantEmailFirst() {
+    void eventUsesApplicantEmailFirst()
+    {
         WholesaleApplicationEntity app = new WholesaleApplicationEntity();
-        app.applicantEmail = "applicant@primary.com";
-        app.accountEmail = "account@fallback.com";
-        app.firstName = "Primary";
-        app.lastName = "Test";
-        app.companyName = "PrimaryCo";
-        app.status = WholesaleApplicationStatusEn.PENDING;
-        app.createdAt = OffsetDateTime.now();
+        app.setApplicantEmail("applicant@primary.com");
+        app.setAccountEmail("account@fallback.com");
+        app.setFirstName("Primary");
+        app.setLastName("Test");
+        app.setCompanyName("PrimaryCo");
+        app.setStatus(WholesaleApplicationStatusEn.PENDING);
+        app.setCreatedAt(OffsetDateTime.now());
         em.persist(app);
         em.flush();
 
-        var result = wholesaleCustomerService.approveWholesaleApplication(app.id);
+        var result = wholesaleCustomerService.approveWholesaleApplication(app.getId());
         assertEquals(WholesaleApplicationStatusEn.APPROVED, result.getStatus());
     }
 
     @Test
     @TestTransaction
     @DisplayName("event falls back to accountEmail when applicantEmail is blank")
-    void eventFallsBackToAccountEmail() {
+    void eventFallsBackToAccountEmail()
+    {
         WholesaleApplicationEntity app = new WholesaleApplicationEntity();
-        app.applicantEmail = "   "; // blank
-        app.accountEmail = "fallback@account.com";
-        app.firstName = "Fallback";
-        app.lastName = "Test";
-        app.companyName = "FallbackCo";
-        app.status = WholesaleApplicationStatusEn.PENDING;
-        app.createdAt = OffsetDateTime.now();
+        app.setApplicantEmail("   "); // blank
+        app.setAccountEmail("fallback@account.com");
+        app.setFirstName("Fallback");
+        app.setLastName("Test");
+        app.setCompanyName("FallbackCo");
+        app.setStatus(WholesaleApplicationStatusEn.PENDING);
+        app.setCreatedAt(OffsetDateTime.now());
         em.persist(app);
         em.flush();
 
-        var result = wholesaleCustomerService.rejectWholesaleApplication(app.id, "Testing fallback");
+        var result = wholesaleCustomerService.rejectWholesaleApplication(app.getId(), "Testing fallback");
         assertEquals(WholesaleApplicationStatusEn.REJECTED, result.getStatus());
     }
 }

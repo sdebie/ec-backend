@@ -11,7 +11,6 @@ import org.ecommerce.common.entity.CustomerEntity;
 import org.ecommerce.common.entity.UserEntity;
 import org.ecommerce.common.entity.WholesaleApplicationEntity;
 import org.ecommerce.common.entity.WholesaleProfileEntity;
-import org.ecommerce.common.enums.WholesaleApplicationStatusEn;
 import org.ecommerce.common.enums.WholesaleCustomerStatusEn;
 import org.ecommerce.common.repository.WholesaleApplicationRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -20,19 +19,18 @@ import org.junit.jupiter.api.Test;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 /**
  * Unit tests for the WholesaleCustomerService create path.
- *
+ * <p>
  * Requirements: 4.4, 4.5, 5.2, 7.1
  */
 @QuarkusTest
-class WholesaleCustomerServiceCreateTest {
-
+class WholesaleCustomerServiceCreateTest
+{
     @Inject
     WholesaleCustomerService wholesaleCustomerService;
 
@@ -41,7 +39,8 @@ class WholesaleCustomerServiceCreateTest {
 
     @SuppressWarnings("unchecked")
     @BeforeEach
-    void setUp() {
+    void setUp()
+    {
         PanacheMock.mock(WholesaleApplicationEntity.class);
         PanacheMock.mock(UserEntity.class);
         PanacheMock.mock(CustomerEntity.class);
@@ -56,7 +55,8 @@ class WholesaleCustomerServiceCreateTest {
 
     // ── Helper ──────────────────────────────────────────────────────────────
 
-    private WholesaleCustomerDto buildValidDto() {
+    private WholesaleCustomerDto buildValidDto()
+    {
         WholesaleCustomerDto dto = new WholesaleCustomerDto();
         dto.setApplicantEmail("applicant@example.com");
         dto.setEmail("account@example.com");
@@ -84,27 +84,23 @@ class WholesaleCustomerServiceCreateTest {
     // ── Test: Rejects null applicantEmail (Requirement 4.4) ──────────────────
 
     @Test
-    void createWholesaleApplication_shouldRejectNullApplicantEmail() {
+    void createWholesaleApplication_shouldRejectNullApplicantEmail()
+    {
         WholesaleCustomerDto dto = buildValidDto();
         dto.setApplicantEmail(null);
 
-        IllegalArgumentException ex = assertThrows(
-                IllegalArgumentException.class,
-                () -> wholesaleCustomerService.createWholesaleApplication(dto)
-        );
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () -> wholesaleCustomerService.createWholesaleApplication(dto));
 
         assertEquals("applicantEmail is required", ex.getMessage());
     }
 
     @Test
-    void createWholesaleApplication_shouldRejectBlankApplicantEmail() {
+    void createWholesaleApplication_shouldRejectBlankApplicantEmail()
+    {
         WholesaleCustomerDto dto = buildValidDto();
         dto.setApplicantEmail("   ");
 
-        IllegalArgumentException ex = assertThrows(
-                IllegalArgumentException.class,
-                () -> wholesaleCustomerService.createWholesaleApplication(dto)
-        );
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () -> wholesaleCustomerService.createWholesaleApplication(dto));
 
         assertEquals("applicantEmail is required", ex.getMessage());
     }
@@ -113,24 +109,21 @@ class WholesaleCustomerServiceCreateTest {
 
     @SuppressWarnings("unchecked")
     @Test
-    void createWholesaleApplication_shouldRejectDuplicateNonNullAccountEmail() {
+    void createWholesaleApplication_shouldRejectDuplicateNonNullAccountEmail()
+    {
         WholesaleCustomerDto dto = buildValidDto();
         dto.setEmail("existing@example.com");
 
         // Mock: an existing application is found with this email
         WholesaleApplicationEntity existing = new WholesaleApplicationEntity();
-        existing.id = UUID.randomUUID();
-        existing.accountEmail = "existing@example.com";
+        existing.setId(UUID.randomUUID());
+        existing.setAccountEmail("existing@example.com");
 
         PanacheQuery<PanacheEntityBase> mockQuery = mock(PanacheQuery.class);
         when(mockQuery.firstResult()).thenReturn(existing);
-        when(WholesaleApplicationEntity.find(anyString(), org.mockito.ArgumentMatchers.<Object[]>any()))
-                .thenReturn(mockQuery);
+        when(WholesaleApplicationEntity.find(anyString(), org.mockito.ArgumentMatchers.<Object[]>any())).thenReturn(mockQuery);
 
-        IllegalArgumentException ex = assertThrows(
-                IllegalArgumentException.class,
-                () -> wholesaleCustomerService.createWholesaleApplication(dto)
-        );
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () -> wholesaleCustomerService.createWholesaleApplication(dto));
 
         assertTrue(ex.getMessage().contains("wholesale application already exists with email:"));
         assertTrue(ex.getMessage().contains("existing@example.com"));
@@ -139,7 +132,8 @@ class WholesaleCustomerServiceCreateTest {
     // ── Test: Permits null account_email — no duplicate check (Requirement 4.5) ─
 
     @Test
-    void createWholesaleApplication_shouldPermitNullAccountEmail() {
+    void createWholesaleApplication_shouldPermitNullAccountEmail()
+    {
         WholesaleCustomerDto dto = buildValidDto();
         dto.setEmail(null);
 
@@ -150,7 +144,8 @@ class WholesaleCustomerServiceCreateTest {
     }
 
     @Test
-    void createWholesaleApplication_shouldPermitBlankAccountEmail() {
+    void createWholesaleApplication_shouldPermitBlankAccountEmail()
+    {
         WholesaleCustomerDto dto = buildValidDto();
         dto.setEmail("   ");
 
@@ -164,7 +159,8 @@ class WholesaleCustomerServiceCreateTest {
     // ── Test: Submitting status = APPROVED still persists PENDING (Requirement 7.1) ─
 
     @Test
-    void createWholesaleApplication_shouldPersistPendingStatus_whenInputIsApproved() {
+    void createWholesaleApplication_shouldPersistPendingStatus_whenInputIsApproved()
+    {
         WholesaleCustomerDto dto = buildValidDto();
         dto.setStatus(WholesaleCustomerStatusEn.APPROVED);
 
@@ -176,7 +172,8 @@ class WholesaleCustomerServiceCreateTest {
     }
 
     @Test
-    void createWholesaleApplication_shouldPersistPendingStatus_whenInputIsRejected() {
+    void createWholesaleApplication_shouldPersistPendingStatus_whenInputIsRejected()
+    {
         WholesaleCustomerDto dto = buildValidDto();
         dto.setStatus(WholesaleCustomerStatusEn.REJECTED);
 
@@ -187,7 +184,8 @@ class WholesaleCustomerServiceCreateTest {
     }
 
     @Test
-    void createWholesaleApplication_shouldPersistPendingStatus_whenInputStatusIsNull() {
+    void createWholesaleApplication_shouldPersistPendingStatus_whenInputStatusIsNull()
+    {
         WholesaleCustomerDto dto = buildValidDto();
         dto.setStatus(null);
 

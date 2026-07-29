@@ -8,7 +8,7 @@ import static org.junit.jupiter.api.Assertions.*;
 /**
  * Unit tests for {@link HtmlSanitizer} — tests the real OWASP policy, no mocking.
  * Validates adversarial inputs are stripped and allow-listed formatting is preserved.
- *
+ * <p>
  * Validates: Requirements 3.7
  */
 class HtmlSanitizerTest

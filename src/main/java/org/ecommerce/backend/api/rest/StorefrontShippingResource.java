@@ -15,22 +15,25 @@ import java.util.List;
  */
 @Path("/api/storefront/shipping-methods")
 @Produces(MediaType.APPLICATION_JSON)
-public class StorefrontShippingResource {
+public class StorefrontShippingResource
+{
 
     @GET
-    public List<ShippingMethodDto> getActiveShippingMethods() {
+    public List<ShippingMethodDto> getActiveShippingMethods()
+    {
         return ShippingMethodEntity.<ShippingMethodEntity>list("isActive", true)
                 .stream()
                 .map(this::toDto)
                 .toList();
     }
 
-    private ShippingMethodDto toDto(ShippingMethodEntity entity) {
+    private ShippingMethodDto toDto(ShippingMethodEntity entity)
+    {
         ShippingMethodDto dto = new ShippingMethodDto();
-        dto.id = entity.id;
-        dto.name = entity.name;
-        dto.baseFee = entity.baseFee;
-        dto.estimatedDays = entity.estimatedDays;
+        dto.setId(entity.getId());
+        dto.setName(entity.getName());
+        dto.setBaseFee(entity.getBaseFee());
+        dto.setEstimatedDays(entity.getEstimatedDays());
         return dto;
     }
 }

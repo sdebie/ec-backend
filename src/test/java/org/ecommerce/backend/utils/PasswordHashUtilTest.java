@@ -6,13 +6,14 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Unit tests for PasswordHashUtil.
- *
+ * <p>
  * Validates: Requirements 5.4, 5.6
  */
-class PasswordHashUtilTest {
-
+class PasswordHashUtilTest
+{
     @Test
-    void hash_samePlaintext_returnsSameResult() {
+    void hash_samePlaintext_returnsSameResult()
+    {
         String result1 = PasswordHashUtil.hash("password123");
         String result2 = PasswordHashUtil.hash("password123");
 
@@ -20,7 +21,8 @@ class PasswordHashUtilTest {
     }
 
     @Test
-    void hash_returnsSha256HexString() {
+    void hash_returnsSha256HexString()
+    {
         String hashed = PasswordHashUtil.hash("password123");
 
         assertNotNull(hashed);
@@ -29,33 +31,38 @@ class PasswordHashUtilTest {
     }
 
     @Test
-    void verify_matchingPassword_returnsTrue() {
+    void verify_matchingPassword_returnsTrue()
+    {
         String hashed = PasswordHashUtil.hash("password123");
 
         assertTrue(PasswordHashUtil.verify("password123", hashed));
     }
 
     @Test
-    void verify_nonMatchingPassword_returnsFalse() {
+    void verify_nonMatchingPassword_returnsFalse()
+    {
         String hashed = PasswordHashUtil.hash("password123");
 
         assertFalse(PasswordHashUtil.verify("wrong", hashed));
     }
 
     @Test
-    void verify_nullPlaintext_returnsFalse() {
+    void verify_nullPlaintext_returnsFalse()
+    {
         String hashed = PasswordHashUtil.hash("password123");
 
         assertFalse(PasswordHashUtil.verify(null, hashed));
     }
 
     @Test
-    void verify_nullStoredHash_returnsFalse() {
+    void verify_nullStoredHash_returnsFalse()
+    {
         assertFalse(PasswordHashUtil.verify("password123", null));
     }
 
     @Test
-    void hash_differentInputs_produceDifferentHashes() {
+    void hash_differentInputs_produceDifferentHashes()
+    {
         String hashA = PasswordHashUtil.hash("a");
         String hashB = PasswordHashUtil.hash("b");
 
@@ -63,11 +70,11 @@ class PasswordHashUtilTest {
     }
 
     @Test
-    void verify_specialCharacters_roundTripsCorrectly() {
+    void verify_specialCharacters_roundTripsCorrectly()
+    {
         String specialPassword = "p@$$w0rd!";
         String hashed = PasswordHashUtil.hash(specialPassword);
 
-        assertTrue(PasswordHashUtil.verify(specialPassword, hashed),
-                "Special characters must hash and verify correctly");
+        assertTrue(PasswordHashUtil.verify(specialPassword, hashed), "Special characters must hash and verify correctly");
     }
 }

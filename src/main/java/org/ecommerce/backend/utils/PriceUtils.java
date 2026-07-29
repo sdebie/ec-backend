@@ -8,23 +8,25 @@ import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.UUID;
 
-public class PriceUtils {
+public class PriceUtils
+{
 
     private static final Comparator<VariantPricesEntity> PRICE_RECENCY_COMPARATOR =
-            Comparator.comparing((VariantPricesEntity price) -> price.priceStartDate,
+            Comparator.comparing(VariantPricesEntity::getPriceStartDate,
                             Comparator.nullsFirst(LocalDateTime::compareTo))
-                    .thenComparing(price -> price.updatedAt,
+                    .thenComparing(VariantPricesEntity::getUpdatedAt,
                             Comparator.nullsFirst(LocalDateTime::compareTo))
-                    .thenComparing(price -> price.createdAt,
+                    .thenComparing(VariantPricesEntity::getCreatedAt,
                             Comparator.nullsFirst(LocalDateTime::compareTo))
-                    .thenComparing(price -> price.id,
+                    .thenComparing(VariantPricesEntity::getId,
                             Comparator.nullsFirst(UUID::compareTo));
 
     /**
      * Get the latest active price for a variant and price type within the configured date window.
      * The method name is kept for compatibility with existing callers.
      */
-    public static BigDecimal getMinimumPrice(UUID variantId, PriceTypeEn priceType) {
+    public static BigDecimal getMinimumPrice(UUID variantId, PriceTypeEn priceType)
+    {
         if (variantId == null || priceType == null) {
             return BigDecimal.ZERO;
         }
@@ -33,19 +35,20 @@ public class PriceUtils {
 
         return VariantPricesEntity.findByVariantId(variantId).stream()
                 .filter(price -> price != null
-                        && price.priceType == priceType
-                        && price.price != null
+                        && price.getPriceType() == priceType
+                        && price.getPrice() != null
                         && isWithinActiveWindow(price, now))
                 .max(PRICE_RECENCY_COMPARATOR)
-                .map(price -> price.price)
+                .map(VariantPricesEntity::getPrice)
                 .orElse(BigDecimal.ZERO);
     }
 
-    private static boolean isWithinActiveWindow(VariantPricesEntity price, LocalDateTime now) {
-        if (price.priceStartDate != null && now.isBefore(price.priceStartDate)) {
+    private static boolean isWithinActiveWindow(VariantPricesEntity price, LocalDateTime now)
+    {
+        if (price.getPriceStartDate() != null && now.isBefore(price.getPriceStartDate())) {
             return false;
         }
 
-        return price.priceEndDate == null || !now.isAfter(price.priceEndDate);
+        return price.getPriceEndDate() == null || !now.isAfter(price.getPriceEndDate());
     }
 }

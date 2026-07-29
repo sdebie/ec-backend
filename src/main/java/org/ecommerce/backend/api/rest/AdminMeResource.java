@@ -35,7 +35,7 @@ public class AdminMeResource {
         UUID id = null;
         StaffUserEntity user = StaffUserEntity.findByEmail(email);
         if (user != null) {
-            id = user.id;
+            id = user.getId();
         } else {
             LOG.warnv("Staff user not found for email: {0}", email);
         }

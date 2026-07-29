@@ -17,18 +17,19 @@ import java.util.List;
 import java.util.UUID;
 
 import static io.restassured.RestAssured.given;
-import static org.hamcrest.Matchers.*;
+import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.Mockito.when;
 
 /**
  * Integration test for StorefrontCustomerPortalResource.
  * Full HTTP round-trip with real customer JWT.
- *
+ * <p>
  * Validates: Requirements 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8
  */
 @QuarkusTest
-class StorefrontCustomerPortalResourceIT {
-
+class StorefrontCustomerPortalResourceIT
+{
     private static final String CUSTOMER_WITH_ADDR_EMAIL = "portal-test@example.com";
     private static final String CUSTOMER_NO_ADDR_EMAIL = "portal-noaddr@example.com";
 
@@ -36,65 +37,66 @@ class StorefrontCustomerPortalResourceIT {
     private CustomerEntity customerWithoutAddresses;
 
     @BeforeEach
-    void setUp() {
+    void setUp()
+    {
         PanacheMock.mock(CustomerEntity.class);
 
         // ── Customer WITH addresses and password ──────────────────────────────
         UserEntity userWithAddr = new UserEntity();
-        userWithAddr.id = UUID.randomUUID();
-        userWithAddr.email = CUSTOMER_WITH_ADDR_EMAIL;
-        userWithAddr.passwordHash = "abc123hashedvalue";
-        userWithAddr.isActive = true;
+        userWithAddr.setId(UUID.randomUUID());
+        userWithAddr.setEmail(CUSTOMER_WITH_ADDR_EMAIL);
+        userWithAddr.setPasswordHash("abc123hashedvalue");
+        userWithAddr.setActive(true);
 
         customerWithAddresses = new CustomerEntity();
-        customerWithAddresses.id = UUID.randomUUID();
-        customerWithAddresses.user = userWithAddr;
-        customerWithAddresses.firstName = "Jane";
-        customerWithAddresses.lastName = "Smith";
-        customerWithAddresses.phone = "0821234567";
-        customerWithAddresses.shopperType = CustomerTypeEn.RETAILER;
-        customerWithAddresses.status = CustomerStatusEn.ACTIVE;
+        customerWithAddresses.setId(UUID.randomUUID());
+        customerWithAddresses.setUser(userWithAddr);
+        customerWithAddresses.setFirstName("Jane");
+        customerWithAddresses.setLastName("Smith");
+        customerWithAddresses.setPhone("0821234567");
+        customerWithAddresses.setShopperType(CustomerTypeEn.RETAILER);
+        customerWithAddresses.setStatus(CustomerStatusEn.ACTIVE);
 
         CustomerAddressEntity physical = new CustomerAddressEntity();
-        physical.id = UUID.randomUUID();
-        physical.customer = customerWithAddresses;
-        physical.addressType = AddressTypeEn.PHYSICAL;
-        physical.addressLine1 = "10 Main Street";
-        physical.addressLine2 = "Unit 5";
-        physical.suburb = "Sandton";
-        physical.city = "Johannesburg";
-        physical.province = "Gauteng";
-        physical.postalCode = "2196";
+        physical.setId(UUID.randomUUID());
+        physical.setCustomer(customerWithAddresses);
+        physical.setAddressType(AddressTypeEn.PHYSICAL);
+        physical.setAddressLine1("10 Main Street");
+        physical.setAddressLine2("Unit 5");
+        physical.setSuburb("Sandton");
+        physical.setCity("Johannesburg");
+        physical.setProvince("Gauteng");
+        physical.setPostalCode("2196");
 
         CustomerAddressEntity postal = new CustomerAddressEntity();
-        postal.id = UUID.randomUUID();
-        postal.customer = customerWithAddresses;
-        postal.addressType = AddressTypeEn.POSTAL;
-        postal.addressLine1 = "PO Box 123";
-        postal.addressLine2 = null;
-        postal.suburb = null;
-        postal.city = "Cape Town";
-        postal.province = "Western Cape";
-        postal.postalCode = "8001";
+        postal.setId(UUID.randomUUID());
+        postal.setCustomer(customerWithAddresses);
+        postal.setAddressType(AddressTypeEn.POSTAL);
+        postal.setAddressLine1("PO Box 123");
+        postal.setAddressLine2(null);
+        postal.setSuburb(null);
+        postal.setCity("Cape Town");
+        postal.setProvince("Western Cape");
+        postal.setPostalCode("8001");
 
-        customerWithAddresses.addresses = List.of(physical, postal);
+        customerWithAddresses.setAddresses(List.of(physical, postal));
 
         // ── Customer WITHOUT addresses and no password ────────────────────────
         UserEntity userNoAddr = new UserEntity();
-        userNoAddr.id = UUID.randomUUID();
-        userNoAddr.email = CUSTOMER_NO_ADDR_EMAIL;
-        userNoAddr.passwordHash = null;
-        userNoAddr.isActive = true;
+        userNoAddr.setId(UUID.randomUUID());
+        userNoAddr.setEmail(CUSTOMER_NO_ADDR_EMAIL);
+        userNoAddr.setPasswordHash(null);
+        userNoAddr.setActive(true);
 
         customerWithoutAddresses = new CustomerEntity();
-        customerWithoutAddresses.id = UUID.randomUUID();
-        customerWithoutAddresses.user = userNoAddr;
-        customerWithoutAddresses.firstName = "Bob";
-        customerWithoutAddresses.lastName = "NoAddress";
-        customerWithoutAddresses.phone = null;
-        customerWithoutAddresses.shopperType = CustomerTypeEn.WHOLESALER;
-        customerWithoutAddresses.status = CustomerStatusEn.ACTIVE;
-        customerWithoutAddresses.addresses = new ArrayList<>();
+        customerWithoutAddresses.setId(UUID.randomUUID());
+        customerWithoutAddresses.setUser(userNoAddr);
+        customerWithoutAddresses.setFirstName("Bob");
+        customerWithoutAddresses.setLastName("NoAddress");
+        customerWithoutAddresses.setPhone(null);
+        customerWithoutAddresses.setShopperType(CustomerTypeEn.WHOLESALER);
+        customerWithoutAddresses.setStatus(CustomerStatusEn.ACTIVE);
+        customerWithoutAddresses.setAddresses(new ArrayList<>());
 
         // Mock entity finders
         when(CustomerEntity.findByEmail(CUSTOMER_WITH_ADDR_EMAIL)).thenReturn(customerWithAddresses);
@@ -105,7 +107,8 @@ class StorefrontCustomerPortalResourceIT {
      * Generates a customer JWT with the given email as subject and "customer" role.
      * Uses SmallRye JWT Build with the project's private key.
      */
-    private String generateCustomerJwt(String email) {
+    private String generateCustomerJwt(String email)
+    {
         return Jwt.subject(email)
                 .issuer("http://localhost:8080")
                 .groups("customer")
@@ -115,14 +118,15 @@ class StorefrontCustomerPortalResourceIT {
     // ── Tests ────────────────────────────────────────────────────────────────
 
     @Test
-    void getCustomerPortal_withValidJwt_returnsCorrectJsonShape() {
+    void getCustomerPortal_withValidJwt_returnsCorrectJsonShape()
+    {
         String token = generateCustomerJwt(CUSTOMER_WITH_ADDR_EMAIL);
 
         given()
                 .header("Authorization", "Bearer " + token)
-        .when()
+                .when()
                 .get("/api/storefront/customer-portal")
-        .then()
+                .then()
                 .statusCode(200)
                 .body("email", equalTo(CUSTOMER_WITH_ADDR_EMAIL))
                 .body("shopperType", equalTo("RETAILER"))
@@ -147,23 +151,25 @@ class StorefrontCustomerPortalResourceIT {
     }
 
     @Test
-    void getCustomerPortal_withoutToken_returns401() {
+    void getCustomerPortal_withoutToken_returns401()
+    {
         given()
-        .when()
+                .when()
                 .get("/api/storefront/customer-portal")
-        .then()
+                .then()
                 .statusCode(401);
     }
 
     @Test
-    void getCustomerPortal_customerWithNoAddresses_addressesAreNull() {
+    void getCustomerPortal_customerWithNoAddresses_addressesAreNull()
+    {
         String token = generateCustomerJwt(CUSTOMER_NO_ADDR_EMAIL);
 
         given()
                 .header("Authorization", "Bearer " + token)
-        .when()
+                .when()
                 .get("/api/storefront/customer-portal")
-        .then()
+                .then()
                 .statusCode(200)
                 .body("email", equalTo(CUSTOMER_NO_ADDR_EMAIL))
                 .body("shopperType", equalTo("WHOLESALER"))

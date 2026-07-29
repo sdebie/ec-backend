@@ -21,7 +21,6 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
-import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 
@@ -31,25 +30,26 @@ import static org.junit.jupiter.api.Assertions.*;
  * Property-based test verifying that the extracted {@link CustomerAdminMapper} pure methods
  * produce output identical to the old inline mapping logic that previously lived in
  * {@code CustomerAdminService}.
- *
+ * <p>
  * Tests the pure (non-query-bearing) methods:
  * <ul>
  *   <li>{@code toListItemDto(CustomerEntity, WholesaleApplicationEntity)} — pure field copy</li>
  *   <li>{@code toDetailDto(CustomerEntity, WholesaleApplicationEntity, List<OrderEntity>)} — pure</li>
  *   <li>{@code toOrderRefDto(OrderEntity)} — pure</li>
  * </ul>
- *
+ * <p>
  * The reference implementation below is a direct transcription of the deleted inline
  * methods from CustomerAdminService — a field-by-field copy with null-safe navigation.
- *
+ * <p>
  * Validates: Requirements 1.3, 2.4, 4.2, 4.4
  */
-public class CustomerAdminMapperOutputPreservationPropertyTest {
-
+public class CustomerAdminMapperOutputPreservationPropertyTest
+{
     // Instantiate the mapper with a real WholesaleMapperImpl for delegation
     private final CustomerAdminMapper mapper;
 
-    public CustomerAdminMapperOutputPreservationPropertyTest() {
+    public CustomerAdminMapperOutputPreservationPropertyTest()
+    {
         CustomerAdminMapper m = new CustomerAdminMapper();
         // Inject the real WholesaleMapper (MapStruct-generated) via reflection
         try {
@@ -66,55 +66,52 @@ public class CustomerAdminMapperOutputPreservationPropertyTest {
     // Reference implementations (old inline logic from CustomerAdminService)
     // ══════════════════════════════════════════════════════════════════════════
 
-    private AdminCustomerListItemDto referenceToListItemDto(CustomerEntity c, WholesaleApplicationEntity app) {
+    private AdminCustomerListItemDto referenceToListItemDto(CustomerEntity c, WholesaleApplicationEntity app)
+    {
         AdminCustomerListItemDto dto = new AdminCustomerListItemDto();
-        dto.id = c.id.toString();
-        dto.firstName = c.firstName;
-        dto.lastName = c.lastName;
-        dto.email = c.user != null ? c.user.email : null;
-        dto.status = c.status != null ? c.status.name() : null;
-        dto.shopperType = c.shopperType != null ? c.shopperType.name() : null;
-        dto.registeredAt = c.user != null && c.user.createdAt != null
-                ? c.user.createdAt.toString()
-                : null;
-        dto.wholesaleApplicationStatus = app != null && app.status != null
-                ? app.status.name()
-                : null;
+        dto.setId(c.getId().toString());
+        dto.setFirstName(c.getFirstName());
+        dto.setLastName(c.getLastName());
+        dto.setEmail(c.getUser() != null ? c.getUser().getEmail() : null);
+        dto.setStatus(c.getStatus() != null ? c.getStatus().name() : null);
+        dto.setShopperType(c.getShopperType() != null ? c.getShopperType().name() : null);
+        dto.setRegisteredAt(c.getUser() != null && c.getUser().getCreatedAt() != null ? c.getUser().getCreatedAt().toString() : null);
+        dto.setWholesaleApplicationStatus(app != null && app.getStatus() != null ? app.getStatus().name() : null);
         return dto;
     }
 
-    private AdminOrderRefDto referenceToOrderRefDto(OrderEntity o) {
+    private AdminOrderRefDto referenceToOrderRefDto(OrderEntity o)
+    {
         AdminOrderRefDto dto = new AdminOrderRefDto();
-        dto.id = o.id.toString();
-        dto.reference = "ORD-" + o.id.toString().substring(0, 8).toUpperCase();
-        dto.placedAt = o.createdAt != null ? o.createdAt.toString() : null;
-        dto.total = o.totalAmount != null ? o.totalAmount.doubleValue() : 0.0;
-        dto.status = o.status != null ? o.status.name() : null;
+        dto.setId(o.getId().toString());
+        dto.setReference("ORD-" + o.getId().toString().substring(0, 8).toUpperCase());
+        dto.setPlacedAt(o.getCreatedAt() != null ? o.getCreatedAt().toString() : null);
+        dto.setTotal(o.getTotalAmount() != null ? o.getTotalAmount().doubleValue() : 0.0);
+        dto.setStatus(o.getStatus() != null ? o.getStatus().name() : null);
         return dto;
     }
 
     private AdminCustomerDetailDto referenceToDetailDto(CustomerEntity c,
                                                         WholesaleApplicationEntity app,
-                                                        List<OrderEntity> orders) {
+                                                        List<OrderEntity> orders)
+    {
         AdminCustomerDetailDto dto = new AdminCustomerDetailDto();
-        dto.id = c.id.toString();
-        dto.firstName = c.firstName;
-        dto.lastName = c.lastName;
-        dto.email = c.user != null ? c.user.email : null;
-        dto.phone = c.phone;
-        dto.status = c.status != null ? c.status.name() : null;
-        dto.shopperType = c.shopperType != null ? c.shopperType.name() : null;
-        dto.registeredAt = c.user != null && c.user.createdAt != null
-                ? c.user.createdAt.toString()
-                : null;
+        dto.setId(c.getId().toString());
+        dto.setFirstName(c.getFirstName());
+        dto.setLastName(c.getLastName());
+        dto.setEmail(c.getUser() != null ? c.getUser().getEmail() : null);
+        dto.setPhone(c.getPhone());
+        dto.setStatus(c.getStatus() != null ? c.getStatus().name() : null);
+        dto.setShopperType(c.getShopperType() != null ? c.getShopperType().name() : null);
+        dto.setRegisteredAt(c.getUser() != null && c.getUser().getCreatedAt() != null ? c.getUser().getCreatedAt().toString() : null);
 
         // Wholesale application delegates to WholesaleMapper — use same impl
         WholesaleMapper wholesaleMapper = new WholesaleMapperImpl();
-        dto.wholesaleApplication = app != null ? wholesaleMapper.toDetailsDto(app) : null;
+        dto.setWholesaleApplication(app != null ? wholesaleMapper.toDetailsDto(app) : null);
 
-        dto.recentOrders = orders.stream()
+        dto.setRecentOrders(orders.stream()
                 .map(this::referenceToOrderRefDto)
-                .toList();
+                .toList());
 
         return dto;
     }
@@ -124,22 +121,19 @@ public class CustomerAdminMapperOutputPreservationPropertyTest {
     // ══════════════════════════════════════════════════════════════════════════
 
     @Property(tries = 200)
-    void toListItemDto_pureOverload_matchesOldInlineLogic(
-            @ForAll("customerEntities") CustomerEntity customer,
-            @ForAll("nullableWholesaleApps") WholesaleApplicationEntity app
-    ) {
+    void toListItemDto_pureOverload_matchesOldInlineLogic(@ForAll("customerEntities") CustomerEntity customer, @ForAll("nullableWholesaleApps") WholesaleApplicationEntity app)
+    {
         AdminCustomerListItemDto mapperResult = mapper.toListItemDto(customer, app);
         AdminCustomerListItemDto referenceResult = referenceToListItemDto(customer, app);
 
-        assertEquals(referenceResult.id, mapperResult.id, "id mismatch");
-        assertEquals(referenceResult.firstName, mapperResult.firstName, "firstName mismatch");
-        assertEquals(referenceResult.lastName, mapperResult.lastName, "lastName mismatch");
-        assertEquals(referenceResult.email, mapperResult.email, "email mismatch");
-        assertEquals(referenceResult.status, mapperResult.status, "status mismatch");
-        assertEquals(referenceResult.shopperType, mapperResult.shopperType, "shopperType mismatch");
-        assertEquals(referenceResult.registeredAt, mapperResult.registeredAt, "registeredAt mismatch");
-        assertEquals(referenceResult.wholesaleApplicationStatus, mapperResult.wholesaleApplicationStatus,
-                "wholesaleApplicationStatus mismatch");
+        assertEquals(referenceResult.getId(), mapperResult.getId(), "id mismatch");
+        assertEquals(referenceResult.getFirstName(), mapperResult.getFirstName(), "firstName mismatch");
+        assertEquals(referenceResult.getLastName(), mapperResult.getLastName(), "lastName mismatch");
+        assertEquals(referenceResult.getEmail(), mapperResult.getEmail(), "email mismatch");
+        assertEquals(referenceResult.getStatus(), mapperResult.getStatus(), "status mismatch");
+        assertEquals(referenceResult.getShopperType(), mapperResult.getShopperType(), "shopperType mismatch");
+        assertEquals(referenceResult.getRegisteredAt(), mapperResult.getRegisteredAt(), "registeredAt mismatch");
+        assertEquals(referenceResult.getWholesaleApplicationStatus(), mapperResult.getWholesaleApplicationStatus(), "wholesaleApplicationStatus mismatch");
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -149,15 +143,16 @@ public class CustomerAdminMapperOutputPreservationPropertyTest {
     @Property(tries = 200)
     void toOrderRefDto_matchesOldInlineLogic(
             @ForAll("orderEntities") OrderEntity order
-    ) {
+    )
+    {
         AdminOrderRefDto mapperResult = mapper.toOrderRefDto(order);
         AdminOrderRefDto referenceResult = referenceToOrderRefDto(order);
 
-        assertEquals(referenceResult.id, mapperResult.id, "id mismatch");
-        assertEquals(referenceResult.reference, mapperResult.reference, "reference mismatch");
-        assertEquals(referenceResult.placedAt, mapperResult.placedAt, "placedAt mismatch");
-        assertEquals(referenceResult.total, mapperResult.total, 0.001, "total mismatch");
-        assertEquals(referenceResult.status, mapperResult.status, "status mismatch");
+        assertEquals(referenceResult.getId(), mapperResult.getId(), "id mismatch");
+        assertEquals(referenceResult.getReference(), mapperResult.getReference(), "reference mismatch");
+        assertEquals(referenceResult.getPlacedAt(), mapperResult.getPlacedAt(), "placedAt mismatch");
+        assertEquals(referenceResult.getTotal(), mapperResult.getTotal(), 0.001, "total mismatch");
+        assertEquals(referenceResult.getStatus(), mapperResult.getStatus(), "status mismatch");
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -165,39 +160,35 @@ public class CustomerAdminMapperOutputPreservationPropertyTest {
     // ══════════════════════════════════════════════════════════════════════════
 
     @Property(tries = 200)
-    void toDetailDto_matchesOldInlineLogic(
-            @ForAll("customerEntities") CustomerEntity customer,
-            @ForAll("nullableWholesaleApps") WholesaleApplicationEntity app,
-            @ForAll("orderLists") List<OrderEntity> orders
-    ) {
+    void toDetailDto_matchesOldInlineLogic(@ForAll("customerEntities") CustomerEntity customer, @ForAll("nullableWholesaleApps") WholesaleApplicationEntity app, @ForAll("orderLists") List<OrderEntity> orders)
+    {
         AdminCustomerDetailDto mapperResult = mapper.toDetailDto(customer, app, orders);
         AdminCustomerDetailDto referenceResult = referenceToDetailDto(customer, app, orders);
 
         // Customer fields
-        assertEquals(referenceResult.id, mapperResult.id, "id mismatch");
-        assertEquals(referenceResult.firstName, mapperResult.firstName, "firstName mismatch");
-        assertEquals(referenceResult.lastName, mapperResult.lastName, "lastName mismatch");
-        assertEquals(referenceResult.email, mapperResult.email, "email mismatch");
-        assertEquals(referenceResult.phone, mapperResult.phone, "phone mismatch");
-        assertEquals(referenceResult.status, mapperResult.status, "status mismatch");
-        assertEquals(referenceResult.shopperType, mapperResult.shopperType, "shopperType mismatch");
-        assertEquals(referenceResult.registeredAt, mapperResult.registeredAt, "registeredAt mismatch");
+        assertEquals(referenceResult.getId(), mapperResult.getId(), "id mismatch");
+        assertEquals(referenceResult.getFirstName(), mapperResult.getFirstName(), "firstName mismatch");
+        assertEquals(referenceResult.getLastName(), mapperResult.getLastName(), "lastName mismatch");
+        assertEquals(referenceResult.getEmail(), mapperResult.getEmail(), "email mismatch");
+        assertEquals(referenceResult.getPhone(), mapperResult.getPhone(), "phone mismatch");
+        assertEquals(referenceResult.getStatus(), mapperResult.getStatus(), "status mismatch");
+        assertEquals(referenceResult.getShopperType(), mapperResult.getShopperType(), "shopperType mismatch");
+        assertEquals(referenceResult.getRegisteredAt(), mapperResult.getRegisteredAt(), "registeredAt mismatch");
 
         // Wholesale application
-        assertWholesaleApplicationEquals(referenceResult.wholesaleApplication, mapperResult.wholesaleApplication);
+        assertWholesaleApplicationEquals(referenceResult.getWholesaleApplication(), mapperResult.getWholesaleApplication());
 
         // Recent orders
-        assertNotNull(mapperResult.recentOrders);
-        assertEquals(referenceResult.recentOrders.size(), mapperResult.recentOrders.size(),
-                "recentOrders size mismatch");
-        for (int i = 0; i < referenceResult.recentOrders.size(); i++) {
-            AdminOrderRefDto refOrder = referenceResult.recentOrders.get(i);
-            AdminOrderRefDto mapOrder = mapperResult.recentOrders.get(i);
-            assertEquals(refOrder.id, mapOrder.id, "order[" + i + "].id mismatch");
-            assertEquals(refOrder.reference, mapOrder.reference, "order[" + i + "].reference mismatch");
-            assertEquals(refOrder.placedAt, mapOrder.placedAt, "order[" + i + "].placedAt mismatch");
-            assertEquals(refOrder.total, mapOrder.total, 0.001, "order[" + i + "].total mismatch");
-            assertEquals(refOrder.status, mapOrder.status, "order[" + i + "].status mismatch");
+        assertNotNull(mapperResult.getRecentOrders());
+        assertEquals(referenceResult.getRecentOrders().size(), mapperResult.getRecentOrders().size(), "recentOrders size mismatch");
+        for (int i = 0; i < referenceResult.getRecentOrders().size(); i++) {
+            AdminOrderRefDto refOrder = referenceResult.getRecentOrders().get(i);
+            AdminOrderRefDto mapOrder = mapperResult.getRecentOrders().get(i);
+            assertEquals(refOrder.getId(), mapOrder.getId(), "order[" + i + "].id mismatch");
+            assertEquals(refOrder.getReference(), mapOrder.getReference(), "order[" + i + "].reference mismatch");
+            assertEquals(refOrder.getPlacedAt(), mapOrder.getPlacedAt(), "order[" + i + "].placedAt mismatch");
+            assertEquals(refOrder.getTotal(), mapOrder.getTotal(), 0.001, "order[" + i + "].total mismatch");
+            assertEquals(refOrder.getStatus(), mapOrder.getStatus(), "order[" + i + "].status mismatch");
         }
     }
 
@@ -205,8 +196,8 @@ public class CustomerAdminMapperOutputPreservationPropertyTest {
     // Helpers
     // ══════════════════════════════════════════════════════════════════════════
 
-    private void assertWholesaleApplicationEquals(WholesaleApplicationDetailsDto expected,
-                                                  WholesaleApplicationDetailsDto actual) {
+    private void assertWholesaleApplicationEquals(WholesaleApplicationDetailsDto expected, WholesaleApplicationDetailsDto actual)
+    {
         if (expected == null) {
             assertNull(actual, "wholesaleApplication should be null");
             return;
@@ -226,7 +217,8 @@ public class CustomerAdminMapperOutputPreservationPropertyTest {
     // ══════════════════════════════════════════════════════════════════════════
 
     @Provide
-    Arbitrary<CustomerEntity> customerEntities() {
+    Arbitrary<CustomerEntity> customerEntities()
+    {
         Arbitrary<UUID> ids = Arbitraries.create(UUID::randomUUID);
         Arbitrary<String> nullableStrings = Arbitraries.oneOf(
                 Arbitraries.just(null),
@@ -249,18 +241,19 @@ public class CustomerAdminMapperOutputPreservationPropertyTest {
                         nullableStatuses, nullableTypes, nullableUsers)
                 .as((id, firstName, lastName, phone, status, shopperType, user) -> {
                     CustomerEntity c = new CustomerEntity();
-                    c.id = id;
-                    c.firstName = firstName;
-                    c.lastName = lastName;
-                    c.phone = phone;
-                    c.status = status;
-                    c.shopperType = shopperType;
-                    c.user = user;
+                    c.setId(id);
+                    c.setFirstName(firstName);
+                    c.setLastName(lastName);
+                    c.setPhone(phone);
+                    c.setStatus(status);
+                    c.setShopperType(shopperType);
+                    c.setUser(user);
                     return c;
                 });
     }
 
-    private Arbitrary<UserEntity> buildUserEntities() {
+    private Arbitrary<UserEntity> buildUserEntities()
+    {
         Arbitrary<String> emails = Arbitraries.strings().alpha().ofMinLength(3).ofMaxLength(8)
                 .map(s -> s.toLowerCase() + "@example.com");
         Arbitrary<OffsetDateTime> nullableCreatedAts = Arbitraries.oneOf(
@@ -273,22 +266,24 @@ public class CustomerAdminMapperOutputPreservationPropertyTest {
         return Combinators.combine(emails, nullableCreatedAts)
                 .as((email, createdAt) -> {
                     UserEntity u = new UserEntity();
-                    u.id = UUID.randomUUID();
-                    u.email = email;
-                    u.createdAt = createdAt;
+                    u.setId(UUID.randomUUID());
+                    u.setEmail(email);
+                    u.setCreatedAt(createdAt);
                     return u;
                 });
     }
 
     @Provide
-    Arbitrary<WholesaleApplicationEntity> nullableWholesaleApps() {
+    Arbitrary<WholesaleApplicationEntity> nullableWholesaleApps()
+    {
         return Arbitraries.oneOf(
                 Arbitraries.just(null),
                 buildWholesaleApps()
         );
     }
 
-    private Arbitrary<WholesaleApplicationEntity> buildWholesaleApps() {
+    private Arbitrary<WholesaleApplicationEntity> buildWholesaleApps()
+    {
         Arbitrary<UUID> ids = Arbitraries.create(UUID::randomUUID);
         Arbitrary<WholesaleApplicationStatusEn> nullableStatuses = Arbitraries.oneOf(
                 Arbitraries.just(null),
@@ -302,7 +297,7 @@ public class CustomerAdminMapperOutputPreservationPropertyTest {
                 Arbitraries.just(null),
                 Arbitraries.create(UUID::randomUUID).map(id -> {
                     CustomerEntity c = new CustomerEntity();
-                    c.id = id;
+                    c.setId(id);
                     return c;
                 })
         );
@@ -317,19 +312,20 @@ public class CustomerAdminMapperOutputPreservationPropertyTest {
                         nullableStrings, nullableCustomers, nullableDates)
                 .as((id, status, firstName, companyName, accountEmail, customer, createdAt) -> {
                     WholesaleApplicationEntity e = new WholesaleApplicationEntity();
-                    e.id = id;
-                    e.status = status;
-                    e.firstName = firstName;
-                    e.companyName = companyName;
-                    e.accountEmail = accountEmail;
-                    e.customer = customer;
-                    e.createdAt = createdAt;
+                    e.setId(id);
+                    e.setStatus(status);
+                    e.setFirstName(firstName);
+                    e.setCompanyName(companyName);
+                    e.setAccountEmail(accountEmail);
+                    e.setCustomer(customer);
+                    e.setCreatedAt(createdAt);
                     return e;
                 });
     }
 
     @Provide
-    Arbitrary<OrderEntity> orderEntities() {
+    Arbitrary<OrderEntity> orderEntities()
+    {
         Arbitrary<UUID> ids = Arbitraries.create(UUID::randomUUID);
         Arbitrary<BigDecimal> nullableTotals = Arbitraries.oneOf(
                 Arbitraries.just(null),
@@ -350,16 +346,17 @@ public class CustomerAdminMapperOutputPreservationPropertyTest {
         return Combinators.combine(ids, nullableTotals, nullableStatuses, nullableCreatedAts)
                 .as((id, totalAmount, status, createdAt) -> {
                     OrderEntity o = new OrderEntity();
-                    o.id = id;
-                    o.totalAmount = totalAmount;
-                    o.status = status;
-                    o.createdAt = createdAt;
+                    o.setId(id);
+                    o.setTotalAmount(totalAmount);
+                    o.setStatus(status);
+                    o.setCreatedAt(createdAt);
                     return o;
                 });
     }
 
     @Provide
-    Arbitrary<List<OrderEntity>> orderLists() {
+    Arbitrary<List<OrderEntity>> orderLists()
+    {
         return orderEntities().list().ofMinSize(0).ofMaxSize(5);
     }
 }

@@ -18,7 +18,8 @@ import java.util.Map;
  * Service for the Customer Portal — handles profile retrieval and password changes.
  */
 @ApplicationScoped
-public class CustomerPortalService {
+public class CustomerPortalService
+{
 
     private static final Logger LOG = Logger.getLogger(CustomerPortalService.class);
 
@@ -29,7 +30,8 @@ public class CustomerPortalService {
      * @return the fully mapped portal profile DTO
      * @throws WebApplicationException 404 if customer not found
      */
-    public StorefrontCustomerPortalDto getPortalProfile(String email) {
+    public StorefrontCustomerPortalDto getPortalProfile(String email)
+    {
         CustomerEntity customer = CustomerEntity.findByEmail(email);
         if (customer == null) {
             LOG.warnf("Customer portal profile requested for unknown email: %s", email);
@@ -40,22 +42,22 @@ public class CustomerPortalService {
         }
 
         StorefrontCustomerPortalDto dto = new StorefrontCustomerPortalDto();
-        dto.email = customer.user != null ? customer.user.email : null;
-        dto.firstName = customer.firstName;
-        dto.lastName = customer.lastName;
-        dto.phone = customer.phone;
+        dto.setEmail(customer.getUser() != null ? customer.getUser().getEmail() : null);
+        dto.setFirstName(customer.getFirstName());
+        dto.setLastName(customer.getLastName());
+        dto.setPhone(customer.getPhone());
 
         // Map shopper type
-        dto.shopperType = customer.shopperType != null ? customer.shopperType.name() : "GUEST";
+        dto.setShopperType(customer.getShopperType() != null ? customer.getShopperType().name() : "GUEST");
 
         // Map addresses
-        dto.physicalAddress = mapAddress(customer, AddressTypeEn.PHYSICAL);
-        dto.postalAddress = mapAddress(customer, AddressTypeEn.POSTAL);
+        dto.setPhysicalAddress(mapAddress(customer, AddressTypeEn.PHYSICAL));
+        dto.setPostalAddress(mapAddress(customer, AddressTypeEn.POSTAL));
 
         // Determine hasPassword
-        dto.hasPassword = customer.user != null
-                && customer.user.passwordHash != null
-                && !customer.user.passwordHash.isEmpty();
+        dto.setHasPassword(customer.getUser() != null
+                && customer.getUser().getPasswordHash() != null
+                && !customer.getUser().getPasswordHash().isEmpty());
 
         return dto;
     }
@@ -69,7 +71,8 @@ public class CustomerPortalService {
      * @throws WebApplicationException on validation or authentication failure
      */
     @Transactional
-    public void changePassword(String email, String currentPassword, String newPassword) {
+    public void changePassword(String email, String currentPassword, String newPassword)
+    {
         CustomerEntity customer = CustomerEntity.findByEmail(email);
         if (customer == null) {
             LOG.warnf("Password change attempted for unknown email: %s", email);
@@ -79,10 +82,10 @@ public class CustomerPortalService {
                             .build());
         }
 
-        UserEntity user = customer.user;
+        UserEntity user = customer.getUser();
 
         // Check if the user has a local password set
-        if (user.passwordHash == null || user.passwordHash.isEmpty()) {
+        if (user.getPasswordHash() == null || user.getPasswordHash().isEmpty()) {
             LOG.warnf("Password change attempted for account with no local password: %s", email);
             throw new WebApplicationException(
                     Response.status(Response.Status.BAD_REQUEST)
@@ -91,7 +94,7 @@ public class CustomerPortalService {
         }
 
         // Verify current password
-        if (!PasswordHashUtil.verify(currentPassword, user.passwordHash)) {
+        if (!PasswordHashUtil.verify(currentPassword, user.getPasswordHash())) {
             LOG.warnf("Incorrect current password during password change for: %s", email);
             throw new WebApplicationException(
                     Response.status(Response.Status.UNAUTHORIZED)
@@ -108,28 +111,31 @@ public class CustomerPortalService {
         }
 
         // Hash and persist
-        user.passwordHash = PasswordHashUtil.hash(newPassword);
+        user.setPasswordHash(PasswordHashUtil.hash(newPassword));
         user.persist();
     }
 
     // ── Private helpers ──────────────────────────────────────────────────────
 
-    private StorefrontCustomerPortalDto.AddressDto mapAddress(CustomerEntity customer, AddressTypeEn type) {
-        return customer.addresses.stream()
-                .filter(a -> a.addressType == type)
+    private StorefrontCustomerPortalDto.AddressDto mapAddress(CustomerEntity customer, AddressTypeEn type)
+    {
+        return customer.getAddresses()
+                .stream()
+                .filter(a -> a.getAddressType() == type)
                 .findFirst()
                 .map(this::toAddressDto)
                 .orElse(null);
     }
 
-    private StorefrontCustomerPortalDto.AddressDto toAddressDto(CustomerAddressEntity entity) {
+    private StorefrontCustomerPortalDto.AddressDto toAddressDto(CustomerAddressEntity entity)
+    {
         StorefrontCustomerPortalDto.AddressDto dto = new StorefrontCustomerPortalDto.AddressDto();
-        dto.line1 = entity.addressLine1;
-        dto.line2 = entity.addressLine2;
-        dto.suburb = entity.suburb;
-        dto.city = entity.city;
-        dto.province = entity.province;
-        dto.postalCode = entity.postalCode;
+        dto.setLine1(entity.getAddressLine1());
+        dto.setLine2(entity.getAddressLine2());
+        dto.setSuburb(entity.getSuburb());
+        dto.setCity(entity.getCity());
+        dto.setProvince(entity.getProvince());
+        dto.setPostalCode(entity.getPostalCode());
         return dto;
     }
 }

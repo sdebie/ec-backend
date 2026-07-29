@@ -3,10 +3,10 @@ package org.ecommerce.backend.service;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import org.ecommerce.backend.mapper.SettingsMapper;
+import org.ecommerce.common.dto.CountrySettingsDto;
 import org.ecommerce.common.dto.SettingsDto;
 import org.ecommerce.common.dto.ShippingMethodDto;
 import org.ecommerce.common.dto.StoreSettingsDto;
-import org.ecommerce.common.dto.CountrySettingsDto;
 import org.ecommerce.common.entity.ShippingMethodEntity;
 import org.ecommerce.common.entity.StoreSettingsEntity;
 import org.ecommerce.common.repository.SettingsRepository;
@@ -15,7 +15,8 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 @ApplicationScoped
-public class SettingsService {
+public class SettingsService
+{
 
     @Inject
     SettingsRepository settingsRepository;
@@ -23,47 +24,54 @@ public class SettingsService {
     @Inject
     SettingsMapper settingsMapper;
 
-    public SettingsDto getSettings() {
+    public SettingsDto getSettings()
+    {
         SettingsDto settingsDto = new SettingsDto();
-        settingsDto.storeSettings = getAllSettings();
-        settingsDto.shippingMethods = getShippingMethods();
-        settingsDto.countrySettings = getCountrySettings();
+        settingsDto.setStoreSettings(getAllSettings());
+        settingsDto.setShippingMethods(getShippingMethods());
+        settingsDto.setCountrySettings(getCountrySettings());
         return settingsDto;
     }
 
-    public List<StoreSettingsDto> getAllSettings() {
+    public List<StoreSettingsDto> getAllSettings()
+    {
         return settingsMapper.mapStoreSettingsEntityToDtoList(settingsRepository.getAllStoreSettings());
     }
 
-    public List<ShippingMethodDto> getShippingMethods() {
+    public List<ShippingMethodDto> getShippingMethods()
+    {
         return settingsMapper.mapShippingMethodEntityToDtoList(settingsRepository.getAllShippingMethods());
     }
 
-    public List<CountrySettingsDto> getCountrySettings() {
+    public List<CountrySettingsDto> getCountrySettings()
+    {
         return settingsMapper.mapCountrySettingsEntityToDtoList(settingsRepository.getAllCountrySettings());
     }
 
-    public List<StoreSettingsDto> saveStoreSettings(List<StoreSettingsDto> settings) {
+    public List<StoreSettingsDto> saveStoreSettings(List<StoreSettingsDto> settings)
+    {
         return settings.stream().map(dto -> {
-            StoreSettingsEntity entity = StoreSettingsEntity.findById(dto.key);
+            StoreSettingsEntity entity = StoreSettingsEntity.findById(dto.getKey());
             if (entity == null) {
                 entity = new StoreSettingsEntity();
-                entity.key = dto.key;
+                entity.setKey(dto.getKey());
             }
             settingsMapper.mapStoreSettingsDtoToEntity(dto, entity);
             settingsRepository.saveStoreSettings(entity);
             return settingsMapper.mapStoreSettingsEntityToDto(entity);
         }).collect(Collectors.toList());
     }
-    public ShippingMethodDto saveShippingMethod(ShippingMethodDto methodDto) {
+
+    public ShippingMethodDto saveShippingMethod(ShippingMethodDto methodDto)
+    {
         ShippingMethodEntity entity;
-        if (methodDto.id == null) {
+        if (methodDto.getId() == null) {
             entity = settingsMapper.mapShippingMethodDtoToEntity(methodDto, new ShippingMethodEntity());
         } else {
-            entity = ShippingMethodEntity.findById(methodDto.id);
+            entity = ShippingMethodEntity.findById(methodDto.getId());
             if (entity == null) {
                 entity = new ShippingMethodEntity();
-                entity.id = methodDto.id;
+                entity.setId(methodDto.getId());
             }
             settingsMapper.mapShippingMethodDtoToEntity(methodDto, entity);
         }

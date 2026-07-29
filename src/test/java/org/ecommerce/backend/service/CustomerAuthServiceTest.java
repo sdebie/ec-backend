@@ -20,35 +20,38 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 /**
  * Unit test for {@link CustomerAuthService#generateToken(CustomerEntity)}.
  * Validates shopperType claim correctness (REQ 8.1, 8.2, 11.8).
- *
+ * <p>
  * Plain JUnit 5 — the service is instantiated directly with the issuer
  * field set reflectively (no need for a full Quarkus context).
  */
-class CustomerAuthServiceTest {
-
+class CustomerAuthServiceTest
+{
     private CustomerAuthService customerAuthService;
 
     @BeforeEach
-    void setUp() throws Exception {
+    void setUp() throws Exception
+    {
         customerAuthService = new CustomerAuthService();
         Field issuerField = CustomerAuthService.class.getDeclaredField("issuer");
         issuerField.setAccessible(true);
         issuerField.set(customerAuthService, "http://localhost:8080");
     }
 
-    private CustomerEntity buildCustomer(CustomerTypeEn shopperType) {
+    private CustomerEntity buildCustomer(CustomerTypeEn shopperType)
+    {
         UserEntity user = new UserEntity();
-        user.id = UUID.randomUUID();
-        user.email = "test-" + UUID.randomUUID() + "@example.com";
+        user.setId(UUID.randomUUID());
+        user.setEmail("test-" + UUID.randomUUID() + "@example.com");
 
         CustomerEntity ce = new CustomerEntity();
-        ce.id = UUID.randomUUID();
-        ce.user = user;
-        ce.shopperType = shopperType;
+        ce.setId(UUID.randomUUID());
+        ce.setUser(user);
+        ce.setShopperType(shopperType);
         return ce;
     }
 
-    private JsonObject decodePayload(String token) {
+    private JsonObject decodePayload(String token)
+    {
         String[] parts = token.split("\\.");
         String json = new String(Base64.getUrlDecoder().decode(parts[1]), StandardCharsets.UTF_8);
         return Json.createReader(new StringReader(json)).readObject();
@@ -56,7 +59,8 @@ class CustomerAuthServiceTest {
 
     @Test
     @DisplayName("generateToken with shopperType=null produces claim 'RETAILER' (REQ 8.1, 11.8)")
-    void nullShopperType_defaultsToRetailer() {
+    void nullShopperType_defaultsToRetailer()
+    {
         CustomerEntity ce = buildCustomer(null);
 
         String token = customerAuthService.generateToken(ce);
@@ -68,7 +72,8 @@ class CustomerAuthServiceTest {
 
     @Test
     @DisplayName("generateToken with shopperType=WHOLESALER produces claim 'WHOLESALER' (REQ 8.2)")
-    void wholesalerShopperType_producesWholesalerClaim() {
+    void wholesalerShopperType_producesWholesalerClaim()
+    {
         CustomerEntity ce = buildCustomer(CustomerTypeEn.WHOLESALER);
 
         String token = customerAuthService.generateToken(ce);

@@ -24,7 +24,8 @@ import static org.ecommerce.common.util.CsvImportUtils.isBlank;
  * same diff semantics).
  */
 @ApplicationScoped
-public class ProductPriceImportValidator {
+public class ProductPriceImportValidator
+{
 
     @Inject
     ProductVariantRepository productVariantRepository;
@@ -32,19 +33,16 @@ public class ProductPriceImportValidator {
     /**
      * Result of validating and diffing a single price import row.
      *
-     * @param variant          the looked-up variant (null if SKU is blank or not found)
-     * @param validationErrors accumulated validation errors (includes any parse errors passed in)
-     * @param hasChanges       whether the proposed prices differ from current prices
+     * @param variant               the looked-up variant (null if SKU is blank or not found)
+     * @param validationErrors      accumulated validation errors (includes any parse errors passed in)
+     * @param hasChanges            whether the proposed prices differ from current prices
      * @param currentRetailPrice    the current retail price for the variant (null if variant not found)
      * @param currentWholesalePrice the current wholesale price for the variant (null if variant not found)
      */
-    public record ValidationResult(
-            ProductVariantEntity variant,
-            List<String> validationErrors,
-            boolean hasChanges,
-            BigDecimal currentRetailPrice,
-            BigDecimal currentWholesalePrice
-    ) {
+    public record ValidationResult(ProductVariantEntity variant, List<String> validationErrors,
+                                   boolean hasChanges, BigDecimal currentRetailPrice,
+                                   BigDecimal currentWholesalePrice)
+    {
     }
 
     /**
@@ -59,18 +57,14 @@ public class ProductPriceImportValidator {
      *   <li>Determines hasChanges flag based on price comparison</li>
      * </ul>
      *
-     * @param sku              the SKU from the parsed row
-     * @param retailPrice      the proposed retail price
-     * @param wholesalePrice   the proposed wholesale price
-     * @param parseErrors      any validation errors accumulated during parsing
+     * @param sku            the SKU from the parsed row
+     * @param retailPrice    the proposed retail price
+     * @param wholesalePrice the proposed wholesale price
+     * @param parseErrors    any validation errors accumulated during parsing
      * @return validation result containing the variant, errors, diff state, and current prices
      */
-    public ValidationResult validateAndDiff(
-            String sku,
-            BigDecimal retailPrice,
-            BigDecimal wholesalePrice,
-            List<String> parseErrors
-    ) {
+    public ValidationResult validateAndDiff(String sku, BigDecimal retailPrice, BigDecimal wholesalePrice, List<String> parseErrors)
+    {
         List<String> validationErrors = new ArrayList<>(parseErrors);
 
         ProductVariantEntity existingVariant = findExistingVariant(sku, validationErrors);
@@ -82,13 +76,7 @@ public class ProductPriceImportValidator {
         boolean wholesaleChanged = pricesDiffer(wholesalePrice, currentWholesalePrice);
         boolean hasChanges = retailChanged || wholesaleChanged;
 
-        return new ValidationResult(
-                existingVariant,
-                validationErrors,
-                hasChanges,
-                currentRetailPrice,
-                currentWholesalePrice
-        );
+        return new ValidationResult(existingVariant, validationErrors, hasChanges, currentRetailPrice, currentWholesalePrice);
     }
 
     /**
@@ -100,18 +88,18 @@ public class ProductPriceImportValidator {
      * @param staged           the staged entity to update
      * @param validationErrors the accumulated errors
      */
-    public void applyValidationResults(ProductPriceUploadStagedEntity staged, List<String> validationErrors) {
-        staged.validationStatus = validationErrors.isEmpty()
-                ? ProductImportValidationStatusEn.VALID
-                : ProductImportValidationStatusEn.INVALID;
-        staged.validationErrors = validationErrors.isEmpty() ? null : String.join("; ", validationErrors);
+    public void applyValidationResults(ProductPriceUploadStagedEntity staged, List<String> validationErrors)
+    {
+        staged.setValidationStatus(validationErrors.isEmpty() ? ProductImportValidationStatusEn.VALID : ProductImportValidationStatusEn.INVALID);
+        staged.setValidationErrors(validationErrors.isEmpty() ? null : String.join("; ", validationErrors));
     }
 
     // ──────────────────────────────────────────────────────────────────────────
     // Internal helpers — identical to the original service methods
     // ──────────────────────────────────────────────────────────────────────────
 
-    private ProductVariantEntity findExistingVariant(String sku, List<String> validationErrors) {
+    private ProductVariantEntity findExistingVariant(String sku, List<String> validationErrors)
+    {
         if (isBlank(sku)) {
             validationErrors.add("sku is required");
             return null;
@@ -124,7 +112,8 @@ public class ProductPriceImportValidator {
         return variant;
     }
 
-    private boolean pricesDiffer(BigDecimal left, BigDecimal right) {
+    private boolean pricesDiffer(BigDecimal left, BigDecimal right)
+    {
         if (left == null && right == null) {
             return false;
         }
@@ -134,11 +123,12 @@ public class ProductPriceImportValidator {
         return left.compareTo(right) != 0;
     }
 
-    private BigDecimal findLatestPrice(ProductVariantEntity variant, PriceTypeEn priceType) {
-        if (variant == null || variant.id == null) {
+    private BigDecimal findLatestPrice(ProductVariantEntity variant, PriceTypeEn priceType)
+    {
+        if (variant == null || variant.getId() == null) {
             return null;
         }
-        VariantPricesEntity price = VariantPricesEntity.findLatestByVariantAndType(variant.id, priceType);
-        return price != null ? price.price : null;
+        VariantPricesEntity price = VariantPricesEntity.findLatestByVariantAndType(variant.getId(), priceType);
+        return price != null ? price.getPrice() : null;
     }
 }

@@ -1,29 +1,25 @@
 package org.ecommerce.backend.service;
 
-import jakarta.transaction.Transactional;
-import lombok.extern.slf4j.Slf4j;
-import org.eclipse.microprofile.config.inject.ConfigProperty;
-import org.jboss.resteasy.reactive.multipart.FileUpload;
-import org.ecommerce.common.enums.ImageTypeEn;
-import org.ecommerce.common.entity.ProductImageEntity;
-import org.ecommerce.common.entity.ProductVariantEntity;
-import org.ecommerce.common.repository.ProductVariantRepository;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
+import jakarta.transaction.Transactional;
+import lombok.extern.slf4j.Slf4j;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.ecommerce.common.entity.ProductImageEntity;
+import org.ecommerce.common.entity.ProductVariantEntity;
+import org.ecommerce.common.enums.ImageTypeEn;
+import org.ecommerce.common.repository.ProductVariantRepository;
+import org.jboss.resteasy.reactive.multipart.FileUpload;
 
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
-import java.util.Comparator;
-import java.util.stream.Stream;
+import java.util.*;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @Slf4j
 @ApplicationScoped
@@ -33,7 +29,8 @@ public class ImageService
     private static final int DEFAULT_PAGE_SIZE = 30;
     private static final int MAX_PAGE_SIZE = 200;
 
-    public record PaginatedImagesResponse(List<String> images, int totalCount, int page, int pageSize) {
+    public record PaginatedImagesResponse(List<String> images, int totalCount, int page, int pageSize)
+    {
     }
 
     @ConfigProperty(name = "storage.path")
@@ -119,11 +116,13 @@ public class ImageService
         return newFileName;
     }
 
-    public Map<String, Integer> bulkUploadImages(List<FileUpload> uploads) {
+    public Map<String, Integer> bulkUploadImages(List<FileUpload> uploads)
+    {
         return bulkUploadImages(uploads, null);
     }
 
-    public Map<String, Integer> bulkUploadImages(List<FileUpload> uploads, String destinationDirectory) {
+    public Map<String, Integer> bulkUploadImages(List<FileUpload> uploads, String destinationDirectory)
+    {
         int uploadedCount = 0;
         int skippedCount = 0;
 
@@ -145,9 +144,7 @@ public class ImageService
                 Path fullPath = Paths.get(file.fileName());
                 String justTheFileName = fullPath.getFileName().toString();
                 Path targetPath = destinationRoot.resolve(justTheFileName);
-                String relativeFilePath = normalizedDirectory.isBlank()
-                        ? justTheFileName
-                        : normalizedDirectory + "/" + justTheFileName;
+                String relativeFilePath = normalizedDirectory.isBlank() ? justTheFileName : normalizedDirectory + "/" + justTheFileName;
 
                 // 2. ONLY save if it doesn't exist
                 if (Files.notExists(targetPath)) {
@@ -166,13 +163,11 @@ public class ImageService
             }
         }
 
-        return Map.of(
-                "uploaded", uploadedCount,
-                "skipped", skippedCount
-        );
+        return Map.of("uploaded", uploadedCount, "skipped", skippedCount);
     }
 
-    private void createThumbnail(Path sourcePath, String fileName) throws IOException {
+    private void createThumbnail(Path sourcePath, String fileName) throws IOException
+    {
         Path thumbPath = Paths.get(storagePath, "thumbnails").resolve(fileName).normalize();
         Files.createDirectories(thumbPath.getParent());
 
@@ -188,7 +183,8 @@ public class ImageService
         }
     }
 
-    public List<String> listDestinationDirectories() {
+    public List<String> listDestinationDirectories()
+    {
         Path root = Paths.get(storagePath);
 
         if (Files.notExists(root)) {
@@ -214,7 +210,8 @@ public class ImageService
 
     }
 
-    public List<String> listImages() {
+    public List<String> listImages()
+    {
         Path thumbnailsRoot = Paths.get(storagePath, "thumbnails");
 
         if (Files.notExists(thumbnailsRoot)) {
@@ -235,12 +232,14 @@ public class ImageService
         }
     }
 
-    public PaginatedImagesResponse listImagesPaginated(Integer page, Integer pageSize, String search) {
+    public PaginatedImagesResponse listImagesPaginated(Integer page, Integer pageSize, String search)
+    {
         int safePage = page == null ? 0 : Math.max(0, page);
         int safePageSize = pageSize == null ? DEFAULT_PAGE_SIZE : Math.max(1, Math.min(pageSize, MAX_PAGE_SIZE));
         String normalizedSearch = search == null ? "" : search.trim().toLowerCase();
 
-        List<String> filteredImages = listImages().stream()
+        List<String> filteredImages = listImages()
+                .stream()
                 .filter(image -> normalizedSearch.isBlank() || image.toLowerCase().contains(normalizedSearch))
                 .collect(Collectors.toList());
 
@@ -256,7 +255,7 @@ public class ImageService
         try {
             ProductVariantEntity variant = productVariantRepository.findBySku(sku);
             if (variant != null) {
-                createProductImageIfAbsent(relativeFilePath, variant.id);
+                createProductImageIfAbsent(relativeFilePath, variant.getId());
                 log.debug("Linked bulk image {} to variant SKU={}", relativeFilePath, sku);
             }
         } catch (Exception e) {
@@ -271,12 +270,12 @@ public class ImageService
     @Transactional
     public void linkExistingBulkImagesForVariant(ProductVariantEntity variant)
     {
-        if (variant == null || variant.id == null || variant.sku == null || variant.sku.isBlank()) {
+        if (variant == null || variant.getId() == null || variant.getSku() == null || variant.getSku().isBlank()) {
             return;
         }
 
-        for (String imagePath : findBulkImagePathsForSku(variant.sku)) {
-            createProductImageIfAbsent(imagePath, variant.id);
+        for (String imagePath : findBulkImagePathsForSku(variant.getSku())) {
+            createProductImageIfAbsent(imagePath, variant.getId());
         }
     }
 
@@ -333,10 +332,10 @@ public class ImageService
                 .getSingleResult();
 
         ProductImageEntity productImage = new ProductImageEntity();
-        productImage.productVariant = productVariant;
-        productImage.imageUrl = imageUrl;
-        productImage.sortOrder = maxSortOrder + 1;
-        productImage.isFeatured = maxSortOrder == 0; // First image is featured by default
+        productImage.setProductVariant(productVariant);
+        productImage.setImageUrl(imageUrl);
+        productImage.setSortOrder(maxSortOrder + 1);
+        productImage.setIsFeatured(maxSortOrder == 0); // First image is featured by default
 
         productImage.persist();
     }
@@ -416,7 +415,8 @@ public class ImageService
         return fileName.substring(0, fileName.lastIndexOf("."));
     }
 
-    String normalizeDestinationDirectory(String destinationDirectory) {
+    String normalizeDestinationDirectory(String destinationDirectory)
+    {
         if (destinationDirectory == null || destinationDirectory.isBlank()) {
             return "";
         }
@@ -446,7 +446,8 @@ public class ImageService
         return relativeDirectory;
     }
 
-    Path resolveStorageDirectory(String destinationDirectory) {
+    Path resolveStorageDirectory(String destinationDirectory)
+    {
         Path storageRoot = Paths.get(storagePath).toAbsolutePath().normalize();
         Path destinationRoot = destinationDirectory == null || destinationDirectory.isBlank()
                 ? storageRoot
@@ -459,7 +460,8 @@ public class ImageService
         return destinationRoot;
     }
 
-    private String normalizeRelativePath(Path path) {
+    private String normalizeRelativePath(Path path)
+    {
         return path.toString().replace(File.separatorChar, '/');
     }
 

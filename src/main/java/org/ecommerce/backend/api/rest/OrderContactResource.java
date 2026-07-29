@@ -16,8 +16,8 @@ import java.util.UUID;
 @Path("/api/orders/{orderId}/contact")
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
-public class OrderContactResource {
-
+public class OrderContactResource
+{
     private static final Logger LOG = Logger.getLogger(OrderContactResource.class);
 
     @PATCH
@@ -25,7 +25,8 @@ public class OrderContactResource {
     public Response updateContact(
             @PathParam("orderId") UUID orderId,
             OrderContactRequestDto request
-    ) {
+    )
+    {
         // 1. Find order by ID → 404 if missing
         OrderEntity order = OrderEntity.findOrderInfoById(orderId);
         if (order == null) {
@@ -37,10 +38,10 @@ public class OrderContactResource {
 
         // 2. Validate shippingMethodId if present → 422 if invalid/inactive
         ShippingMethodEntity shippingMethod = null;
-        if (request.shippingMethodId != null && !request.shippingMethodId.isBlank()) {
+        if (request.getShippingMethodId() != null && !request.getShippingMethodId().isBlank()) {
             UUID shippingMethodUuid;
             try {
-                shippingMethodUuid = UUID.fromString(request.shippingMethodId);
+                shippingMethodUuid = UUID.fromString(request.getShippingMethodId());
             } catch (IllegalArgumentException e) {
                 return Response.status(422)
                         .entity(Map.of("error", "Invalid shipping method ID format"))
@@ -48,8 +49,8 @@ public class OrderContactResource {
             }
 
             shippingMethod = ShippingMethodEntity.findById(shippingMethodUuid);
-            if (shippingMethod == null || !shippingMethod.isActive) {
-                LOG.debugf("Invalid or inactive shipping method: %s", request.shippingMethodId);
+            if (shippingMethod == null || !shippingMethod.isActive()) {
+                LOG.debugf("Invalid or inactive shipping method: %s", request.getShippingMethodId());
                 return Response.status(422)
                         .entity(Map.of("error", "Shipping method not found or inactive"))
                         .build();
@@ -57,25 +58,25 @@ public class OrderContactResource {
         }
 
         // 3. Persist contact + address fields
-        order.contactEmail = request.email;
-        order.contactFirstName = request.firstName;
-        order.contactLastName = request.lastName;
+        order.setContactEmail(request.getEmail());
+        order.setContactFirstName(request.getFirstName());
+        order.setContactLastName(request.getLastName());
 
         if (shippingMethod != null) {
-            order.shippingMethod = shippingMethod;
+            order.setShippingMethod(shippingMethod);
         }
 
-        if (request.streetAddress != null) {
-            order.streetAddress = request.streetAddress;
+        if (request.getStreetAddress() != null) {
+            order.setStreetAddress(request.getStreetAddress());
         }
-        if (request.city != null) {
-            order.city = request.city;
+        if (request.getCity() != null) {
+            order.setCity(request.getCity());
         }
-        if (request.province != null) {
-            order.province = request.province;
+        if (request.getProvince() != null) {
+            order.setProvince(request.getProvince());
         }
-        if (request.postalCode != null) {
-            order.postalCode = request.postalCode;
+        if (request.getPostalCode() != null) {
+            order.setPostalCode(request.getPostalCode());
         }
 
         // No explicit persist needed — entity is managed within @Transactional
@@ -83,32 +84,32 @@ public class OrderContactResource {
 
         // 4. Return 200 with updated order summary
         Map<String, Object> summary = new LinkedHashMap<>();
-        summary.put("orderId", order.id.toString());
-        summary.put("contactEmail", order.contactEmail);
-        summary.put("contactFirstName", order.contactFirstName);
-        summary.put("contactLastName", order.contactLastName);
-        summary.put("totalAmount", order.totalAmount);
-        summary.put("status", order.status.name());
+        summary.put("orderId", order.getId().toString());
+        summary.put("contactEmail", order.getContactEmail());
+        summary.put("contactFirstName", order.getContactFirstName());
+        summary.put("contactLastName", order.getContactLastName());
+        summary.put("totalAmount", order.getTotalAmount());
+        summary.put("status", order.getStatus().name());
 
-        if (order.shippingMethod != null) {
-            summary.put("shippingMethodId", order.shippingMethod.id.toString());
-            summary.put("shippingMethodName", order.shippingMethod.name);
-        }
-
-        if (order.streetAddress != null) {
-            summary.put("streetAddress", order.streetAddress);
-        }
-        if (order.city != null) {
-            summary.put("city", order.city);
-        }
-        if (order.province != null) {
-            summary.put("province", order.province);
-        }
-        if (order.postalCode != null) {
-            summary.put("postalCode", order.postalCode);
+        if (order.getShippingMethod() != null) {
+            summary.put("shippingMethodId", order.getShippingMethod().getId().toString());
+            summary.put("shippingMethodName", order.getShippingMethod().getName());
         }
 
-        LOG.infof("Updated contact for order %s (email: %s)", orderId, order.contactEmail);
+        if (order.getStreetAddress() != null) {
+            summary.put("streetAddress", order.getStreetAddress());
+        }
+        if (order.getCity() != null) {
+            summary.put("city", order.getCity());
+        }
+        if (order.getProvince() != null) {
+            summary.put("province", order.getProvince());
+        }
+        if (order.getPostalCode() != null) {
+            summary.put("postalCode", order.getPostalCode());
+        }
+
+        LOG.infof("Updated contact for order %s (email: %s)", orderId, order.getContactEmail());
 
         return Response.ok(summary).build();
     }

@@ -25,7 +25,8 @@ import java.util.UUID;
  * </ul>
  */
 @ApplicationScoped
-public class ChunkedImportStateMachine {
+public class ChunkedImportStateMachine
+{
 
     public static final int STAGING_CHUNK_SIZE = 200;
     public static final int PROCESSING_CHUNK_SIZE = 100;
@@ -39,7 +40,8 @@ public class ChunkedImportStateMachine {
      * Strategy interface defining per-type variation points for the import state machine.
      * Implemented by each import service and passed per call.
      */
-    public interface ChunkImportStrategy<R, S, B> {
+    public interface ChunkImportStrategy<R, S, B>
+    {
         B loadBatch(UUID batchId);
 
         int stageRow(B batch, R row);
@@ -78,7 +80,8 @@ public class ChunkedImportStateMachine {
     /**
      * Result of staging a chunk of rows.
      */
-    public record StagingChunkResult(int rowCount, int validationErrorCount) {
+    public record StagingChunkResult(int rowCount, int validationErrorCount)
+    {
     }
 
     /**
@@ -96,7 +99,8 @@ public class ChunkedImportStateMachine {
      * @param <B>      batch entity type
      * @return the staging result with row count and validation error count
      */
-    public <R, S, B> StagingChunkResult stageRowsChunk(UUID batchId, List<R> rows, ChunkImportStrategy<R, S, B> strategy) {
+    public <R, S, B> StagingChunkResult stageRowsChunk(UUID batchId, List<R> rows, ChunkImportStrategy<R, S, B> strategy)
+    {
         try {
             return QuarkusTransaction.requiringNew().call(() -> stageRowsChunkInTransaction(batchId, List.copyOf(rows), strategy));
         } catch (RuntimeException ex) {
@@ -120,7 +124,8 @@ public class ChunkedImportStateMachine {
      * @param <B>      batch entity type
      * @return the number of staged rows handled (0 means done)
      */
-    public <R, S, B> int processNextStagedChunk(UUID batchId, ChunkImportStrategy<R, S, B> strategy) {
+    public <R, S, B> int processNextStagedChunk(UUID batchId, ChunkImportStrategy<R, S, B> strategy)
+    {
         try {
             return QuarkusTransaction.requiringNew().call(() -> processNextStagedChunkInTransaction(batchId, strategy));
         } catch (RuntimeException ex) {
@@ -139,7 +144,8 @@ public class ChunkedImportStateMachine {
      * @param <S>      staged entity type
      * @param <B>      batch entity type
      */
-    public <R, S, B> void synchronizeBatchProgress(UUID batchId, ChunkImportStrategy<R, S, B> strategy) {
+    public <R, S, B> void synchronizeBatchProgress(UUID batchId, ChunkImportStrategy<R, S, B> strategy)
+    {
         QuarkusTransaction.requiringNew().run(() -> {
             B batch = strategy.loadBatch(batchId);
             long totalRows = strategy.countByBatchId(batchId);
@@ -155,7 +161,8 @@ public class ChunkedImportStateMachine {
     // Private transactional implementations
     // ──────────────────────────────────────────────────────────────────────────
 
-    private <R, S, B> StagingChunkResult stageRowsChunkInTransaction(UUID batchId, List<R> rows, ChunkImportStrategy<R, S, B> strategy) {
+    private <R, S, B> StagingChunkResult stageRowsChunkInTransaction(UUID batchId, List<R> rows, ChunkImportStrategy<R, S, B> strategy)
+    {
         B batch = strategy.loadBatch(batchId);
         int validationErrorCount = 0;
 
@@ -170,7 +177,8 @@ public class ChunkedImportStateMachine {
         return new StagingChunkResult(rows.size(), validationErrorCount);
     }
 
-    private <R, S, B> int processNextStagedChunkInTransaction(UUID batchId, ChunkImportStrategy<R, S, B> strategy) {
+    private <R, S, B> int processNextStagedChunkInTransaction(UUID batchId, ChunkImportStrategy<R, S, B> strategy)
+    {
         B batch = strategy.loadBatch(batchId);
         List<S> stagedRows = strategy.fetchNextUnprocessedChunk(batchId, PROCESSING_CHUNK_SIZE);
         if (stagedRows.isEmpty()) {
@@ -203,7 +211,8 @@ public class ChunkedImportStateMachine {
         return stagedRows.size();
     }
 
-    private static int safeInt(Integer v) {
+    private static int safeInt(Integer v)
+    {
         return v != null ? v : 0;
     }
 }

@@ -7,8 +7,8 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 
 @ApplicationScoped
-public class TaxService {
-
+public class TaxService
+{
     private static final BigDecimal DEFAULT_VAT_RATE = new BigDecimal("0.15");
     private static final String VAT_RATE_KEY = "vat_rate_percent";
 
@@ -16,7 +16,8 @@ public class TaxService {
      * Calculates VAT on the given subtotal using the rate stored in store_settings.
      * Defaults to 0.15 (15%) if the key is missing or unparseable.
      */
-    public BigDecimal calculateVat(BigDecimal subtotal) {
+    public BigDecimal calculateVat(BigDecimal subtotal)
+    {
         if (subtotal == null || subtotal.compareTo(BigDecimal.ZERO) == 0) {
             return BigDecimal.ZERO;
         }
@@ -25,13 +26,14 @@ public class TaxService {
         return subtotal.multiply(rate).setScale(2, RoundingMode.HALF_UP);
     }
 
-    private BigDecimal loadVatRate() {
+    private BigDecimal loadVatRate()
+    {
         StoreSettingsEntity setting = StoreSettingsEntity.findById(VAT_RATE_KEY);
-        if (setting == null || setting.value == null || setting.value.isBlank()) {
+        if (setting == null || setting.getValue() == null || setting.getValue().isBlank()) {
             return DEFAULT_VAT_RATE;
         }
         try {
-            return new BigDecimal(setting.value.trim());
+            return new BigDecimal(setting.getValue().trim());
         } catch (NumberFormatException e) {
             return DEFAULT_VAT_RATE;
         }

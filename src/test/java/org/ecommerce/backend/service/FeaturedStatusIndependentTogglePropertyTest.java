@@ -15,24 +15,25 @@ import org.junit.jupiter.api.Test;
 
 import java.util.UUID;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.*;
 
 /**
  * Feature: featured-products-list, Property 4: Status-Independent Toggle
- *
+ * <p>
  * For a product of ANY status (ACTIVE, PENDING, DISABLED), setFeatured(id, true) on the
  * REAL {@link FeaturedProductService} succeeds when below the cap — the product's status
  * never gates featuring, and featuring never mutates the status.
- *
+ * <p>
  * Exercises the real service via @QuarkusTest + PanacheMock; the property is quantified by
  * iterating every status against a range of below-cap counts.
- *
+ * <p>
  * Validates: Requirements 2.6
  */
 @QuarkusTest
-class FeaturedStatusIndependentTogglePropertyTest {
-
+class FeaturedStatusIndependentTogglePropertyTest
+{
     @Inject
     FeaturedProductService service;
 
@@ -40,13 +41,17 @@ class FeaturedStatusIndependentTogglePropertyTest {
     ProductRepository productRepository;
 
     @BeforeEach
-    void setUp() {
+    void setUp()
+    {
         PanacheMock.mock(ProductEntity.class);
     }
 
-    /** Property: featuring succeeds for every status when the cap is not reached. */
+    /**
+     * Property: featuring succeeds for every status when the cap is not reached.
+     */
     @Test
-    void setFeaturedSucceedsForAnyStatus() {
+    void setFeaturedSucceedsForAnyStatus()
+    {
         long[] belowCap = {0L, 1L, 30L, 49L};
         for (ProductStatusEn status : ProductStatusEn.values()) {
             for (long count : belowCap) {
@@ -58,21 +63,21 @@ class FeaturedStatusIndependentTogglePropertyTest {
 
                 FeaturedProductResultDto result = service.setFeatured(productId, true);
 
-                assertTrue(result.featured,
-                        "Featuring must succeed regardless of status (" + status + ", count=" + count + ")");
-                assertTrue(product.isFeatured, "Product should be featured after toggle");
-                assertEquals(status, product.status, "setFeatured must not alter product status");
+                assertTrue(result.isFeatured(), "Featuring must succeed regardless of status (" + status + ", count=" + count + ")");
+                assertTrue(product.isFeatured(), "Product should be featured after toggle");
+                assertEquals(status, product.getStatus(), "setFeatured must not alter product status");
             }
         }
     }
 
-    private ProductEntity product(UUID id, String name, ProductStatusEn status) {
+    private ProductEntity product(UUID id, String name, ProductStatusEn status)
+    {
         ProductEntity product = new ProductEntity();
-        product.id = id;
-        product.name = name;
-        product.slug = "p-" + id;
-        product.status = status;
-        product.isFeatured = false;
+        product.setId(id);
+        product.setName(name);
+        product.setSlug("p-" + id);
+        product.setStatus(status);
+        product.setFeatured(false);
         return product;
     }
 }

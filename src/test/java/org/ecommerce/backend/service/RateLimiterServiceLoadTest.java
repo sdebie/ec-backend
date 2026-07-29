@@ -7,14 +7,11 @@ import org.junit.jupiter.api.Test;
 import java.lang.reflect.Field;
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
@@ -36,12 +33,13 @@ import static org.mockito.Mockito.when;
  *
  * <strong>Validates: Requirement 1.1 (Property 1 — bounded acceptance) under concurrency</strong>
  */
-class RateLimiterServiceLoadTest {
-
+class RateLimiterServiceLoadTest
+{
     private RateLimiterService service;
 
     @BeforeEach
-    void setUp() throws Exception {
+    void setUp() throws Exception
+    {
         Config config = mock(Config.class);
         when(config.getOptionalValue(anyString(), any())).thenReturn(Optional.empty());
 
@@ -54,7 +52,8 @@ class RateLimiterServiceLoadTest {
     // ── Bounded acceptance under concurrent load ────────────────────────────
 
     @Test
-    void concurrentSingleKey_neverAdmitsMoreThanMax() throws Exception {
+    void concurrentSingleKey_neverAdmitsMoreThanMax() throws Exception
+    {
         final int threads = 20;
         final int requestsPerThread = 50;   // 1000 total requests
         final int max = 25;
@@ -98,7 +97,8 @@ class RateLimiterServiceLoadTest {
     }
 
     @Test
-    void concurrentDistinctKeys_eachKeyGetsItsFullBudget() throws Exception {
+    void concurrentDistinctKeys_eachKeyGetsItsFullBudget() throws Exception
+    {
         final int keys = 16;
         final int requestsPerKey = 10;      // sequential per key → deterministic
         final int max = 5;
@@ -141,7 +141,8 @@ class RateLimiterServiceLoadTest {
     }
 
     @Test
-    void concurrentMixedNamesAndKeys_invariantsHoldAtVolume() throws Exception {
+    void concurrentMixedNamesAndKeys_invariantsHoldAtVolume() throws Exception
+    {
         final int threads = 8;
         final int requestsPerThread = 10_000;   // 80k total checks
         final int distinctKeys = 200;
@@ -200,7 +201,8 @@ class RateLimiterServiceLoadTest {
 
     @SuppressWarnings("unchecked")
     private static ConcurrentHashMap<String, RateLimiterService.WindowBucket> bucketsOf(RateLimiterService service)
-            throws Exception {
+            throws Exception
+    {
         Field bucketsField = RateLimiterService.class.getDeclaredField("buckets");
         bucketsField.setAccessible(true);
         return (ConcurrentHashMap<String, RateLimiterService.WindowBucket>) bucketsField.get(service);

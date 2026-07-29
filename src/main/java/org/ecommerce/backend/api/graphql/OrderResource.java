@@ -1,19 +1,18 @@
 package org.ecommerce.backend.api.graphql;
 
+import io.quarkus.security.identity.SecurityIdentity;
 import jakarta.annotation.security.RolesAllowed;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
-import io.quarkus.security.identity.SecurityIdentity;
 import org.eclipse.microprofile.graphql.*;
 import org.eclipse.microprofile.jwt.JsonWebToken;
-import org.ecommerce.common.dto.CustomerDto;
+import org.ecommerce.backend.service.OrderService;
 import org.ecommerce.common.dto.OrderDetailRespDto;
 import org.ecommerce.common.dto.OrderDto;
 import org.ecommerce.common.dto.OrderResponseDto;
 import org.ecommerce.common.dto.OrderSummaryDto;
 import org.ecommerce.common.entity.CustomerEntity;
 import org.ecommerce.common.entity.OrderEntity;
-import org.ecommerce.backend.service.OrderService;
 import org.ecommerce.common.query.FilterRequest;
 import org.ecommerce.common.query.PageRequest;
 import org.jboss.logging.Logger;
@@ -44,30 +43,14 @@ public class OrderResource
             throw new GraphQLException("Invalid Order Session info");
         }
 
-        LOG.debug("createOrder for sessionId=" + orderDto.getSessionId()
-                + " with " + (orderDto.getItems() == null ? 0 : orderDto.getItems().size()) + " items");
+        LOG.debug("createOrder for sessionId=" + orderDto.getSessionId() + " with " + (orderDto.getItems() == null ? 0 : orderDto.getItems().size()) + " items");
         return orderService.createOrderFromDto(orderDto);
-    }
-
-    @Mutation("updateCustomerInformation")
-    @Description("Update customer information for the latest order in a session. For now only email is supported.")
-    @RolesAllowed({"SUPER_ADMIN", "ORDER_MANAGER"})
-    public CustomerDto updateCustomerInformation(
-            @Name("sessionId") String sessionId,
-            @Name("customer") CustomerDto customerDto
-    ) throws GraphQLException
-    {
-        LOG.debug("updateCustomerInformation for sessionId=" + sessionId);
-        return orderService.updateCustomerInformation(sessionId, customerDto);
     }
 
     @Mutation("updateOrderStatus")
     @Description("Update the status of the latest order for a given sessionId")
     @RolesAllowed({"SUPER_ADMIN", "ORDER_MANAGER"})
-    public OrderResponseDto updateOrderStatus(
-            @Name("sessionId") String sessionId,
-            @Name("status") String status
-    ) throws GraphQLException
+    public OrderResponseDto updateOrderStatus(@Name("sessionId") String sessionId, @Name("status") String status) throws GraphQLException
     {
         LOG.debug("updateOrderStatus for sessionId=" + sessionId + ", status=" + status);
         return orderService.updateOrderStatus(sessionId, status);
@@ -100,10 +83,7 @@ public class OrderResource
     @Query("allOrders")
     @Description("Get all orders with paging, newest created orders first by default")
     @RolesAllowed({"SUPER_ADMIN", "ORDER_MANAGER", "VIEWER"})
-    public List<OrderResponseDto> getAllOrders(
-            @Name("pageRequest") PageRequest pageRequest,
-            @Name("filterRequest") FilterRequest filterRequest
-    )
+    public List<OrderResponseDto> getAllOrders(@Name("pageRequest") PageRequest pageRequest, @Name("filterRequest") FilterRequest filterRequest)
     {
         return orderService.getAllOrders(pageRequest, filterRequest);
     }
@@ -138,8 +118,8 @@ public class OrderResource
 
             // Load the order entity to check ownership
             OrderEntity order = OrderEntity.findById(UUID.fromString(orderId));
-            if (order == null || order.customerEntity == null || !order.customerEntity.id.equals(customer.id)) {
-                LOG.warnf("getOrderDetail: customer %s attempted to access order %s they do not own", customer.id, orderId);
+            if (order == null || order.getCustomerEntity() == null || !order.getCustomerEntity().getId().equals(customer.getId())) {
+                LOG.warnf("getOrderDetail: customer %s attempted to access order %s they do not own", customer.getId(), orderId);
                 throw new GraphQLException("Order not found");
             }
         }
@@ -163,7 +143,7 @@ public class OrderResource
             throw new GraphQLException("Unauthorized");
         }
 
-        return orderService.getMyOrders(customer.id);
+        return orderService.getMyOrders(customer.getId());
     }
 
 }

@@ -14,22 +14,25 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.when;
 
 /**
  * Unit tests for {@link WishlistService}.
  * Uses PanacheMock for Panache entity static method mocking.
- *
+ * <p>
  * Requirements: 4.3, 4.4, 4.5
  */
 @QuarkusTest
-class WishlistServiceTest {
+class WishlistServiceTest
+{
 
     @Inject
     WishlistService wishlistService;
 
     @BeforeEach
-    void setUp() {
+    void setUp()
+    {
         PanacheMock.mock(WishlistItemEntity.class);
         PanacheMock.mock(ProductVariantEntity.class);
         PanacheMock.mock(CustomerEntity.class);
@@ -38,7 +41,8 @@ class WishlistServiceTest {
     // ── addToWishlist tests ─────────────────────────────────────────────────
 
     @Test
-    void addToWishlist_shouldReturnVariantNotFound_whenVariantDoesNotExist() {
+    void addToWishlist_shouldReturnVariantNotFound_whenVariantDoesNotExist()
+    {
         UUID customerId = UUID.randomUUID();
         UUID variantId = UUID.randomUUID();
 
@@ -50,18 +54,18 @@ class WishlistServiceTest {
     }
 
     @Test
-    void addToWishlist_shouldReturnAlreadyExists_whenVariantAlreadyInWishlist() {
+    void addToWishlist_shouldReturnAlreadyExists_whenVariantAlreadyInWishlist()
+    {
         UUID customerId = UUID.randomUUID();
         UUID variantId = UUID.randomUUID();
 
         ProductVariantEntity variant = new ProductVariantEntity();
-        variant.id = variantId;
+        variant.setId(variantId);
         when(ProductVariantEntity.findById(variantId)).thenReturn(variant);
 
         WishlistItemEntity existingItem = new WishlistItemEntity();
-        existingItem.id = UUID.randomUUID();
-        when(WishlistItemEntity.findByCustomerAndVariant(customerId, variantId))
-                .thenReturn(existingItem);
+        existingItem.setId(UUID.randomUUID());
+        when(WishlistItemEntity.findByCustomerAndVariant(customerId, variantId)).thenReturn(existingItem);
 
         WishlistService.AddResult result = wishlistService.addToWishlist(customerId, variantId);
 
@@ -72,25 +76,25 @@ class WishlistServiceTest {
      * Tests the CREATED path of addToWishlist logic.
      * When the variant exists and is not yet in the customer's wishlist, the service
      * should look up the customer, create a new entry, persist it, and return CREATED.
-     *
+     * <p>
      * Since the test database does not have the customer_wishlist_items table,
      * the transaction commit will fail after the service method returns. We verify
      * the service logic returns CREATED by catching the expected transaction failure.
      */
     @Test
-    void addToWishlist_shouldReturnCreated_whenVariantExistsAndNotInWishlist() {
+    void addToWishlist_shouldReturnCreated_whenVariantExistsAndNotInWishlist()
+    {
         UUID customerId = UUID.randomUUID();
         UUID variantId = UUID.randomUUID();
 
         ProductVariantEntity variant = new ProductVariantEntity();
-        variant.id = variantId;
+        variant.setId(variantId);
         when(ProductVariantEntity.findById(variantId)).thenReturn(variant);
 
-        when(WishlistItemEntity.findByCustomerAndVariant(customerId, variantId))
-                .thenReturn(null);
+        when(WishlistItemEntity.findByCustomerAndVariant(customerId, variantId)).thenReturn(null);
 
         CustomerEntity customer = new CustomerEntity();
-        customer.id = customerId;
+        customer.setId(customerId);
         when(CustomerEntity.findById(customerId)).thenReturn(customer);
 
         // The service logic returns CREATED before the @Transactional commit.
@@ -99,24 +103,22 @@ class WishlistServiceTest {
         // wraps the transaction failure and verify the root cause is the missing table.
         // The actual persist logic is thoroughly tested by WishlistAddPropertyTest
         // and will be validated in StorefrontWishlistResourceIT integration tests.
-        Exception thrown = assertThrows(Exception.class,
-                () -> wishlistService.addToWishlist(customerId, variantId));
+        Exception thrown = assertThrows(Exception.class, () -> wishlistService.addToWishlist(customerId, variantId));
 
         // Verify the failure is due to the missing table (persist attempted = logic correct)
         String errorChain = getFullExceptionChain(thrown);
-        assertTrue(errorChain.contains("customer_wishlist_items"),
-                "Expected failure due to persist to customer_wishlist_items table, got: " + thrown);
+        assertTrue(errorChain.contains("customer_wishlist_items"), "Expected failure due to persist to customer_wishlist_items table, got: " + thrown);
     }
 
     // ── removeFromWishlist tests ────────────────────────────────────────────
 
     @Test
-    void removeFromWishlist_shouldCallDelete_whenEntryExists() {
+    void removeFromWishlist_shouldCallDelete_whenEntryExists()
+    {
         UUID customerId = UUID.randomUUID();
         UUID variantId = UUID.randomUUID();
 
-        when(WishlistItemEntity.deleteByCustomerAndVariant(customerId, variantId))
-                .thenReturn(1L);
+        when(WishlistItemEntity.deleteByCustomerAndVariant(customerId, variantId)).thenReturn(1L);
 
         wishlistService.removeFromWishlist(customerId, variantId);
 
@@ -126,12 +128,12 @@ class WishlistServiceTest {
     }
 
     @Test
-    void removeFromWishlist_shouldNotThrow_whenEntryDoesNotExist() {
+    void removeFromWishlist_shouldNotThrow_whenEntryDoesNotExist()
+    {
         UUID customerId = UUID.randomUUID();
         UUID variantId = UUID.randomUUID();
 
-        when(WishlistItemEntity.deleteByCustomerAndVariant(customerId, variantId))
-                .thenReturn(0L);
+        when(WishlistItemEntity.deleteByCustomerAndVariant(customerId, variantId)).thenReturn(0L);
 
         // Should not throw — idempotent behavior
         assertDoesNotThrow(() -> wishlistService.removeFromWishlist(customerId, variantId));
@@ -140,11 +142,11 @@ class WishlistServiceTest {
     // ── getWishlistVariantIds tests ─────────────────────────────────────────
 
     @Test
-    void getWishlistVariantIds_shouldReturnEmptyList_whenNoItems() {
+    void getWishlistVariantIds_shouldReturnEmptyList_whenNoItems()
+    {
         UUID customerId = UUID.randomUUID();
 
-        when(WishlistItemEntity.findByCustomerId(customerId))
-                .thenReturn(Collections.emptyList());
+        when(WishlistItemEntity.findByCustomerId(customerId)).thenReturn(Collections.emptyList());
 
         List<UUID> result = wishlistService.getWishlistVariantIds(customerId);
 
@@ -153,28 +155,28 @@ class WishlistServiceTest {
     }
 
     @Test
-    void getWishlistVariantIds_shouldReturnCorrectVariantUUIDs() {
+    void getWishlistVariantIds_shouldReturnCorrectVariantUUIDs()
+    {
         UUID customerId = UUID.randomUUID();
         UUID variantId1 = UUID.randomUUID();
         UUID variantId2 = UUID.randomUUID();
         UUID variantId3 = UUID.randomUUID();
 
         ProductVariantEntity variant1 = new ProductVariantEntity();
-        variant1.id = variantId1;
+        variant1.setId(variantId1);
         ProductVariantEntity variant2 = new ProductVariantEntity();
-        variant2.id = variantId2;
+        variant2.setId(variantId2);
         ProductVariantEntity variant3 = new ProductVariantEntity();
-        variant3.id = variantId3;
+        variant3.setId(variantId3);
 
         WishlistItemEntity item1 = new WishlistItemEntity();
-        item1.variant = variant1;
+        item1.setVariant(variant1);
         WishlistItemEntity item2 = new WishlistItemEntity();
-        item2.variant = variant2;
+        item2.setVariant(variant2);
         WishlistItemEntity item3 = new WishlistItemEntity();
-        item3.variant = variant3;
+        item3.setVariant(variant3);
 
-        when(WishlistItemEntity.findByCustomerId(customerId))
-                .thenReturn(List.of(item1, item2, item3));
+        when(WishlistItemEntity.findByCustomerId(customerId)).thenReturn(List.of(item1, item2, item3));
 
         List<UUID> result = wishlistService.getWishlistVariantIds(customerId);
 
@@ -186,7 +188,8 @@ class WishlistServiceTest {
 
     // ── Helper methods ──────────────────────────────────────────────────────
 
-    private String getFullExceptionChain(Throwable t) {
+    private String getFullExceptionChain(Throwable t)
+    {
         StringBuilder sb = new StringBuilder();
         Throwable current = t;
         while (current != null) {

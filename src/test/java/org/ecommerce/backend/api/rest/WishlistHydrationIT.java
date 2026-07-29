@@ -22,12 +22,12 @@ import static org.mockito.Mockito.when;
 /**
  * Integration test for POST /api/storefront/wishlist/hydrate.
  * Full HTTP round-trip — no JWT required (endpoint is public).
- *
+ * <p>
  * Validates: Requirements 3.1, 3.2, 3.7
  */
 @QuarkusTest
-class WishlistHydrationIT {
-
+class WishlistHydrationIT
+{
     @InjectMock
     WishlistHydrationService wishlistHydrationService;
 
@@ -36,45 +36,47 @@ class WishlistHydrationIT {
     private WishlistHydratedItemDto hydratedItem;
 
     @BeforeEach
-    void setUp() {
+    void setUp()
+    {
         activeVariantId = UUID.randomUUID();
         inactiveVariantId = UUID.randomUUID();
 
         // Build a hydrated item for the active variant
         hydratedItem = new WishlistHydratedItemDto();
-        hydratedItem.variantId = activeVariantId;
-        hydratedItem.variantLabel = "{\"size\": \"M\", \"color\": \"Blue\"}";
-        hydratedItem.sku = "TEST-SKU-001";
-        hydratedItem.productId = UUID.randomUUID();
-        hydratedItem.productName = "Test Product";
-        hydratedItem.productSlug = "test-product";
-        hydratedItem.imagePath = "images/01/test-product.png";
+        hydratedItem.setVariantId(activeVariantId);
+        hydratedItem.setVariantLabel("{\"size\": \"M\", \"color\": \"Blue\"}");
+        hydratedItem.setSku("TEST-SKU-001");
+        hydratedItem.setProductId(UUID.randomUUID());
+        hydratedItem.setProductName("Test Product");
+        hydratedItem.setProductSlug("test-product");
+        hydratedItem.setImagePath("images/01/test-product.png");
 
         VariantPriceDto retailPrice = new VariantPriceDto();
-        retailPrice.id = UUID.randomUUID().toString();
-        retailPrice.priceType = "RETAIL_PRICE";
-        retailPrice.price = new BigDecimal("199.99");
-        retailPrice.isActive = true;
-        hydratedItem.retailPrice = retailPrice;
+        retailPrice.setId(UUID.randomUUID().toString());
+        retailPrice.setPriceType("RETAIL_PRICE");
+        retailPrice.setPrice(new BigDecimal("199.99"));
+        retailPrice.setIsActive(true);
+        hydratedItem.setRetailPrice(retailPrice);
 
-        hydratedItem.wholesalePrice = null;
-        hydratedItem.retailSalePrice = null;
-        hydratedItem.wholesaleSalePrice = null;
+        hydratedItem.setWholesalePrice(null);
+        hydratedItem.setRetailSalePrice(null);
+        hydratedItem.setWholesaleSalePrice(null);
     }
 
     // ── Valid IDs return hydrated items ───────────────────────────────────────
 
     @Test
-    void hydrate_validActiveIds_returnsHydratedItems() {
+    void hydrate_validActiveIds_returnsHydratedItems()
+    {
         when(wishlistHydrationService.hydrate(List.of(activeVariantId)))
                 .thenReturn(List.of(hydratedItem));
 
         given()
                 .contentType("application/json")
                 .body("{\"variantIds\": [\"" + activeVariantId + "\"]}")
-        .when()
+                .when()
                 .post("/api/storefront/wishlist/hydrate")
-        .then()
+                .then()
                 .statusCode(200)
                 .body("items", hasSize(1))
                 .body("items[0].variantId", equalTo(activeVariantId.toString()))
@@ -91,7 +93,8 @@ class WishlistHydrationIT {
     // ── Mixed active/inactive returns only active ────────────────────────────
 
     @Test
-    void hydrate_mixedActiveAndInactive_returnsOnlyActive() {
+    void hydrate_mixedActiveAndInactive_returnsOnlyActive()
+    {
         // The service filters out inactive variants — returns only the active one
         when(wishlistHydrationService.hydrate(List.of(activeVariantId, inactiveVariantId)))
                 .thenReturn(List.of(hydratedItem));
@@ -99,16 +102,17 @@ class WishlistHydrationIT {
         given()
                 .contentType("application/json")
                 .body("{\"variantIds\": [\"" + activeVariantId + "\", \"" + inactiveVariantId + "\"]}")
-        .when()
+                .when()
                 .post("/api/storefront/wishlist/hydrate")
-        .then()
+                .then()
                 .statusCode(200)
                 .body("items", hasSize(1))
                 .body("items[0].variantId", equalTo(activeVariantId.toString()));
     }
 
     @Test
-    void hydrate_allInactive_returnsEmptyItems() {
+    void hydrate_allInactive_returnsEmptyItems()
+    {
         // All requested variants are inactive — service returns empty list
         when(wishlistHydrationService.hydrate(List.of(inactiveVariantId)))
                 .thenReturn(Collections.emptyList());
@@ -116,9 +120,9 @@ class WishlistHydrationIT {
         given()
                 .contentType("application/json")
                 .body("{\"variantIds\": [\"" + inactiveVariantId + "\"]}")
-        .when()
+                .when()
                 .post("/api/storefront/wishlist/hydrate")
-        .then()
+                .then()
                 .statusCode(200)
                 .body("items", hasSize(0));
     }
@@ -126,37 +130,40 @@ class WishlistHydrationIT {
     // ── Empty request returns empty items ────────────────────────────────────
 
     @Test
-    void hydrate_emptyVariantIds_returnsEmptyItems() {
+    void hydrate_emptyVariantIds_returnsEmptyItems()
+    {
         given()
                 .contentType("application/json")
                 .body("{\"variantIds\": []}")
-        .when()
+                .when()
                 .post("/api/storefront/wishlist/hydrate")
-        .then()
+                .then()
                 .statusCode(200)
                 .body("items", hasSize(0));
     }
 
     @Test
-    void hydrate_nullVariantIds_returnsEmptyItems() {
+    void hydrate_nullVariantIds_returnsEmptyItems()
+    {
         given()
                 .contentType("application/json")
                 .body("{}")
-        .when()
+                .when()
                 .post("/api/storefront/wishlist/hydrate")
-        .then()
+                .then()
                 .statusCode(200)
                 .body("items", hasSize(0));
     }
 
     @Test
-    void hydrate_nullRequestBody_returnsEmptyItems() {
+    void hydrate_nullRequestBody_returnsEmptyItems()
+    {
         given()
                 .contentType("application/json")
                 .body("null")
-        .when()
+                .when()
                 .post("/api/storefront/wishlist/hydrate")
-        .then()
+                .then()
                 .statusCode(200)
                 .body("items", hasSize(0));
     }
@@ -164,7 +171,8 @@ class WishlistHydrationIT {
     // ── Over-limit (>50) returns 400 ─────────────────────────────────────────
 
     @Test
-    void hydrate_overFiftyIds_returns400() {
+    void hydrate_overFiftyIds_returns400()
+    {
         List<UUID> fiftyOneIds = IntStream.range(0, 51)
                 .mapToObj(i -> UUID.randomUUID())
                 .toList();
@@ -180,15 +188,16 @@ class WishlistHydrationIT {
         given()
                 .contentType("application/json")
                 .body(body.toString())
-        .when()
+                .when()
                 .post("/api/storefront/wishlist/hydrate")
-        .then()
+                .then()
                 .statusCode(400)
                 .body("error", equalTo("Maximum 50 variant IDs per request"));
     }
 
     @Test
-    void hydrate_exactlyFiftyIds_isAllowed() {
+    void hydrate_exactlyFiftyIds_isAllowed()
+    {
         List<UUID> fiftyIds = IntStream.range(0, 50)
                 .mapToObj(i -> UUID.randomUUID())
                 .toList();
@@ -207,9 +216,9 @@ class WishlistHydrationIT {
         given()
                 .contentType("application/json")
                 .body(body.toString())
-        .when()
+                .when()
                 .post("/api/storefront/wishlist/hydrate")
-        .then()
+                .then()
                 .statusCode(200)
                 .body("items", hasSize(0));
     }
@@ -217,7 +226,8 @@ class WishlistHydrationIT {
     // ── No auth required (public endpoint) ───────────────────────────────────
 
     @Test
-    void hydrate_withoutJwt_returns200() {
+    void hydrate_withoutJwt_returns200()
+    {
         // Endpoint is public — no JWT required
         when(wishlistHydrationService.hydrate(List.of(activeVariantId)))
                 .thenReturn(List.of(hydratedItem));
@@ -225,9 +235,9 @@ class WishlistHydrationIT {
         given()
                 .contentType("application/json")
                 .body("{\"variantIds\": [\"" + activeVariantId + "\"]}")
-        .when()
+                .when()
                 .post("/api/storefront/wishlist/hydrate")
-        .then()
+                .then()
                 .statusCode(200)
                 .body("items", hasSize(1))
                 .body("items[0].variantId", equalTo(activeVariantId.toString()));
@@ -236,24 +246,25 @@ class WishlistHydrationIT {
     // ── Multiple valid items ─────────────────────────────────────────────────
 
     @Test
-    void hydrate_multipleValidIds_returnsAllHydratedItems() {
+    void hydrate_multipleValidIds_returnsAllHydratedItems()
+    {
         UUID secondVariantId = UUID.randomUUID();
 
         WishlistHydratedItemDto secondItem = new WishlistHydratedItemDto();
-        secondItem.variantId = secondVariantId;
-        secondItem.variantLabel = "{\"size\": \"L\"}";
-        secondItem.sku = "TEST-SKU-002";
-        secondItem.productId = UUID.randomUUID();
-        secondItem.productName = "Second Product";
-        secondItem.productSlug = "second-product";
-        secondItem.imagePath = null; // No image
+        secondItem.setVariantId(secondVariantId);
+        secondItem.setVariantLabel("{\"size\": \"L\"}");
+        secondItem.setSku("TEST-SKU-002");
+        secondItem.setProductId(UUID.randomUUID());
+        secondItem.setProductName("Second Product");
+        secondItem.setProductSlug("second-product");
+        secondItem.setImagePath(null); // No image
 
         VariantPriceDto wholesalePrice = new VariantPriceDto();
-        wholesalePrice.id = UUID.randomUUID().toString();
-        wholesalePrice.priceType = "WHOLESALE_PRICE";
-        wholesalePrice.price = new BigDecimal("149.50");
-        wholesalePrice.isActive = true;
-        secondItem.wholesalePrice = wholesalePrice;
+        wholesalePrice.setId(UUID.randomUUID().toString());
+        wholesalePrice.setPriceType("WHOLESALE_PRICE");
+        wholesalePrice.setPrice(new BigDecimal("149.50"));
+        wholesalePrice.setIsActive(true);
+        secondItem.setWholesalePrice(wholesalePrice);
 
         when(wishlistHydrationService.hydrate(List.of(activeVariantId, secondVariantId)))
                 .thenReturn(List.of(hydratedItem, secondItem));
@@ -261,9 +272,9 @@ class WishlistHydrationIT {
         given()
                 .contentType("application/json")
                 .body("{\"variantIds\": [\"" + activeVariantId + "\", \"" + secondVariantId + "\"]}")
-        .when()
+                .when()
                 .post("/api/storefront/wishlist/hydrate")
-        .then()
+                .then()
                 .statusCode(200)
                 .body("items", hasSize(2))
                 .body("items[0].variantId", equalTo(activeVariantId.toString()))

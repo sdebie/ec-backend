@@ -9,23 +9,27 @@ import jakarta.inject.Inject;
  * proxy headers. Designed for use in GraphQL resolvers where {@code @HeaderParam} is
  * unavailable.
  * <p>
- * Delegates to {@link ClientIpUtils#resolveClientIp(String, String)} so the resolution
+ * Delegates to {@link ClientIpUtils#resolveClientIp(String, String, String)} so the resolution
  * logic is never duplicated.
  */
 @RequestScoped
-public class CurrentRequestClientIp {
+public class CurrentRequestClientIp
+{
 
     @Inject
     RoutingContext routingContext;
 
     /**
-     * Resolve the client IP for the current request using X-Forwarded-For / X-Real-IP headers.
+     * Resolve the client IP for the current request using CF-Connecting-IP /
+     * X-Forwarded-For / X-Real-IP headers.
      *
      * @return the resolved client IP, or "unknown" if no proxy headers are present
      */
-    public String resolve() {
+    public String resolve()
+    {
         var headers = routingContext.request().headers();
         return ClientIpUtils.resolveClientIp(
+                headers.get("CF-Connecting-IP"),
                 headers.get("X-Forwarded-For"),
                 headers.get("X-Real-IP")
         );

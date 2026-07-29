@@ -19,21 +19,24 @@ import java.util.List;
  */
 @Path("/api/storefront/payment-methods")
 @Produces(MediaType.APPLICATION_JSON)
-public class StorefrontPaymentResource {
-
+public class StorefrontPaymentResource
+{
     private static final Logger LOG = Logger.getLogger(StorefrontPaymentResource.class);
 
     @Inject
     ObjectMapper objectMapper;
 
     @GET
-    public List<String> getAllowedPaymentMethods() {
+    public List<String> getAllowedPaymentMethods()
+    {
         StoreSettingsEntity setting = StoreSettingsEntity.find("key", "payment_methods_allowed").firstResult();
         if (setting == null) {
             return List.of();
         }
         try {
-            return objectMapper.readValue(setting.value, new TypeReference<List<String>>() {});
+            return objectMapper.readValue(setting.getValue(), new TypeReference<List<String>>()
+            {
+            });
         } catch (Exception e) {
             LOG.error("Failed to parse payment_methods_allowed setting value", e);
             return List.of();

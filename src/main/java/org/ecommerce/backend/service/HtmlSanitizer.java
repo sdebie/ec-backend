@@ -5,8 +5,8 @@ import org.owasp.html.HtmlPolicyBuilder;
 import org.owasp.html.PolicyFactory;
 
 @ApplicationScoped
-public class HtmlSanitizer {
-
+public class HtmlSanitizer
+{
     private static final PolicyFactory POLICY = new HtmlPolicyBuilder()
             .allowElements("p", "br", "h1", "h2", "h3", "strong", "b", "em", "i", "u", "ul", "ol", "li", "a")
             .allowUrlProtocols("https", "http", "mailto")
@@ -22,7 +22,8 @@ public class HtmlSanitizer {
      * @param rawHtml the untrusted HTML input
      * @return cleaned HTML, or an empty string if input is null
      */
-    public String sanitize(String rawHtml) {
+    public String sanitize(String rawHtml)
+    {
         if (rawHtml == null) {
             return "";
         }
