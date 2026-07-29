@@ -33,7 +33,7 @@ jobs:
 
       # 3. Inject authentication credentials into Maven so it can download parent/common packages
       - name: Configure Maven for GitHub Packages Auth
-        uses: s4u/maven-settings-action@v4
+        uses: s4u/maven-settings-action@v3.1.0
         with:
           servers: |
             [
