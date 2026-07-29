@@ -28,12 +28,12 @@ jobs:
 
       - name: Set Next SNAPSHOT Version
         run: |
-          CURRENT_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
+          CURRENT_VERSION=$(mvn -B help:evaluate -Dexpression=project.version -q -DforceStdout)
           
           # Only bump if the branch currently doesn't already have -SNAPSHOT
           if [[ "$CURRENT_VERSION" != *"-SNAPSHOT"* ]]; then
             echo "Bumping version $CURRENT_VERSION to next SNAPSHOT..."
-            mvn versions:set -DnextSnapshot=true -DgenerateBackupPoms=false
+            mvn -B versions:set -DnextSnapshot=true -DgenerateBackupPoms=false
           
             git config user.name "github-actions[bot]"
             git config user.email "github-actions[bot]@users.noreply.github.com"
