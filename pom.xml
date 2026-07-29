@@ -14,7 +14,7 @@
 
     <groupId>org.ecommerce.backend</groupId>
     <artifactId>ec-backend</artifactId>
-    <version>1.0.0-SNAPSHOT</version>
+    <version>1.0.0</version>
     <name>Ecommerce :: Backend</name>
     <packaging>jar</packaging>
 
