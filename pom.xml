@@ -19,7 +19,7 @@
     <packaging>jar</packaging>
 
     <properties>
-        <ec-common.version>1.0.1-SNAPSHOT</ec-common.version>
+        <ec-common.version>1.0.1</ec-common.version>
     </properties>
 
     <dependencyManagement>
