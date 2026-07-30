@@ -14,12 +14,12 @@
 
     <groupId>org.ecommerce.backend</groupId>
     <artifactId>ec-backend</artifactId>
-    <version>1.0.1-SNAPSHOT</version>
+    <version>1.0.1</version>
     <name>Ecommerce :: Backend</name>
     <packaging>jar</packaging>
 
     <properties>
-        <ec-common.version>1.0.0-SNAPSHOT</ec-common.version>
+        <ec-common.version>1.0.0</ec-common.version>
     </properties>
 
     <dependencyManagement>
