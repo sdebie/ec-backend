@@ -1,29 +1,30 @@
-name: Build and Push Quarkus Backend
+name: Finalize Release and Build Backend
 
 on:
   push:
     branches:
-      - main  # Automatically compiles and ships your code every time you push to main
+      - main
 
-# Force JavaScript actions to use Node.js 24 to silence deprecation warnings in 2026
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 jobs:
-  compile-and-ship:
+  # -------------------------------------------------------------
+  # Job 1: Strip SNAPSHOT, commit release version, tag, and push
+  # -------------------------------------------------------------
+  strip-snapshot:
     runs-on: ubuntu-latest
 
-    # Essential permissions to allow this repo to pull down packages from your other repo
     permissions:
-      contents: read
-      packages: read
+      contents: write
 
     steps:
-      # 1. Download the backend source code
       - name: Checkout Code
         uses: actions/checkout@v5
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
 
-      # 2. Setup Java 21 with automatic Maven build caching
       - name: Set up JDK 21
         uses: actions/setup-java@v5
         with:
@@ -31,7 +32,6 @@ jobs:
           distribution: 'temurin'
           cache: 'maven'
 
-      # 3. Inject authentication credentials into Maven so it can download parent/common packages
       - name: Configure Maven for GitHub Packages Auth
         uses: s4u/maven-settings-action@v4.0.0
         with:
@@ -49,18 +49,82 @@ jobs:
               }
             ]
 
-      # 4. Compile the backend application. Maven will safely pull parent/common packages from GitHub Packages.
+      - name: Strip SNAPSHOT from project version and properties
+        run: |
+          CURRENT_VERSION=$(mvn -B help:evaluate -Dexpression=project.version -q -DforceStdout)
+          
+          if [[ "$CURRENT_VERSION" == *"-SNAPSHOT"* ]]; then
+            RELEASE_VERSION=${CURRENT_VERSION%-SNAPSHOT}
+            echo "Stripping SNAPSHOT from project: $CURRENT_VERSION -> $RELEASE_VERSION"
+          
+            mvn -B versions:set -DnewVersion=${RELEASE_VERSION} -DgenerateBackupPoms=false
+            sed -i 's/-SNAPSHOT<\/ec-common.version>/<\/ec-common.version>/g' pom.xml
+          
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+            if [[ -n $(git status --porcelain) ]]; then
+              git commit -am "chore(release): set clean main release v${RELEASE_VERSION} [skip ci]"
+              git tag "v${RELEASE_VERSION}"
+              git push origin main --tags
+            else
+              echo "No files were changed. Skipping commit."
+            fi
+          else
+            echo "Main branch is already on clean version ($CURRENT_VERSION). No action needed."
+          fi
+
+  # -------------------------------------------------------------
+  # Job 2: Build & Push Docker Image (Runs ONLY after Job 1 succeeds)
+  # -------------------------------------------------------------
+  compile-and-ship:
+    needs: strip-snapshot
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      packages: read
+
+    steps:
+      # Checkout main to ensure we get the cleaned release POM version from Job 1
+      - name: Checkout Code
+        uses: actions/checkout@v5
+        with:
+          ref: main
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v5
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'maven'
+
+      - name: Configure Maven for GitHub Packages Auth
+        uses: s4u/maven-settings-action@v4.0.0
+        with:
+          servers: |
+            [
+              {
+                "id": "github-parent",
+                "username": "${{ github.actor }}",
+                "password": "${{ secrets.GITHUB_TOKEN }}"
+              },
+              {
+                "id": "github-common",
+                "username": "${{ github.actor }}",
+                "password": "${{ secrets.GITHUB_TOKEN }}"
+              }
+            ]
+
       - name: Compile Application with Maven
         run: mvn clean package -DskipTests
 
-      # 5. Log in securely to your Docker Hub account
       - name: Authenticate with Docker Hub
         uses: docker/login-action@v4
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # 6. Build the lightweight production image and push it to Docker Hub
       - name: Build and Push Final Docker Image
         uses: docker/build-push-action@v6
         with:
