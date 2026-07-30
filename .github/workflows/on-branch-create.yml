@@ -5,7 +5,7 @@ on:
 
 jobs:
   bump-snapshot:
-    # 🚀 Only run when a branch (not a tag) is created, and ignore main
+    # Only run when a branch (not a tag) is created, and ignore main
     if: github.event.ref_type == 'branch' && github.event.ref != 'main'
     runs-on: ubuntu-latest
 
@@ -26,6 +26,24 @@ jobs:
           distribution: 'temurin'
           cache: 'maven'
 
+      # Maven Auth so help:evaluate and versions:set can resolve parent/common dependencies
+      - name: Configure Maven for GitHub Packages Auth
+        uses: s4u/maven-settings-action@v4.0.0
+        with:
+          servers: |
+            [
+              {
+                "id": "github-parent",
+                "username": "${{ github.actor }}",
+                "password": "${{ secrets.GITHUB_TOKEN }}"
+              },
+              {
+                "id": "github-common",
+                "username": "${{ github.actor }}",
+                "password": "${{ secrets.GITHUB_TOKEN }}"
+              }
+            ]
+
       - name: Set Next SNAPSHOT Version
         run: |
           CURRENT_VERSION=$(mvn -B help:evaluate -Dexpression=project.version -q -DforceStdout)
@@ -37,10 +55,15 @@ jobs:
           
             git config user.name "github-actions[bot]"
             git config user.email "github-actions[bot]@users.noreply.github.com"
-            git commit -am "chore(version): set feature branch snapshot version [skip ci]"
           
-            # 🚀 FIX: Dynamic push to whatever branch triggered this action
-            git push origin ${{ github.event.ref_name }}
+            # Prevent exit code 1 if git status is clean
+            if [[ -n $(git status --porcelain) ]]; then
+              git commit -am "chore(version): set feature branch snapshot version [skip ci]"
+              # Explicitly push HEAD to the created branch ref
+              git push origin HEAD:${{ github.event.ref }}
+            else
+              echo "No version changes detected to commit."
+            fi
           else
             echo "Version is already a SNAPSHOT ($CURRENT_VERSION). Skipping bump."
           fi
