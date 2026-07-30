@@ -14,13 +14,13 @@ jobs:
 
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: ${{ github.event.ref }}
           fetch-depth: 0
 
       - name: Set up JDK 21
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           java-version: '21'
           distribution: 'temurin'
@@ -28,17 +28,19 @@ jobs:
 
       - name: Set Next SNAPSHOT Version
         run: |
-          CURRENT_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
+          CURRENT_VERSION=$(mvn -B help:evaluate -Dexpression=project.version -q -DforceStdout)
           
           # Only bump if the branch currently doesn't already have -SNAPSHOT
           if [[ "$CURRENT_VERSION" != *"-SNAPSHOT"* ]]; then
             echo "Bumping version $CURRENT_VERSION to next SNAPSHOT..."
-            mvn versions:set -DnextSnapshot=true -DgenerateBackupPoms=false
+            mvn -B versions:set -DnextSnapshot=true -DgenerateBackupPoms=false
           
             git config user.name "github-actions[bot]"
             git config user.email "github-actions[bot]@users.noreply.github.com"
             git commit -am "chore(version): set feature branch snapshot version [skip ci]"
-            git push origin ${{ github.event.ref }}
+          
+            # 🚀 FIX: Dynamic push to whatever branch triggered this action
+            git push origin ${{ github.event.ref_name }}
           else
             echo "Version is already a SNAPSHOT ($CURRENT_VERSION). Skipping bump."
           fi
