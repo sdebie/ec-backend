@@ -33,15 +33,27 @@ public class AdminMeResource {
         String email = jwt.getName();
 
         UUID id = null;
+        // Defaults to true so an unresolvable user cannot be admitted to the portal:
+        // the client treats "must reset" as the locked state, so this fails closed.
+        boolean resetPassword = true;
         StaffUserEntity user = StaffUserEntity.findByEmail(email);
         if (user != null) {
             id = user.getId();
+            resetPassword = user.isResetPassword();
         } else {
             LOG.warnv("Staff user not found for email: {0}", email);
         }
 
-        return Response.ok(new AdminMeDto(id, role, List.of(role), email, email)).build();
+        return Response.ok(new AdminMeDto(id, role, List.of(role), email, email, resetPassword)).build();
     }
 
-    public record AdminMeDto(UUID id, String role, List<String> authority, String userName, String email) {}
+    /**
+     * `resetPassword` carries the forced-password-change flag. It must be served here,
+     * not only from the login response: the client deliberately does not persist it, so
+     * on a page reload this endpoint is the only thing that can re-establish the state.
+     * Without it the guard would rehydrate role and authority, see nothing forcing a
+     * reset, and admit a flagged user — a bypass by reload.
+     */
+    public record AdminMeDto(UUID id, String role, List<String> authority, String userName, String email,
+                             boolean resetPassword) {}
 }

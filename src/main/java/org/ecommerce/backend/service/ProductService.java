@@ -54,58 +54,6 @@ public class ProductService
     ProductWriteValidator productWriteValidator;
 
     @Transactional(value = TxType.SUPPORTS)
-    public List<ProductListItemDto> getAllProducts(PageRequest pageRequest, FilterRequest filterRequest)
-    {
-        return enrichProductListItems(productRepository.findAllProductListItems(pageRequest, filterRequest, true));
-    }
-
-    @Transactional(value = TxType.SUPPORTS)
-    public List<ProductListItemDto> getProductsByCategory(String categoryId, boolean includeSubCategories, PageRequest pageRequest, FilterRequest filterRequest, boolean ignoreStatus)
-    {
-        if (categoryId == null || categoryId.isBlank()) {
-            throw new IllegalArgumentException("Category id is required");
-        }
-
-        UUID selectedCategoryId = UUID.fromString(categoryId);
-        CategoryEntity selectedCategory = categoryRepository.findById(selectedCategoryId);
-        if (selectedCategory == null) {
-            throw new IllegalArgumentException("Category not found with id: " + categoryId);
-        }
-
-        List<UUID> categoryIds = includeSubCategories ? resolveCategoryScopeIds(selectedCategory) : List.of(selectedCategoryId);
-
-        FilterRequest effectiveFilterRequest = applyActiveProductStatusFilter(filterRequest, ignoreStatus);
-
-        return enrichProductListItems(productRepository.findProductListItemsByCategoryIds(pageRequest, effectiveFilterRequest, categoryIds, ignoreStatus));
-    }
-
-    @Transactional(value = TxType.SUPPORTS)
-    public List<ProductListItemDto> getProductsByBrand(String brandId, PageRequest pageRequest, FilterRequest filterRequest, boolean ignoreStatus)
-    {
-        if (brandId == null || brandId.isBlank()) {
-            throw new IllegalArgumentException("Brand id is required");
-        }
-
-        final UUID parsedBrandId;
-        try {
-            parsedBrandId = UUID.fromString(brandId);
-        } catch (IllegalArgumentException e) {
-            throw new IllegalArgumentException("Brand id must be a valid UUID", e);
-        }
-
-        if (brandRepository.findById(parsedBrandId) == null) {
-            throw new IllegalArgumentException("Brand not found with id: " + brandId);
-        }
-
-        FilterRequest effectiveFilterRequest = applyActiveProductStatusFilter(filterRequest, ignoreStatus);
-        List<Filter> filters = mutableFilters(effectiveFilterRequest);
-        filters.add(new Filter("brand.id", FilterOperator.EQUALS, brandId));
-        effectiveFilterRequest.setFilters(filters);
-
-        return enrichProductListItems(productRepository.findAllProductListItems(pageRequest, effectiveFilterRequest, ignoreStatus));
-    }
-
-    @Transactional(value = TxType.SUPPORTS)
     public List<ProductShoppingListItemDto> getShoppingProducts(PageRequest pageRequest, FilterRequest filterRequest, boolean onSale, boolean ignoreStatus)
     {
         FilterRequest effectiveFilterRequest = applyActiveProductStatusFilter(filterRequest, ignoreStatus);
@@ -135,46 +83,6 @@ public class ProductService
         List<AdminProductListItemDto> content = productListItemAssembler.buildAdminListItems(page.getContent(), now);
 
         return new PageResponse<>(content, page.getTotalElements(), page.getTotalPages(), page.getPageIndex(), page.getPageSize());
-    }
-
-
-    private List<ProductListItemDto> enrichProductListItems(List<ProductListItemDto> products)
-    {
-        return products.stream().map(product -> {
-            if (product.getId() == null) {
-                product.setVariantIds(List.of());
-                product.setImageName(null);
-                return product;
-            }
-
-            UUID productId = UUID.fromString(product.getId());
-
-            product.setVariantIds(productVariantRepository.findByVariantsForProductId(productId)
-                    .stream()
-                    .map(v -> v.getId().toString())
-                    .collect(Collectors.toList()));
-
-            ProductImageEntity featuredImage = productImageRepository.findFeaturedByProductId(productId);
-            product.setImageName(featuredImage != null ? featuredImage.getImageUrl() : null);
-            return product;
-
-        }).collect(Collectors.toList());
-    }
-
-    private List<UUID> resolveCategoryScopeIds(CategoryEntity selectedCategory)
-    {
-        Set<UUID> scopedIds = new LinkedHashSet<>();
-        scopedIds.add(selectedCategory.getId());
-
-        UUID groupParentId = selectedCategory.getParent() != null ? selectedCategory.getParent().getId() : selectedCategory.getId();
-        List<CategoryEntity> groupedCategories = categoryRepository.list("parent.id", groupParentId);
-        for (CategoryEntity category : groupedCategories) {
-            if (category != null && category.getId() != null) {
-                scopedIds.add(category.getId());
-            }
-        }
-
-        return new ArrayList<>(scopedIds);
     }
 
     @Transactional(value = TxType.SUPPORTS)

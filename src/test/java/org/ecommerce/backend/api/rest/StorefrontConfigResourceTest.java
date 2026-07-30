@@ -183,6 +183,61 @@ class StorefrontConfigResourceTest
                 .body("contact", not(hasKey("enquiryEmail")));
     }
 
+    // ── Branding assembly tests ───────────────────────────────────────────────
+
+    @Test
+    void getConfig_shouldAlwaysEmitBrandingFallingBackToClientNameWhenBrandingRowAbsent()
+    {
+        // storefront.branding is boot-critical (the header/footer dereference
+        // config.branding.name). With no branding row but a config row present,
+        // branding must still be emitted, named after clientName.
+        StoreSettingsEntity configSetting = new StoreSettingsEntity();
+        configSetting.setKey("storefront.config");
+        configSetting.setValue("{\"clientId\":\"acme\",\"clientName\":\"Acme Store\"}");
+
+        when(settingsRepository.getAllStoreSettings()).thenReturn(List.of(configSetting));
+
+        given()
+                .when().get("/api/storefront/config")
+                .then()
+                .statusCode(200)
+                .body("branding.name", equalTo("Acme Store"))
+                .body("branding", not(hasKey("logo")));
+    }
+
+    @Test
+    void getConfig_shouldEmitBrandingWithGenericNameWhenNoSettingsAtAll()
+    {
+        when(settingsRepository.getAllStoreSettings()).thenReturn(Collections.emptyList());
+
+        given()
+                .when().get("/api/storefront/config")
+                .then()
+                .statusCode(200)
+                .body("branding.name", equalTo("Storefront"));
+    }
+
+    @Test
+    void getConfig_shouldAssembleBrandingWithNestedLogoWhenRowPresent()
+    {
+        StoreSettingsEntity brandingSetting = new StoreSettingsEntity();
+        brandingSetting.setKey("storefront.branding");
+        brandingSetting.setValue("{\"name\":\"UVH Holdings\",\"tagline\":\"Your partner\",\"logoSrc\":\"storefront/uvh-logo.png\",\"logoAlt\":\"UVH Holdings logo\",\"logoWidth\":180,\"logoHeight\":48}");
+
+        when(settingsRepository.getAllStoreSettings()).thenReturn(List.of(brandingSetting));
+
+        given()
+                .when().get("/api/storefront/config")
+                .then()
+                .statusCode(200)
+                .body("branding.name", equalTo("UVH Holdings"))
+                .body("branding.tagline", equalTo("Your partner"))
+                .body("branding.logo.src", equalTo("storefront/uvh-logo.png"))
+                .body("branding.logo.alt", equalTo("UVH Holdings logo"))
+                .body("branding.logo.width", equalTo(180))
+                .body("branding.logo.height", equalTo(48));
+    }
+
     // ── aboutSections tests ───────────────────────────────────────────────────
 
     @Test
