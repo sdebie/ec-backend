@@ -13,6 +13,7 @@ jobs:
   # Job 1: Strip SNAPSHOT, commit release version, tag, and push
   # -------------------------------------------------------------
   strip-snapshot:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
 
     permissions:
@@ -87,6 +88,7 @@ jobs:
   # -------------------------------------------------------------
   compile-and-ship:
     needs: strip-snapshot
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
 
     permissions:
