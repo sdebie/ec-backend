@@ -10,6 +10,8 @@ import org.ecommerce.backend.assembler.ProductListItemAssembler;
 import org.ecommerce.backend.mapper.ProductMapper;
 import org.ecommerce.common.dto.*;
 import org.ecommerce.common.entity.*;
+import org.ecommerce.common.enums.CatalogueSortEn;
+import org.ecommerce.common.enums.PriceBasisEn;
 import org.ecommerce.common.enums.PriceTypeEn;
 import org.ecommerce.common.enums.ProductStatusEn;
 import org.ecommerce.common.query.Filter;
@@ -54,11 +56,13 @@ public class ProductService
     ProductWriteValidator productWriteValidator;
 
     @Transactional(value = TxType.SUPPORTS)
-    public List<ProductShoppingListItemDto> getShoppingProducts(PageRequest pageRequest, FilterRequest filterRequest, boolean onSale, boolean ignoreStatus)
+    public List<ProductShoppingListItemDto> getShoppingProducts(PageRequest pageRequest, FilterRequest filterRequest, boolean onSale, CatalogueSortEn sortBy, PriceBasisEn priceBasis)
     {
-        FilterRequest effectiveFilterRequest = applyActiveProductStatusFilter(filterRequest, ignoreStatus);
+        CatalogueSortEn effectiveSort = sortBy != null ? sortBy : CatalogueSortEn.NAME_ASC;
+        PriceBasisEn effectiveBasis = priceBasis != null ? priceBasis : PriceBasisEn.RETAIL;
+        FilterRequest effectiveFilterRequest = applyActiveProductStatusFilter(filterRequest, false);
         LocalDateTime now = LocalDateTime.now();
-        return productListItemAssembler.buildShoppingListItems(productRepository.findShoppingProductEntities(pageRequest, effectiveFilterRequest, onSale, ignoreStatus), now, ignoreStatus);
+        return productListItemAssembler.buildShoppingListItems(productRepository.findShoppingProductEntities(pageRequest, effectiveFilterRequest, onSale, effectiveSort, effectiveBasis), now, false);
     }
 
     @Transactional(value = TxType.SUPPORTS)
@@ -97,16 +101,16 @@ public class ProductService
     }
 
     @Transactional(value = TxType.SUPPORTS)
-    public long productCount(FilterRequest filterRequest, boolean ignoreStatus)
+    public long productCount(FilterRequest filterRequest)
     {
-        return productRepository.count(applyActiveProductStatusFilter(filterRequest, ignoreStatus));
+        return productRepository.count(applyActiveProductStatusFilter(filterRequest, false));
     }
 
     @Transactional(value = TxType.SUPPORTS)
-    public long countShoppingProducts(FilterRequest filterRequest, boolean onSale, boolean ignoreStatus)
+    public long countShoppingProducts(FilterRequest filterRequest, boolean onSale)
     {
-        FilterRequest effectiveFilterRequest = applyActiveProductStatusFilter(filterRequest, ignoreStatus);
-        return productRepository.countShoppingProducts(effectiveFilterRequest, onSale, ignoreStatus);
+        FilterRequest effectiveFilterRequest = applyActiveProductStatusFilter(filterRequest, false);
+        return productRepository.countShoppingProducts(effectiveFilterRequest, onSale);
     }
 
     private FilterRequest applyActiveProductStatusFilter(FilterRequest filterRequest, boolean ignoreStatus)
