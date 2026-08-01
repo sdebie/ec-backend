@@ -148,7 +148,7 @@ class ProductServiceOnSaleIT
         em.flush();
 
         List<ProductShoppingListItemDto> results = productService.getShoppingProducts(
-                pageOf(0, 50), null, true, false);
+                pageOf(0, 50), null, true, null, null, null);
 
         List<String> mine = results
                 .stream()
@@ -187,7 +187,7 @@ class ProductServiceOnSaleIT
         em.flush();
 
         // Use onSale=true path (the new scope)
-        List<ProductShoppingListItemDto> onSaleResults = productService.getShoppingProducts(pageOf(0, 50), null, true, false);
+        List<ProductShoppingListItemDto> onSaleResults = productService.getShoppingProducts(pageOf(0, 50), null, true, null, null, null);
 
         // Use the legacy findOnSaleShoppingProductList (existing)
         List<ProductShoppingListItemDto> legacyResults = productService.getProductsOnSale(pageOf(0, 50), false);
@@ -246,7 +246,7 @@ class ProductServiceOnSaleIT
         FilterRequest filterRequest = new FilterRequest();
         filterRequest.setFilters(List.of(new Filter("categories.id", FilterOperator.EQUALS, category.getId().toString())));
 
-        List<ProductShoppingListItemDto> results = productService.getShoppingProducts(pageOf(0, 50), filterRequest, true, false);
+        List<ProductShoppingListItemDto> results = productService.getShoppingProducts(pageOf(0, 50), filterRequest, true, null, null, null);
 
         List<String> mine = results
                 .stream()
@@ -286,7 +286,7 @@ class ProductServiceOnSaleIT
         FilterRequest filterRequest = new FilterRequest();
         filterRequest.setFilters(List.of(new Filter("brand.id", FilterOperator.EQUALS, brand.getId().toString())));
 
-        List<ProductShoppingListItemDto> results = productService.getShoppingProducts(pageOf(0, 50), filterRequest, true, false);
+        List<ProductShoppingListItemDto> results = productService.getShoppingProducts(pageOf(0, 50), filterRequest, true, null, null, null);
 
         List<String> mine = results
                 .stream()
@@ -321,7 +321,7 @@ class ProductServiceOnSaleIT
         FilterRequest filterRequest = new FilterRequest();
         filterRequest.setFilters(List.of(new Filter("name", FilterOperator.ILIKE, "Findable")));
 
-        List<ProductShoppingListItemDto> results = productService.getShoppingProducts(pageOf(0, 50), filterRequest, true, false);
+        List<ProductShoppingListItemDto> results = productService.getShoppingProducts(pageOf(0, 50), filterRequest, true, null, null, null);
 
         List<String> mine = results
                 .stream()
@@ -338,6 +338,9 @@ class ProductServiceOnSaleIT
     @TestTransaction
     void onSaleTrueRespectsSortOrder()
     {
+        // Post catalogue-ordering-and-pagination: filterRequest.sort is IGNORED by getShoppingProducts;
+        // the authoritative sort is the CatalogueSortEn parameter (defaults to NAME_ASC when null).
+        // This test verifies that the default NAME_ASC ordering is applied regardless of filterRequest.sort.
         String marker = "ZZONSALESORT-" + UUID.randomUUID().toString().substring(0, 8) + "-";
 
         ProductEntity pA = newProduct(marker, "Zebra");
@@ -354,7 +357,7 @@ class ProductServiceOnSaleIT
 
         em.flush();
 
-        // Sort by name DESC
+        // filterRequest.sort is set to DESC but should be ignored — sortBy parameter is authoritative
         SortRequest sortDesc = new SortRequest();
         sortDesc.setField("name");
         sortDesc.setDirection(SortDirection.DESC);
@@ -362,14 +365,15 @@ class ProductServiceOnSaleIT
         FilterRequest filterRequest = new FilterRequest();
         filterRequest.setSort(List.of(sortDesc));
 
-        List<ProductShoppingListItemDto> results = productService.getShoppingProducts(pageOf(0, 50), filterRequest, true, false);
+        // sortBy=null → defaults to NAME_ASC
+        List<ProductShoppingListItemDto> results = productService.getShoppingProducts(pageOf(0, 50), filterRequest, true, null, null, null);
 
         List<String> mine = results.stream()
                 .map(ProductShoppingListItemDto::getName)
                 .filter(n -> n.startsWith(marker))
                 .collect(Collectors.toList());
 
-        assertEquals(List.of(marker + "Zebra", marker + "Mango", marker + "Apple"), mine, "On-sale products must be sorted by name DESC");
+        assertEquals(List.of(marker + "Apple", marker + "Mango", marker + "Zebra"), mine, "Default ordering is NAME_ASC — filterRequest.sort is ignored");
     }
 
     // ─── Property 3: totalElements/totalPages correct across pages ──────────
@@ -397,10 +401,10 @@ class ProductServiceOnSaleIT
         em.flush();
 
         // Count with onSale=true
-        long totalOnSale = productService.countShoppingProducts(null, true, false);
+        long totalOnSale = productService.countShoppingProducts(null, true, null);
 
         // Count with onSale=false (all products with any active price)
-        long totalAll = productService.countShoppingProducts(null, false, false);
+        long totalAll = productService.countShoppingProducts(null, false, null);
 
         // The on-sale total includes our 5 + any pre-existing on-sale products
         // The all-products total includes our 8 + any pre-existing products
@@ -411,7 +415,7 @@ class ProductServiceOnSaleIT
         int pageSize = 2;
 
         // Get page 0 of on-sale products
-        List<ProductShoppingListItemDto> page0 = productService.getShoppingProducts(pageOf(0, pageSize), null, true, false);
+        List<ProductShoppingListItemDto> page0 = productService.getShoppingProducts(pageOf(0, pageSize), null, true, null, null, null);
 
         // Verify page size is respected
         assertTrue(page0.size() <= pageSize, "Page 0 must contain at most pageSize items");
@@ -422,7 +426,7 @@ class ProductServiceOnSaleIT
         // Collect all on-sale products across all pages to verify disjoint coverage
         List<String> allOnSaleIds = new ArrayList<>();
         for (int pageIdx = 0; pageIdx < expectedTotalPages; pageIdx++) {
-            List<ProductShoppingListItemDto> page = productService.getShoppingProducts(pageOf(pageIdx, pageSize), null, true, false);
+            List<ProductShoppingListItemDto> page = productService.getShoppingProducts(pageOf(pageIdx, pageSize), null, true, null, null, null);
             assertTrue(page.size() <= pageSize, "Page " + pageIdx + " must contain at most pageSize items");
             for (ProductShoppingListItemDto dto : page) {
                 assertFalse(allOnSaleIds.contains(dto.getId()), "Product " + dto.getId() + " appeared on multiple pages (not disjoint)");
@@ -464,7 +468,7 @@ class ProductServiceOnSaleIT
 
         // onSale=false should return ALL products (sale AND non-sale) — same as today
         List<ProductShoppingListItemDto> onSaleFalse = productService.getShoppingProducts(
-                pageOf(0, 50), filterRequest, false, false);
+                pageOf(0, 50), filterRequest, false, null, null, null);
 
         List<String> onSaleFalseNames = onSaleFalse
                 .stream()
@@ -478,7 +482,7 @@ class ProductServiceOnSaleIT
         assertEquals(expected, onSaleFalseNames, "onSale=false must return all products with any active price (unchanged behaviour)");
 
         // Now verify that onSale=true for the same filter only returns Alpha (has sale price)
-        List<ProductShoppingListItemDto> onSaleTrue = productService.getShoppingProducts(pageOf(0, 50), filterRequest, true, false);
+        List<ProductShoppingListItemDto> onSaleTrue = productService.getShoppingProducts(pageOf(0, 50), filterRequest, true, null, null, null);
 
         List<String> onSaleTrueNames = onSaleTrue
                 .stream()
@@ -512,8 +516,8 @@ class ProductServiceOnSaleIT
 
         em.flush();
 
-        long countFalse = productService.countShoppingProducts(null, false, false);
-        long countTrue = productService.countShoppingProducts(null, true, false);
+        long countFalse = productService.countShoppingProducts(null, false, null);
+        long countTrue = productService.countShoppingProducts(null, true, null);
 
         // onSale=true is strictly a subset of onSale=false
         assertTrue(countFalse >= countTrue, "onSale=false total must be >= onSale=true total (sale is a subset of all)");

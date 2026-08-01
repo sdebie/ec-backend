@@ -12,73 +12,81 @@ jobs:
   # -------------------------------------------------------------
   # Job 1: Strip SNAPSHOT, commit release version, tag, and push
   # -------------------------------------------------------------
-  strip-snapshot:
-    runs-on: ubuntu-latest
-
-    permissions:
-      contents: write
-
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v5
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          fetch-depth: 0
-
-      - name: Set up JDK 21
-        uses: actions/setup-java@v5
-        with:
-          java-version: '21'
-          distribution: 'temurin'
-          cache: 'maven'
-
-      - name: Configure Maven for GitHub Packages Auth
-        uses: s4u/maven-settings-action@v4.0.0
-        with:
-          servers: |
-            [
-              {
-                "id": "github-parent",
-                "username": "${{ github.actor }}",
-                "password": "${{ secrets.GITHUB_TOKEN }}"
-              },
-              {
-                "id": "github-common",
-                "username": "${{ github.actor }}",
-                "password": "${{ secrets.GITHUB_TOKEN }}"
-              }
-            ]
-
-      - name: Strip SNAPSHOT from project version and properties
-        run: |
-          CURRENT_VERSION=$(mvn -B help:evaluate -Dexpression=project.version -q -DforceStdout)
-          
-          if [[ "$CURRENT_VERSION" == *"-SNAPSHOT"* ]]; then
-            RELEASE_VERSION=${CURRENT_VERSION%-SNAPSHOT}
-            echo "Stripping SNAPSHOT from project: $CURRENT_VERSION -> $RELEASE_VERSION"
-          
-            mvn -B versions:set -DnewVersion=${RELEASE_VERSION} -DgenerateBackupPoms=false
-            sed -i 's/-SNAPSHOT<\/ec-common.version>/<\/ec-common.version>/g' pom.xml
-          
-            git config user.name "github-actions[bot]"
-            git config user.email "github-actions[bot]@users.noreply.github.com"
-          
-            if [[ -n $(git status --porcelain) ]]; then
-              git commit -am "chore(release): set clean main release v${RELEASE_VERSION} [skip ci]"
-              git tag "v${RELEASE_VERSION}"
-              git push origin main --tags
-            else
-              echo "No files were changed. Skipping commit."
-            fi
-          else
-            echo "Main branch is already on clean version ($CURRENT_VERSION). No action needed."
-          fi
+#  strip-snapshot:
+#    if: github.ref == 'refs/heads/main'
+#    runs-on: ubuntu-latest
+#
+#    permissions:
+#      contents: write
+#
+#    steps:
+#      - name: Checkout Code
+#        uses: actions/checkout@v5
+#        with:
+#          token: ${{ secrets.GITHUB_TOKEN }}
+#          fetch-depth: 0
+#
+#      - name: Set up JDK 21
+#        uses: actions/setup-java@v5
+#        with:
+#          java-version: '21'
+#          distribution: 'temurin'
+#          cache: 'maven'
+#
+#      - name: Configure Maven for GitHub Packages Auth
+#        uses: s4u/maven-settings-action@v4.0.0
+#        with:
+#          servers: |
+#            [
+#              {
+#                "id": "github-parent",
+#                "username": "${{ github.actor }}",
+#                "password": "${{ secrets.GITHUB_TOKEN }}"
+#              },
+#              {
+#                "id": "github-common",
+#                "username": "${{ github.actor }}",
+#                "password": "${{ secrets.GITHUB_TOKEN }}"
+#              }
+#            ]
+#
+#      - name: Strip SNAPSHOT from project version and properties
+#        run: |
+#          CURRENT_VERSION=$(mvn -B help:evaluate -Dexpression=project.version -q -DforceStdout)
+#
+#          if [[ "$CURRENT_VERSION" == *"-SNAPSHOT"* ]]; then
+#            RELEASE_VERSION=${CURRENT_VERSION%-SNAPSHOT}
+#            echo "Stripping SNAPSHOT from project: $CURRENT_VERSION -> $RELEASE_VERSION"
+#
+#            # 1. Update main project version
+#            mvn -B versions:set -DnewVersion=${RELEASE_VERSION} -DgenerateBackupPoms=false
+#
+#            # 2. Strip SNAPSHOT from ec-common.version property
+#            sed -i 's/-SNAPSHOT<\/ec-common.version>/<\/ec-common.version>/g' pom.xml
+#
+#            # 3. Strip SNAPSHOT from parent version (using a multiline sed or range)
+#            sed -i '/<parent>/,/<\/parent>/s/-SNAPSHOT<\/version>/<\/version>/' pom.xml
+#
+#            git config user.name "github-actions[bot]"
+#            git config user.email "github-actions[bot]@users.noreply.github.com"
+#
+#            if [[ -n $(git status --porcelain) ]]; then
+#              git commit -am "chore(release): set clean main release v${RELEASE_VERSION} [skip ci]"
+#              git tag "v${RELEASE_VERSION}"
+#              git push origin main --tags
+#            else
+#              echo "No files were changed. Skipping commit."
+#            fi
+#          else
+#            echo "Main branch is already on clean version ($CURRENT_VERSION). No action needed."
+#          fi
 
   # -------------------------------------------------------------
   # Job 2: Build & Push Docker Image (Runs ONLY after Job 1 succeeds)
   # -------------------------------------------------------------
   compile-and-ship:
-    needs: strip-snapshot
+#    needs: strip-snapshot
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
 
     permissions:

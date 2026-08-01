@@ -1,6 +1,9 @@
 package org.ecommerce.backend.api.graphql;
 
 import io.micrometer.core.annotation.Timed;
+import io.quarkus.security.ForbiddenException;
+import io.quarkus.security.UnauthorizedException;
+import io.quarkus.security.identity.SecurityIdentity;
 import jakarta.annotation.security.RolesAllowed;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -10,6 +13,8 @@ import org.eclipse.microprofile.graphql.*;
 import org.ecommerce.backend.service.FeaturedProductService;
 import org.ecommerce.backend.service.ProductService;
 import org.ecommerce.common.dto.*;
+import org.ecommerce.common.enums.CatalogueSortEn;
+import org.ecommerce.common.enums.PriceBasisEn;
 import org.ecommerce.common.query.Filter;
 import org.ecommerce.common.query.FilterRequest;
 import org.ecommerce.common.query.PageRequest;
@@ -23,6 +28,9 @@ import java.util.*;
 @GraphQLApi
 public class ProductResource
 {
+    private static final Set<String> STAFF_ROLES = Set.of(
+            "SUPER_ADMIN", "CATALOG_MANAGER", "ORDER_MANAGER", "VIEWER");
+
     @Inject
     ProductService productService;
 
@@ -35,8 +43,13 @@ public class ProductResource
     @Inject
     BrandRepository brandRepository;
 
+    @Inject
+    SecurityIdentity securityIdentity;
+
     @Query("shoppingProductList")
-    @Description("Returns paginated shopping product cards with variant count, image list, and active lowest prices by type. Products can belong to multiple categories. Supports optional category scope and includeSubCategories.")
+    @Description("Returns paginated shopping product cards with variant count, image list, and active lowest prices by type. " +
+            "Products can belong to multiple categories. Supports optional category scope and includeSubCategories. " +
+            "Note: filterRequest.sort is ignored by this resolver; sortBy is authoritative for ordering.")
     @Timed(value = "ecommerce.catalog.shopping_product_list", description = "Shopping catalogue list resolver duration")
     @Transactional(value = TxType.SUPPORTS)
     public PageResponse<ProductShoppingListItemDto> getShoppingProductsList(
@@ -45,8 +58,10 @@ public class ProductResource
             @Name("filterRequest") FilterRequest filterRequest,
             @Name("categoryId") @Description("Optional main category UUID. If omitted or ALL, returns products across all categories.") String categoryId,
             @Name("onSale") @DefaultValue("false") boolean onSale,
-            @Name("ignoreStatus") @DefaultValue("false") @Description("When true, skips the default ACTIVE product and variant status restriction.") boolean ignoreStatus,
-            @Name("includeSubCategories") @DefaultValue("true") @Description("When true, includes products linked to the selected category and all descendant categories. When false, only products linked directly to the selected category are returned.") boolean includeSubCategories)
+            @Name("includeSubCategories") @DefaultValue("true") @Description("When true, includes products linked to the selected category and all descendant categories. When false, only products linked directly to the selected category are returned.") boolean includeSubCategories,
+            @Name("sortBy") @DefaultValue("NAME_ASC") CatalogueSortEn sortBy,
+            @Name("priceBasis") @DefaultValue("RETAIL") PriceBasisEn priceBasis,
+            @Name("inStockOnly") @DefaultValue("false") Boolean inStockOnly)
     {
         FilterRequest resolvedFilterRequest = filterRequest != null ? filterRequest : new FilterRequest();
 
@@ -82,8 +97,8 @@ public class ProductResource
         pageRequest.setPageIndex(pageIndex);
         pageRequest.setPageSize(effectivePageSize);
 
-        List<ProductShoppingListItemDto> content = productService.getShoppingProducts(pageRequest, resolvedFilterRequest, onSale, ignoreStatus);
-        long totalElements = productService.countShoppingProducts(resolvedFilterRequest, onSale, ignoreStatus);
+        List<ProductShoppingListItemDto> content = productService.getShoppingProducts(pageRequest, resolvedFilterRequest, onSale, sortBy, priceBasis, inStockOnly);
+        long totalElements = productService.countShoppingProducts(resolvedFilterRequest, onSale, inStockOnly);
         int totalPages = (int) Math.ceil((double) totalElements / effectivePageSize);
 
         return new PageResponse<>(content, totalElements, totalPages, pageIndex, effectivePageSize);
@@ -122,6 +137,15 @@ public class ProductResource
             @Name("pageRequest") PageRequest pageRequest,
             @Name("ignoreStatus") @DefaultValue("false") @Description("When true, skips the default ACTIVE product and variant status restriction.") boolean ignoreStatus)
     {
+        if (ignoreStatus) {
+            if (securityIdentity.isAnonymous()) {
+                throw new UnauthorizedException("Authentication required");
+            }
+            if (STAFF_ROLES.stream().noneMatch(securityIdentity::hasRole)) {
+                throw new ForbiddenException("Insufficient permissions");
+            }
+        }
+
         return productService.getProductsOnSale(pageRequest, ignoreStatus);
     }
 
@@ -140,8 +164,7 @@ public class ProductResource
     public long productCount(
             @Name("filterRequest") FilterRequest filterRequest,
             @Name("categoryId") @Description("Optional category UUID. Includes products in this category and all subcategories. Pass null or omit for all categories.") String categoryId,
-            @Name("brandId") @Description("Optional brand UUID. Restricts count to products linked to this brand.") String brandId,
-            @Name("ignoreStatus") @DefaultValue("false") @Description("When true, skips the default ACTIVE product and variant status restriction.") boolean ignoreStatus)
+            @Name("brandId") @Description("Optional brand UUID. Restricts count to products linked to this brand.") String brandId)
     {
         FilterRequest resolvedFilterRequest = filterRequest != null ? filterRequest : new FilterRequest();
 
@@ -191,8 +214,8 @@ public class ProductResource
                 || (brandId != null && !brandId.isBlank());
 
         return isScoped
-                ? productService.countShoppingProducts(resolvedFilterRequest, false, ignoreStatus)
-                : productService.productCount(resolvedFilterRequest, ignoreStatus);
+                ? productService.countShoppingProducts(resolvedFilterRequest, false, null)
+                : productService.productCount(resolvedFilterRequest);
     }
 
     @Query("variantsByIds")
