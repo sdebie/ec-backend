@@ -3,6 +3,8 @@ name: AI PR Review
 on:
   pull_request:
     types: [opened, synchronize]
+  issue_comment:
+    types: [created]
 
 permissions:
   contents: read
@@ -10,15 +12,14 @@ permissions:
   issues: write
 
 jobs:
-  review:
+  pr_agent_job:
+    # Avoid running on bot-generated comments or events
+    if: ${{ github.event.sender.type != 'Bot' }}
     runs-on: ubuntu-latest
+    name: Run PR Agent
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Run AI Reviewer
-        uses: Codium-ai/pr-agent-action@v2
+      - name: PR Agent Step
+        uses: the-pr-agent/pr-agent@main
         env:
           OPENAI_KEY: ${{ secrets.OPENAI_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

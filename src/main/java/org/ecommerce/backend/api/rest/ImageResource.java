@@ -23,7 +23,7 @@ public class ImageResource
     ImageService imageService;
 
     /**
-     * Generic upload endpoint - saves file without creating database records.
+     * Generic upload endpoint - saves a file without creating database records.
      * Accepts an optional destinationDirectory to place the file in a subdirectory (e.g. "brands").
      */
     @POST
