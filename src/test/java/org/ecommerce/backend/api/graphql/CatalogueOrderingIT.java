@@ -161,7 +161,7 @@ class CatalogueOrderingIT
         em.flush();
 
         List<ProductShoppingListItemDto> results = productService.getShoppingProducts(
-                pageOf(0, 50), filterByMarker(marker), false, CatalogueSortEn.PRICE_ASC, PriceBasisEn.RETAIL);
+                pageOf(0, 50), filterByMarker(marker), false, CatalogueSortEn.PRICE_ASC, PriceBasisEn.RETAIL, null);
 
         // With the marker filter, all three tracked products should appear
         assertEquals(3, results.size(), "Exactly 3 tracked products should appear in filtered results");
@@ -206,7 +206,7 @@ class CatalogueOrderingIT
         em.flush();
 
         List<ProductShoppingListItemDto> results = productService.getShoppingProducts(
-                pageOf(0, 50), filterByMarker(marker), false, CatalogueSortEn.PRICE_DESC, PriceBasisEn.RETAIL);
+                pageOf(0, 50), filterByMarker(marker), false, CatalogueSortEn.PRICE_DESC, PriceBasisEn.RETAIL, null);
 
         assertEquals(3, results.size(), "Exactly 3 tracked products should appear in filtered results");
 
@@ -252,7 +252,7 @@ class CatalogueOrderingIT
         em.flush();
 
         List<ProductShoppingListItemDto> results = productService.getShoppingProducts(
-                pageOf(0, 50), filterByMarker(marker), false, CatalogueSortEn.PRICE_ASC, PriceBasisEn.WHOLESALE);
+                pageOf(0, 50), filterByMarker(marker), false, CatalogueSortEn.PRICE_ASC, PriceBasisEn.WHOLESALE, null);
 
         assertEquals(3, results.size(), "Exactly 3 tracked products should appear in filtered results");
 
@@ -308,7 +308,7 @@ class CatalogueOrderingIT
         em.flush();
 
         List<ProductShoppingListItemDto> results = productService.getShoppingProducts(
-                pageOf(0, 50), filterByMarker(marker), false, CatalogueSortEn.PRICE_ASC, PriceBasisEn.RETAIL);
+                pageOf(0, 50), filterByMarker(marker), false, CatalogueSortEn.PRICE_ASC, PriceBasisEn.RETAIL, null);
 
         assertEquals(3, results.size(), "All three tracked products must appear in the filtered result");
 
@@ -357,7 +357,7 @@ class CatalogueOrderingIT
         em.flush();
 
         List<ProductShoppingListItemDto> results = productService.getShoppingProducts(
-                pageOf(0, 50), filterByMarker(marker), false, CatalogueSortEn.PRICE_DESC, PriceBasisEn.RETAIL);
+                pageOf(0, 50), filterByMarker(marker), false, CatalogueSortEn.PRICE_DESC, PriceBasisEn.RETAIL, null);
 
         assertEquals(3, results.size(), "All three tracked products must appear in the filtered result");
 
@@ -414,7 +414,7 @@ class CatalogueOrderingIT
 
         // Request PRICE_ASC ordering — expected: Bravo(30), Charlie(60), Alpha(90)
         List<ProductShoppingListItemDto> results = productService.getShoppingProducts(
-                pageOf(0, 50), filterByMarker(marker), false, CatalogueSortEn.PRICE_ASC, PriceBasisEn.RETAIL);
+                pageOf(0, 50), filterByMarker(marker), false, CatalogueSortEn.PRICE_ASC, PriceBasisEn.RETAIL, null);
 
         assertEquals(3, results.size(), "All three tracked products must appear in the filtered result");
 
@@ -487,7 +487,7 @@ class CatalogueOrderingIT
         int pageSize = 2;
 
         // --- Count query returns the full total (> pageSize) ---
-        long totalCount = productService.countShoppingProducts(filter, false);
+        long totalCount = productService.countShoppingProducts(filter, false, null);
         assertTrue(totalCount > pageSize,
                 "Count must exceed pageSize (" + pageSize + ") to prove pagination is real; got " + totalCount);
         assertEquals(5, totalCount,
@@ -495,14 +495,14 @@ class CatalogueOrderingIT
 
         // --- Page 0: at most pageSize items ---
         List<ProductShoppingListItemDto> page0 = productService.getShoppingProducts(
-                pageOf(0, pageSize), filter, false, CatalogueSortEn.PRICE_ASC, PriceBasisEn.RETAIL);
+                pageOf(0, pageSize), filter, false, CatalogueSortEn.PRICE_ASC, PriceBasisEn.RETAIL, null);
 
         assertEquals(pageSize, page0.size(),
                 "Page 0 must return exactly pageSize (" + pageSize + ") items, not " + page0.size());
 
         // --- Page 1: at most pageSize items ---
         List<ProductShoppingListItemDto> page1 = productService.getShoppingProducts(
-                pageOf(1, pageSize), filter, false, CatalogueSortEn.PRICE_ASC, PriceBasisEn.RETAIL);
+                pageOf(1, pageSize), filter, false, CatalogueSortEn.PRICE_ASC, PriceBasisEn.RETAIL, null);
 
         assertEquals(pageSize, page1.size(),
                 "Page 1 must return exactly pageSize (" + pageSize + ") items, not " + page1.size());
@@ -520,7 +520,7 @@ class CatalogueOrderingIT
 
         // --- Final page (page 2): should have the remainder (1 item) ---
         List<ProductShoppingListItemDto> page2 = productService.getShoppingProducts(
-                pageOf(2, pageSize), filter, false, CatalogueSortEn.PRICE_ASC, PriceBasisEn.RETAIL);
+                pageOf(2, pageSize), filter, false, CatalogueSortEn.PRICE_ASC, PriceBasisEn.RETAIL, null);
 
         assertEquals(1, page2.size(),
                 "Page 2 must return exactly 1 item (5 total, pageSize 2, pages 0-1 have 4), got " + page2.size());
@@ -569,7 +569,7 @@ class CatalogueOrderingIT
 
         // Request with NAME_ASC (the default) — no price ordering involved
         List<ProductShoppingListItemDto> results = productService.getShoppingProducts(
-                pageOf(0, 50), filterByMarker(marker), false, CatalogueSortEn.NAME_ASC, PriceBasisEn.RETAIL);
+                pageOf(0, 50), filterByMarker(marker), false, CatalogueSortEn.NAME_ASC, PriceBasisEn.RETAIL, null);
 
         assertEquals(3, results.size(), "Exactly 3 tracked products expected");
 
@@ -636,7 +636,7 @@ class CatalogueOrderingIT
         fr.setFilters(filters);
 
         List<ProductShoppingListItemDto> results = productService.getShoppingProducts(
-                pageOf(0, 50), fr, false, CatalogueSortEn.NAME_ASC, PriceBasisEn.RETAIL);
+                pageOf(0, 50), fr, false, CatalogueSortEn.NAME_ASC, PriceBasisEn.RETAIL, null);
 
         // Both products must appear — the child-only product is found via descendant categories
         assertTrue(results.size() >= 2,
@@ -674,7 +674,7 @@ class CatalogueOrderingIT
         int pageSize = 2;
 
         // Count query must return the total matching count
-        long totalElements = productService.countShoppingProducts(filter, false);
+        long totalElements = productService.countShoppingProducts(filter, false, null);
         assertEquals(5, totalElements,
                 "countShoppingProducts must return exactly 5 for 5 seeded tracked products");
 
@@ -685,11 +685,11 @@ class CatalogueOrderingIT
 
         // Verify page results align with the total count
         List<ProductShoppingListItemDto> page0 = productService.getShoppingProducts(
-                pageOf(0, pageSize), filter, false, CatalogueSortEn.NAME_ASC, PriceBasisEn.RETAIL);
+                pageOf(0, pageSize), filter, false, CatalogueSortEn.NAME_ASC, PriceBasisEn.RETAIL, null);
         List<ProductShoppingListItemDto> page1 = productService.getShoppingProducts(
-                pageOf(1, pageSize), filter, false, CatalogueSortEn.NAME_ASC, PriceBasisEn.RETAIL);
+                pageOf(1, pageSize), filter, false, CatalogueSortEn.NAME_ASC, PriceBasisEn.RETAIL, null);
         List<ProductShoppingListItemDto> page2 = productService.getShoppingProducts(
-                pageOf(2, pageSize), filter, false, CatalogueSortEn.NAME_ASC, PriceBasisEn.RETAIL);
+                pageOf(2, pageSize), filter, false, CatalogueSortEn.NAME_ASC, PriceBasisEn.RETAIL, null);
 
         // Pages 0 and 1 should have exactly pageSize items, page 2 the remainder
         assertEquals(2, page0.size(), "Page 0 must have pageSize items");
@@ -729,7 +729,7 @@ class CatalogueOrderingIT
         em.flush();
 
         List<ProductShoppingListItemDto> results = productService.getShoppingProducts(
-                pageOf(0, 50), filterByMarker(marker), false, CatalogueSortEn.NAME_ASC, PriceBasisEn.RETAIL);
+                pageOf(0, 50), filterByMarker(marker), false, CatalogueSortEn.NAME_ASC, PriceBasisEn.RETAIL, null);
 
         assertEquals(1, results.size(), "Exactly 1 tracked product expected");
 
@@ -803,7 +803,7 @@ class CatalogueOrderingIT
 
         // ASC: cheap, dear, then the null-key product last
         List<ProductShoppingListItemDto> asc = productService.getShoppingProducts(
-                pageOf(0, 50), filter, false, CatalogueSortEn.PRICE_ASC, PriceBasisEn.RETAIL);
+                pageOf(0, 50), filter, false, CatalogueSortEn.PRICE_ASC, PriceBasisEn.RETAIL, null);
         assertEquals(3, asc.size(), "All three tracked products must appear");
         assertTrue(indexOf(asc, cheap.getId()) < indexOf(asc, dear.getId()),
                 "ASC: cheap (10) must sort before dear (20)");
@@ -813,7 +813,7 @@ class CatalogueOrderingIT
         // DESC: dear, cheap, then the null-key product STILL last — this is the
         // assertion that fails if NULLS LAST is dropped from the DESC branch.
         List<ProductShoppingListItemDto> desc = productService.getShoppingProducts(
-                pageOf(0, 50), filter, false, CatalogueSortEn.PRICE_DESC, PriceBasisEn.RETAIL);
+                pageOf(0, 50), filter, false, CatalogueSortEn.PRICE_DESC, PriceBasisEn.RETAIL, null);
         assertEquals(3, desc.size(), "All three tracked products must appear");
         assertTrue(indexOf(desc, dear.getId()) < indexOf(desc, cheap.getId()),
                 "DESC: dear (20) must sort before cheap (10)");
@@ -870,7 +870,7 @@ class CatalogueOrderingIT
         fr.setFilters(filters);
 
         List<ProductShoppingListItemDto> results = productService.getShoppingProducts(
-                pageOf(0, 50), fr, false, CatalogueSortEn.PRICE_ASC, PriceBasisEn.RETAIL);
+                pageOf(0, 50), fr, false, CatalogueSortEn.PRICE_ASC, PriceBasisEn.RETAIL, null);
 
         long multiOccurrences = results.stream()
                 .filter(dto -> multi.getId().toString().equals(dto.getId()))
@@ -882,7 +882,7 @@ class CatalogueOrderingIT
                 "Exactly the two tracked products must appear (multi-cat once + single-cat once)");
 
         // The count query runs the same EXISTS rewrite and must agree
-        long total = productService.countShoppingProducts(fr, false);
+        long total = productService.countShoppingProducts(fr, false, null);
         assertEquals(2, total,
                 "countShoppingProducts must agree with the page content — count(p) with the EXISTS "
                         + "rewrite must not double-count the multi-category product");
@@ -943,7 +943,7 @@ class CatalogueOrderingIT
         while (true)
         {
             List<ProductShoppingListItemDto> page = productService.getShoppingProducts(
-                    pageOf(pageIndex, pageSize), filter, false, CatalogueSortEn.PRICE_ASC, PriceBasisEn.RETAIL);
+                    pageOf(pageIndex, pageSize), filter, false, CatalogueSortEn.PRICE_ASC, PriceBasisEn.RETAIL, null);
             if (page.isEmpty())
             {
                 break;

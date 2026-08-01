@@ -60,7 +60,8 @@ public class ProductResource
             @Name("onSale") @DefaultValue("false") boolean onSale,
             @Name("includeSubCategories") @DefaultValue("true") @Description("When true, includes products linked to the selected category and all descendant categories. When false, only products linked directly to the selected category are returned.") boolean includeSubCategories,
             @Name("sortBy") @DefaultValue("NAME_ASC") CatalogueSortEn sortBy,
-            @Name("priceBasis") @DefaultValue("RETAIL") PriceBasisEn priceBasis)
+            @Name("priceBasis") @DefaultValue("RETAIL") PriceBasisEn priceBasis,
+            @Name("inStockOnly") @DefaultValue("false") Boolean inStockOnly)
     {
         FilterRequest resolvedFilterRequest = filterRequest != null ? filterRequest : new FilterRequest();
 
@@ -96,8 +97,8 @@ public class ProductResource
         pageRequest.setPageIndex(pageIndex);
         pageRequest.setPageSize(effectivePageSize);
 
-        List<ProductShoppingListItemDto> content = productService.getShoppingProducts(pageRequest, resolvedFilterRequest, onSale, sortBy, priceBasis);
-        long totalElements = productService.countShoppingProducts(resolvedFilterRequest, onSale);
+        List<ProductShoppingListItemDto> content = productService.getShoppingProducts(pageRequest, resolvedFilterRequest, onSale, sortBy, priceBasis, inStockOnly);
+        long totalElements = productService.countShoppingProducts(resolvedFilterRequest, onSale, inStockOnly);
         int totalPages = (int) Math.ceil((double) totalElements / effectivePageSize);
 
         return new PageResponse<>(content, totalElements, totalPages, pageIndex, effectivePageSize);
@@ -213,7 +214,7 @@ public class ProductResource
                 || (brandId != null && !brandId.isBlank());
 
         return isScoped
-                ? productService.countShoppingProducts(resolvedFilterRequest, false)
+                ? productService.countShoppingProducts(resolvedFilterRequest, false, null)
                 : productService.productCount(resolvedFilterRequest);
     }
 

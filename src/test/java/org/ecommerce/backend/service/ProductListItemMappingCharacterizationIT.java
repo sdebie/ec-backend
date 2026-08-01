@@ -196,7 +196,7 @@ class ProductListItemMappingCharacterizationIT
 
         // Shopping baseline from ProductRepository via ProductService (ignoreStatus=false)
         List<ProductShoppingListItemDto> repoList = productService.getShoppingProducts(
-                pageRequest(0, 50), nameFilter(marker), false, null, null);
+                pageRequest(0, 50), nameFilter(marker), false, null, null, null);
         ProductShoppingListItemDto repoDto = repoList
                 .stream()
                 .filter(d -> d.getName()
@@ -204,7 +204,7 @@ class ProductListItemMappingCharacterizationIT
                 .findFirst().orElseThrow(() -> new AssertionError("ProductRepository shopping list missing product"));
 
         // Shopping baseline from ProductRepository via ProductService (ACTIVE-only, unconditional)
-        List<ProductShoppingListItemDto> repoIgnoreList = productService.getShoppingProducts(pageRequest(0, 50), nameFilter(marker), false, null, null);
+        List<ProductShoppingListItemDto> repoIgnoreList = productService.getShoppingProducts(pageRequest(0, 50), nameFilter(marker), false, null, null, null);
         ProductShoppingListItemDto repoIgnoreDto = repoIgnoreList
                 .stream()
                 .filter(d -> d.getName().startsWith(marker))
@@ -291,13 +291,13 @@ class ProductListItemMappingCharacterizationIT
                 .findFirst().orElseThrow();
 
         // ProductRepository shopping (ignoreStatus=false)
-        ProductShoppingListItemDto repoDto = productService.getShoppingProducts(pageRequest(0, 50), nameFilter(marker), false, null, null)
+        ProductShoppingListItemDto repoDto = productService.getShoppingProducts(pageRequest(0, 50), nameFilter(marker), false, null, null, null)
                 .stream()
                 .filter(d -> d.getName().startsWith(marker))
                 .findFirst().orElseThrow();
 
         // ProductRepository shopping (second call to confirm consistency)
-        ProductShoppingListItemDto repoIgnoreDto = productService.getShoppingProducts(pageRequest(0, 50), nameFilter(marker), false, null, null)
+        ProductShoppingListItemDto repoIgnoreDto = productService.getShoppingProducts(pageRequest(0, 50), nameFilter(marker), false, null, null, null)
                 .stream()
                 .filter(d -> d.getName().startsWith(marker))
                 .findFirst().orElseThrow();
@@ -392,7 +392,7 @@ class ProductListItemMappingCharacterizationIT
                 .findFirst()
                 .orElseThrow();
 
-        ProductShoppingListItemDto repoDto = productService.getShoppingProducts(pageRequest(0, 50), nameFilter(marker), false, null, null)
+        ProductShoppingListItemDto repoDto = productService.getShoppingProducts(pageRequest(0, 50), nameFilter(marker), false, null, null, null)
                 .stream()
                 .filter(d -> d.getName().startsWith(marker))
                 .findFirst().orElseThrow();
@@ -478,7 +478,7 @@ class ProductListItemMappingCharacterizationIT
 
         // With ignoreStatus removed, the ACTIVE product status filter is unconditional.
         // A PENDING product must NOT appear in storefront shopping results.
-        List<ProductShoppingListItemDto> repoList = productService.getShoppingProducts(pageRequest(0, 50), nameFilter(marker), false, null, null);
+        List<ProductShoppingListItemDto> repoList = productService.getShoppingProducts(pageRequest(0, 50), nameFilter(marker), false, null, null, null);
         boolean existsInStorefront = repoList
                 .stream()
                 .anyMatch(d -> d.getName().startsWith(marker));
@@ -510,7 +510,7 @@ class ProductListItemMappingCharacterizationIT
                 .filter(d -> d.getName().startsWith(marker))
                 .findFirst().orElseThrow();
 
-        ProductShoppingListItemDto repoDto = productService.getShoppingProducts(pageRequest(0, 50), nameFilter(marker), false, null, null)
+        ProductShoppingListItemDto repoDto = productService.getShoppingProducts(pageRequest(0, 50), nameFilter(marker), false, null, null, null)
                 .stream()
                 .filter(d -> d.getName().startsWith(marker))
                 .findFirst().orElseThrow();
@@ -581,7 +581,7 @@ class ProductListItemMappingCharacterizationIT
         em.flush();
 
         // Shopping service always applies ACTIVE-only filtering (ignoreStatus removed)
-        ProductShoppingListItemDto repoDto = productService.getShoppingProducts(pageRequest(0, 50), nameFilter(marker), false, null, null)
+        ProductShoppingListItemDto repoDto = productService.getShoppingProducts(pageRequest(0, 50), nameFilter(marker), false, null, null, null)
                 .stream()
                 .filter(d -> d.getName().startsWith(marker))
                 .findFirst().orElseThrow();

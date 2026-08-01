@@ -156,6 +156,10 @@ public class ProductListItemAssembler
 
         dto.setVariantCount(variants.size());
         dto.setVariantId(product.getProductType() != ProductTypeEn.SIMPLE ? null : variants.isEmpty() ? null : variants.get(0).getId().toString());
+        dto.setSku(product.getProductType() != ProductTypeEn.SIMPLE ? null
+                : variants.isEmpty() ? null : variants.get(0).getSku());
+        dto.setInStock(variants.stream()
+                .anyMatch(v -> v.getStockQuantity() != null && v.getStockQuantity() > 0));
         dto.setImages(images
                 .stream()
                 .map(productMapper::mapImageEntityToDto)

@@ -56,13 +56,13 @@ public class ProductService
     ProductWriteValidator productWriteValidator;
 
     @Transactional(value = TxType.SUPPORTS)
-    public List<ProductShoppingListItemDto> getShoppingProducts(PageRequest pageRequest, FilterRequest filterRequest, boolean onSale, CatalogueSortEn sortBy, PriceBasisEn priceBasis)
+    public List<ProductShoppingListItemDto> getShoppingProducts(PageRequest pageRequest, FilterRequest filterRequest, boolean onSale, CatalogueSortEn sortBy, PriceBasisEn priceBasis, Boolean inStockOnly)
     {
         CatalogueSortEn effectiveSort = sortBy != null ? sortBy : CatalogueSortEn.NAME_ASC;
         PriceBasisEn effectiveBasis = priceBasis != null ? priceBasis : PriceBasisEn.RETAIL;
         FilterRequest effectiveFilterRequest = applyActiveProductStatusFilter(filterRequest, false);
         LocalDateTime now = LocalDateTime.now();
-        return productListItemAssembler.buildShoppingListItems(productRepository.findShoppingProductEntities(pageRequest, effectiveFilterRequest, onSale, effectiveSort, effectiveBasis), now, false);
+        return productListItemAssembler.buildShoppingListItems(productRepository.findShoppingProductEntities(pageRequest, effectiveFilterRequest, onSale, effectiveSort, effectiveBasis, inStockOnly), now, false);
     }
 
     @Transactional(value = TxType.SUPPORTS)
@@ -107,10 +107,10 @@ public class ProductService
     }
 
     @Transactional(value = TxType.SUPPORTS)
-    public long countShoppingProducts(FilterRequest filterRequest, boolean onSale)
+    public long countShoppingProducts(FilterRequest filterRequest, boolean onSale, Boolean inStockOnly)
     {
         FilterRequest effectiveFilterRequest = applyActiveProductStatusFilter(filterRequest, false);
-        return productRepository.countShoppingProducts(effectiveFilterRequest, onSale);
+        return productRepository.countShoppingProducts(effectiveFilterRequest, onSale, inStockOnly);
     }
 
     private FilterRequest applyActiveProductStatusFilter(FilterRequest filterRequest, boolean ignoreStatus)
