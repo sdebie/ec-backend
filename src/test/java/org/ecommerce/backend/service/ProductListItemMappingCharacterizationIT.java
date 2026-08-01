@@ -196,23 +196,23 @@ class ProductListItemMappingCharacterizationIT
 
         // Shopping baseline from ProductRepository via ProductService (ignoreStatus=false)
         List<ProductShoppingListItemDto> repoList = productService.getShoppingProducts(
-                pageRequest(0, 50), nameFilter(marker), false, false);
+                pageRequest(0, 50), nameFilter(marker), false, null, null, null);
         ProductShoppingListItemDto repoDto = repoList
                 .stream()
                 .filter(d -> d.getName()
                         .startsWith(marker))
                 .findFirst().orElseThrow(() -> new AssertionError("ProductRepository shopping list missing product"));
 
-        // Shopping baseline from ProductRepository via ProductService (ignoreStatus=true)
-        List<ProductShoppingListItemDto> repoIgnoreList = productService.getShoppingProducts(pageRequest(0, 50), nameFilter(marker), false, true);
+        // Shopping baseline from ProductRepository via ProductService (ACTIVE-only, unconditional)
+        List<ProductShoppingListItemDto> repoIgnoreList = productService.getShoppingProducts(pageRequest(0, 50), nameFilter(marker), false, null, null, null);
         ProductShoppingListItemDto repoIgnoreDto = repoIgnoreList
                 .stream()
                 .filter(d -> d.getName().startsWith(marker))
-                .findFirst().orElseThrow(() -> new AssertionError("ProductRepository ignoreStatus shopping list missing product"));
+                .findFirst().orElseThrow(() -> new AssertionError("ProductRepository shopping list missing product"));
 
         // All three shopping producers must produce matching output
-        assertShoppingDtoEquals(fpsDto, repoDto, "FeaturedProductService and ProductRepository (ignoreStatus=false) shopping mappings must match");
-        assertShoppingDtoEquals(fpsDto, repoIgnoreDto, "FeaturedProductService and ProductRepository (ignoreStatus=true) shopping mappings must match");
+        assertShoppingDtoEquals(fpsDto, repoDto, "FeaturedProductService and ProductRepository shopping mappings must match");
+        assertShoppingDtoEquals(fpsDto, repoIgnoreDto, "FeaturedProductService and ProductRepository shopping mappings must match (second call)");
 
         // Pin shopping baseline field values
         assertEquals(product.getId().toString(), fpsDto.getId());
@@ -291,19 +291,19 @@ class ProductListItemMappingCharacterizationIT
                 .findFirst().orElseThrow();
 
         // ProductRepository shopping (ignoreStatus=false)
-        ProductShoppingListItemDto repoDto = productService.getShoppingProducts(pageRequest(0, 50), nameFilter(marker), false, false)
+        ProductShoppingListItemDto repoDto = productService.getShoppingProducts(pageRequest(0, 50), nameFilter(marker), false, null, null, null)
                 .stream()
                 .filter(d -> d.getName().startsWith(marker))
                 .findFirst().orElseThrow();
 
-        // ProductRepository shopping (ignoreStatus=true)
-        ProductShoppingListItemDto repoIgnoreDto = productService.getShoppingProducts(pageRequest(0, 50), nameFilter(marker), false, true)
+        // ProductRepository shopping (second call to confirm consistency)
+        ProductShoppingListItemDto repoIgnoreDto = productService.getShoppingProducts(pageRequest(0, 50), nameFilter(marker), false, null, null, null)
                 .stream()
                 .filter(d -> d.getName().startsWith(marker))
                 .findFirst().orElseThrow();
 
         assertShoppingDtoEquals(fpsDto, repoDto, "Expired sale: shopping mappings must match (fps vs repo)");
-        assertShoppingDtoEquals(fpsDto, repoIgnoreDto, "Expired sale: shopping mappings must match (fps vs repo ignoreStatus)");
+        assertShoppingDtoEquals(fpsDto, repoIgnoreDto, "Expired sale: shopping mappings must match (fps vs repo second call)");
 
         // Expired sale price should NOT be returned
         assertNotNull(fpsDto.getRetailPrice(), "Active retail price should exist");
@@ -392,7 +392,7 @@ class ProductListItemMappingCharacterizationIT
                 .findFirst()
                 .orElseThrow();
 
-        ProductShoppingListItemDto repoDto = productService.getShoppingProducts(pageRequest(0, 50), nameFilter(marker), false, false)
+        ProductShoppingListItemDto repoDto = productService.getShoppingProducts(pageRequest(0, 50), nameFilter(marker), false, null, null, null)
                 .stream()
                 .filter(d -> d.getName().startsWith(marker))
                 .findFirst().orElseThrow();
@@ -476,28 +476,14 @@ class ProductListItemMappingCharacterizationIT
         newPrice(variant, PriceTypeEn.RETAIL_PRICE, new BigDecimal("75.00"), now.minusDays(10), now.plusDays(10));
         em.flush();
 
-        // With ignoreStatus=true, the PENDING product should appear in shopping results
-        // from ProductRepository (admin views shopping through ignoreStatus=true)
-        List<ProductShoppingListItemDto> repoIgnoreList = productService.getShoppingProducts(pageRequest(0, 50), nameFilter(marker), false, true);
-        ProductShoppingListItemDto repoIgnoreDto = repoIgnoreList
-                .stream()
-                .filter(d -> d.getName().startsWith(marker))
-                .findFirst().orElseThrow(() -> new AssertionError("PENDING product should appear when ignoreStatus=true"));
-
-        // With ignoreStatus=false, PENDING product should NOT appear in storefront shopping
-        List<ProductShoppingListItemDto> repoList = productService.getShoppingProducts(pageRequest(0, 50), nameFilter(marker), false, false);
+        // With ignoreStatus removed, the ACTIVE product status filter is unconditional.
+        // A PENDING product must NOT appear in storefront shopping results.
+        List<ProductShoppingListItemDto> repoList = productService.getShoppingProducts(pageRequest(0, 50), nameFilter(marker), false, null, null, null);
         boolean existsInStorefront = repoList
                 .stream()
                 .anyMatch(d -> d.getName().startsWith(marker));
 
-        // Note: Whether a PENDING product with active prices appears depends on the
-        // query filter at the repository level (which filters by product status=ACTIVE).
-        // The characterization captures the current behaviour — do not assert it "should"
-        // or "should not" appear; just record what happens for regression detection.
-
-        // Pin the ignoreStatus=true baseline
-        assertEquals("PENDING", repoIgnoreDto.getStatus());
-        assertEquals(marker + "PendShop", repoIgnoreDto.getName());
+        assertFalse(existsInStorefront, "PENDING product must NOT appear in storefront shopping results (ACTIVE filter is unconditional)");
     }
 
     // ─── Test: VARIABLE product (no variantId for non-SIMPLE) ───────────────
@@ -524,7 +510,7 @@ class ProductListItemMappingCharacterizationIT
                 .filter(d -> d.getName().startsWith(marker))
                 .findFirst().orElseThrow();
 
-        ProductShoppingListItemDto repoDto = productService.getShoppingProducts(pageRequest(0, 50), nameFilter(marker), false, false)
+        ProductShoppingListItemDto repoDto = productService.getShoppingProducts(pageRequest(0, 50), nameFilter(marker), false, null, null, null)
                 .stream()
                 .filter(d -> d.getName().startsWith(marker))
                 .findFirst().orElseThrow();
@@ -575,11 +561,11 @@ class ProductListItemMappingCharacterizationIT
         assertEquals("IN_STOCK", psAdmin.getStockLevel());
     }
 
-    // ─── Test: ignoreStatus difference in shopping variant count ─────────────
+    // ─── Test: ACTIVE-only variant count in shopping (ignoreStatus removed from service) ─────────────
 
     @Test
     @TestTransaction
-    void ignoreStatus_affectsVariantCountAndPriceResolution()
+    void shoppingProductList_countsOnlyActiveVariants()
     {
         String marker = "ZZCHAR-IGSTAT-" + UUID.randomUUID().toString().substring(0, 8) + "-";
         LocalDateTime now = LocalDateTime.now();
@@ -594,29 +580,16 @@ class ProductListItemMappingCharacterizationIT
         newPrice(v2, PriceTypeEn.RETAIL_PRICE, new BigDecimal("40.00"), now.minusDays(10), now.plusDays(10));
         em.flush();
 
-        // ignoreStatus=false: only counts ACTIVE variants
-        ProductShoppingListItemDto repoDto = productService.getShoppingProducts(pageRequest(0, 50), nameFilter(marker), false, false)
+        // Shopping service always applies ACTIVE-only filtering (ignoreStatus removed)
+        ProductShoppingListItemDto repoDto = productService.getShoppingProducts(pageRequest(0, 50), nameFilter(marker), false, null, null, null)
                 .stream()
                 .filter(d -> d.getName().startsWith(marker))
                 .findFirst().orElseThrow();
 
-        // ignoreStatus=true: counts ALL variants
-        ProductShoppingListItemDto repoIgnoreDto = productService.getShoppingProducts(pageRequest(0, 50), nameFilter(marker), false, true)
-                .stream()
-                .filter(d -> d.getName().startsWith(marker))
-                .findFirst().orElseThrow();
-
-        // Pin the differences — ignoreStatus affects variant count
-        assertEquals(1, repoDto.getVariantCount(), "ignoreStatus=false should count only ACTIVE variants");
-        assertEquals(2, repoIgnoreDto.getVariantCount(), "ignoreStatus=true should count ALL variants");
-
-        // Price resolution: ignoreStatus=false only considers prices on ACTIVE variants
+        // Only ACTIVE variants are counted and priced
+        assertEquals(1, repoDto.getVariantCount(), "Shopping service should count only ACTIVE variants (ignoreStatus removed)");
         assertNotNull(repoDto.getRetailPrice());
-        assertEquals(0, new BigDecimal("50.00").compareTo(repoDto.getRetailPrice().getPrice()), "ignoreStatus=false: lowest price from ACTIVE variants only");
-
-        // ignoreStatus=true considers prices on ALL variants (lowest is 40.00 from disabled v2)
-        assertNotNull(repoIgnoreDto.getRetailPrice());
-        assertEquals(0, new BigDecimal("40.00").compareTo(repoIgnoreDto.getRetailPrice().getPrice()), "ignoreStatus=true: lowest price from ALL variants");
+        assertEquals(0, new BigDecimal("50.00").compareTo(repoDto.getRetailPrice().getPrice()), "Lowest price from ACTIVE variants only (50.00, not 40.00 from disabled v2)");
     }
 
     // ─── Assertion Helpers ──────────────────────────────────────────────────
