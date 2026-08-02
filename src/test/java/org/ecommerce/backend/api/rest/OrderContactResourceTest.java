@@ -246,7 +246,11 @@ class OrderContactResourceTest
     /** Compares a JSON money field by value, whatever numeric type it deserialised as. */
     private static void assertMoney(io.restassured.response.Response response, String path, String expected)
     {
-        BigDecimal actual = new BigDecimal(String.valueOf(response.path(path)));
+        // Bind to Object first: response.path() is generic <T>, so passing it
+        // straight into String.valueOf() lets the compiler choose the char[]
+        // overload and blow up at runtime.
+        Object raw = response.path(path);
+        BigDecimal actual = new BigDecimal(String.valueOf(raw));
         assertEquals(0, actual.compareTo(new BigDecimal(expected)),
                 path + " expected " + expected + " but was " + actual);
     }
