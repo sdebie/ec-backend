@@ -1,9 +1,12 @@
 package org.ecommerce.backend.api.rest;
 
+import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
+import org.ecommerce.backend.service.OrderService;
+import org.ecommerce.backend.service.OrderTotals;
 import org.ecommerce.common.dto.OrderContactRequestDto;
 import org.ecommerce.common.entity.OrderEntity;
 import org.ecommerce.common.entity.ShippingMethodEntity;
@@ -19,6 +22,9 @@ import java.util.UUID;
 public class OrderContactResource
 {
     private static final Logger LOG = Logger.getLogger(OrderContactResource.class);
+
+    @Inject
+    OrderService orderService;
 
     @PATCH
     @Transactional
@@ -82,12 +88,23 @@ public class OrderContactResource
         // No explicit persist needed — entity is managed within @Transactional
         // Hibernate dirty-checking will flush changes at commit
 
-        // 4. Return 200 with updated order summary
+        // 4. Reprice. The order was created before a delivery method existed, so
+        // its total carried the DEFAULT estimate. Now that one is selected the
+        // total has to follow it — otherwise the checkout summary shows, and the
+        // payment gateway charges, a figure that excludes the chosen delivery.
+        OrderTotals totals = orderService.repriceOrder(order);
+
+        // 5. Return 200 with the updated order summary, including the breakdown
+        // the checkout page needs to show a total that matches what will be charged.
         Map<String, Object> summary = new LinkedHashMap<>();
         summary.put("orderId", order.getId().toString());
         summary.put("contactEmail", order.getContactEmail());
         summary.put("contactFirstName", order.getContactFirstName());
         summary.put("contactLastName", order.getContactLastName());
+        summary.put("subtotal", totals.subtotal());
+        summary.put("vatAmount", totals.vatAmount());
+        summary.put("shippingEstimate", totals.shippingEstimate());
+        summary.put("grandTotal", totals.grandTotal());
         summary.put("totalAmount", order.getTotalAmount());
         summary.put("status", order.getStatus().name());
 
