@@ -223,18 +223,32 @@ class OrderContactResourceTest
                 }
                 """.formatted(shippingMethodId);
 
-        // (19.99 × 3) + (5.50 × 2) = 70.97; VAT 10.65 (half-up); collection is free
-        given()
+        // (19.99 × 3) + (5.50 × 2) = 70.97; VAT 10.65 (half-up); collection is free.
+        // Values are compared as BigDecimal, not against a JSON-typed literal: a
+        // zero fee serialises as `0` (Integer) while 70.97 serialises as a
+        // Float, so a typed matcher passes on one and fails on the other.
+        io.restassured.response.Response response = given()
                 .contentType(ContentType.JSON)
                 .body(body)
                 .when()
                 .patch("/api/orders/{orderId}/contact", orderId)
                 .then()
                 .statusCode(200)
-                .body("subtotal", comparesEqualTo(70.97f))
-                .body("vatAmount", comparesEqualTo(10.65f))
-                .body("shippingEstimate", comparesEqualTo(0.00f))
-                .body("grandTotal", comparesEqualTo(81.62f));
+                .extract()
+                .response();
+
+        assertMoney(response, "subtotal", "70.97");
+        assertMoney(response, "vatAmount", "10.65");
+        assertMoney(response, "shippingEstimate", "0");
+        assertMoney(response, "grandTotal", "81.62");
+    }
+
+    /** Compares a JSON money field by value, whatever numeric type it deserialised as. */
+    private static void assertMoney(io.restassured.response.Response response, String path, String expected)
+    {
+        BigDecimal actual = new BigDecimal(String.valueOf(response.path(path)));
+        assertEquals(0, actual.compareTo(new BigDecimal(expected)),
+                path + " expected " + expected + " but was " + actual);
     }
 
     private static OrderItemEntity orderItem(BigDecimal unitPrice, int quantity)
