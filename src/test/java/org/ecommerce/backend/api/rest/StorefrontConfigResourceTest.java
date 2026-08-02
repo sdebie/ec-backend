@@ -363,4 +363,64 @@ class StorefrontConfigResourceTest
         assertEquals("/products", cta.get("props").get("to").asText());
         assertFalse(cta.has("enabled"), "enabled field must be stripped");
     }
+
+    // ── Quote pass-through tests ──────────────────────────────────────────────
+
+    @Test
+    void getConfig_shouldIncludeQuoteObjectWhenStorefrontQuoteSettingExists()
+    {
+        StoreSettingsEntity quoteSetting = new StoreSettingsEntity();
+        quoteSetting.setKey("storefront.quote");
+        quoteSetting.setValue("{\"slaText\":\"Quotes returned within 1 business day.\",\"validityText\":\"Every quote is held for 7 days.\",\"steps\":[\"Send your product list\",\"We price it at live supplier rates\",\"Your quote arrives within 1 business day, valid for 7 days\"]}");
+
+        when(settingsRepository.getAllStoreSettings()).thenReturn(List.of(quoteSetting));
+
+        given()
+                .when().get("/api/storefront/config")
+                .then()
+                .statusCode(200)
+                .body("quote.slaText", equalTo("Quotes returned within 1 business day."))
+                .body("quote.validityText", equalTo("Every quote is held for 7 days."))
+                .body("quote.steps", hasSize(3))
+                .body("quote.steps[0]", equalTo("Send your product list"))
+                .body("quote.steps[1]", equalTo("We price it at live supplier rates"))
+                .body("quote.steps[2]", equalTo("Your quote arrives within 1 business day, valid for 7 days"));
+    }
+
+    @Test
+    void getConfig_shouldOmitQuoteKeyWhenStorefrontQuoteSettingAbsent()
+    {
+        // Only non-quote settings present — quote should not appear in response
+        StoreSettingsEntity headerSetting = new StoreSettingsEntity();
+        headerSetting.setKey("storefront.header");
+        headerSetting.setValue("{\"announcement\":{\"enabled\":false,\"text\":\"\",\"backgroundColor\":\"#1a1f35\",\"textColor\":\"#ffffff\"}}");
+
+        when(settingsRepository.getAllStoreSettings()).thenReturn(List.of(headerSetting));
+
+        given()
+                .when().get("/api/storefront/config")
+                .then()
+                .statusCode(200)
+                .body("$", not(hasKey("quote")))
+                .body("header.announcement.enabled", equalTo(false));
+    }
+
+    @Test
+    void getConfig_shouldPassThroughPartialQuoteConfig()
+    {
+        // Only slaText present — the pass-through must not require all fields
+        StoreSettingsEntity quoteSetting = new StoreSettingsEntity();
+        quoteSetting.setKey("storefront.quote");
+        quoteSetting.setValue("{\"slaText\":\"Within 2 hours.\"}");
+
+        when(settingsRepository.getAllStoreSettings()).thenReturn(List.of(quoteSetting));
+
+        given()
+                .when().get("/api/storefront/config")
+                .then()
+                .statusCode(200)
+                .body("quote.slaText", equalTo("Within 2 hours."))
+                .body("quote", not(hasKey("validityText")))
+                .body("quote", not(hasKey("steps")));
+    }
 }
