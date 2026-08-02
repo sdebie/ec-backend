@@ -8,6 +8,7 @@ import org.ecommerce.common.entity.ProductImageEntity;
 import org.ecommerce.common.entity.ProductVariantEntity;
 import org.ecommerce.common.entity.VariantPricesEntity;
 import org.ecommerce.common.enums.PriceTypeEn;
+import org.ecommerce.common.enums.ProductStatusEn;
 import org.ecommerce.common.repository.ProductImageRepository;
 import org.ecommerce.common.repository.ProductVariantRepository;
 import org.ecommerce.common.repository.VariantPricesRepository;
@@ -19,9 +20,12 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 /**
- * Resolves a list of variant IDs into displayable wishlist entries.
- * Only returns entries where both the product and variant are ACTIVE.
- * Deleted/disabled products are silently omitted.
+ * Resolves a list of variant IDs into displayable wishlist entries with availability flags.
+ *
+ * <p>Contract: variant IDs that do not match any database row (hard-deleted) are omitted from
+ * the response. All other variants — regardless of product or variant status — are returned
+ * with {@code productActive} and {@code inStock} flags so the frontend can render the
+ * appropriate UI state (purchasable, out-of-stock, or no-longer-available).
  */
 @ApplicationScoped
 public class WishlistHydrationService
@@ -38,9 +42,14 @@ public class WishlistHydrationService
     ProductImageRepository productImageRepository;
 
     /**
-     * Resolves variant IDs to displayable product data.
-     * Only returns entries where both the product and variant are ACTIVE.
-     * Deleted/disabled products are silently omitted.
+     * Resolves variant IDs to hydrated wishlist items with availability flags.
+     *
+     * <p>Nonexistent variant IDs (hard-deleted) are omitted. Every other variant is returned
+     * with {@code productActive} ({@code true} when the parent product is ACTIVE) and
+     * {@code inStock} ({@code true} when productActive AND variant ACTIVE AND stock &gt; 0).
+     *
+     * @param variantIds the variant IDs to hydrate (max 50 per the resource cap)
+     * @return hydrated items with availability flags; never null
      */
     public List<WishlistHydratedItemDto> hydrate(List<UUID> variantIds)
     {
@@ -50,15 +59,15 @@ public class WishlistHydrationService
 
         LocalDateTime now = LocalDateTime.now();
 
-        // 1. Fetch all requested variants with their products, filtering to ACTIVE only
-        List<ProductVariantEntity> activeVariants = productVariantRepository.findActiveByIdsWithProduct(variantIds);
+        // 1. Fetch all requested variants with their products (status-agnostic; flags derived below)
+        List<ProductVariantEntity> resolvedVariants = productVariantRepository.findByIdsWithProduct(variantIds);
 
-        if (activeVariants.isEmpty()) {
-            LOG.debugv("Hydration: none of {0} requested variants resolved to active entries", variantIds.size());
+        if (resolvedVariants.isEmpty()) {
+            LOG.debugv("Hydration: none of {0} requested variants resolved", variantIds.size());
             return List.of();
         }
 
-        List<UUID> resolvedVariantIds = activeVariants
+        List<UUID> resolvedVariantIds = resolvedVariants
                 .stream()
                 .map(ProductVariantEntity::getId)
                 .toList();
@@ -81,7 +90,7 @@ public class WishlistHydrationService
                         (first, duplicate) -> first));
 
         // 4. Assemble WishlistHydratedItemDto per variant
-        return activeVariants
+        return resolvedVariants
                 .stream()
                 .map(variant -> assembleItem(variant, pricesByVariant, thumbnailByVariant, now))
                 .toList();
@@ -127,6 +136,14 @@ public class WishlistHydrationService
         dto.setWholesalePrice(toVariantPriceDto(prices.get(PriceTypeEn.WHOLESALE_PRICE), now));
         dto.setRetailSalePrice(toVariantPriceDto(prices.get(PriceTypeEn.RETAIL_SALE_PRICE), now));
         dto.setWholesaleSalePrice(toVariantPriceDto(prices.get(PriceTypeEn.WHOLESALE_SALE_PRICE), now));
+
+        // Availability flags
+        boolean productActive = variant.getProduct().getStatus() == ProductStatusEn.ACTIVE;
+        dto.setProductActive(productActive);
+        dto.setInStock(productActive
+                && variant.getStatus() == ProductStatusEn.ACTIVE
+                && variant.getStockQuantity() != null
+                && variant.getStockQuantity() > 0);
 
         return dto;
     }
