@@ -54,7 +54,11 @@ class StorefrontShippingResourceTest
                 .body("[0].estimatedDays", equalTo("3-5"))
                 .body("[1].name", equalTo("In-store Collection"))
                 .body("[1].baseFee", equalTo(0))
-                .body("[1].estimatedDays", nullValue());
+                .body("[1].estimatedDays", nullValue())
+                // Every row came from the isActive=true query, so the published
+                // flag must say so — it used to fall through as the Java default.
+                .body("[0].active", equalTo(true))
+                .body("[1].active", equalTo(true));
     }
 
     @Test

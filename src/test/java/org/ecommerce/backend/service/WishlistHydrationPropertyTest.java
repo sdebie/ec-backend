@@ -1,6 +1,6 @@
 package org.ecommerce.backend.service;
 
-// Feature: wishlist-completion, Property 6: Hydration omits inactive products
+// Feature: wishlist-purchasing-rework, Property: Hydration returns all existing variants + flag derivation
 
 import net.jqwik.api.*;
 import org.ecommerce.common.dto.WishlistHydratedItemDto;
@@ -20,24 +20,27 @@ import java.util.stream.Collectors;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Property 6: Hydration omits inactive products
+ * Properties:
+ * <ol>
+ *   <li>Hydration returns all existing variants regardless of status.</li>
+ *   <li>Flag derivation: productActive = product ACTIVE; inStock = productActive AND variant ACTIVE AND stock > 0.</li>
+ * </ol>
  * <p>
- * For any set of variant IDs passed to the hydration endpoint, the response SHALL
- * contain only entries where both the product status is ACTIVE and the variant status
- * is ACTIVE. No entry with a DISABLED or PENDING product/variant SHALL appear in the
- * response.
+ * After the contract change (task 1.1), the repository no longer filters by status.
+ * All requested variant IDs that exist are returned; nonexistent IDs are omitted.
+ * Status-based flags (inStock, productActive) are derived in the service layer (task 1.3).
  * <p>
- * Validates: Requirements 3.7
+ * Validates: Requirements 1 (widened hydration contract), Requirements 1.2, 1.3 (flag derivation)
  */
 class WishlistHydrationPropertyTest
 {
     /**
-     * Property: For any mix of variant statuses (ACTIVE/DISABLED/PENDING) and product
-     * statuses, only those with BOTH product.status = ACTIVE and variant.status = ACTIVE
-     * appear in the hydration response.
+     * Property: For any mix of variant statuses (ACTIVE/DISABLED) and product
+     * statuses, ALL existing variants appear in the hydration response (none filtered
+     * by status at the repository level).
      */
     @Property(tries = 100)
-    void hydrationOnlyReturnsVariantsWithBothProductAndVariantActive(@ForAll("variantScenarios") VariantScenario scenario)
+    void hydrationReturnsAllExistingVariantsRegardlessOfStatus(@ForAll("variantScenarios") VariantScenario scenario)
     {
         // Set up the service with mocked repositories
         WishlistHydrationService service = buildServiceWithMockedRepos(scenario);
@@ -49,38 +52,61 @@ class WishlistHydrationPropertyTest
 
         List<WishlistHydratedItemDto> results = service.hydrate(requestedIds);
 
-        // Property assertion: every returned item must correspond to a variant
-        // where both product.status == ACTIVE and variant.status == ACTIVE
+        // Property assertion: after the contract change, ALL variants are returned
+        // regardless of status (flags are derived in the service layer — task 1.3).
+        // For now, verify that every requested variant that exists appears in the response.
         Set<UUID> returnedVariantIds = results.stream()
                 .map(dto -> dto.getVariantId())
                 .collect(Collectors.toSet());
 
-        // Determine which variant IDs SHOULD be in the response
-        Set<UUID> expectedActiveIds = scenario.variants.stream()
-                .filter(v -> v.variantStatus == ProductStatusEn.ACTIVE
-                        && v.productStatus == ProductStatusEn.ACTIVE)
+        Set<UUID> allRequestedIds = scenario.variants.stream()
                 .map(v -> v.variantId)
                 .collect(Collectors.toSet());
 
-        // Determine which variant IDs MUST NOT be in the response
-        Set<UUID> inactiveIds = scenario.variants.stream()
-                .filter(v -> v.variantStatus != ProductStatusEn.ACTIVE
-                        || v.productStatus != ProductStatusEn.ACTIVE)
+        // Assert: every variant in the scenario appears in results (none omitted by status)
+        assertEquals(allRequestedIds, returnedVariantIds,
+                "All existing variants must be returned regardless of status");
+    }
+
+    /**
+     * Property: For ALL status/stock combinations, the derived flags match:
+     * - productActive = product.status == ACTIVE
+     * - inStock = productActive AND variant.status == ACTIVE AND stockQuantity != null AND stockQuantity > 0
+     * <p>
+     * Validates: Requirements 1.2, 1.3
+     */
+    @Property(tries = 200)
+    void flagDerivationMatchesTruthTable(@ForAll("variantScenarios") VariantScenario scenario)
+    {
+        WishlistHydrationService service = buildServiceWithMockedRepos(scenario);
+
+        List<UUID> requestedIds = scenario.variants.stream()
                 .map(v -> v.variantId)
-                .collect(Collectors.toSet());
+                .collect(Collectors.toList());
 
-        // Assert: no inactive variant appears in results
-        for (UUID inactiveId : inactiveIds) {
-            assertFalse(returnedVariantIds.contains(inactiveId), "Variant " + inactiveId + " has inactive product/variant status and must NOT appear in results");
+        List<WishlistHydratedItemDto> results = service.hydrate(requestedIds);
+
+        // Build a lookup from variant ID to its definition for verification
+        Map<UUID, VariantDef> defByVariantId = scenario.variants.stream()
+                .collect(Collectors.toMap(v -> v.variantId, v -> v));
+
+        for (WishlistHydratedItemDto dto : results) {
+            VariantDef def = defByVariantId.get(dto.getVariantId());
+            assertNotNull(def, "Every returned DTO must have a matching definition");
+
+            // productActive = product.status == ACTIVE
+            boolean expectedProductActive = def.productStatus == ProductStatusEn.ACTIVE;
+            assertEquals(expectedProductActive, dto.getProductActive(),
+                    "productActive must equal (product.status == ACTIVE) for " + def);
+
+            // inStock = productActive AND variant ACTIVE AND stock > 0
+            boolean expectedInStock = expectedProductActive
+                    && def.variantStatus == ProductStatusEn.ACTIVE
+                    && def.stockQuantity != null
+                    && def.stockQuantity > 0;
+            assertEquals(expectedInStock, dto.getInStock(),
+                    "inStock must equal (productActive AND variant ACTIVE AND stock > 0) for " + def);
         }
-
-        // Assert: all active variants DO appear in results
-        for (UUID activeId : expectedActiveIds) {
-            assertTrue(returnedVariantIds.contains(activeId), "Variant " + activeId + " has ACTIVE product and variant status and MUST appear in results");
-        }
-
-        // Assert: result count equals exactly the number of both-ACTIVE entries
-        assertEquals(expectedActiveIds.size(), results.size(), "Result count must equal number of variants with both product and variant ACTIVE");
     }
 
     // ── Service construction with mocked repositories ──────────────────────────
@@ -107,22 +133,19 @@ class WishlistHydrationPropertyTest
             variant.setSku("SKU-" + def.variantId.toString().substring(0, 8));
             variant.setAttributesJson("{\"color\":\"blue\"}");
             variant.setStatus(def.variantStatus);
+            variant.setStockQuantity(def.stockQuantity);
             variant.setProduct(product);
             allVariantEntities.add(variant);
         }
 
-        // Filter to only ACTIVE variants with ACTIVE products (mimics the DB query)
-        List<ProductVariantEntity> activeVariants = allVariantEntities.stream()
-                .filter(v -> v.getStatus() == ProductStatusEn.ACTIVE && v.getProduct().getStatus() == ProductStatusEn.ACTIVE)
-                .toList();
-
-        // Create mock repositories
+        // Create mock repositories — no status pre-filter; the new contract returns all
+        // variants that exist, regardless of status (flags are derived in the service layer)
         ProductVariantRepository mockVariantRepo = new ProductVariantRepository()
         {
             @Override
-            public List<ProductVariantEntity> findActiveByIdsWithProduct(List<UUID> ids)
+            public List<ProductVariantEntity> findByIdsWithProduct(List<UUID> ids)
             {
-                return activeVariants.stream()
+                return allVariantEntities.stream()
                         .filter(v -> ids.contains(v.getId()))
                         .toList();
             }
@@ -183,8 +206,15 @@ class WishlistHydrationPropertyTest
         Arbitrary<UUID> productIdArb = Arbitraries.create(UUID::randomUUID);
         Arbitrary<ProductStatusEn> variantStatusArb = Arbitraries.of(ProductStatusEn.values());
         Arbitrary<ProductStatusEn> productStatusArb = Arbitraries.of(ProductStatusEn.values());
+        // Stock: null, 0, or positive — covers all three branches of the inStock derivation
+        Arbitrary<Integer> stockArb = Arbitraries.oneOf(
+                Arbitraries.just(null),
+                Arbitraries.just(0),
+                Arbitraries.integers().between(1, 1000)
+        );
 
-        return Combinators.combine(variantIdArb, productIdArb, variantStatusArb, productStatusArb).as(VariantDef::new);
+        return Combinators.combine(variantIdArb, productIdArb, variantStatusArb, productStatusArb, stockArb)
+                .as(VariantDef::new);
     }
 
     // ── Scenario classes ───────────────────────────────────────────────────────
@@ -195,13 +225,15 @@ class WishlistHydrationPropertyTest
         final UUID productId;
         final ProductStatusEn variantStatus;
         final ProductStatusEn productStatus;
+        final Integer stockQuantity;
 
-        VariantDef(UUID variantId, UUID productId, ProductStatusEn variantStatus, ProductStatusEn productStatus)
+        VariantDef(UUID variantId, UUID productId, ProductStatusEn variantStatus, ProductStatusEn productStatus, Integer stockQuantity)
         {
             this.variantId = variantId;
             this.productId = productId;
             this.variantStatus = variantStatus;
             this.productStatus = productStatus;
+            this.stockQuantity = stockQuantity;
         }
 
         @Override
@@ -210,7 +242,8 @@ class WishlistHydrationPropertyTest
             return "VariantDef{id=" + variantId.toString().substring(0, 8)
                     + ", productId=" + productId.toString().substring(0, 8)
                     + ", variantStatus=" + variantStatus
-                    + ", productStatus=" + productStatus + "}";
+                    + ", productStatus=" + productStatus
+                    + ", stock=" + stockQuantity + "}";
         }
     }
 

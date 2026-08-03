@@ -32,6 +32,11 @@ public class StorefrontShippingResource
         ShippingMethodDto dto = new ShippingMethodDto();
         dto.setId(entity.getId());
         dto.setName(entity.getName());
+        // Every row here came from the isActive=true query, but the flag was
+        // never copied, so the endpoint published active=false for methods that
+        // ARE active. The wire key is "active" — Lombok derives isActive() from
+        // the private isActive field, and Jackson strips the prefix.
+        dto.setActive(entity.isActive());
         dto.setBaseFee(entity.getBaseFee());
         dto.setEstimatedDays(entity.getEstimatedDays());
         return dto;

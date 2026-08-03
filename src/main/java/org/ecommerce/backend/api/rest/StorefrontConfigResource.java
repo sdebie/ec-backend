@@ -55,6 +55,7 @@ public class StorefrontConfigResource
         applyNavigation(config, sections.get("storefront.navigation"));
         applyFooter(config, sections.get("storefront.footer"));
         applyContact(config, sections.get("storefront.contact"));
+        applyQuote(config, sections.get("storefront.quote"));
         applyHeader(config, sections.get("storefront.header"));
         applySections(config, sections, "storefront.home_sections", "sections");
         applySections(config, sections, "storefront.about_sections", "aboutSections");
@@ -155,6 +156,9 @@ public class StorefrontConfigResource
                 }
                 navItem.put("external", item.has("external") && item.get("external").asBoolean());
                 navItem.put("sortOrder", item.has("sortOrder") ? item.get("sortOrder").asInt() : i);
+                if (item.has("emphasis")) {
+                    navItem.put("emphasis", item.get("emphasis").asText());
+                }
                 nav.add(navItem);
             }
         }
@@ -204,6 +208,12 @@ public class StorefrontConfigResource
     {
         if (section == null || section.isNull()) return;
         out.set("contact", section);
+    }
+
+    private void applyQuote(ObjectNode out, JsonNode section)
+    {
+        if (section == null || section.isNull()) return;
+        out.set("quote", section);
     }
 
     private void applyHeader(ObjectNode out, JsonNode section)

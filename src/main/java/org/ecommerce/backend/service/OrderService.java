@@ -11,6 +11,7 @@ import org.ecommerce.common.entity.OrderEntity;
 import org.ecommerce.common.entity.OrderItemEntity;
 import org.ecommerce.common.entity.OrderStatusHistoryEntity;
 import org.ecommerce.common.entity.ProductVariantEntity;
+import org.ecommerce.common.entity.ShippingMethodEntity;
 import org.ecommerce.common.enums.CustomerTypeEn;
 import org.ecommerce.common.enums.OrderStatusEn;
 import org.ecommerce.common.enums.ProductStatusEn;
@@ -114,10 +115,13 @@ public class OrderService
             subtotal = subtotal.add(lineTotal);
         }
 
-        // 4 & 5. Calculate tax and shipping
-        BigDecimal vatAmount = taxService.calculateVat(subtotal);
-        BigDecimal shippingEstimate = shippingService.estimateShipping();
-        BigDecimal grandTotal = subtotal.add(vatAmount).add(shippingEstimate);
+        // 4 & 5. Calculate tax and shipping. No method has been chosen yet at
+        // creation time, so this falls back to the default estimate; the order is
+        // repriced by repriceOrder() once the shopper selects one at checkout.
+        OrderTotals totals = computeTotals(subtotal, null);
+        BigDecimal vatAmount = totals.vatAmount();
+        BigDecimal shippingEstimate = totals.shippingEstimate();
+        BigDecimal grandTotal = totals.grandTotal();
 
         // 6. Persist the order
         UUID sessionId = UUID.randomUUID();
@@ -152,6 +156,57 @@ public class OrderService
         response.setShippingEstimate(shippingEstimate);
         response.setGrandTotal(grandTotal);
         return response;
+    }
+
+    /**
+     * Assembles the money on an order. The ONLY place subtotal, VAT, delivery and
+     * grand total are combined, so order creation and later repricing can never
+     * build a total differently.
+     *
+     * A null method means "not chosen yet" and falls back to the default
+     * estimate, preserving what creation did before a method exists.
+     */
+    public OrderTotals computeTotals(BigDecimal subtotal, ShippingMethodEntity shippingMethod)
+    {
+        BigDecimal base = subtotal != null ? subtotal : BigDecimal.ZERO;
+        BigDecimal vatAmount = taxService.calculateVat(base);
+        BigDecimal shippingEstimate = shippingMethod != null && shippingMethod.getBaseFee() != null
+                ? shippingMethod.getBaseFee()
+                : shippingService.estimateShipping();
+
+        return new OrderTotals(base, vatAmount, shippingEstimate, base.add(vatAmount).add(shippingEstimate));
+    }
+
+    /**
+     * Recomputes an order's totals from its own persisted lines and its currently
+     * selected delivery method, and writes the new grand total back.
+     *
+     * The order was priced at creation against the DEFAULT delivery estimate,
+     * because no method has been chosen at that point. Once the shopper picks one
+     * at checkout the total must follow, otherwise the summary shows — and the
+     * payment gateway charges — a figure that excludes the delivery they chose.
+     *
+     * The subtotal is rebuilt from the stored line prices, which the server set
+     * from the shopper's tier at creation. Nothing here re-prices a product.
+     *
+     * Caller must be inside a transaction: the entity is managed, so the new
+     * total flushes on commit.
+     */
+    public OrderTotals repriceOrder(OrderEntity order)
+    {
+        BigDecimal subtotal = BigDecimal.ZERO;
+        if (order.getItems() != null) {
+            for (OrderItemEntity item : order.getItems()) {
+                if (item.getUnitPrice() == null || item.getQuantity() == null) {
+                    continue;
+                }
+                subtotal = subtotal.add(item.getUnitPrice().multiply(BigDecimal.valueOf(item.getQuantity())));
+            }
+        }
+
+        OrderTotals totals = computeTotals(subtotal, order.getShippingMethod());
+        order.setTotalAmount(totals.grandTotal());
+        return totals;
     }
 
     public OrderResponseDto getOrderById(UUID orderId)
