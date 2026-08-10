@@ -396,6 +396,7 @@ public class ProductService
                 if (existing != null) {
                     existing.setSortOrder(i);
                     existing.setIsFeatured(imgDto.isFeatured());
+                    existing.setAltText(imgDto.getAltText());
                     // Normalise: move to owner variant if not already there
                     if (!ownerVariant.getId().equals(existing.getProductVariant().getId())) {
                         existing.setProductVariant(ownerVariant);
@@ -409,6 +410,7 @@ public class ProductService
                 newImage.setImageUrl(imgDto.getImageUrl());
                 newImage.setSortOrder(i);
                 newImage.setIsFeatured(imgDto.isFeatured());
+                newImage.setAltText(imgDto.getAltText());
                 newImage.persist();
                 log.info("Created new image association for product {}: {}", productId, imgDto.getImageUrl());
             }
@@ -657,16 +659,17 @@ public class ProductService
                 .stream()
                 .anyMatch(v -> productVariantRepository.isReferencedByOrders(v.getId()));
 
-        boolean isDraft = product.getStatus() == ProductStatusEn.PENDING;
-
-        if (isDraft && !anyOrderReferenced) {
-            // Hard-delete: product is PENDING and no child variant is order-referenced.
+        // Order history is the ONLY bar to physical deletion: a product whose
+        // variants were never ordered may be hard-deleted in any status; one
+        // with order references is archived (DISABLED) so orders keep their
+        // variant rows. (Supersedes the old drafts-only hard-delete rule.)
+        if (!anyOrderReferenced) {
             // CascadeType.ALL + orphanRemoval on ProductEntity.variants handles
             // cascading removal of variants, their prices, and their images.
             product.delete();
-            log.info("Hard-deleted product {} — draft with no order references", id);
+            log.info("Hard-deleted product {} — no order references", id);
         } else {
-            // Soft-delete: set product status to DISABLED, and disable all ACTIVE child variants
+            // Archive: set product status to DISABLED, and disable all ACTIVE child variants
             product.setStatus(ProductStatusEn.DISABLED);
             product.persist();
 
@@ -676,7 +679,7 @@ public class ProductService
                     variant.persist();
                 }
             }
-            log.info("Soft-deleted product {} — set to DISABLED (draft={}, orderRef={})", id, isDraft, anyOrderReferenced);
+            log.info("Archived product {} — variants are order-referenced", id);
         }
     }
 

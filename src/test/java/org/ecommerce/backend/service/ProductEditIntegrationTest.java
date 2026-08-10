@@ -37,10 +37,9 @@ import static org.junit.jupiter.api.Assertions.assertNull;
  * Covers:
  * - Edit persists every change: add/remove variant, change price, scalar changes (Req 3.2, 3.3, 3.4, 4.2)
  * - Active-only editor/storefront reads exclude disabled variants (Req 9.6)
- * - Draft unreferenced hard delete (Req 9.1)
- * - Draft order-referenced soft delete (Req 9.3)
- * - Non-draft soft delete (Req 9.2)
- * - Whole-product deletion (Req 9.1, 9.2)
+ * - Unreferenced hard delete, any status (order history is the only bar to physical deletion)
+ * - Order-referenced soft delete / archive (Req 9.3)
+ * - Whole-product deletion
  * - Order/history preservation (Req 9.3)
  * - Real service coverage (Req 8.1)
  */
@@ -435,11 +434,11 @@ class ProductEditIntegrationTest
 
     @Test
     @TestTransaction
-    void deletionPolicy_wholeProductDelete_activeProduct_softDeletes()
+    void deletionPolicy_wholeProductDelete_activeProductWithoutOrders_hardDeletes()
     {
         String marker = "ZZED-WPSD-" + UUID.randomUUID().toString().substring(0, 6) + "-";
 
-        // Create an ACTIVE product
+        // Create an ACTIVE product with no order references
         ProductInformationDto created = createProduct(marker, "ACTIVE", 2);
         String productId = created.getProduct().getId();
         em.flush();
@@ -450,16 +449,14 @@ class ProductEditIntegrationTest
         em.flush();
         em.clear();
 
-        // Product must still exist with DISABLED status
+        // Order history is the only bar to physical deletion: an ACTIVE product
+        // with no ordered variants is hard-deleted like a draft.
         ProductEntity product = em.find(ProductEntity.class, UUID.fromString(productId));
-        assertNotNull(product, "ACTIVE product must NOT be hard-deleted");
-        assertThat(product.getStatus(), equalTo(ProductStatusEn.DISABLED));
+        assertNull(product, "ACTIVE product with no order references must be hard-deleted");
 
-        // All child variants that were ACTIVE must now be DISABLED
         for (ProductVariantDto v : created.getVariants()) {
             ProductVariantEntity variant = em.find(ProductVariantEntity.class, UUID.fromString(v.getId()));
-            assertNotNull(variant, "Variants of soft-deleted product must still exist");
-            assertThat(variant.getStatus(), equalTo(ProductStatusEn.DISABLED));
+            assertNull(variant, "Variants of hard-deleted product must also be physically removed");
         }
     }
 
