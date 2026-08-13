@@ -182,8 +182,9 @@ public class ImageResource
     public ImageService.PaginatedImagesResponse listImagesPaginated(
             @QueryParam("page") @DefaultValue("0") int page,
             @QueryParam("pageSize") @DefaultValue("30") int pageSize,
-            @QueryParam("search") @DefaultValue("") String search) {
-        return imageService.listImagesPaginated(page, pageSize, search);
+            @QueryParam("search") @DefaultValue("") String search,
+            @QueryParam("directory") @DefaultValue("") String directory) {
+        return imageService.listImagesPaginated(page, pageSize, search, directory);
     }
 
 }

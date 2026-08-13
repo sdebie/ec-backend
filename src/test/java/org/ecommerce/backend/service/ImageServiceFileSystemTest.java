@@ -68,13 +68,33 @@ class ImageServiceFileSystemTest
         assertEquals(2, page0.totalCount());
         assertEquals(List.of("01/SKU-001.jpg"), page0.images());
 
+        // Each page is a discrete slice, not a cumulative 0..page range — page 1 must not
+        // repeat page 0's items (a prior bug: subList(0, toIndex) always started at 0).
         ImageService.PaginatedImagesResponse page1 = imageService.listImagesPaginated(1, 1, "");
         assertEquals(2, page1.totalCount());
-        assertEquals(List.of("01/SKU-001.jpg", "archived/SKU-002.png"), page1.images());
+        assertEquals(List.of("archived/SKU-002.png"), page1.images());
 
         ImageService.PaginatedImagesResponse searchResult = imageService.listImagesPaginated(0, 30, "archived");
         assertEquals(1, searchResult.totalCount());
         assertEquals(List.of("archived/SKU-002.png"), searchResult.images());
+
+        ImageService.PaginatedImagesResponse directoryResult = imageService.listImagesPaginated(0, 30, "", "archived");
+        assertEquals(1, directoryResult.totalCount());
+        assertEquals(List.of("archived/SKU-002.png"), directoryResult.images());
+
+        // directory is a leading-path-segment match, not a substring match — a file whose name
+        // merely contains the directory's text must not match.
+        ImageService.PaginatedImagesResponse directoryPrefixOnly = imageService.listImagesPaginated(0, 30, "", "01");
+        assertEquals(1, directoryPrefixOnly.totalCount());
+        assertEquals(List.of("01/SKU-001.jpg"), directoryPrefixOnly.images());
+
+        // directory and search are ANDed together.
+        ImageService.PaginatedImagesResponse combined = imageService.listImagesPaginated(0, 30, "SKU-003", "archived");
+        assertEquals(1, combined.totalCount());
+        assertEquals(List.of("archived/SKU-003.webp"), combined.images());
+
+        ImageService.PaginatedImagesResponse noMatch = imageService.listImagesPaginated(0, 30, "SKU-001", "archived");
+        assertEquals(0, noMatch.totalCount());
     }
 
     @Test

@@ -71,10 +71,12 @@ public class ImageService
         Path targetPath = destinationRoot.resolve(newFileName);
         Files.copy(file.filePath(), targetPath);
 
-        createThumbnail(targetPath, newFileName);
+        // Path relative to storage root, so resolveImageUrl() builds the correct URL and the
+        // thumbnail mirrors the same directory listImages()/listImagesPaginated() walk.
+        String relativeFilePath = normalizedDirectory.isBlank() ? newFileName : normalizedDirectory + "/" + newFileName;
+        createThumbnail(targetPath, relativeFilePath);
 
-        // Return path relative to storage root so resolveImageUrl() builds the correct URL
-        return normalizedDirectory.isBlank() ? newFileName : normalizedDirectory + "/" + newFileName;
+        return relativeFilePath;
     }
 
     /**
@@ -234,19 +236,55 @@ public class ImageService
 
     public PaginatedImagesResponse listImagesPaginated(Integer page, Integer pageSize, String search)
     {
+        return listImagesPaginated(page, pageSize, search, null);
+    }
+
+    /**
+     * @param directory optional subfolder prefix (e.g. "brands") — ANDed with search, matched
+     *                  as a leading path segment rather than a substring so a directory named
+     *                  "brands" never matches a filename that merely contains that text.
+     */
+    public PaginatedImagesResponse listImagesPaginated(Integer page, Integer pageSize, String search, String directory)
+    {
         int safePage = page == null ? 0 : Math.max(0, page);
         int safePageSize = pageSize == null ? DEFAULT_PAGE_SIZE : Math.max(1, Math.min(pageSize, MAX_PAGE_SIZE));
         String normalizedSearch = search == null ? "" : search.trim().toLowerCase();
+        String directoryPrefix = normalizeSearchDirectory(directory);
 
         List<String> filteredImages = listImages()
                 .stream()
                 .filter(image -> normalizedSearch.isBlank() || image.toLowerCase().contains(normalizedSearch))
+                .filter(image -> directoryPrefix.isEmpty() || image.toLowerCase().startsWith(directoryPrefix))
                 .collect(Collectors.toList());
 
-        int toIndex = Math.min(filteredImages.size(), (safePage + 1) * safePageSize);
-        List<String> imagesPage = filteredImages.subList(0, toIndex);
+        int fromIndex = Math.min(filteredImages.size(), safePage * safePageSize);
+        int toIndex = Math.min(filteredImages.size(), fromIndex + safePageSize);
+        List<String> imagesPage = filteredImages.subList(fromIndex, toIndex);
 
         return new PaginatedImagesResponse(imagesPage, filteredImages.size(), safePage, safePageSize);
+    }
+
+    /**
+     * Read-only normalization for the directory query filter — trims/lower-cases and ensures
+     * exactly one trailing slash so it matches as a leading path segment. Unlike
+     * normalizeDestinationDirectory(), this never touches the filesystem or throws on a
+     * traversal-looking value: an unmatchable directory filter just yields zero results.
+     */
+    private String normalizeSearchDirectory(String directory)
+    {
+        if (directory == null || directory.isBlank()) {
+            return "";
+        }
+
+        String trimmed = directory.trim().toLowerCase().replace('\\', '/');
+        while (trimmed.startsWith("/")) {
+            trimmed = trimmed.substring(1);
+        }
+        while (trimmed.endsWith("/")) {
+            trimmed = trimmed.substring(0, trimmed.length() - 1);
+        }
+
+        return trimmed.isBlank() ? "" : trimmed + "/";
     }
 
     @Transactional
