@@ -53,6 +53,7 @@ class ImageServiceFileSystemTest
         Files.writeString(tempDir.resolve("notes.txt"), "ignore");
         Files.writeString(tempDir.resolve("thumbnails/01/SKU-001.jpg"), "thumb");
         Files.writeString(tempDir.resolve("thumbnails/archived/SKU-002.png"), "thumb");
+        Files.writeString(tempDir.resolve("thumbnails/archived/SKU-003.webp"), "thumb");
 
         assertEquals(
                 List.of("01", "01/nested", "archived"),
@@ -60,27 +61,27 @@ class ImageServiceFileSystemTest
         );
 
         assertEquals(
-                List.of("01/SKU-001.jpg", "archived/SKU-002.png"),
+                List.of("01/SKU-001.jpg", "archived/SKU-002.png", "archived/SKU-003.webp"),
                 imageService.listImages()
         );
 
         ImageService.PaginatedImagesResponse page0 = imageService.listImagesPaginated(0, 1, "");
-        assertEquals(2, page0.totalCount());
+        assertEquals(3, page0.totalCount());
         assertEquals(List.of("01/SKU-001.jpg"), page0.images());
 
         // Each page is a discrete slice, not a cumulative 0..page range — page 1 must not
         // repeat page 0's items (a prior bug: subList(0, toIndex) always started at 0).
         ImageService.PaginatedImagesResponse page1 = imageService.listImagesPaginated(1, 1, "");
-        assertEquals(2, page1.totalCount());
+        assertEquals(3, page1.totalCount());
         assertEquals(List.of("archived/SKU-002.png"), page1.images());
 
         ImageService.PaginatedImagesResponse searchResult = imageService.listImagesPaginated(0, 30, "archived");
-        assertEquals(1, searchResult.totalCount());
-        assertEquals(List.of("archived/SKU-002.png"), searchResult.images());
+        assertEquals(2, searchResult.totalCount());
+        assertEquals(List.of("archived/SKU-002.png", "archived/SKU-003.webp"), searchResult.images());
 
         ImageService.PaginatedImagesResponse directoryResult = imageService.listImagesPaginated(0, 30, "", "archived");
-        assertEquals(1, directoryResult.totalCount());
-        assertEquals(List.of("archived/SKU-002.png"), directoryResult.images());
+        assertEquals(2, directoryResult.totalCount());
+        assertEquals(List.of("archived/SKU-002.png", "archived/SKU-003.webp"), directoryResult.images());
 
         // directory is a leading-path-segment match, not a substring match — a file whose name
         // merely contains the directory's text must not match.
