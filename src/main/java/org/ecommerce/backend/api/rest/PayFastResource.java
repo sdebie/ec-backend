@@ -3,6 +3,7 @@ package org.ecommerce.backend.api.rest;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import jakarta.ws.rs.Consumes;
+import jakarta.ws.rs.HeaderParam;
 import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
@@ -14,6 +15,7 @@ import org.ecommerce.backend.service.OrderNotificationService;
 import org.ecommerce.backend.service.OrderService;
 import org.ecommerce.backend.service.payfast.HtmlFormField;
 import org.ecommerce.backend.service.payfast.PayFastService;
+import org.ecommerce.backend.utils.ClientIpUtils;
 import org.ecommerce.common.entity.OrderEntity;
 import org.ecommerce.common.entity.PaymentLogEntity;
 import org.ecommerce.common.enums.OrderStatusEn;
@@ -32,6 +34,7 @@ import java.util.UUID;
 public class PayFastResource
 {
     private static final Logger LOG = Logger.getLogger(PayFastResource.class);
+    private static final BigDecimal AMOUNT_TOLERANCE = new BigDecimal("0.01");
 
     @Inject
     PayFastService payFastService;
@@ -108,25 +111,44 @@ public class PayFastResource
     @Path("/itn")
     @Consumes(MediaType.APPLICATION_FORM_URLENCODED)
     @Transactional
-    public Response handleITN(String rawBody)
+    public Response handleITN(
+            String rawBody,
+            @HeaderParam("CF-Connecting-IP") String cfConnectingIp,
+            @HeaderParam("X-Forwarded-For") String xForwardedFor,
+            @HeaderParam("X-Real-IP") String xRealIp)
     {
         LOG.debug("ITN callback received");
 
-        // 1. Security Check
+        // 1. Signature check
         if (!payFastService.verifyItnSignature(rawBody)) {
             LOG.warn("ITN callback rejected: signature verification failed");
             return Response.status(Response.Status.UNAUTHORIZED).build();
         }
 
+        // 2. Source check — a leaked passphrase is enough to forge a valid signature
+        // offline, so the signature alone cannot prove the request came from PayFast.
+        String clientIp = ClientIpUtils.resolveClientIp(cfConnectingIp, xForwardedFor, xRealIp);
+        if (!payFastService.isTrustedSource(clientIp)) {
+            LOG.warn("ITN callback rejected: untrusted source IP " + clientIp);
+            return Response.status(Response.Status.UNAUTHORIZED).build();
+        }
+
         Map<String, String> params = parseFormBody(rawBody);
 
+        BigDecimal amountGross = null;
         try {
-            // 2. Generic Logging
+            amountGross = new BigDecimal(params.get("amount_gross"));
+        } catch (Exception e) {
+            LOG.warn("ITN amount_gross could not be parsed: '" + params.get("amount_gross") + "'");
+        }
+
+        try {
+            // 3. Generic Logging
             PaymentLogEntity log = new PaymentLogEntity();
             log.setGatewayName("PAYFAST");
             log.setInternalReference(params.get("m_payment_id"));
             log.setExternalReference(params.get("pf_payment_id"));
-            log.setAmountGross(new BigDecimal(params.get("amount_gross")));
+            log.setAmountGross(amountGross);
             log.setStatus(params.get("payment_status"));
             // Store raw JSON for auditing
             log.setRawResponse(params.toString());
@@ -135,19 +157,33 @@ public class PayFastResource
             LOG.error("Error logging payment: " + e.getMessage());
         }
 
-        // 3. Logic: If payment is complete, update Order
+        // 4. Logic: If payment is complete, validate and update Order
         if ("COMPLETE".equalsIgnoreCase(params.get("payment_status"))) {
             String orderIdStr = params.get("m_payment_id");
             try {
                 UUID orderId = UUID.fromString(orderIdStr);
                 OrderEntity order = OrderEntity.findById(orderId);
                 if (order != null) {
-                    order.setStatus(OrderStatusEn.PAID);
-                    // Panache will auto-dirty-check within @Transactional, but call persist() to be explicit
-                    order.persist();
-                    LOG.debug("Updated Order " + orderId + " to PAID (entity update)");
+                    if (order.getStatus() == OrderStatusEn.PAID) {
+                        // PayFast retries ITNs it doesn't get a definitive ack for;
+                        // a replay of an already-processed payment is not an error.
+                        LOG.debug("Order " + orderId + " already PAID; ignoring duplicate ITN");
+                    } else if (amountGross == null
+                            || amountGross.subtract(order.getTotalAmount()).abs().compareTo(AMOUNT_TOLERANCE) > 0) {
+                        LOG.warn("ITN rejected: amount_gross " + amountGross + " does not match order total "
+                                + order.getTotalAmount() + " for order " + orderId);
+                        return Response.status(Response.Status.UNAUTHORIZED).build();
+                    } else if (!payFastService.confirmWithPayFast(rawBody)) {
+                        LOG.warn("ITN rejected: PayFast server confirmation failed for order " + orderId);
+                        return Response.status(Response.Status.UNAUTHORIZED).build();
+                    } else {
+                        order.setStatus(OrderStatusEn.PAID);
+                        // Panache will auto-dirty-check within @Transactional, but call persist() to be explicit
+                        order.persist();
+                        LOG.debug("Updated Order " + orderId + " to PAID (entity update)");
 
-                    orderNotificationService.sendConfirmationEmail(order);
+                        orderNotificationService.sendConfirmationEmail(order);
+                    }
                 } else {
                     LOG.warn("Order not found for m_payment_id=" + orderId + "; no update performed");
                 }

@@ -123,6 +123,8 @@ class PayFastResourceTest
         doNothing().when(order).persist();
 
         when(payFastService.verifyItnSignature(anyString())).thenReturn(true);
+        when(payFastService.isTrustedSource(anyString())).thenReturn(true);
+        when(payFastService.confirmWithPayFast(anyString())).thenReturn(true);
         when(OrderEntity.findById(orderId)).thenReturn(order);
 
         given()
@@ -135,5 +137,113 @@ class PayFastResourceTest
 
         assertEquals(OrderStatusEn.PAID, order.getStatus());
         verify(orderNotificationService).sendConfirmationEmail(order);
+    }
+
+    @Test
+    void itn_fromUntrustedSourceIp_returns401AndDoesNotTouchOrder()
+    {
+        UUID orderId = UUID.randomUUID();
+        OrderEntity order = spy(new OrderEntity());
+        order.setId(orderId);
+        order.setTotalAmount(new BigDecimal("100.00"));
+        order.setStatus(OrderStatusEn.PENDING);
+
+        when(payFastService.verifyItnSignature(anyString())).thenReturn(true);
+        when(payFastService.isTrustedSource(anyString())).thenReturn(false);
+        when(OrderEntity.findById(orderId)).thenReturn(order);
+
+        given()
+                .contentType(ContentType.URLENC)
+                .body("m_payment_id=" + orderId + "&payment_status=COMPLETE&amount_gross=100.00&signature=valid")
+                .when()
+                .post("/api/payments/itn")
+                .then()
+                .statusCode(401);
+
+        assertEquals(OrderStatusEn.PENDING, order.getStatus());
+        verify(order, never()).persist();
+        verify(orderNotificationService, never()).sendConfirmationEmail(any());
+    }
+
+    @Test
+    void itn_withAmountBelowOrderTotal_returns401AndDoesNotMarkOrderPaid()
+    {
+        UUID orderId = UUID.randomUUID();
+        OrderEntity order = spy(new OrderEntity());
+        order.setId(orderId);
+        order.setTotalAmount(new BigDecimal("500.00"));
+        order.setStatus(OrderStatusEn.PENDING);
+
+        when(payFastService.verifyItnSignature(anyString())).thenReturn(true);
+        when(payFastService.isTrustedSource(anyString())).thenReturn(true);
+        when(OrderEntity.findById(orderId)).thenReturn(order);
+
+        // amount_gross (1.00) far under the real order total (500.00) — e.g. a forged
+        // ITN for a cheap decoy order replayed against a high-value order ID.
+        given()
+                .contentType(ContentType.URLENC)
+                .body("m_payment_id=" + orderId + "&payment_status=COMPLETE&amount_gross=1.00&signature=valid")
+                .when()
+                .post("/api/payments/itn")
+                .then()
+                .statusCode(401);
+
+        assertEquals(OrderStatusEn.PENDING, order.getStatus());
+        verify(order, never()).persist();
+        verify(payFastService, never()).confirmWithPayFast(anyString());
+        verify(orderNotificationService, never()).sendConfirmationEmail(any());
+    }
+
+    @Test
+    void itn_whenPayFastServerConfirmationFails_returns401AndDoesNotMarkOrderPaid()
+    {
+        UUID orderId = UUID.randomUUID();
+        OrderEntity order = spy(new OrderEntity());
+        order.setId(orderId);
+        order.setTotalAmount(new BigDecimal("100.00"));
+        order.setStatus(OrderStatusEn.PENDING);
+
+        when(payFastService.verifyItnSignature(anyString())).thenReturn(true);
+        when(payFastService.isTrustedSource(anyString())).thenReturn(true);
+        when(payFastService.confirmWithPayFast(anyString())).thenReturn(false);
+        when(OrderEntity.findById(orderId)).thenReturn(order);
+
+        given()
+                .contentType(ContentType.URLENC)
+                .body("m_payment_id=" + orderId + "&payment_status=COMPLETE&amount_gross=100.00&signature=valid")
+                .when()
+                .post("/api/payments/itn")
+                .then()
+                .statusCode(401);
+
+        assertEquals(OrderStatusEn.PENDING, order.getStatus());
+        verify(order, never()).persist();
+        verify(orderNotificationService, never()).sendConfirmationEmail(any());
+    }
+
+    @Test
+    void itn_replayedForAnAlreadyPaidOrder_returns200ButDoesNotReprocess()
+    {
+        UUID orderId = UUID.randomUUID();
+        OrderEntity order = spy(new OrderEntity());
+        order.setId(orderId);
+        order.setTotalAmount(new BigDecimal("100.00"));
+        order.setStatus(OrderStatusEn.PAID);
+
+        when(payFastService.verifyItnSignature(anyString())).thenReturn(true);
+        when(payFastService.isTrustedSource(anyString())).thenReturn(true);
+        when(OrderEntity.findById(orderId)).thenReturn(order);
+
+        given()
+                .contentType(ContentType.URLENC)
+                .body("m_payment_id=" + orderId + "&payment_status=COMPLETE&amount_gross=100.00&signature=valid")
+                .when()
+                .post("/api/payments/itn")
+                .then()
+                .statusCode(200);
+
+        verify(order, never()).persist();
+        verify(payFastService, never()).confirmWithPayFast(anyString());
+        verify(orderNotificationService, never()).sendConfirmationEmail(any());
     }
 }

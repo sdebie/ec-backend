@@ -6,6 +6,7 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.StringJoiner;
 import java.util.TreeMap;
 
 public class PayFastUtils
@@ -13,6 +14,81 @@ public class PayFastUtils
     public static String generateSecuritySignature(String joinedNameValuePair)
     {
         return DigestUtils.md5Hex(joinedNameValuePair.getBytes(StandardCharsets.UTF_8));
+    }
+
+    /**
+     * Extracts the {@code signature} value from a raw ITN body, scanning every
+     * {@code &}-separated pair (last occurrence wins, matching how a duplicate
+     * form field would resolve).
+     */
+    public static String extractSignature(String rawBody)
+    {
+        if (rawBody == null) {
+            return null;
+        }
+        String signature = null;
+        for (String pair : rawBody.split("&")) {
+            if (pair.startsWith("signature=")) {
+                signature = pair.substring("signature=".length());
+            }
+        }
+        return signature;
+    }
+
+    /**
+     * Rebuilds the raw ITN body with the {@code signature} pair removed, preserving
+     * posted order and encoding. This is PayFast's own {@code pfParamString}: the same
+     * string is the base for the signature check (passphrase appended) and the exact
+     * body PayFast expects back for server-side confirmation (passphrase never appended).
+     */
+    public static String buildParamString(String rawBody)
+    {
+        StringJoiner baseString = new StringJoiner("&");
+        for (String pair : rawBody.split("&")) {
+            if (!pair.startsWith("signature=") && !pair.isBlank()) {
+                baseString.add(pair);
+            }
+        }
+        return baseString.toString();
+    }
+
+    /**
+     * Checks whether an IPv4 address falls inside a CIDR block (e.g. {@code 197.97.145.144/28})
+     * or matches a bare IPv4 address (treated as a /32). Fails closed (returns false) on any
+     * malformed input, including non-IPv4 addresses.
+     */
+    public static boolean ipMatchesCidr(String ip, String cidr)
+    {
+        try {
+            String[] parts = cidr.split("/", 2);
+            int prefixLength = parts.length == 2 ? Integer.parseInt(parts[1].trim()) : 32;
+            if (prefixLength == 0) {
+                return true;
+            }
+            int targetInt = ipv4ToInt(ip);
+            int networkInt = ipv4ToInt(parts[0].trim());
+            int mask = 0xFFFFFFFF << (32 - prefixLength);
+            return (targetInt & mask) == (networkInt & mask);
+        } catch (RuntimeException e) {
+            return false;
+        }
+    }
+
+    private static int ipv4ToInt(String ip)
+    {
+        String[] octets = ip.trim().split("\\.");
+        if (octets.length != 4) {
+            throw new IllegalArgumentException("Not an IPv4 address: " + ip);
+        }
+        int result = 0;
+        for (String octet : octets) {
+            int value = Integer.parseInt(octet);
+            if (value < 0 || value > 255) {
+                throw new IllegalArgumentException("Octet out of range: " + octet);
+            }
+            result = (result << 8) | value;
+        }
+        return result;
     }
 
     /**
