@@ -523,7 +523,7 @@ class CatalogueOrderingIT
                 "Page 2 must return exactly 1 item (5 total, pageSize 2, pages 0-1 have 4), got " + page2.size());
 
         // Ensure page 2's item is different from pages 0 and 1
-        String page2Id = page2.get(0).getId();
+        String page2Id = page2.getFirst().getId();
         assertFalse(page0Ids.contains(page2Id),
                 "Page 2 product must not appear on page 0");
         assertFalse(page1Ids.contains(page2Id),
@@ -729,7 +729,7 @@ class CatalogueOrderingIT
 
         assertEquals(1, results.size(), "Exactly 1 tracked product expected");
 
-        ProductShoppingListItemDto dto = results.get(0);
+        ProductShoppingListItemDto dto = results.getFirst();
 
         // Assert all core fields are populated (non-null)
         assertNotNull(dto.getId(), "id must be populated");

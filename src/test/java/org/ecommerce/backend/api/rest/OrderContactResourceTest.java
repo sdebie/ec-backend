@@ -17,6 +17,7 @@ import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.comparesEqualTo;
 import static org.hamcrest.Matchers.equalTo;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.Mockito.when;
 
 @QuarkusTest
@@ -38,7 +39,7 @@ class OrderContactResourceTest
         OrderEntity order = new OrderEntity();
         order.setId(orderId);
         order.setTotalAmount(new BigDecimal("500.00"));
-        order.setStatus(OrderStatusEn.PENDING);
+        order.setStatus(OrderStatusEn.CREATED);
 
         ShippingMethodEntity shippingMethod = new ShippingMethodEntity();
         shippingMethod.setId(shippingMethodId);
@@ -103,6 +104,44 @@ class OrderContactResourceTest
     }
 
     @Test
+    void updateContact_orderNotCreated_returns409AndDoesNotMutate()
+    {
+        // Once an order has left CREATED (e.g. paid via PayFast, or fulfilled/
+        // cancelled by staff), contact/address/shipping must be frozen — otherwise
+        // this endpoint can silently redirect a paid order's delivery address or
+        // rewrite its contact email after the fact.
+        UUID orderId = UUID.randomUUID();
+
+        OrderEntity order = new OrderEntity();
+        order.setId(orderId);
+        order.setTotalAmount(new BigDecimal("500.00"));
+        order.setStatus(OrderStatusEn.PAID);
+
+        when(OrderEntity.findOrderInfoById(orderId)).thenReturn(order);
+
+        String body = """
+                {
+                    "email": "attacker@example.com",
+                    "firstName": "New",
+                    "lastName": "Address",
+                    "streetAddress": "999 Redirect Ave"
+                }
+                """;
+
+        given()
+                .contentType(ContentType.JSON)
+                .body(body)
+                .when()
+                .patch("/api/orders/{orderId}/contact", orderId)
+                .then()
+                .statusCode(409)
+                .body("error", equalTo("Order can no longer be modified"));
+
+        assertNull(order.getContactEmail());
+        assertEquals(0, order.getTotalAmount().compareTo(new BigDecimal("500.00")));
+    }
+
+    @Test
     void updateContact_invalidShippingMethodId_returns422()
     {
         UUID orderId = UUID.randomUUID();
@@ -111,7 +150,7 @@ class OrderContactResourceTest
         OrderEntity order = new OrderEntity();
         order.setId(orderId);
         order.setTotalAmount(new BigDecimal("500.00"));
-        order.setStatus(OrderStatusEn.PENDING);
+        order.setStatus(OrderStatusEn.CREATED);
 
         when(OrderEntity.findOrderInfoById(orderId)).thenReturn(order);
         when(ShippingMethodEntity.findById(invalidShippingMethodId)).thenReturn(null);
@@ -147,7 +186,7 @@ class OrderContactResourceTest
         OrderEntity order = new OrderEntity();
         order.setId(orderId);
         order.setTotalAmount(new BigDecimal("115.00")); // stale: created with the default estimate
-        order.setStatus(OrderStatusEn.PENDING);
+        order.setStatus(OrderStatusEn.CREATED);
         order.getItems().add(orderItem(new BigDecimal("100.00"), 2));
 
         ShippingMethodEntity express = new ShippingMethodEntity();
@@ -201,7 +240,7 @@ class OrderContactResourceTest
         OrderEntity order = new OrderEntity();
         order.setId(orderId);
         order.setTotalAmount(new BigDecimal("1.00"));
-        order.setStatus(OrderStatusEn.PENDING);
+        order.setStatus(OrderStatusEn.CREATED);
         order.getItems().add(orderItem(new BigDecimal("19.99"), 3));
         order.getItems().add(orderItem(new BigDecimal("5.50"), 2));
 
@@ -271,7 +310,7 @@ class OrderContactResourceTest
         OrderEntity order = new OrderEntity();
         order.setId(orderId);
         order.setTotalAmount(new BigDecimal("250.00"));
-        order.setStatus(OrderStatusEn.PENDING);
+        order.setStatus(OrderStatusEn.CREATED);
         order.setCustomerEntity(null); // Guest order — no customer
 
         when(OrderEntity.findOrderInfoById(orderId)).thenReturn(order);

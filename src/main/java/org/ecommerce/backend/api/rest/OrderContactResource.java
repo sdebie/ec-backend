@@ -10,6 +10,7 @@ import org.ecommerce.backend.service.OrderTotals;
 import org.ecommerce.common.dto.OrderContactRequestDto;
 import org.ecommerce.common.entity.OrderEntity;
 import org.ecommerce.common.entity.ShippingMethodEntity;
+import org.ecommerce.common.enums.OrderStatusEn;
 import org.jboss.logging.Logger;
 
 import java.util.LinkedHashMap;
@@ -39,6 +40,17 @@ public class OrderContactResource
             LOG.debugf("Order not found: %s", orderId);
             return Response.status(Response.Status.NOT_FOUND)
                     .entity(Map.of("error", "Order not found"))
+                    .build();
+        }
+
+        // 1b. Contact/address/shipping are only mutable while the order is still
+        // being assembled at checkout. Once it has left CREATED (paid, fulfilled,
+        // cancelled, ...) this must not be able to rewrite delivery details or
+        // force a reprice on a total the shopper already paid.
+        if (order.getStatus() != OrderStatusEn.CREATED) {
+            LOG.warnf("Rejected contact update for order %s in status %s", orderId, order.getStatus());
+            return Response.status(Response.Status.CONFLICT)
+                    .entity(Map.of("error", "Order can no longer be modified"))
                     .build();
         }
 
