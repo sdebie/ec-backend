@@ -3,6 +3,7 @@ package org.ecommerce.backend.mapper;
 import org.ecommerce.common.dto.CategoryDto;
 import org.ecommerce.common.entity.CategoryEntity;
 import org.mapstruct.Mapper;
+import org.mapstruct.Mapping;
 import org.mapstruct.MappingTarget;
 
 import java.util.List;
@@ -22,6 +23,13 @@ public interface CategoryMapper
 
     CategoryEntity mapDtoToEntity(CategoryDto categoryDto);
 
+    /**
+     * {@code parent} is deliberately not mapped: on a {@code @MappingTarget} overload MapStruct
+     * writes a nested association INTO the existing associated entity rather than replacing the
+     * reference, so an id-only parent stub would null the live parent row's fields at flush.
+     * {@link org.ecommerce.backend.service.CategoryService} resolves the parent by id instead.
+     */
+    @Mapping(target = "parent", ignore = true)
     CategoryEntity mapDtoToEntity(CategoryDto categoryDto, @MappingTarget CategoryEntity categoryEntity);
 
 }

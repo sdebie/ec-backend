@@ -16,8 +16,10 @@ import org.ecommerce.common.query.enums.FilterOperator;
 import org.ecommerce.common.repository.CategoryRepository;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 @Slf4j
@@ -95,6 +97,7 @@ public class CategoryService
                     throw new CategoryAlreadyExistsException("Category with slug '" + categoryDto.getSlug() + "' already exists");
                 }
                 CategoryEntity categoryEntity = categoryMapper.mapDtoToEntity(categoryDto, new CategoryEntity());
+                categoryEntity.setParent(resolveParent(categoryDto));
                 categoryRepository.persist(categoryEntity);
             }
         } catch (Exception e) {
@@ -115,6 +118,40 @@ public class CategoryService
         }
 
         return true;
+    }
+
+    /**
+     * Resolves the parent association from the dto's parent id — the mapper deliberately does not
+     * map {@code parent} (see {@link CategoryMapper}). Returns null for a top-level category.
+     * Rejects a missing parent, self-parenting, and re-parenting under the category's own subtree.
+     */
+    private CategoryEntity resolveParent(CategoryDto categoryDto)
+    {
+        CategoryDto parentDto = categoryDto.getParent();
+        if (parentDto == null || parentDto.getId() == null) {
+            return null;
+        }
+
+        UUID parentId = parentDto.getId();
+        if (parentId.equals(categoryDto.getId())) {
+            throw new IllegalArgumentException("A category cannot be its own parent");
+        }
+
+        CategoryEntity parent = categoryRepository.findById(parentId);
+        if (parent == null) {
+            throw new CategoryNotFoundException("Parent category with id " + parentId + " not found");
+        }
+
+        // Walk the ancestor chain to keep the tree acyclic; the visited set makes the walk
+        // terminate even if the stored data already contains a cycle.
+        Set<UUID> visited = new HashSet<>();
+        for (CategoryEntity ancestor = parent.getParent(); ancestor != null && visited.add(ancestor.getId()); ancestor = ancestor.getParent()) {
+            if (ancestor.getId().equals(categoryDto.getId())) {
+                throw new IllegalArgumentException("A category cannot be moved under one of its own subcategories");
+            }
+        }
+
+        return parent;
     }
 
     @Transactional
@@ -138,6 +175,7 @@ public class CategoryService
                 }
 
                 categoryMapper.mapDtoToEntity(categoryDto, categoryEntity);
+                categoryEntity.setParent(resolveParent(categoryDto));
                 categoryRepository.persist(categoryEntity);
             }
         } catch (Exception e) {
@@ -157,6 +195,13 @@ public class CategoryService
             CategoryEntity categoryEntity = CategoryEntity.findById(id);
             if (categoryEntity == null) {
                 throw new CategoryNotFoundException("Category with id " + id + " not found");
+            }
+
+            // parent_id has no ON DELETE action, so deleting a category with children would fail
+            // with a raw FK violation rendered as "System error"; reject it with a clear message
+            // instead (IllegalArgumentException is on the GraphQL message whitelist).
+            if (categoryRepository.count("parent.id = ?1", id) > 0) {
+                throw new IllegalArgumentException("Cannot delete a category that has subcategories; delete or move its subcategories first");
             }
 
             categoryRepository.delete(categoryEntity);
