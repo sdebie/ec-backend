@@ -230,7 +230,7 @@ class RateLimiterServiceTest
     void check_shouldSweepExpiredBucketsWhenThresholdExceeded() throws Exception
     {
         // Fill the map beyond CLEANUP_THRESHOLD with expired buckets
-        injectExpiredBuckets(RateLimiterService.CLEANUP_THRESHOLD + 1, 60);
+        injectExpiredBuckets();
 
         // Next check triggers the sweep
         service.check("test", "sweep-trigger", 5, 60);
@@ -244,7 +244,7 @@ class RateLimiterServiceTest
     void check_shouldNotSweepActiveBuckets() throws Exception
     {
         // Fill with active buckets (recent windowStart, long window)
-        injectActiveBuckets(RateLimiterService.CLEANUP_THRESHOLD + 1, 3600);
+        injectActiveBuckets();
 
         // Next check triggers sweep logic but active buckets should survive
         service.check("test", "sweep-active-trigger", 5, 3600);
@@ -330,17 +330,17 @@ class RateLimiterServiceTest
      * Injects expired buckets directly into the map via reflection.
      */
     @SuppressWarnings("unchecked")
-    private void injectExpiredBuckets(int count, long windowSeconds) throws Exception
+    private void injectExpiredBuckets() throws Exception
     {
         Field bucketsField = RateLimiterService.class.getDeclaredField("buckets");
         bucketsField.setAccessible(true);
         ConcurrentHashMap<String, RateLimiterService.WindowBucket> map =
                 (ConcurrentHashMap<String, RateLimiterService.WindowBucket>) bucketsField.get(service);
 
-        long expiredStart = service.currentTimeMillis() - (windowSeconds * 1000 + 1000); // 1s past expiry
-        for (int i = 0; i < count; i++) {
+        long expiredStart = service.currentTimeMillis() - ((long) 60 * 1000 + 1000); // 1s past expiry
+        for (int i = 0; i < 10001; i++) {
             map.put("expired:" + i, new RateLimiterService.WindowBucket(
-                    expiredStart, new AtomicInteger(1), windowSeconds));
+                    expiredStart, new AtomicInteger(1), 60));
         }
     }
 
@@ -348,7 +348,7 @@ class RateLimiterServiceTest
      * Injects active (non-expired) buckets directly into the map via reflection.
      */
     @SuppressWarnings("unchecked")
-    private void injectActiveBuckets(int count, long windowSeconds) throws Exception
+    private void injectActiveBuckets() throws Exception
     {
         Field bucketsField = RateLimiterService.class.getDeclaredField("buckets");
         bucketsField.setAccessible(true);
@@ -356,9 +356,9 @@ class RateLimiterServiceTest
                 (ConcurrentHashMap<String, RateLimiterService.WindowBucket>) bucketsField.get(service);
 
         long recentStart = service.currentTimeMillis() - 1000; // 1 second ago — well within any window
-        for (int i = 0; i < count; i++) {
+        for (int i = 0; i < 10001; i++) {
             map.put("active:" + i, new RateLimiterService.WindowBucket(
-                    recentStart, new AtomicInteger(1), windowSeconds));
+                    recentStart, new AtomicInteger(1), 3600));
         }
     }
 

@@ -200,7 +200,7 @@ public class WholesaleMapperOutputPreservationPropertyTest
                 Arbitraries.strings().alpha().ofMinLength(1).ofMaxLength(30)
         );
         Arbitrary<Boolean> nullableBooleans = Arbitraries.oneOf(
-                Arbitraries.just((Boolean) null),
+                Arbitraries.just(null),
                 Arbitraries.of(true, false)
         );
         Arbitrary<WholesaleApplicationStatusEn> statuses = Arbitraries.oneOf(

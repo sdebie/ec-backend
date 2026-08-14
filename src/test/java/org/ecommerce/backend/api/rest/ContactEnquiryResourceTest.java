@@ -56,7 +56,7 @@ class ContactEnquiryResourceTest
                 """;
     }
 
-    private String validPayloadWithHoneypot(String honeypotValue)
+    private String validPayloadWithHoneypot()
     {
         return """
                 {
@@ -67,7 +67,7 @@ class ContactEnquiryResourceTest
                     "message": "I'd like to enquire about your services.",
                     "website": "%s"
                 }
-                """.formatted(honeypotValue);
+                """.formatted("http://spam-site.com");
     }
 
     // ── Valid submission: 202 + mail invoked (Req 2.1, 2.4, 1.3) ────────────
@@ -241,7 +241,7 @@ class ContactEnquiryResourceTest
     {
         given()
                 .contentType(ContentType.JSON)
-                .body(validPayloadWithHoneypot("http://spam-site.com"))
+                .body(validPayloadWithHoneypot())
                 .when()
                 .post("/api/storefront/enquiries")
                 .then()

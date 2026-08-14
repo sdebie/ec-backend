@@ -56,7 +56,7 @@ class ProductEditIntegrationTest
 
     // ─── Helpers ────────────────────────────────────────────────────────────
 
-    private ProductInformationDto createProduct(String marker, String status, int variantCount)
+    private ProductInformationDto createProduct(String marker, String status)
     {
         ProductDto product = new ProductDto();
         product.setName(marker + "Product");
@@ -66,7 +66,7 @@ class ProductEditIntegrationTest
         product.setStatus(status);
 
         List<ProductVariantDto> variants = new ArrayList<>();
-        for (int i = 0; i < variantCount; i++) {
+        for (int i = 0; i < 2; i++) {
             ProductVariantDto variant = new ProductVariantDto();
             variant.setSku(marker + "SKU-" + (char) ('A' + i) + "-" + UUID.randomUUID().toString().substring(0, 8));
             variant.setStockQuantity(10 + i * 5);
@@ -117,7 +117,7 @@ class ProductEditIntegrationTest
         String marker = "ZZED-CHNG-" + UUID.randomUUID().toString().substring(0, 6) + "-";
 
         // Create a product with 2 variants (ACTIVE so removal triggers soft-delete)
-        ProductInformationDto created = createProduct(marker, "ACTIVE", 2);
+        ProductInformationDto created = createProduct(marker, "ACTIVE");
         String productId = created.getProduct().getId();
         em.flush();
         em.clear();
@@ -152,8 +152,8 @@ class ProductEditIntegrationTest
         changedPrice.setPriceType("RETAIL_PRICE");
         changedPrice.setPrice(new BigDecimal("777.77"));
         // Use existing price id so it's an upsert
-        if (original.getVariants().get(0).getPrices() != null && !original.getVariants().get(0).getPrices().isEmpty()) {
-            changedPrice.setId(original.getVariants().get(0).getPrices().get(0).getId());
+        if (original.getVariants().getFirst().getPrices() != null && !original.getVariants().getFirst().getPrices().isEmpty()) {
+            changedPrice.setId(original.getVariants().getFirst().getPrices().getFirst().getId());
         }
         keptVariant.setPrices(List.of(changedPrice));
         keptVariant.setImages(List.of(new ProductImageDto(null, "/images/updated.jpg", 0, true)));
@@ -188,7 +188,7 @@ class ProductEditIntegrationTest
         // Active-only read: should have 2 variants (kept + new), removed variant absent
         assertThat(read.getVariants(), hasSize(2));
 
-        List<String> readSkus = read.getVariants().stream().map(v -> v.getSku()).toList();
+        List<String> readSkus = read.getVariants().stream().map(ProductVariantDto::getSku).toList();
         assertThat(readSkus, hasItem(variantToKeepSku));
         assertThat(readSkus, hasItem(newVariant.getSku()));
         assertThat(readSkus, not(hasItem(variantToRemoveSku)));
@@ -197,7 +197,7 @@ class ProductEditIntegrationTest
         ProductVariantDto readKeptVariant = read.getVariants().stream().filter(v -> v.getSku().equals(variantToKeepSku)).findFirst().orElseThrow();
         List<VariantPriceDto> retailPrices = readKeptVariant.getPrices().stream().filter(p -> "RETAIL_PRICE".equals(p.getPriceType())).toList();
         assertThat("Price updated, not duplicated", retailPrices, hasSize(1));
-        assertThat(retailPrices.get(0).getPrice().compareTo(new BigDecimal("777.77")), equalTo(0));
+        assertThat(retailPrices.getFirst().getPrice().compareTo(new BigDecimal("777.77")), equalTo(0));
 
         // Stock updated
         assertThat(readKeptVariant.getStockQuantity(), equalTo(99));
@@ -216,7 +216,7 @@ class ProductEditIntegrationTest
         String marker = "ZZED-SFRD-" + UUID.randomUUID().toString().substring(0, 6) + "-";
 
         // Create an ACTIVE product with 2 variants
-        ProductInformationDto created = createProduct(marker, "ACTIVE", 2);
+        ProductInformationDto created = createProduct(marker, "ACTIVE");
         String productId = created.getProduct().getId();
         String slug = created.getProduct().getSlug();
         em.flush();
@@ -233,13 +233,13 @@ class ProductEditIntegrationTest
         updateInput.getProduct().setStatus("ACTIVE");
 
         ProductVariantDto keptVariant = new ProductVariantDto();
-        keptVariant.setId(original.getVariants().get(0).getId());
+        keptVariant.setId(original.getVariants().getFirst().getId());
         keptVariant.setSku(variantToKeepSku);
-        keptVariant.setStockQuantity(original.getVariants().get(0).getStockQuantity());
+        keptVariant.setStockQuantity(original.getVariants().getFirst().getStockQuantity());
         VariantPriceDto price = new VariantPriceDto();
         price.setPriceType("RETAIL_PRICE");
-        price.setPrice(original.getVariants().get(0).getPrices().get(0).getPrice());
-        price.setId(original.getVariants().get(0).getPrices().get(0).getId());
+        price.setPrice(original.getVariants().getFirst().getPrices().getFirst().getPrice());
+        price.setId(original.getVariants().getFirst().getPrices().getFirst().getId());
         keptVariant.setPrices(List.of(price));
         keptVariant.setImages(List.of(new ProductImageDto(null, "/images/kept.jpg", 0, true)));
         updateInput.setVariants(List.of(keptVariant));
@@ -252,7 +252,7 @@ class ProductEditIntegrationTest
         ProductInformationDto storefrontRead = productService.getProductInformationBySlug(slug);
         assertNotNull(storefrontRead);
         assertThat(storefrontRead.getVariants(), hasSize(1));
-        assertThat(storefrontRead.getVariants().get(0).getSku(), equalTo(variantToKeepSku));
+        assertThat(storefrontRead.getVariants().getFirst().getSku(), equalTo(variantToKeepSku));
     }
 
     // ─── Deletion Policy: Variant removal ───────────────────────────────────
@@ -264,7 +264,7 @@ class ProductEditIntegrationTest
         String marker = "ZZED-DHRD-" + UUID.randomUUID().toString().substring(0, 6) + "-";
 
         // Create a PENDING (draft) product with 2 variants
-        ProductInformationDto created = createProduct(marker, "PENDING", 2);
+        ProductInformationDto created = createProduct(marker, "PENDING");
         String productId = created.getProduct().getId();
         em.flush();
         em.clear();
@@ -286,8 +286,8 @@ class ProductEditIntegrationTest
         kept.setStockQuantity(10);
         VariantPriceDto price = new VariantPriceDto();
         price.setPriceType("RETAIL_PRICE");
-        price.setPrice(original.getVariants().get(0).getPrices().get(0).getPrice());
-        price.setId(original.getVariants().get(0).getPrices().get(0).getId());
+        price.setPrice(original.getVariants().getFirst().getPrices().getFirst().getPrice());
+        price.setId(original.getVariants().getFirst().getPrices().getFirst().getId());
         kept.setPrices(List.of(price));
         kept.setImages(List.of(new ProductImageDto(null, "/images/kept.jpg", 0, true)));
         updateInput.setVariants(List.of(kept));
@@ -308,7 +308,7 @@ class ProductEditIntegrationTest
         String marker = "ZZED-DREF-" + UUID.randomUUID().toString().substring(0, 6) + "-";
 
         // Create a PENDING (draft) product with 2 variants
-        ProductInformationDto created = createProduct(marker, "PENDING", 2);
+        ProductInformationDto created = createProduct(marker, "PENDING");
         String productId = created.getProduct().getId();
         em.flush();
         em.clear();
@@ -335,8 +335,8 @@ class ProductEditIntegrationTest
         kept.setStockQuantity(10);
         VariantPriceDto price = new VariantPriceDto();
         price.setPriceType("RETAIL_PRICE");
-        price.setPrice(original.getVariants().get(0).getPrices().get(0).getPrice());
-        price.setId(original.getVariants().get(0).getPrices().get(0).getId());
+        price.setPrice(original.getVariants().getFirst().getPrices().getFirst().getPrice());
+        price.setId(original.getVariants().getFirst().getPrices().getFirst().getId());
         kept.setPrices(List.of(price));
         kept.setImages(List.of(new ProductImageDto(null, "/images/kept.jpg", 0, true)));
         updateInput.setVariants(List.of(kept));
@@ -358,7 +358,7 @@ class ProductEditIntegrationTest
         String marker = "ZZED-NDSD-" + UUID.randomUUID().toString().substring(0, 6) + "-";
 
         // Create an ACTIVE (non-draft) product with 2 variants
-        ProductInformationDto created = createProduct(marker, "ACTIVE", 2);
+        ProductInformationDto created = createProduct(marker, "ACTIVE");
         String productId = created.getProduct().getId();
         em.flush();
         em.clear();
@@ -380,8 +380,8 @@ class ProductEditIntegrationTest
         kept.setStockQuantity(10);
         VariantPriceDto price = new VariantPriceDto();
         price.setPriceType("RETAIL_PRICE");
-        price.setPrice(original.getVariants().get(0).getPrices().get(0).getPrice());
-        price.setId(original.getVariants().get(0).getPrices().get(0).getId());
+        price.setPrice(original.getVariants().getFirst().getPrices().getFirst().getPrice());
+        price.setId(original.getVariants().getFirst().getPrices().getFirst().getId());
         kept.setPrices(List.of(price));
         kept.setImages(List.of(new ProductImageDto(null, "/images/kept.jpg", 0, true)));
         updateInput.setVariants(List.of(kept));
@@ -398,7 +398,7 @@ class ProductEditIntegrationTest
         // Active-only read must NOT include the disabled variant
         ProductInformationDto read = productService.getProductInformationDto(productId);
         assertThat(read.getVariants(), hasSize(1));
-        assertThat(read.getVariants().get(0).getSku(), equalTo(variantToKeepSku));
+        assertThat(read.getVariants().getFirst().getSku(), equalTo(variantToKeepSku));
     }
 
     // ─── Deletion Policy: Whole-product deletion ────────────────────────────
@@ -410,7 +410,7 @@ class ProductEditIntegrationTest
         String marker = "ZZED-WPHD-" + UUID.randomUUID().toString().substring(0, 6) + "-";
 
         // Create a PENDING product with no order references
-        ProductInformationDto created = createProduct(marker, "PENDING", 2);
+        ProductInformationDto created = createProduct(marker, "PENDING");
         String productId = created.getProduct().getId();
         em.flush();
         em.clear();
@@ -438,7 +438,7 @@ class ProductEditIntegrationTest
         String marker = "ZZED-WPSD-" + UUID.randomUUID().toString().substring(0, 6) + "-";
 
         // Create an ACTIVE product with no order references
-        ProductInformationDto created = createProduct(marker, "ACTIVE", 2);
+        ProductInformationDto created = createProduct(marker, "ACTIVE");
         String productId = created.getProduct().getId();
         em.flush();
         em.clear();
@@ -466,12 +466,12 @@ class ProductEditIntegrationTest
         String marker = "ZZED-WPOR-" + UUID.randomUUID().toString().substring(0, 6) + "-";
 
         // Create a PENDING product
-        ProductInformationDto created = createProduct(marker, "PENDING", 2);
+        ProductInformationDto created = createProduct(marker, "PENDING");
         String productId = created.getProduct().getId();
         em.flush();
 
         // Insert an order referencing one of the variants
-        UUID referencedVariantId = UUID.fromString(created.getVariants().get(0).getId());
+        UUID referencedVariantId = UUID.fromString(created.getVariants().getFirst().getId());
         insertOrderReferencing(referencedVariantId);
         em.flush();
         em.clear();
@@ -503,7 +503,7 @@ class ProductEditIntegrationTest
         String marker = "ZZED-OHST-" + UUID.randomUUID().toString().substring(0, 6) + "-";
 
         // Create an ACTIVE product with 2 variants
-        ProductInformationDto created = createProduct(marker, "ACTIVE", 2);
+        ProductInformationDto created = createProduct(marker, "ACTIVE");
         String productId = created.getProduct().getId();
         em.flush();
 
@@ -523,13 +523,13 @@ class ProductEditIntegrationTest
 
         // Keep only variant 0
         ProductVariantDto kept = new ProductVariantDto();
-        kept.setId(original.getVariants().get(0).getId());
-        kept.setSku(original.getVariants().get(0).getSku());
-        kept.setStockQuantity(original.getVariants().get(0).getStockQuantity());
+        kept.setId(original.getVariants().getFirst().getId());
+        kept.setSku(original.getVariants().getFirst().getSku());
+        kept.setStockQuantity(original.getVariants().getFirst().getStockQuantity());
         VariantPriceDto price = new VariantPriceDto();
         price.setPriceType("RETAIL_PRICE");
-        price.setPrice(original.getVariants().get(0).getPrices().get(0).getPrice());
-        price.setId(original.getVariants().get(0).getPrices().get(0).getId());
+        price.setPrice(original.getVariants().getFirst().getPrices().getFirst().getPrice());
+        price.setId(original.getVariants().getFirst().getPrices().getFirst().getId());
         kept.setPrices(List.of(price));
         kept.setImages(List.of(new ProductImageDto(null, "/images/kept.jpg", 0, true)));
         updateInput.setVariants(List.of(kept));

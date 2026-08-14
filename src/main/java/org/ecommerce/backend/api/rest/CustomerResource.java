@@ -164,7 +164,7 @@ public class CustomerResource
         if (req.newPassword == null || req.newPassword.isBlank()) {
             return Response.status(Response.Status.BAD_REQUEST).entity("newPassword is required").build();
         }
-        if (req.confirmPassword == null || !req.newPassword.equals(req.confirmPassword)) {
+        if (!req.newPassword.equals(req.confirmPassword)) {
             return Response.status(Response.Status.BAD_REQUEST).entity("Passwords do not match").build();
         }
 

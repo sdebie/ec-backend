@@ -70,9 +70,9 @@ class PasswordHashPropertyTest
                 .ofMinLength(1).ofMaxLength(10);
 
         Arbitrary<String> unicode = Arbitraries.strings()
-                .withCharRange('\u00C0', '\u00FF')  // Latin Extended (accented chars)
-                .withCharRange('\u0400', '\u04FF')  // Cyrillic
-                .withCharRange('\u4E00', '\u4E50')  // CJK subset
+                .withCharRange('À', 'ÿ')  // Latin Extended (accented chars)
+                .withCharRange('Ѐ', 'ӿ')  // Cyrillic
+                .withCharRange('一', '乐')  // CJK subset
                 .ofMinLength(1).ofMaxLength(10);
 
         // Combine segments and constrain total length to 8-128

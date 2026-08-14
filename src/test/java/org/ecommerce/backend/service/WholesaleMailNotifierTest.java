@@ -93,12 +93,12 @@ class WholesaleMailNotifierTest
         );
     }
 
-    private WholesaleDecisionEvent rejectionEvent(String recipientEmail)
+    private WholesaleDecisionEvent rejectionEvent()
     {
         return new WholesaleDecisionEvent(
                 UUID.randomUUID(),
                 WholesaleApplicationStatusEn.REJECTED,
-                recipientEmail,
+                "bob@test.com",
                 "Bob",
                 "Beta Inc",
                 "Insufficient documentation"
@@ -429,7 +429,7 @@ class WholesaleMailNotifierTest
                     .thenReturn(brandingSetting("{\"name\": \"My Store\"}"));
             MailTemplate.MailTemplateInstance instance = stubMailTemplateChain();
 
-            notifier.onDecision(rejectionEvent("bob@test.com"));
+            notifier.onDecision(rejectionEvent());
 
             verify(wholesale_status).to("bob@test.com");
             verify(instance).from(CONFIGURED_FROM);

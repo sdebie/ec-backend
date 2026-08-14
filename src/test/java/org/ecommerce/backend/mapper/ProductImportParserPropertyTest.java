@@ -181,7 +181,7 @@ public class ProductImportParserPropertyTest
 
         assertNull(result.stock(), "Invalid stock should result in null");
         assertEquals(1, result.validationErrors().size(), "Invalid stock should produce exactly one error");
-        assertTrue(result.validationErrors().get(0).startsWith("Invalid integer value for stock:"),
+        assertTrue(result.validationErrors().getFirst().startsWith("Invalid integer value for stock:"),
                 "Error message should describe the invalid stock value");
     }
 
@@ -203,7 +203,7 @@ public class ProductImportParserPropertyTest
                 received::add);
 
         assertEquals(rowCount, received.size());
-        assertEquals("SKU-0", received.get(0).sku());
+        assertEquals("SKU-0", received.getFirst().sku());
         assertEquals("SKU-5000", received.get(rowCount - 1).sku());
     }
 
@@ -404,7 +404,7 @@ public class ProductImportParserPropertyTest
             if (records.isEmpty()) {
                 throw new IllegalStateException("No records parsed from CSV content");
             }
-            return records.get(0);
+            return records.getFirst();
         }
     }
 }

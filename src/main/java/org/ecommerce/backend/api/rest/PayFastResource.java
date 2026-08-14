@@ -2,17 +2,12 @@ package org.ecommerce.backend.api.rest;
 
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
-import jakarta.ws.rs.Consumes;
-import jakarta.ws.rs.HeaderParam;
-import jakarta.ws.rs.POST;
-import jakarta.ws.rs.Path;
-import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.MultivaluedMap;
 import jakarta.ws.rs.core.Response;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.ecommerce.backend.service.OrderNotificationService;
-import org.ecommerce.backend.service.OrderService;
 import org.ecommerce.backend.service.payfast.HtmlFormField;
 import org.ecommerce.backend.service.payfast.PayFastService;
 import org.ecommerce.backend.utils.ClientIpUtils;

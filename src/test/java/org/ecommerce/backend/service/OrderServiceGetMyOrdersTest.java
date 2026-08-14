@@ -68,7 +68,7 @@ class OrderServiceGetMyOrdersTest
         List<OrderSummaryDto> result = orderService.getMyOrders(customerId);
 
         assertEquals(1, result.size());
-        OrderSummaryDto dto = result.get(0);
+        OrderSummaryDto dto = result.getFirst();
         assertEquals(order.getId().toString(), dto.getId());
         assertEquals(orderDate.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME), dto.getOrderDate());
         assertEquals("PAID", dto.getStatus());
@@ -94,7 +94,7 @@ class OrderServiceGetMyOrdersTest
         assertEquals(2, result.size());
 
         // First order (newest)
-        OrderSummaryDto dto1 = result.get(0);
+        OrderSummaryDto dto1 = result.getFirst();
         assertEquals(order1.getId().toString(), dto1.getId());
         assertEquals(date1.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME), dto1.getOrderDate());
         assertEquals("DELIVERED", dto1.getStatus());
@@ -145,7 +145,7 @@ class OrderServiceGetMyOrdersTest
         List<OrderSummaryDto> result = orderService.getMyOrders(customerId);
 
         assertEquals(1, result.size());
-        assertNull(result.get(0).getOrderDate());
+        assertNull(result.getFirst().getOrderDate());
     }
 
     @Test
@@ -160,7 +160,7 @@ class OrderServiceGetMyOrdersTest
         List<OrderSummaryDto> result = orderService.getMyOrders(customerId);
 
         assertEquals(1, result.size());
-        assertNull(result.get(0).getStatus());
+        assertNull(result.getFirst().getStatus());
     }
 
     @Test
@@ -175,7 +175,7 @@ class OrderServiceGetMyOrdersTest
         List<OrderSummaryDto> result = orderService.getMyOrders(customerId);
 
         assertEquals(1, result.size());
-        assertEquals(0.0, result.get(0).getTotalAmount(), 0.001);
+        assertEquals(0.0, result.getFirst().getTotalAmount(), 0.001);
     }
 
     @Test
@@ -199,7 +199,7 @@ class OrderServiceGetMyOrdersTest
         List<OrderSummaryDto> result = orderService.getMyOrders(customerId);
 
         assertEquals(1, result.size());
-        assertEquals(0, result.get(0).getItemCount());
+        assertEquals(0, result.getFirst().getItemCount());
     }
 
     @Test
@@ -232,7 +232,7 @@ class OrderServiceGetMyOrdersTest
         List<OrderSummaryDto> result = orderService.getMyOrders(customerId);
 
         assertEquals(1, result.size());
-        assertEquals(4, result.get(0).getItemCount()); // 4 + 0 (null treated as 0)
+        assertEquals(4, result.getFirst().getItemCount()); // 4 + 0 (null treated as 0)
     }
 
     // --- Helper methods ---
@@ -266,7 +266,7 @@ class OrderServiceGetMyOrdersTest
     private void mockOrderEntityFind(List<OrderEntity> orders)
     {
         PanacheQuery<PanacheEntityBase> query = mock(PanacheQuery.class);
-        when(query.list()).thenReturn((List) orders);
+        when(query.list()).thenReturn((List<PanacheEntityBase>) (List<?>) orders);
         when(OrderEntity.find(anyString(), any(Object[].class))).thenReturn(query);
     }
 }

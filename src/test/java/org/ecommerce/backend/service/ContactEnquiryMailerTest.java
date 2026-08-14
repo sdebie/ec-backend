@@ -45,6 +45,9 @@ class ContactEnquiryMailerTest
     @Mock
     private MailTemplate contact_enquiry;
 
+    @Spy
+    private ObjectMapper objectMapper = new ObjectMapper();
+
     private static final String CONFIGURED_FROM = "no-reply@store.co.za";
 
     @BeforeEach
@@ -117,7 +120,7 @@ class ContactEnquiryMailerTest
         @DisplayName("recipient is never taken from the emails array — only enquiryEmail")
         void neverFallsBackToEmailsList()
         {
-            // enquiryEmail absent but emails list has values — must NOT fall back
+            // enquiryEmail absent, but emails list has values — must NOT fall back
             when(settingsRepository.findById("storefront.contact"))
                     .thenReturn(settingWith("{\"emails\":[\"info@store.co.za\",\"support@store.co.za\"]}"));
 
