@@ -3,7 +3,6 @@ package org.ecommerce.backend.api.rest;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.http.ContentType;
-import org.ecommerce.backend.service.CustomerAuthService;
 import org.ecommerce.backend.service.RateLimitDecision;
 import org.ecommerce.backend.service.RateLimiterService;
 import org.junit.jupiter.api.BeforeEach;
@@ -29,9 +28,6 @@ class CustomerEndpointRateLimitIT
     @InjectMock
     RateLimiterService rateLimiterService;
 
-    @InjectMock
-    CustomerAuthService customerAuthService;
-
     @BeforeEach
     void setUp()
     {
@@ -54,7 +50,7 @@ class CustomerEndpointRateLimitIT
         given()
                 .contentType(ContentType.JSON)
                 .header("X-Forwarded-For", "192.0.2.20")
-                .body(registerPayload("newuser@example.com", "StrongPass1!"))
+                .body(registerPayload("newuser@example.com"))
                 .when()
                 .post("/api/customers/register")
                 .then()
@@ -73,7 +69,7 @@ class CustomerEndpointRateLimitIT
         given()
                 .contentType(ContentType.JSON)
                 .header("X-Forwarded-For", "192.0.2.21")
-                .body(registerPayload("recover@example.com", "StrongPass1!"))
+                .body(registerPayload("recover@example.com"))
                 .when()
                 .post("/api/customers/register")
                 .then()
@@ -88,7 +84,7 @@ class CustomerEndpointRateLimitIT
         int status = given()
                 .contentType(ContentType.JSON)
                 .header("X-Forwarded-For", "192.0.2.21")
-                .body(registerPayload("recover@example.com", "StrongPass1!"))
+                .body(registerPayload("recover@example.com"))
                 .when()
                 .post("/api/customers/register")
                 .then()
@@ -105,7 +101,7 @@ class CustomerEndpointRateLimitIT
         given()
                 .contentType(ContentType.JSON)
                 .header("X-Forwarded-For", "203.0.113.60, 10.0.0.1")
-                .body(registerPayload("xff@example.com", "StrongPass1!"))
+                .body(registerPayload("xff@example.com"))
                 .when()
                 .post("/api/customers/register");
 
@@ -119,7 +115,7 @@ class CustomerEndpointRateLimitIT
         given()
                 .contentType(ContentType.JSON)
                 .header("X-Real-IP", "198.51.100.30")
-                .body(registerPayload("realip@example.com", "StrongPass1!"))
+                .body(registerPayload("realip@example.com"))
                 .when()
                 .post("/api/customers/register");
 
@@ -184,7 +180,7 @@ class CustomerEndpointRateLimitIT
         given()
                 .contentType(ContentType.JSON)
                 .header("X-Forwarded-For", "192.0.2.24")
-                .body(registerPayload("existing@example.com", "StrongPass1!"))
+                .body(registerPayload("existing@example.com"))
                 .when()
                 .post("/api/customers/register")
                 .then()
@@ -194,7 +190,7 @@ class CustomerEndpointRateLimitIT
 
     // ── Helpers ─────────────────────────────────────────────────────────────
 
-    private String registerPayload(String email, String password)
+    private String registerPayload(String email)
     {
         return """
                 {
@@ -203,6 +199,6 @@ class CustomerEndpointRateLimitIT
                     "firstName": "Test",
                     "lastName": "User"
                 }
-                """.formatted(email, password);
+                """.formatted(email, "StrongPass1!");
     }
 }

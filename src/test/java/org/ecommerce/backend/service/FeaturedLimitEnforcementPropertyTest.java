@@ -37,9 +37,6 @@ class FeaturedLimitEnforcementPropertyTest
     @Inject
     FeaturedProductService service;
 
-    @InjectMock
-    ProductRepository productRepository;
-
     private PanacheQuery<PanacheEntityBase> query;
 
     @BeforeEach

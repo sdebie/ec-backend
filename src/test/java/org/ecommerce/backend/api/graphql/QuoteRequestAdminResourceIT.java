@@ -45,7 +45,6 @@ class QuoteRequestAdminResourceIT
     QuoteRequestService quoteRequestService;
 
     private UUID testRequestId;
-    private QuoteRequestEntity testEntity;
 
     // ─── JWT Helpers ─────────────────────────────────────────────────────────
 
@@ -81,7 +80,7 @@ class QuoteRequestAdminResourceIT
     void setUp()
     {
         testRequestId = UUID.randomUUID();
-        testEntity = createTestEntity(testRequestId, QuoteRequestStatusEn.NEW);
+        QuoteRequestEntity testEntity = createTestEntity(testRequestId, QuoteRequestStatusEn.NEW);
 
         // Repository mocks
         when(quoteRequestRepository.findAll(any(), any())).thenReturn(List.of(testEntity));

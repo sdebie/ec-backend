@@ -36,10 +36,6 @@ class OrderResourceMyOrdersIT
     OrderService orderService;
 
     private UUID customerAId;
-    private UUID customerBId;
-
-    private CustomerEntity customerA;
-    private CustomerEntity customerB;
 
     // OrderSummaryDto for customer A (newest first)
     private OrderSummaryDto summaryA1; // newest
@@ -54,7 +50,7 @@ class OrderResourceMyOrdersIT
         PanacheMock.mock(CustomerEntity.class);
 
         customerAId = UUID.randomUUID();
-        customerBId = UUID.randomUUID();
+        UUID customerBId = UUID.randomUUID();
 
         // Set up Customer A
         UserEntity userA = new UserEntity();
@@ -63,7 +59,7 @@ class OrderResourceMyOrdersIT
         userA.setPasswordHash("somehash");
         userA.setActive(true);
 
-        customerA = new CustomerEntity();
+        CustomerEntity customerA = new CustomerEntity();
         customerA.setId(customerAId);
         customerA.setUser(userA);
         customerA.setFirstName("Alice");
@@ -80,7 +76,7 @@ class OrderResourceMyOrdersIT
         userB.setPasswordHash("somehash");
         userB.setActive(true);
 
-        customerB = new CustomerEntity();
+        CustomerEntity customerB = new CustomerEntity();
         customerB.setId(customerBId);
         customerB.setUser(userB);
         customerB.setFirstName("Bob");

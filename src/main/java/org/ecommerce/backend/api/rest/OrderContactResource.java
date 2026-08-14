@@ -1,5 +1,6 @@
 package org.ecommerce.backend.api.rest;
 
+import io.quarkus.security.identity.SecurityIdentity;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import jakarta.ws.rs.*;
@@ -8,9 +9,11 @@ import jakarta.ws.rs.core.Response;
 import org.ecommerce.backend.service.OrderService;
 import org.ecommerce.backend.service.OrderTotals;
 import org.ecommerce.common.dto.OrderContactRequestDto;
+import org.ecommerce.common.entity.CustomerEntity;
 import org.ecommerce.common.entity.OrderEntity;
 import org.ecommerce.common.entity.ShippingMethodEntity;
 import org.ecommerce.common.enums.OrderStatusEn;
+import org.eclipse.microprofile.jwt.JsonWebToken;
 import org.jboss.logging.Logger;
 
 import java.util.LinkedHashMap;
@@ -27,6 +30,12 @@ public class OrderContactResource
     @Inject
     OrderService orderService;
 
+    @Inject
+    SecurityIdentity securityIdentity;
+
+    @Inject
+    JsonWebToken jwt;
+
     @PATCH
     @Transactional
     public Response updateContact(
@@ -41,6 +50,24 @@ public class OrderContactResource
             return Response.status(Response.Status.NOT_FOUND)
                     .entity(Map.of("error", "Order not found"))
                     .build();
+        }
+
+        // 1a. Ownership gate: a signed-in customer may only touch their own order.
+        // Guest checkout (no JWT) is deliberately unrestricted here — orders are
+        // keyed by their UUID as a bearer capability during checkout (see
+        // KNOWN-LIMITATIONS.md §4) — but a customer JWT must not reach across
+        // accounts. Mirrors OrderResource.getOrderDetail's ownership gate; a
+        // mismatch reports as "not found" rather than "forbidden" so the endpoint
+        // can't be used to enumerate which order IDs exist.
+        if (securityIdentity != null && securityIdentity.hasRole("customer")) {
+            CustomerEntity customer = CustomerEntity.findByEmail(jwt.getSubject());
+            if (customer == null || order.getCustomerEntity() == null
+                    || !order.getCustomerEntity().getId().equals(customer.getId())) {
+                LOG.warnf("Rejected contact update for order %s: caller does not own it", orderId);
+                return Response.status(Response.Status.NOT_FOUND)
+                        .entity(Map.of("error", "Order not found"))
+                        .build();
+            }
         }
 
         // 1b. Contact/address/shipping are only mutable while the order is still

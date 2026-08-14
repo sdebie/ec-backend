@@ -41,14 +41,11 @@ class AdminProductGraphQLTest
     @InjectMock
     ProductService productService;
 
-    private AdminProductStatsDto mockStats;
-    private PageResponse<AdminProductListItemDto> mockPage;
-
     @BeforeEach
     void setUp()
     {
         // Set up mock stats
-        mockStats = new AdminProductStatsDto();
+        AdminProductStatsDto mockStats = new AdminProductStatsDto();
         mockStats.setTotal(50);
         mockStats.setActive(30);
         mockStats.setPending(12);
@@ -69,7 +66,7 @@ class AdminProductGraphQLTest
         item.setStockCount(25);
         item.setStockLevel("IN_STOCK");
 
-        mockPage = new PageResponse<>(List.of(item), 1, 1, 0, 10);
+        PageResponse<AdminProductListItemDto> mockPage = new PageResponse<>(List.of(item), 1, 1, 0, 10);
 
         // Set up service mocks
         when(productService.getProductStats()).thenReturn(mockStats);

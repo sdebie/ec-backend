@@ -246,7 +246,7 @@ public class ImageService
     public PaginatedImagesResponse listImagesPaginated(Integer page, Integer pageSize, String search, String directory)
     {
         int safePage = page == null ? 0 : Math.max(0, page);
-        int safePageSize = pageSize == null ? DEFAULT_PAGE_SIZE : Math.max(1, Math.min(pageSize, MAX_PAGE_SIZE));
+        int safePageSize = pageSize == null ? DEFAULT_PAGE_SIZE : Math.clamp(pageSize, 1, MAX_PAGE_SIZE);
         String normalizedSearch = search == null ? "" : search.trim().toLowerCase();
         String directoryPrefix = normalizeSearchDirectory(directory);
 

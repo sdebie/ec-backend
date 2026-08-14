@@ -41,14 +41,8 @@ class OrderResourceOwnershipIT
     @InjectMock
     OrderService orderService;
 
-    private CustomerEntity customerA;
-    private CustomerEntity customerB;
-
     private OrderEntity orderA;
     private OrderEntity orderB;
-
-    private OrderDetailRespDto orderDetailA;
-    private OrderDetailRespDto orderDetailB;
 
     @BeforeEach
     void setUp()
@@ -61,7 +55,7 @@ class OrderResourceOwnershipIT
         userA.setId(UUID.randomUUID());
         userA.setEmail(CUSTOMER_A_EMAIL);
 
-        customerA = new CustomerEntity();
+        CustomerEntity customerA = new CustomerEntity();
         customerA.setId(UUID.randomUUID());
         customerA.setUser(userA);
         customerA.setFirstName("Alice");
@@ -75,7 +69,7 @@ class OrderResourceOwnershipIT
         userB.setId(UUID.randomUUID());
         userB.setEmail(CUSTOMER_B_EMAIL);
 
-        customerB = new CustomerEntity();
+        CustomerEntity customerB = new CustomerEntity();
         customerB.setId(UUID.randomUUID());
         customerB.setUser(userB);
         customerB.setFirstName("Bob");
@@ -103,14 +97,14 @@ class OrderResourceOwnershipIT
         orderB.setItems(new ArrayList<>());
 
         // OrderDetailRespDto for order A
-        orderDetailA = new OrderDetailRespDto();
+        OrderDetailRespDto orderDetailA = new OrderDetailRespDto();
         orderDetailA.setId(orderA.getId());
         orderDetailA.setTotalAmount(orderA.getTotalAmount());
         orderDetailA.setStatus(orderA.getStatus());
         orderDetailA.setCreatedAt(orderA.getCreatedAt());
 
         // OrderDetailRespDto for order B
-        orderDetailB = new OrderDetailRespDto();
+        OrderDetailRespDto orderDetailB = new OrderDetailRespDto();
         orderDetailB.setId(orderB.getId());
         orderDetailB.setTotalAmount(orderB.getTotalAmount());
         orderDetailB.setStatus(orderB.getStatus());

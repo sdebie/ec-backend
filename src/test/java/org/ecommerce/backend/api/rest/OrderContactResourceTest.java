@@ -3,6 +3,8 @@ package org.ecommerce.backend.api.rest;
 import io.quarkus.panache.mock.PanacheMock;
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.http.ContentType;
+import io.smallrye.jwt.build.Jwt;
+import org.ecommerce.common.entity.CustomerEntity;
 import org.ecommerce.common.entity.OrderEntity;
 import org.ecommerce.common.entity.OrderItemEntity;
 import org.ecommerce.common.entity.ShippingMethodEntity;
@@ -28,6 +30,15 @@ class OrderContactResourceTest
     {
         PanacheMock.mock(OrderEntity.class);
         PanacheMock.mock(ShippingMethodEntity.class);
+        PanacheMock.mock(CustomerEntity.class);
+    }
+
+    private String generateCustomerJwt(String email)
+    {
+        return Jwt.subject(email)
+                .issuer("http://localhost:8080")
+                .groups("customer")
+                .sign();
     }
 
     @Test
@@ -101,6 +112,90 @@ class OrderContactResourceTest
                 .then()
                 .statusCode(404)
                 .body("error", equalTo("Order not found"));
+    }
+
+    @Test
+    void updateContact_customerJwtOwnOrder_returns200()
+    {
+        UUID orderId = UUID.randomUUID();
+        String email = "alice@test.com";
+
+        CustomerEntity customer = new CustomerEntity();
+        customer.setId(UUID.randomUUID());
+
+        OrderEntity order = new OrderEntity();
+        order.setId(orderId);
+        order.setTotalAmount(new BigDecimal("500.00"));
+        order.setStatus(OrderStatusEn.CREATED);
+        order.setCustomerEntity(customer);
+
+        when(OrderEntity.findOrderInfoById(orderId)).thenReturn(order);
+        when(CustomerEntity.findByEmail(email)).thenReturn(customer);
+
+        String body = """
+                {
+                    "email": "alice@test.com",
+                    "firstName": "Alice",
+                    "lastName": "Test"
+                }
+                """;
+
+        given()
+                .header("Authorization", "Bearer " + generateCustomerJwt(email))
+                .contentType(ContentType.JSON)
+                .body(body)
+                .when()
+                .patch("/api/orders/{orderId}/contact", orderId)
+                .then()
+                .statusCode(200)
+                .body("contactEmail", equalTo("alice@test.com"));
+    }
+
+    @Test
+    void updateContact_customerJwtOtherCustomersOrder_returns404AndDoesNotMutate()
+    {
+        // A signed-in customer must not be able to rewrite another customer's
+        // in-progress order just by knowing/guessing its ID. Reports as "not
+        // found" (not "forbidden") so the endpoint can't be used to enumerate
+        // which order IDs exist.
+        UUID orderId = UUID.randomUUID();
+        String callerEmail = "alice@test.com";
+
+        CustomerEntity caller = new CustomerEntity();
+        caller.setId(UUID.randomUUID());
+
+        CustomerEntity owner = new CustomerEntity();
+        owner.setId(UUID.randomUUID());
+
+        OrderEntity order = new OrderEntity();
+        order.setId(orderId);
+        order.setTotalAmount(new BigDecimal("500.00"));
+        order.setStatus(OrderStatusEn.CREATED);
+        order.setCustomerEntity(owner);
+
+        when(OrderEntity.findOrderInfoById(orderId)).thenReturn(order);
+        when(CustomerEntity.findByEmail(callerEmail)).thenReturn(caller);
+
+        String body = """
+                {
+                    "email": "attacker@example.com",
+                    "firstName": "New",
+                    "lastName": "Address",
+                    "streetAddress": "999 Redirect Ave"
+                }
+                """;
+
+        given()
+                .header("Authorization", "Bearer " + generateCustomerJwt(callerEmail))
+                .contentType(ContentType.JSON)
+                .body(body)
+                .when()
+                .patch("/api/orders/{orderId}/contact", orderId)
+                .then()
+                .statusCode(404)
+                .body("error", equalTo("Order not found"));
+
+        assertNull(order.getContactEmail());
     }
 
     @Test

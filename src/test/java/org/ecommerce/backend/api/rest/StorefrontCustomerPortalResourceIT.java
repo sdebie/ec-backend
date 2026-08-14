@@ -32,9 +32,6 @@ class StorefrontCustomerPortalResourceIT
     private static final String CUSTOMER_WITH_ADDR_EMAIL = "portal-test@example.com";
     private static final String CUSTOMER_NO_ADDR_EMAIL = "portal-noaddr@example.com";
 
-    private CustomerEntity customerWithAddresses;
-    private CustomerEntity customerWithoutAddresses;
-
     @BeforeEach
     void setUp()
     {
@@ -47,7 +44,7 @@ class StorefrontCustomerPortalResourceIT
         userWithAddr.setPasswordHash("abc123hashedvalue");
         userWithAddr.setActive(true);
 
-        customerWithAddresses = new CustomerEntity();
+        CustomerEntity customerWithAddresses = new CustomerEntity();
         customerWithAddresses.setId(UUID.randomUUID());
         customerWithAddresses.setUser(userWithAddr);
         customerWithAddresses.setFirstName("Jane");
@@ -87,7 +84,7 @@ class StorefrontCustomerPortalResourceIT
         userNoAddr.setPasswordHash(null);
         userNoAddr.setActive(true);
 
-        customerWithoutAddresses = new CustomerEntity();
+        CustomerEntity customerWithoutAddresses = new CustomerEntity();
         customerWithoutAddresses.setId(UUID.randomUUID());
         customerWithoutAddresses.setUser(userNoAddr);
         customerWithoutAddresses.setFirstName("Bob");

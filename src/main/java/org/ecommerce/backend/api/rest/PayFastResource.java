@@ -40,9 +40,6 @@ public class PayFastResource
     PayFastService payFastService;
 
     @Inject
-    OrderService orderService;
-
-    @Inject
     OrderNotificationService orderNotificationService;
 
     @ConfigProperty(name = "payfast.gateway.url")

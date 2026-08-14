@@ -45,9 +45,6 @@ class ContactEnquiryMailerTest
     @Mock
     private MailTemplate contact_enquiry;
 
-    @Spy
-    private ObjectMapper objectMapper = new ObjectMapper();
-
     private static final String CONFIGURED_FROM = "no-reply@store.co.za";
 
     @BeforeEach

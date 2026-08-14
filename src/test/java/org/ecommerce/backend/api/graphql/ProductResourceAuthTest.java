@@ -35,8 +35,6 @@ class ProductResourceAuthTest
     @InjectMock
     ProductService productService;
 
-    private ProductInformationDto mockResult;
-
     @BeforeEach
     void setUp()
     {
@@ -58,7 +56,7 @@ class ProductResourceAuthTest
         variant.setPrices(List.of(price));
         variant.setImages(List.of());
 
-        mockResult = new ProductInformationDto(product, List.of(variant));
+        ProductInformationDto mockResult = new ProductInformationDto(product, List.of(variant));
 
         when(productService.addProductInformation(any())).thenReturn(mockResult);
         when(productService.updateProductInformation(anyString(), any())).thenReturn(mockResult);
