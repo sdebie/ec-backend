@@ -79,6 +79,11 @@ public class PayFastService
         Map<String, String> sortedData = PayFastUtils.sortByPredefinedOrder(stringTreeMap);
         String joinedNameValuePair = PayFastUtils.concatenateNonEmptyNameValuePairs(sortedData);
         String signature = PayFastUtils.generateSecuritySignature(joinedNameValuePair);
+        // The passphrase only salts the signature — PayFast never lists it as a
+        // submitted field, so it must be dropped before the map becomes response
+        // fields, or the merchant secret ships to the browser in the checkout JSON
+        // and the auto-submitted hidden form.
+        sortedData.remove("passphrase");
         return buildFormElements(sortedData, signature);
     }
 
