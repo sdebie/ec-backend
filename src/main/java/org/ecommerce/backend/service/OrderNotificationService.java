@@ -26,10 +26,11 @@ public class OrderNotificationService
     String senderAddress;
 
     /**
-     * Sends an order confirmation email to the customer associated with the given order.
+     * Sends an order confirmation email to the order's recipient (linked customer
+     * or guest checkout contact — see {@link #resolveRecipient}).
      * Uses the Qute {@code order_confirmation} template.
      *
-     * @param order the persisted order entity (must have customerEntity populated)
+     * @param order the persisted order entity
      */
     public void sendConfirmationEmail(OrderEntity order)
     {
@@ -50,22 +51,31 @@ public class OrderNotificationService
     }
 
     /**
-     * Display name for the greeting; falls back to "Guest" when no usable first name.
+     * Display name for the greeting: customer account name first, then the
+     * checkout contact name (guests), then "Guest" when neither is usable.
      */
     String resolveDisplayName(OrderEntity order)
     {
         String firstName = order.getCustomerEntity() != null ? order.getCustomerEntity().getFirstName() : null;
-        return (firstName != null && !firstName.isBlank()) ? firstName : "Guest";
+        if (firstName != null && !firstName.isBlank()) {
+            return firstName;
+        }
+        String contactFirstName = order.getContactFirstName();
+        return (contactFirstName != null && !contactFirstName.isBlank()) ? contactFirstName : "Guest";
     }
 
     /**
-     * Recipient email resolved from the order's customer→user, or null when unavailable.
+     * Recipient email: the order's linked customer→user first, then the
+     * checkout contact email (guests never have a customerEntity), or null
+     * when neither is available.
      */
     String resolveRecipient(OrderEntity order)
     {
-        if (order.getCustomerEntity() == null || order.getCustomerEntity().getUser() == null) {
-            return null;
+        if (order.getCustomerEntity() != null && order.getCustomerEntity().getUser() != null
+                && order.getCustomerEntity().getUser().getEmail() != null
+                && !order.getCustomerEntity().getUser().getEmail().isBlank()) {
+            return order.getCustomerEntity().getUser().getEmail();
         }
-        return order.getCustomerEntity().getUser().getEmail();
+        return order.getContactEmail();
     }
 }

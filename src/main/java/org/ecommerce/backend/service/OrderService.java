@@ -7,6 +7,7 @@ import org.eclipse.microprofile.graphql.GraphQLException;
 import org.ecommerce.backend.exception.UnavailableVariantsException;
 import org.ecommerce.backend.mapper.OrderMapper;
 import org.ecommerce.common.dto.*;
+import org.ecommerce.common.entity.CustomerEntity;
 import org.ecommerce.common.entity.OrderEntity;
 import org.ecommerce.common.entity.OrderItemEntity;
 import org.ecommerce.common.entity.OrderStatusHistoryEntity;
@@ -48,7 +49,7 @@ public class OrderService
     private static final Logger LOG = Logger.getLogger(OrderService.class);
 
     @Transactional
-    public OrderCheckoutResponseDto createOrderFromCart(OrderCreationRequestDto request, CustomerTypeEn customerTier)
+    public OrderCheckoutResponseDto createOrderFromCart(OrderCreationRequestDto request, CustomerTypeEn customerTier, CustomerEntity customer)
     {
         if (request == null || request.getItems() == null || request.getItems().isEmpty()) {
             throw new IllegalArgumentException("Order request must contain at least one item");
@@ -92,6 +93,13 @@ public class OrderService
             throw new UnavailableVariantsException(unavailableVariantIds);
         }
 
+        // 2b. Reserve stock: aggregate requested quantity per variant (a cart can
+        // carry more than one line for the same variant) and decrement atomically,
+        // so concurrent checkouts can never oversell the same unit. A failure here
+        // rolls back the whole @Transactional method, so any decrements already
+        // applied to other variants in this same request are released too.
+        reserveStock(validVariants, validItems);
+
         // 3. Build checkout lines from server-side pricing
         List<OrderCheckoutLineDto> lines = new ArrayList<>();
         BigDecimal subtotal = BigDecimal.ZERO;
@@ -128,6 +136,7 @@ public class OrderService
 
         OrderEntity order = new OrderEntity();
         order.setSessionId(sessionId);
+        order.setCustomerEntity(customer);
         order.setTotalAmount(grandTotal);
         order.setStatus(OrderStatusEn.CREATED);
 
@@ -156,6 +165,37 @@ public class OrderService
         response.setShippingEstimate(shippingEstimate);
         response.setGrandTotal(grandTotal);
         return response;
+    }
+
+    /**
+     * Decrements stock for every valid line, aggregated by variant so duplicate
+     * lines for the same variant are checked against their combined quantity
+     * rather than independently (independently, two lines of 3 each both pass a
+     * "3 <= 5 in stock" check even though 6 together oversells by 1). Each
+     * decrement is an atomic conditional UPDATE — it fails closed if a concurrent
+     * order already consumed the stock — so this is safe under concurrent
+     * checkouts with no application-level locking.
+     */
+    private void reserveStock(List<ProductVariantEntity> validVariants, List<OrderCreationItemDto> validItems)
+    {
+        Map<UUID, Integer> requestedByVariantId = new LinkedHashMap<>();
+        for (int i = 0; i < validVariants.size(); i++) {
+            requestedByVariantId.merge(validVariants.get(i).getId(), validItems.get(i).getQuantity(), Integer::sum);
+        }
+
+        List<String> unavailableVariantIds = new ArrayList<>();
+        for (Map.Entry<UUID, Integer> entry : requestedByVariantId.entrySet()) {
+            long updated = ProductVariantEntity.update(
+                    "stockQuantity = stockQuantity - ?1 where id = ?2 and stockQuantity >= ?1",
+                    entry.getValue(), entry.getKey());
+            if (updated == 0) {
+                unavailableVariantIds.add(entry.getKey().toString());
+            }
+        }
+
+        if (!unavailableVariantIds.isEmpty()) {
+            throw new UnavailableVariantsException(unavailableVariantIds);
+        }
     }
 
     /**

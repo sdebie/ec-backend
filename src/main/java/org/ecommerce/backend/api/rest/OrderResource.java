@@ -1,5 +1,6 @@
 package org.ecommerce.backend.api.rest;
 
+import io.quarkus.security.identity.SecurityIdentity;
 import jakarta.inject.Inject;
 import jakarta.json.JsonString;
 import jakarta.transaction.Transactional;
@@ -11,6 +12,7 @@ import org.ecommerce.backend.exception.UnavailableVariantsException;
 import org.ecommerce.backend.service.OrderService;
 import org.ecommerce.common.dto.OrderCheckoutResponseDto;
 import org.ecommerce.common.dto.OrderCreationRequestDto;
+import org.ecommerce.common.entity.CustomerEntity;
 import org.ecommerce.common.enums.CustomerTypeEn;
 
 import java.util.Map;
@@ -26,6 +28,9 @@ public class OrderResource {
     @Inject
     JsonWebToken jwt;
 
+    @Inject
+    SecurityIdentity securityIdentity;
+
     @POST
     @Transactional
     public Response createOrder(OrderCreationRequestDto request) {
@@ -34,9 +39,10 @@ public class OrderResource {
         }
 
         CustomerTypeEn customerTier = resolveCustomerTier();
+        CustomerEntity customer = resolveCustomer();
 
         try {
-            OrderCheckoutResponseDto response = orderService.createOrderFromCart(request, customerTier);
+            OrderCheckoutResponseDto response = orderService.createOrderFromCart(request, customerTier, customer);
             return Response.status(201).entity(response).build();
         } catch (UnavailableVariantsException e) {
             return Response.status(422)
@@ -66,5 +72,17 @@ public class OrderResource {
 
         String shopperType = claim instanceof JsonString js ? js.getString() : claim.toString();
         return "WHOLESALER".equals(shopperType) ? CustomerTypeEn.WHOLESALER : CustomerTypeEn.RETAILER;
+    }
+
+    /**
+     * Resolves the signed-in customer so the order can be linked to their account.
+     * Mirrors the ownership pattern in OrderContactResource/getOrderDetail; guest
+     * checkout (no "customer" role) deliberately resolves to null.
+     */
+    private CustomerEntity resolveCustomer() {
+        if (securityIdentity == null || !securityIdentity.hasRole("customer")) {
+            return null;
+        }
+        return CustomerEntity.findByEmail(jwt.getSubject());
     }
 }
