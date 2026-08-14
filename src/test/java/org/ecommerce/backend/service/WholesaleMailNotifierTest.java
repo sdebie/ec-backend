@@ -1,7 +1,6 @@
 package org.ecommerce.backend.service;
 
 // Feature: wholesale-application-review-workflow, Property 4: No hardcoded sender or client identity
-// Validates: Requirements 4.3, 4.5, 5.1, 5.3
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.quarkus.mailer.MailTemplate;
@@ -35,7 +34,6 @@ import static org.mockito.Mockito.*;
  * is mocked so we can verify parameters without sending actual SMTP traffic.
  * <p>
  * Feature: wholesale-application-review-workflow, Property 4: No hardcoded sender or client identity
- * Validates: Requirements 4.3, 4.5, 5.1, 5.3
  */
 @ExtendWith(MockitoExtension.class)
 @DisplayName("WholesaleMailNotifier — store name resolution, from-address & recipient guards")

@@ -31,7 +31,6 @@ import static org.mockito.Mockito.*;
  * is mocked so we can verify the parameters passed to the mailer without sending
  * actual SMTP traffic.
  * <p>
- * Validates: Requirements 1.3, 1.4, 2.2, 2.3
  */
 @ExtendWith(MockitoExtension.class)
 @DisplayName("ContactEnquiryMailer — recipient resolution & mail composition")

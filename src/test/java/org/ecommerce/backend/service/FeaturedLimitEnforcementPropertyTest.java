@@ -30,7 +30,6 @@ import static org.mockito.Mockito.*;
  * page(offset, size) call can be verified). The property is quantified by iterating
  * representative limits in each clamp region.
  * <p>
- * Validates: Requirements 4.2
  */
 @QuarkusTest
 class FeaturedLimitEnforcementPropertyTest

@@ -24,7 +24,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
  * This test verifies the idempotence property by simulating the WishlistService logic
  * with an in-memory store that mirrors the Panache entity behavior.
  * <p>
- * Validates: Requirements 4.4
  */
 class WishlistAddPropertyTest
 {

@@ -19,7 +19,6 @@ import static org.junit.jupiter.api.Assertions.*;
  * Property-based tests for the real StorefrontConfigResource.applySections()
  * assembly seam.
  *
- * Validates: Requirements 1.2, 1.3, 1.4
  */
 class StorefrontConfigSectionsPropertyTest {
 
@@ -49,7 +48,6 @@ class StorefrontConfigSectionsPropertyTest {
      * containing only those sections where `enabled` is not explicitly `false`,
      * and no output section SHALL contain the `enabled` field.
      *
-     * Validates: Requirements 1.2
      */
     @Property(tries = 150)
     void enabledFilteringInvariant(
@@ -112,7 +110,6 @@ class StorefrontConfigSectionsPropertyTest {
      * produce an empty array and all other fields in the config response SHALL
      * remain unchanged.
      *
-     * Validates: Requirements 1.3
      */
     @Property(tries = 150)
     void malformedInputFallback(
@@ -146,7 +143,6 @@ class StorefrontConfigSectionsPropertyTest {
      * Additional case: when the setting key is entirely absent from the map,
      * applySections SHALL produce an empty array.
      *
-     * Validates: Requirements 1.3
      */
     @Property(tries = 100)
     void absentKeyProducesEmptyArray(

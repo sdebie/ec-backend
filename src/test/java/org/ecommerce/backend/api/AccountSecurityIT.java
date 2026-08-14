@@ -19,7 +19,6 @@ import static org.junit.jupiter.api.Assertions.*;
  * Integration tests for account security: takeover fix, OAuth-takeover regression,
  * guest checkout reachability, and Google-login shopperType behavior.
  * <p>
- * Validates: Requirements 11.6, 11.7, 11.10, 11.11
  */
 @QuarkusTest
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)

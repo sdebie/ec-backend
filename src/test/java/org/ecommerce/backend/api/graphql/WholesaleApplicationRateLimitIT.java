@@ -25,7 +25,6 @@ import static org.mockito.Mockito.*;
  * Test-profile config: {@code %test.ratelimit.wholesale-application.max=2},
  * {@code %test.ratelimit.wholesale-application.window-seconds=2}.
  * <p>
- * Validates: Requirements 3.1, 3.2, 3.3, 9.3
  */
 @QuarkusTest
 @DisplayName("Wholesale Application Rate Limiting — integration")

@@ -30,7 +30,6 @@ import static org.mockito.Mockito.when;
  * returning null. The property is quantified by iterating many random ids and both
  * boolean flag values.
  * <p>
- * Validates: Requirements 2.3
  */
 @QuarkusTest
 class FeaturedNotFoundPropertyTest

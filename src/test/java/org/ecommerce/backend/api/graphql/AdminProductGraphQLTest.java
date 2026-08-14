@@ -31,7 +31,6 @@ import static org.mockito.Mockito.when;
  * - updateProductStatus mutation
  * - deleteProduct mutation
  * <p>
- * Validates: Requirements 9.1, 9.2, 9.3, 9.4, 9.5
  */
 @QuarkusTest
 class AdminProductGraphQLTest

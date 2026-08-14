@@ -1,7 +1,6 @@
 package org.ecommerce.backend.service;
 
 // Feature: sale-products-page, Task 1.3: Backend integration tests (DB-backed)
-// Validates: Requirements 1.1, 1.2, 1.3, 1.4, 1.6
 
 import io.quarkus.test.TestTransaction;
 import io.quarkus.test.junit.QuarkusTest;

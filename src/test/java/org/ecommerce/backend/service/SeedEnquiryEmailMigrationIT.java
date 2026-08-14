@@ -1,7 +1,6 @@
 package org.ecommerce.backend.service;
 
 // Feature: contact-enquiry-form, Task 19: Migration test
-// Validates: Requirements 1.5
 
 import io.quarkus.test.TestTransaction;
 import io.quarkus.test.junit.QuarkusTest;

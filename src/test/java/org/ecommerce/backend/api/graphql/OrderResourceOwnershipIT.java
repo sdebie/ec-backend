@@ -30,7 +30,6 @@ import static org.mockito.Mockito.when;
  * Tests the full HTTP round-trip through the /api/graphql endpoint with JWT-based
  * authentication and ownership checking.
  * <p>
- * Validates: Requirements 3.1, 3.2, 3.3
  */
 @QuarkusTest
 class OrderResourceOwnershipIT

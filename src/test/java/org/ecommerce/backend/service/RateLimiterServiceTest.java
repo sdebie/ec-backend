@@ -19,7 +19,6 @@ import static org.mockito.Mockito.*;
  * allowance, per-(name, key) isolation, retry-after calculation, the expired-bucket sweep,
  * and "unknown" key still limited.
  *
- * <strong>Validates: Requirements 1, 9.1</strong>
  */
 class RateLimiterServiceTest
 {

@@ -20,7 +20,6 @@ import static org.hamcrest.Matchers.*;
  * 4. Correct-role staff JWT reaches admin endpoints (non-401/403)
  * 5. Anonymous access to public storefront reads succeeds (no over-guarding)
  * <p>
- * Validates: Requirements 11.2, 11.3, 11.4, 11.5, 11.9
  */
 @QuarkusTest
 class AuthorizationIT {

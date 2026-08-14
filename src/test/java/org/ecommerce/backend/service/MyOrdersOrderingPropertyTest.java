@@ -25,7 +25,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * For any list of orders returned by myOrders, for every pair of adjacent elements
  * orders[i] and orders[i+1], orders[i].orderDate >= orders[i+1].orderDate (descending order).
  * <p>
- * Validates: Requirements 2.5
  */
 class MyOrdersOrderingPropertyTest
 {

@@ -2,7 +2,6 @@ package org.ecommerce.backend.api.graphql;
 
 // Feature: catalogue-browsing-experience
 // Task 1.4: Integration tests for the availability filter
-// Validates: Requirements 3.2, 3.4, 3.5, 8.4
 
 import io.quarkus.test.TestTransaction;
 import io.quarkus.test.junit.QuarkusTest;

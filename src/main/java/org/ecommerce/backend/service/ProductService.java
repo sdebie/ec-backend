@@ -431,7 +431,7 @@ public class ProductService
 
     /**
      * Updates product variants and their prices, then removes variants absent from
-     * the payload per the Deletion Policy (Req 9).
+     * the payload per the Deletion Policy.
      */
     private void updateProductVariants(UUID productId, List<ProductVariantDto> newVariants)
     {

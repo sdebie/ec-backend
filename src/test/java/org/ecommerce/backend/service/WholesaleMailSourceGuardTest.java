@@ -1,7 +1,6 @@
 package org.ecommerce.backend.service;
 
 // Feature: wholesale-application-review-workflow, Property 4: No hardcoded sender or client identity
-// Validates: Requirements 4.3, 4.5, 4.6, 5.1, 5.3
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -24,7 +23,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * <p>
  * Feature: wholesale-application-review-workflow
  * Property 4: No hardcoded sender or client identity
- * Validates: Requirements 4.3, 4.5, 4.6, 5.1, 5.3
  */
 @DisplayName("WholesaleMailSourceGuardTest — no hardcoded sender/identity in source")
 class WholesaleMailSourceGuardTest

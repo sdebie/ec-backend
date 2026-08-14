@@ -22,7 +22,6 @@ import static org.junit.jupiter.api.Assertions.*;
  * when a customer JWT is present, the resource checks order.customerEntity.id against
  * customer.id. If they differ, it throws GraphQLException("Order not found").
  * <p>
- * Validates: Requirements 3.1, 3.2
  */
 class OrderDetailOwnershipPropertyTest
 {
@@ -51,7 +50,6 @@ class OrderDetailOwnershipPropertyTest
     }
 
     /**
-     * Validates: Requirements 3.1, 3.2
      * <p>
      * For any pair of distinct UUIDs (authenticatedCustomerId, orderOwnerCustomerId),
      * the ownership gate MUST throw GraphQLException("Order not found").
@@ -80,7 +78,6 @@ class OrderDetailOwnershipPropertyTest
     }
 
     /**
-     * Validates: Requirements 3.1, 3.2
      * <p>
      * For any authenticated customer, if the order has no customer entity (guest order),
      * the ownership gate MUST throw GraphQLException("Order not found").

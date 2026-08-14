@@ -7,7 +7,6 @@ import static org.junit.jupiter.api.Assertions.*;
 /**
  * Unit tests for PasswordHashUtil.
  * <p>
- * Validates: Requirements 5.4, 5.6
  */
 class PasswordHashUtilTest
 {

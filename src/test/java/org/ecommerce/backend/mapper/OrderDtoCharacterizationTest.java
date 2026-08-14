@@ -42,7 +42,6 @@ import static org.mockito.Mockito.when;
  * Both toResponseDto and toDetailDto now produce OrderItemDetailDto with ProductVariantDetailDto
  * (reduced variant: no sku/status/prices; product: ProductDetailDto name-only; images: ProductImageDto).
  *
- * <p>Validates: Requirements 2.4, 4.2</p>
  */
 @QuarkusTest
 @DisplayName("OrderMapper DTO shape characterization")

@@ -28,7 +28,6 @@ import static org.mockito.Mockito.when;
  * Asserts that SUPER_ADMIN and CATALOG_MANAGER can call addProductInformation
  * and updateProductInformation, while ORDER_MANAGER and VIEWER are rejected (403).
  * <p>
- * Validates: Requirements 6.2, 6.4, 8.3
  */
 @QuarkusTest
 class ProductResourceAuthTest

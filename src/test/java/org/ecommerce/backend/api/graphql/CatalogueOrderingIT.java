@@ -1,9 +1,9 @@
 package org.ecommerce.backend.api.graphql;
 
 // Feature: catalogue-ordering-and-pagination
-// Task 4.1: Ordering correctness ITs — Validates: Requirements 1.1, 1.3, 2.4, 3.1, 3.2
-// Task 4.2: Sale-over-base ordering test — Validates: Requirements 2.1, 2.3
-// Task 4.8: Unchanged-behaviour tests — Validates: Requirements 11.1, 11.2, 11.3, 11.4
+// Task 4.1: Ordering correctness ITs
+// Task 4.2: Sale-over-base ordering test
+// Task 4.8: Unchanged-behaviour tests
 
 import io.quarkus.test.TestTransaction;
 import io.quarkus.test.junit.QuarkusTest;
@@ -273,7 +273,6 @@ class CatalogueOrderingIT
 
     // ═══════════════════════════════════════════════════════════════════════════
     // Task 4.2: Sale-over-base ordering test
-    // Validates: Requirements 2.1, 2.3
     //
     // The sale tier wins on EXISTENCE, not on price. If a sale row exists, use
     // its price for sorting — even if the sale price is higher than the base.
@@ -380,7 +379,6 @@ class CatalogueOrderingIT
 
     // ═══════════════════════════════════════════════════════════════════════════
     // Task 4.6: Hydration order-preservation test
-    // Validates: Requirements 5.5
     //
     // Proves the hydration step preserves the ID-selection query's order.
     // Seeds products where price ordering DIFFERS from name ordering — if the
@@ -443,7 +441,6 @@ class CatalogueOrderingIT
 
     // ═══════════════════════════════════════════════════════════════════════════
     // Task 4.5: SQL-level pagination test
-    // Validates: Requirements 5.1, 5.2, 5.3
     //
     // Proves real SQL LIMIT/OFFSET pagination:
     // - At most pageSize items are returned per page request
@@ -535,7 +532,6 @@ class CatalogueOrderingIT
 
     // ═══════════════════════════════════════════════════════════════════════════
     // Task 4.8: Unchanged-behaviour tests
-    // Validates: Requirements 11.1, 11.2, 11.3, 11.4
     //
     // Proves that the refactored query path preserves existing behaviour:
     // (a) Default ordering is name ascending
@@ -772,7 +768,6 @@ class CatalogueOrderingIT
     // ═══════════════════════════════════════════════════════════════════════════
     // Task 4.4: Null-basis ordering (added by audit 2026-07-30 — the task was
     // checked but the test did not exist)
-    // Validates: Requirements 4.4, 4.5
     //
     // A product with no active price row in the requested basis has a NULL sort
     // key and must sort LAST in BOTH directions. Postgres defaults DESC to

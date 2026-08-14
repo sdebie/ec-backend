@@ -1,7 +1,6 @@
 package org.ecommerce.backend.mapper;
 
 // Feature: service-layer-refactor, Property 3: Mapper output preservation (customer admin)
-// Validates: Requirements 1.3, 2.4, 4.2, 4.4
 
 import net.jqwik.api.*;
 import org.ecommerce.common.dto.AdminCustomerDetailDto;
@@ -41,7 +40,6 @@ import static org.junit.jupiter.api.Assertions.*;
  * The reference implementation below is a direct transcription of the deleted inline
  * methods from CustomerAdminService — a field-by-field copy with null-safe navigation.
  * <p>
- * Validates: Requirements 1.3, 2.4, 4.2, 4.4
  */
 public class CustomerAdminMapperOutputPreservationPropertyTest
 {

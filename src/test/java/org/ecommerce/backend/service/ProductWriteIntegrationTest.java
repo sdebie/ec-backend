@@ -1,7 +1,6 @@
 package org.ecommerce.backend.service;
 
 // Feature: admin-product-write, Task 1.3: Backend test — create round-trips + aggregate guard
-// Validates: Requirements 2.2, 2.3, 2.4, 4.1, 8.1, 8.4, 10.1, 10.2
 
 import io.quarkus.test.TestTransaction;
 import io.quarkus.test.junit.QuarkusTest;

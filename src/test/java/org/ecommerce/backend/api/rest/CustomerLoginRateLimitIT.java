@@ -24,7 +24,6 @@ import static org.mockito.Mockito.*;
  * users in the test DB). This proves the limiter correctly short-circuits before credential
  * evaluation when denied.
  * <p>
- * Validates: Requirements 4.1, 4.2, 4.4, 9.2
  */
 @QuarkusTest
 @DisplayName("CustomerLoginRateLimitIT — customer login + Google login rate limiting")

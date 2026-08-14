@@ -1,7 +1,6 @@
 package org.ecommerce.backend.mapper;
 
 // Feature: service-layer-refactor, Property 4 (partial): Import parser row equivalence
-// Validates: Requirements 3.2, 4.1, 4.2
 
 import net.jqwik.api.*;
 import org.apache.commons.csv.CSVFormat;
@@ -27,7 +26,6 @@ import static org.junit.jupiter.api.Assertions.*;
  * The reference implementation is a straightforward transcription of the pre-extraction
  * CSV field extraction, slug normalization, and stock parsing logic.
  * <p>
- * Validates: Requirements 3.2, 4.1, 4.2
  */
 public class ProductImportParserPropertyTest
 {

@@ -1,7 +1,6 @@
 package org.ecommerce.backend.mapper;
 
 // Feature: service-layer-refactor, Property 4: Import decomposition preserves error accumulation (price import)
-// Validates: Requirements 3.2, 4.1, 4.2
 
 import io.quarkus.panache.mock.PanacheMock;
 import io.quarkus.test.InjectMock;
@@ -40,7 +39,6 @@ import static org.mockito.Mockito.when;
  * import files: all-valid, unknown SKU, missing SKU, malformed prices, empty file,
  * and mixed rows.
  *
- * <p><b>Validates: Requirements 3.2, 4.1, 4.2</b>
  */
 @QuarkusTest
 class ProductPriceImportErrorAccumulationEquivalenceTest

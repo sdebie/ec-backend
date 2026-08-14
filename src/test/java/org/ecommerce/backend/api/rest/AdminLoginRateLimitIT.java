@@ -22,7 +22,6 @@ import static org.mockito.Mockito.*;
  * The auth service is mocked so credential evaluation is irrelevant — we are testing
  * that rate limit responses fire correctly and that credentials are NOT evaluated when denied.
  * <p>
- * Validates: Requirements 4.3, 4.4, 9.2
  */
 @QuarkusTest
 @DisplayName("AdminLoginRateLimitIT — admin login rate limiting")

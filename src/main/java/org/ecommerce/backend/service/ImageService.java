@@ -25,7 +25,6 @@ import java.util.stream.Stream;
 @ApplicationScoped
 public class ImageService
 {
-    //private static final Logger LOG = Logger.getLogger(ImageService.class);
     private static final int DEFAULT_PAGE_SIZE = 30;
     private static final int MAX_PAGE_SIZE = 200;
 

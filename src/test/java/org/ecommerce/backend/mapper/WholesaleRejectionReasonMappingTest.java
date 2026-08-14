@@ -1,7 +1,6 @@
 package org.ecommerce.backend.mapper;
 
 // Feature: wholesale-application-review-workflow, Task 1.2
-// Validates: Requirements 1.2, 3.2
 
 import org.ecommerce.common.dto.AdminCustomerDetailDto;
 import org.ecommerce.common.dto.WholesaleApplicationDetailsDto;
@@ -24,7 +23,6 @@ import static org.junit.jupiter.api.Assertions.*;
  *   <li>Customer-admin detail: {@link CustomerAdminMapper#toDetailDto} (delegates to WholesaleMapper)</li>
  * </ol>
  * <p>
- * Validates: Requirements 1.2, 3.2
  */
 class WholesaleRejectionReasonMappingTest
 {

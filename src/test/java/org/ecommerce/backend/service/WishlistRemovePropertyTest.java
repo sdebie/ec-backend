@@ -21,7 +21,6 @@ import static org.junit.jupiter.api.Assertions.*;
  * This test verifies the idempotence property by simulating the WishlistService
  * removeFromWishlist logic with an in-memory store that mirrors Panache entity behavior.
  * <p>
- * Validates: Requirements 4.5
  */
 class WishlistRemovePropertyTest
 {

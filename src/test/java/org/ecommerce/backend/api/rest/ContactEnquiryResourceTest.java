@@ -21,7 +21,6 @@ import static org.mockito.Mockito.*;
  * via REST-assured. The mailer and rate-limiter are mocked at the CDI bean level so we
  * can verify mail invocation without SMTP and control rate-limit behaviour.
  * <p>
- * Validates: Requirements 2.1, 2.4, 2.5, 3.1, 3.2, 3.3, 1.3, 1.4
  */
 @QuarkusTest
 @DisplayName("ContactEnquiryResource — integration tests")

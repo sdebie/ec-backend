@@ -20,7 +20,6 @@ import static org.mockito.Mockito.when;
  * Unit tests for the public storefront testimonial endpoint.
  * Verifies response codes and DTO shape without Quarkus runtime.
  *
- * Validates: Requirements 2.1, 2.2
  */
 class StorefrontTestimonialResourceTest
 {

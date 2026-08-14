@@ -27,7 +27,6 @@ import static org.mockito.Mockito.when;
  * Role enforcement (403) is tested in the integration test since @RolesAllowed
  * requires the JAX-RS security interceptor.
  *
- * Validates: Requirements 5.1, 5.2
  */
 class AdminTestimonialResourceTest
 {

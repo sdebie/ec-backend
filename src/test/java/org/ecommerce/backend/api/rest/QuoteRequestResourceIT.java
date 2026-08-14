@@ -25,7 +25,6 @@ import static org.mockito.Mockito.*;
  * via REST-assured. QuoteRequestService and RateLimiterService are mocked at the CDI
  * bean level to isolate endpoint behaviour.
  * <p>
- * Validates: Requirements 4.2, 4.3, 4.4, 4.5, 4.6, 5.1
  */
 @QuarkusTest
 @DisplayName("QuoteRequestResource — integration tests")

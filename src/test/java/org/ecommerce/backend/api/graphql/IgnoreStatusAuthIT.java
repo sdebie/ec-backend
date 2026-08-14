@@ -2,7 +2,6 @@ package org.ecommerce.backend.api.graphql;
 
 // Feature: catalogue-ordering-and-pagination
 // Task 4.9: ignoreStatus authorisation ITs
-// Validates: Requirements 12.2, 12.5, 12.6
 
 import io.quarkus.test.junit.QuarkusTest;
 import io.smallrye.jwt.build.Jwt;

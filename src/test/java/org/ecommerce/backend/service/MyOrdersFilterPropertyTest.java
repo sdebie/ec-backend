@@ -25,7 +25,6 @@ import static org.junit.jupiter.api.Assertions.*;
  * order.customerEntity.id equals the authenticated customer's ID — no order belonging
  * to a different customer is ever included.
  * <p>
- * Validates: Requirements 2.4
  */
 class MyOrdersFilterPropertyTest
 {

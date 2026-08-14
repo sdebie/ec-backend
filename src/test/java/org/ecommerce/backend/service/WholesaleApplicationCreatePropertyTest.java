@@ -4,7 +4,6 @@ package org.ecommerce.backend.service;
 // Feature: wholesale-application-enhancements, Property 5: Partial unique constraint permits multiple null account_email values
 // Feature: wholesale-application-enhancements, Property 6: applicantEmail and accountEmail are independently stored
 // Feature: wholesale-application-enhancements, Property 7: Created applications default to PENDING status
-// Validates: Requirements 4.1, 4.2, 4.5, 4.6, 4.7, 5.1, 7.1
 
 import io.quarkus.hibernate.orm.panache.PanacheEntityBase;
 import io.quarkus.hibernate.orm.panache.PanacheQuery;
@@ -42,7 +41,6 @@ import static org.mockito.Mockito.when;
  * Uses @QuarkusTest with PanacheMock to properly mock Panache entity methods.
  * Property-based testing is achieved by running 100 iterations with random inputs.
  * <p>
- * Validates: Requirements 4.1, 4.2, 4.5, 4.6, 4.7, 5.1, 7.1
  */
 @QuarkusTest
 @Tag("Feature: wholesale-application-enhancements")
@@ -82,7 +80,6 @@ public class WholesaleApplicationCreatePropertyTest
      * createWholesaleApplication SHALL have each mapped field equal to the
      * normalized (trimmed, null-if-blank) input value.
      * <p>
-     * Validates: Requirements 4.1, 4.2
      */
     @Test
     @Tag("Property 3: DTO-to-entity field mapping preserves values")
@@ -137,7 +134,6 @@ public class WholesaleApplicationCreatePropertyTest
      * both applications SHALL persist successfully without unique constraint violation.
      * The service skips the duplicate check entirely when account_email is null.
      * <p>
-     * Validates: Requirements 4.5
      */
     @Test
     @Tag("Property 5: Partial unique constraint permits multiple null account_email values")
@@ -162,7 +158,6 @@ public class WholesaleApplicationCreatePropertyTest
      * For any two inputs where account_email is the same non-null value, the second
      * SHALL be rejected with an IllegalArgumentException.
      * <p>
-     * Validates: Requirements 4.5
      */
     @Test
     @Tag("Property 5: Partial unique constraint permits multiple null account_email values")
@@ -207,7 +202,6 @@ public class WholesaleApplicationCreatePropertyTest
      * each is stored in its own column without cross-contamination.
      * We verify via the returned DTO (toDto maps entity.accountEmail → getEmail()).
      * <p>
-     * Validates: Requirements 4.6
      */
     @Test
     @Tag("Property 6: applicantEmail and accountEmail independently stored")
@@ -248,7 +242,6 @@ public class WholesaleApplicationCreatePropertyTest
      * explicitly supply status = APPROVED/REJECTED/CONVERTED — the resulting entity
      * SHALL have status = PENDING.
      * <p>
-     * Validates: Requirements 4.7, 5.1, 7.1
      */
     @Test
     @Tag("Property 7: Created applications default to PENDING status")

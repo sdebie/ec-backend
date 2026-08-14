@@ -20,7 +20,6 @@ import static io.restassured.RestAssured.given;
  * Uses IP keys unique to this class so the shared application-scoped bucket map never
  * collides with other test classes running in the same Quarkus instance.
  *
- * <strong>Validates: Requirements 1.2, 6.1, 7.1, 9.2 (real-bean path)</strong>
  */
 @QuarkusTest
 class RateLimitConfigBindingIT {

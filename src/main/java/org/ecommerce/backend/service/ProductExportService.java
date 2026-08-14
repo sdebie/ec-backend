@@ -48,7 +48,6 @@ public class ProductExportService
             LEFT JOIN brands b ON p.brand_id = b.id
             """;
 
-    //"sku,retail_price,wholesale_price";
     private static final String EXPORT_PRD_PRICE_SQL = """
             SELECT
                 v.sku,

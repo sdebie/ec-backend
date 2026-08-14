@@ -27,7 +27,6 @@ import static org.junit.jupiter.api.Assertions.*;
  * This test validates the password length validation logic in CustomerPortalService.changePassword()
  * by mocking the static entity finder and testing the validation gate directly.
  * <p>
- * Validates: Requirements 5.5
  */
 class PasswordValidationPropertyTest
 {
@@ -72,7 +71,6 @@ class PasswordValidationPropertyTest
     }
 
     /**
-     * Validates: Requirements 5.5
      * <p>
      * For any new password with length < 8, changePassword SHALL throw
      * a WebApplicationException with status 400 and message "Password must be at least 8 characters".
@@ -88,7 +86,6 @@ class PasswordValidationPropertyTest
     }
 
     /**
-     * Validates: Requirements 5.5
      * <p>
      * For any new password with length >= 8 (given correct current password),
      * changePassword SHALL accept it without throwing an exception.
@@ -104,7 +101,6 @@ class PasswordValidationPropertyTest
     }
 
     /**
-     * Validates: Requirements 5.5
      * <p>
      * Null new password should be rejected with HTTP 400.
      */

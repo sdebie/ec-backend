@@ -1,7 +1,6 @@
 package org.ecommerce.backend.mapper;
 
 // Feature: service-layer-refactor, Property 3: Mapper output preservation (customer admin)
-// Validates: Requirements 1.3, 2.4, 4.2, 4.4
 
 import io.quarkus.hibernate.orm.panache.PanacheEntityBase;
 import io.quarkus.hibernate.orm.panache.PanacheQuery;
@@ -39,7 +38,6 @@ import static org.mockito.Mockito.when;
  * - Customer with null user (email/registeredAt should be null)
  * - Customer with null status and shopperType
  * <p>
- * Validates: Requirements 1.3, 2.4, 4.2, 4.4
  */
 @QuarkusTest
 class CustomerAdminMapperQueryBearingIT

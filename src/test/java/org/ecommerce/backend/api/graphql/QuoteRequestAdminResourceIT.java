@@ -33,7 +33,6 @@ import static org.mockito.Mockito.when;
  * - Transition validation via the updateQuoteRequestStatus mutation
  * - Variant-deleted detail still resolves from snapshots
  * <p>
- * Validates: Requirements 6.1, 6.2, 6.3, 6.4
  */
 @QuarkusTest
 @DisplayName("QuoteRequestAdminResource — integration tests")

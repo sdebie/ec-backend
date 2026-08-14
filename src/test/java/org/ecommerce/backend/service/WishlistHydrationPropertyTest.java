@@ -73,7 +73,6 @@ class WishlistHydrationPropertyTest
      * - productActive = product.status == ACTIVE
      * - inStock = productActive AND variant.status == ACTIVE AND stockQuantity != null AND stockQuantity > 0
      * <p>
-     * Validates: Requirements 1.2, 1.3
      */
     @Property(tries = 200)
     void flagDerivationMatchesTruthTable(@ForAll("variantScenarios") VariantScenario scenario)

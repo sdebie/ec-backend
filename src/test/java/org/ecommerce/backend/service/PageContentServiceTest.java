@@ -20,7 +20,6 @@ import static org.mockito.Mockito.when;
  * Unit tests for {@link PageContentService}.
  * Uses Mockito mocking for PageContentRepository and HtmlSanitizer.
  * <p>
- * Validates: Requirements 3.3, 3.4, 3.7, 5.5
  */
 @QuarkusTest
 class PageContentServiceTest

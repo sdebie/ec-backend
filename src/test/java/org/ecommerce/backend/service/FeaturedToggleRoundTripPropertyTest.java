@@ -29,7 +29,6 @@ import static org.mockito.Mockito.*;
  * iterating every product status and a range of pre-existing featured counts (kept below
  * the cap so the featuring step succeeds).
  * <p>
- * Validates: Requirements 1.4, 2.1, 2.2
  */
 @QuarkusTest
 class FeaturedToggleRoundTripPropertyTest

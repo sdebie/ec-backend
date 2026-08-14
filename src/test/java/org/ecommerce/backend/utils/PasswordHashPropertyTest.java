@@ -14,7 +14,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * SHALL return true. For any two distinct passwords a and b,
  * PasswordHashUtil.verify(a, PasswordHashUtil.hash(b)) SHALL return false.
  * <p>
- * Validates: Requirements 5.4, 5.6
  */
 class PasswordHashPropertyTest
 {

@@ -1,7 +1,6 @@
 package org.ecommerce.backend.service;
 
 // Feature: admin-product-write, Task 2.3: Backend test — edit persists every change + Deletion Policy
-// Validates: Requirements 3.2, 3.3, 3.4, 4.2, 9.1, 9.2, 9.3, 9.6, 8.1
 
 import io.quarkus.test.TestTransaction;
 import io.quarkus.test.junit.QuarkusTest;

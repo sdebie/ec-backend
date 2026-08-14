@@ -1,7 +1,6 @@
 package org.ecommerce.backend.service;
 
 // Feature: service-layer-refactor, Task 1.1: Characterization tests for product list-item mapping
-// Validates: Requirements 4.2, 4.4
 
 import io.quarkus.test.TestTransaction;
 import io.quarkus.test.junit.QuarkusTest;

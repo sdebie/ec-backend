@@ -134,7 +134,7 @@ public class CustomerResource
         String clientIp = ClientIpUtils.resolveClientIp(cfConnectingIp, xForwardedFor, xRealIp);
 
         // Chained-check: IP limiter first; if denied, email counter is NOT incremented.
-        // Silent denial — return the identical generic response to prevent enumeration (Req 5.2).
+        // Silent denial — return the identical generic response to prevent enumeration.
         RateLimitDecision ipDecision = rateLimiterService.check("password-reset-request", clientIp, 5, 3600);
         if (!ipDecision.allowed()) {
             return Response.ok("If an account exists, a reset code has been sent.").build();

@@ -25,7 +25,6 @@ import static org.mockito.Mockito.when;
 
 /**
  * Integration test for the myOrders GraphQL query.
- * Validates: Requirements 2.1, 2.2, 2.3, 2.4, 2.5
  */
 @QuarkusTest
 class OrderResourceMyOrdersIT

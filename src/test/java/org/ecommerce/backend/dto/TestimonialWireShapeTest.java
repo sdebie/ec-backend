@@ -18,7 +18,6 @@ import static org.hamcrest.Matchers.*;
  * Wire-shape test: pins the JSON field as "published" (NOT "isPublished").
  * Guards the isX boolean record-component naming decision.
  *
- * Validates: Requirements 2.1, 2.2, 5.1, 5.2
  */
 class TestimonialWireShapeTest
 {

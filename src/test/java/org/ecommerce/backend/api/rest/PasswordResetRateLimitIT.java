@@ -20,7 +20,6 @@ import static org.mockito.Mockito.*;
 /**
  * Integration tests for password reset rate limiting.
  * <p>
- * Validates: Requirements 5.1, 5.2, 9.3, 9.4
  * <p>
  * Key assertions:
  * <ul>

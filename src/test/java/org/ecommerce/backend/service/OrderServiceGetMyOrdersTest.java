@@ -29,7 +29,6 @@ import static org.mockito.Mockito.when;
 /**
  * Unit tests for {@link OrderService#getMyOrders(UUID)}.
  * <p>
- * Validates: Requirements 2.3, 2.4, 2.5
  */
 @QuarkusTest
 class OrderServiceGetMyOrdersTest

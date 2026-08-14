@@ -1,7 +1,6 @@
 package org.ecommerce.backend.mapper;
 
 // Feature: service-layer-refactor, Property 4: Import decomposition preserves error accumulation
-// Validates: Requirements 3.2, 4.1, 4.2
 
 import org.ecommerce.backend.mapper.ProductImportParser.StagedProductCsvRow;
 import org.ecommerce.common.entity.*;
@@ -32,7 +31,6 @@ import static org.mockito.Mockito.when;
  * It covers representative import files: all-valid, some-invalid, malformed,
  * unknown-SKU, and empty.
  *
- * <p><b>Validates: Requirements 3.2, 4.1, 4.2</b>
  */
 class ProductImportErrorAccumulationEquivalenceTest
 {

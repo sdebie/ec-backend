@@ -35,7 +35,6 @@ import static org.junit.jupiter.api.Assertions.*;
  *   <li>Nonexistent ID → omitted from response</li>
  * </ul>
  * <p>
- * Validates: Requirements 1.2, 1.3
  */
 class WishlistHydrationFlagsTest
 {

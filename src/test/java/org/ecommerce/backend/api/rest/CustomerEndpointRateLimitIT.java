@@ -21,7 +21,6 @@ import static org.mockito.Mockito.*;
  * Tests verify that 429 + Retry-After is returned on denial and that requests succeed
  * after the window resets (simulated by toggling the mock).
  * <p>
- * Validates: Requirements 6.1, 6.2, 6.3, 9.2
  */
 @QuarkusTest
 @DisplayName("CustomerEndpointRateLimitIT — lookup and register rate limiting")
