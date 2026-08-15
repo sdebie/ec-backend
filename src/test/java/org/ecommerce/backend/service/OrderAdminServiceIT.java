@@ -136,9 +136,14 @@ class OrderAdminServiceIT
         em.clear();
     }
 
-    private PageResponse<AdminOrderListItemDto> listWindow(int pageIndex, int pageSize, String status)
+    private PageResponse<AdminOrderListItemDto> listWindow(int pageIndex, int pageSize, String paymentState)
     {
-        return orderAdminService.adminOrderList(pageIndex, pageSize, status, WINDOW_FROM, WINDOW_TO);
+        return orderAdminService.adminOrderList(pageIndex, pageSize, paymentState, null, WINDOW_FROM, WINDOW_TO);
+    }
+
+    private PageResponse<AdminOrderListItemDto> listWindow(String paymentState, String fulfilmentState)
+    {
+        return orderAdminService.adminOrderList(0, 10, paymentState, fulfilmentState, WINDOW_FROM, WINDOW_TO);
     }
 
     // ── List ────────────────────────────────────────────────────────────────
@@ -184,26 +189,61 @@ class OrderAdminServiceIT
 
     @Test
     @TestTransaction
-    @DisplayName("narrows the window by status, and counts only what the filter matches")
-    void adminOrderList_withStatusFilter_returnsOnlyThatStatus()
+    @DisplayName("narrows the window by payment state, and counts only what the filter matches")
+    void adminOrderList_withPaymentFilter_returnsOnlyThatState()
     {
         newOrder(OrderStatusEn.PAID, new BigDecimal("10.00"), WINDOW_DAY);
-        newOrder(OrderStatusEn.PAID, new BigDecimal("20.00"), WINDOW_DAY);
-        newOrder(OrderStatusEn.CANCELLED, new BigDecimal("30.00"), WINDOW_DAY);
+        newOrder(OrderStatusEn.PROCESSING, new BigDecimal("20.00"), WINDOW_DAY);
+        newOrder(OrderStatusEn.ADMIN_CANCELED, new BigDecimal("30.00"), WINDOW_DAY);
         syncAndClear();
 
         assertEquals(3, listWindow(0, 10, null).getTotalElements());
+        // PAID and PROCESSING are different statuses but the same answer to "has the money
+        // arrived?", which is the point of filtering on the facet rather than the status.
         assertEquals(2, listWindow(0, 10, "PAID").getTotalElements());
         assertEquals(1, listWindow(0, 10, "CANCELLED").getTotalElements());
     }
 
     @Test
     @TestTransaction
-    @DisplayName("treats the UI's ALL sentinel as no status filter at all")
+    @DisplayName("intersects the two facets, so paid-but-unpicked is findable on its own")
+    void adminOrderList_bothFacets_intersects()
+    {
+        newOrder(OrderStatusEn.PAID, new BigDecimal("10.00"), WINDOW_DAY);
+        newOrder(OrderStatusEn.PROCESSING, new BigDecimal("20.00"), WINDOW_DAY);
+        newOrder(OrderStatusEn.DELIVERED, new BigDecimal("30.00"), WINDOW_DAY);
+        syncAndClear();
+
+        assertEquals(3, listWindow("PAID", null).getTotalElements(), "all three are paid");
+        assertEquals(1, listWindow("PAID", "NOT_STARTED").getTotalElements(), "only the unpicked one");
+        assertEquals(1, listWindow("PAID", "PROCESSING").getTotalElements());
+        assertEquals(1, listWindow("PAID", "COMPLETED").getTotalElements());
+    }
+
+    /**
+     * A pair with no overlap is a valid question with no answers, not a query — and
+     * `status in ()` is not valid SQL, so it must never reach the database.
+     */
+    @Test
+    @TestTransaction
+    @DisplayName("returns an empty page when the two facets cannot overlap")
+    void adminOrderList_contradictoryFacets_returnsEmpty()
+    {
+        newOrder(OrderStatusEn.PAID, new BigDecimal("10.00"), WINDOW_DAY);
+        syncAndClear();
+
+        PageResponse<AdminOrderListItemDto> page = listWindow("AWAITING", "COMPLETED");
+        assertEquals(0, page.getTotalElements());
+        assertTrue(page.getContent().isEmpty());
+    }
+
+    @Test
+    @TestTransaction
+    @DisplayName("treats the UI's ALL sentinel as no filter at all")
     void adminOrderList_allSentinel_doesNotFilter()
     {
         newOrder(OrderStatusEn.PAID, new BigDecimal("10.00"), WINDOW_DAY);
-        newOrder(OrderStatusEn.CANCELLED, new BigDecimal("20.00"), WINDOW_DAY);
+        newOrder(OrderStatusEn.ADMIN_CANCELED, new BigDecimal("20.00"), WINDOW_DAY);
         syncAndClear();
 
         assertEquals(2, listWindow(0, 10, "ALL").getTotalElements());
@@ -248,16 +288,18 @@ class OrderAdminServiceIT
     void adminOrderList_malformedDate_throws()
     {
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
-                () -> orderAdminService.adminOrderList(0, 10, null, "15-03-2001", null));
+                () -> orderAdminService.adminOrderList(0, 10, null, null, "15-03-2001", null));
         assertTrue(ex.getMessage().contains("invalid fromDate"), ex.getMessage());
     }
 
     @Test
-    @DisplayName("rejects a status that is not an OrderStatusEn value")
-    void adminOrderList_unknownStatus_throws()
+    @DisplayName("rejects a facet value that is not one of its enum's constants")
+    void adminOrderList_unknownFacet_throws()
     {
         assertThrows(IllegalArgumentException.class,
-                () -> orderAdminService.adminOrderList(0, 10, "SHIPPED", null, null));
+                () -> orderAdminService.adminOrderList(0, 10, "SHIPPED", null, null, null));
+        assertThrows(IllegalArgumentException.class,
+                () -> orderAdminService.adminOrderList(0, 10, null, "SHIPPED", null, null));
     }
 
     // ── Detail ──────────────────────────────────────────────────────────────

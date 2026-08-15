@@ -35,11 +35,12 @@ public class OrderAdminResource
     public PageResponse<AdminOrderListItemDto> adminOrderList(
             @Name("pageIndex") @DefaultValue("0") int pageIndex,
             @Name("pageSize") @DefaultValue("10") int pageSize,
-            @Name("status") String status,
+            @Name("paymentState") String paymentState,
+            @Name("fulfilmentState") String fulfilmentState,
             @Name("fromDate") String fromDate,
             @Name("toDate") String toDate)
     {
-        return orderAdminService.adminOrderList(pageIndex, pageSize, status, fromDate, toDate);
+        return orderAdminService.adminOrderList(pageIndex, pageSize, paymentState, fulfilmentState, fromDate, toDate);
     }
 
     @Query("adminOrder")

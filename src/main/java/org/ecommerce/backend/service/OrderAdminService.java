@@ -16,6 +16,11 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeParseException;
 import java.util.List;
+import org.ecommerce.common.enums.FulfilmentState;
+import org.ecommerce.common.enums.PaymentState;
+import java.util.function.Function;
+import java.util.EnumSet;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -40,13 +45,20 @@ public class OrderAdminService
     OrderService orderService;
 
     /**
-     * @param status   an {@link OrderStatusEn} name, or null/"ALL" for every status
-     * @param fromDate inclusive ISO date (yyyy-MM-dd), or null
-     * @param toDate   inclusive ISO date (yyyy-MM-dd), or null
+     * One order carries one status, but staff filter on two separate questions of it — has
+     * the money arrived, and where are the goods. Each facet resolves back to the statuses
+     * that report it, and supplying both intersects the two sets.
+     *
+     * @param paymentState    a {@link PaymentState} name, or null/"ALL" for any
+     * @param fulfilmentState a {@link FulfilmentState} name, or null/"ALL" for any
+     * @param fromDate        inclusive ISO date (yyyy-MM-dd), or null
+     * @param toDate          inclusive ISO date (yyyy-MM-dd), or null
      */
-    public PageResponse<AdminOrderListItemDto> adminOrderList(int pageIndex, int pageSize, String status, String fromDate, String toDate)
+    public PageResponse<AdminOrderListItemDto> adminOrderList(int pageIndex, int pageSize,
+                                                              String paymentState, String fulfilmentState,
+                                                              String fromDate, String toDate)
     {
-        OrderStatusEn statusFilter = parseStatus(status);
+        Set<OrderStatusEn> statusFilter = resolveStatuses(paymentState, fulfilmentState);
 
         LocalDate fromDay = parseDate(fromDate, "fromDate");
         LocalDateTime from = fromDay == null ? null : fromDay.atStartOfDay();
@@ -59,6 +71,12 @@ public class OrderAdminService
         PageRequest pageRequest = new PageRequest();
         pageRequest.setPageIndex(pageIndex);
         pageRequest.setPageSize(pageSize);
+
+        // An empty set means the two facets admit nothing between them, which is a valid
+        // question with no answers — not a query. `status in ()` is not valid SQL.
+        if (statusFilter != null && statusFilter.isEmpty()) {
+            return new PageResponse<>(List.of(), 0, 0, pageRequest.getPageIndex(), pageRequest.getPageSize());
+        }
 
         List<AdminOrderListItemDto> content = orderRepository
                 .findForAdmin(statusFilter, from, toExclusive, pageRequest)
@@ -94,15 +112,37 @@ public class OrderAdminService
         return orderAdminMapper.toDetailDto(order, totals, history);
     }
 
-    private OrderStatusEn parseStatus(String status)
+    /**
+     * The statuses both facets admit, or null when neither is set and every status matches.
+     * Returns an empty set when the two do not overlap — a filter pair with no answers.
+     */
+    private Set<OrderStatusEn> resolveStatuses(String paymentState, String fulfilmentState)
     {
-        if (status == null || status.isBlank() || ALL.equals(status)) {
+        Set<OrderStatusEn> byPayment = parseFacet(paymentState, PaymentState.class, PaymentState::statusesFor);
+        Set<OrderStatusEn> byFulfilment = parseFacet(fulfilmentState, FulfilmentState.class, FulfilmentState::statusesFor);
+
+        if (byPayment == null) {
+            return byFulfilment;
+        }
+        if (byFulfilment == null) {
+            return byPayment;
+        }
+
+        Set<OrderStatusEn> both = EnumSet.copyOf(byPayment);
+        both.retainAll(byFulfilment);
+        return both;
+    }
+
+    private <E extends Enum<E>> Set<OrderStatusEn> parseFacet(String value, Class<E> type,
+                                                              Function<E, Set<OrderStatusEn>> statusesFor)
+    {
+        if (value == null || value.isBlank() || ALL.equals(value)) {
             return null;
         }
         try {
-            return OrderStatusEn.valueOf(status);
+            return statusesFor.apply(Enum.valueOf(type, value));
         } catch (IllegalArgumentException e) {
-            throw new IllegalArgumentException("invalid status: " + status);
+            throw new IllegalArgumentException("invalid " + type.getSimpleName() + ": " + value);
         }
     }
 
