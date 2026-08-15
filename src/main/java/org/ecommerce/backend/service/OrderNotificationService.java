@@ -4,8 +4,11 @@ import io.quarkus.mailer.MailTemplate;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.ecommerce.backend.exception.RecipientNotConfiguredException;
 import org.ecommerce.common.entity.OrderEntity;
 import org.jboss.logging.Logger;
+
+import java.math.BigDecimal;
 
 /**
  * Dedicated CDI component for order-related email notifications.
@@ -21,6 +24,12 @@ public class OrderNotificationService
 
     @Inject
     MailTemplate order_confirmation;
+
+    @Inject
+    MailTemplate order_payment_anomaly;
+
+    @Inject
+    ContactEnquiryMailer contactEnquiryMailer;
 
     @ConfigProperty(name = "quarkus.mailer.from")
     String senderAddress;
@@ -47,6 +56,42 @@ public class OrderNotificationService
                 .subscribe().with(
                         success -> LOG.info("Order confirmation email sent to: " + customerEmail),
                         failure -> LOG.error("Order confirmation email failed for: " + customerEmail, failure)
+                );
+    }
+
+    /**
+     * Alerts staff that PayFast confirmed a payment for an order that is no longer
+     * CREATED — the order's stock may no longer be reserved for it (most likely the
+     * abandoned-order release job already restored it, or a staff member cancelled
+     * the order). Real money moved and the order disagrees; this needs a human to
+     * reconcile, so it is never a silent drop.
+     * <p>
+     * Recipient reuses {@link ContactEnquiryMailer#resolveRecipient()} — the same
+     * admin enquiry mailbox {@link WholesaleMailNotifier} alerts staff through — since
+     * that is the only staff-facing notification channel this backend has.
+     */
+    public void sendPaymentAnomalyAlert(OrderEntity order, BigDecimal amountReceived)
+    {
+        String recipient;
+        try {
+            recipient = contactEnquiryMailer.resolveRecipient();
+        } catch (RecipientNotConfiguredException e) {
+            LOG.errorf("Payment anomaly alert for order %s could not be sent — no recipient configured: %s",
+                    order.getId(), e.getMessage());
+            return;
+        }
+
+        order_payment_anomaly.to(recipient)
+                .from(senderAddress)
+                .subject("Payment received for order #" + order.getId() + " that is no longer active")
+                .data("orderId", order.getId())
+                .data("orderStatus", order.getStatus())
+                .data("amountReceived", amountReceived)
+                .data("orderTotal", order.getTotalAmount())
+                .send()
+                .subscribe().with(
+                        success -> LOG.infof("Payment anomaly alert delivered for order %s to %s", order.getId(), recipient),
+                        failure -> LOG.errorf(failure, "Payment anomaly alert failed for order %s to %s", order.getId(), recipient)
                 );
     }
 

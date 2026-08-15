@@ -50,6 +50,19 @@ public class AbandonedOrderReleaseService
 
     private void releaseOrder(OrderEntity order)
     {
+        // Claim the order first: an atomic conditional UPDATE, exactly like the stock
+        // decrement itself. The prior SELECT only filtered on status — by the time we
+        // get here, an ITN or a staff action could have already moved it off CREATED.
+        // Zero rows affected means we lost that race and must not touch its stock;
+        // whoever did change it now owns what happens to the stock it was holding.
+        long claimed = OrderEntity.update("status = ?1 where id = ?2 and status = ?3",
+                OrderStatusEn.SYSTEM_CANCELED, order.getId(), OrderStatusEn.CREATED);
+        if (claimed == 0) {
+            LOG.debugf("Skipped releasing order %s: its status changed concurrently", order.getId());
+            return;
+        }
+        order.setStatus(OrderStatusEn.SYSTEM_CANCELED);
+
         for (OrderItemEntity item : order.getItems()) {
             if (item.getVariant() == null || item.getQuantity() == null) {
                 continue;
@@ -57,9 +70,6 @@ public class AbandonedOrderReleaseService
             ProductVariantEntity.update("stockQuantity = stockQuantity + ?1 where id = ?2",
                     item.getQuantity(), item.getVariant().getId());
         }
-
-        order.setStatus(OrderStatusEn.SYSTEM_CANCELED);
-        order.persist();
 
         OrderStatusHistoryEntity history = new OrderStatusHistoryEntity();
         history.setOrder(order);

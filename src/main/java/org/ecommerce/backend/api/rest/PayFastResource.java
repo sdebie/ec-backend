@@ -169,12 +169,19 @@ public class PayFastResource
                         LOG.warn("ITN rejected: PayFast server confirmation failed for order " + orderId);
                         return Response.status(Response.Status.UNAUTHORIZED).build();
                     } else {
-                        order.setStatus(OrderStatusEn.PAID);
-                        // Panache will auto-dirty-check within @Transactional, but call persist() to be explicit
-                        order.persist();
-                        LOG.debug("Updated Order " + orderId + " to PAID (entity update)");
-
-                        orderNotificationService.sendConfirmationEmail(order);
+                        // Atomic conditional claim, mirroring the stock decrement's own
+                        // pattern: the order could have been cancelled by the abandoned-order
+                        // release job (or a staff action) between the read above and this
+                        // write. A plain setStatus()+persist() would silently clobber that.
+                        long claimed = OrderEntity.update("status = ?1 where id = ?2 and status = ?3",
+                                OrderStatusEn.PAID, orderId, OrderStatusEn.CREATED);
+                        if (claimed == 1) {
+                            order.setStatus(OrderStatusEn.PAID);
+                            LOG.debug("Updated Order " + orderId + " to PAID");
+                            orderNotificationService.sendConfirmationEmail(order);
+                        } else {
+                            handlePaidButNoLongerCreated(orderId, order, amountGross);
+                        }
                     }
                 } else {
                     LOG.warn("Order not found for m_payment_id=" + orderId + "; no update performed");
@@ -187,6 +194,31 @@ public class PayFastResource
         }
 
         return Response.ok().build();
+    }
+
+    /**
+     * PayFast has confirmed a real payment, but the order is no longer CREATED — the
+     * atomic claim above lost. Re-reads the current status to tell apart the two
+     * possible causes: a concurrent duplicate ITN already won (already PAID — the
+     * same harmless replay case the fast-path above usually catches, just arrived
+     * out of order) versus anything else (most likely the abandoned-order release
+     * job cancelled it and gave its stock back before this payment confirmation
+     * arrived). The second case is money received against stock that may no longer
+     * be reserved for it — that needs a human to reconcile, not a silent drop.
+     */
+    private void handlePaidButNoLongerCreated(UUID orderId, OrderEntity staleOrder, BigDecimal amountGross)
+    {
+        OrderEntity current = OrderEntity.findById(orderId);
+        OrderStatusEn currentStatus = current != null ? current.getStatus() : null;
+
+        if (currentStatus == OrderStatusEn.PAID) {
+            LOG.debug("Order " + orderId + " was concurrently marked PAID; ignoring");
+            return;
+        }
+
+        LOG.errorf("PayFast confirmed payment for order %s but it is no longer CREATED (current status: %s) — "
+                + "payment received, stock may not be reserved. Manual review required.", orderId, currentStatus);
+        orderNotificationService.sendPaymentAnomalyAlert(current != null ? current : staleOrder, amountGross);
     }
 
     /**

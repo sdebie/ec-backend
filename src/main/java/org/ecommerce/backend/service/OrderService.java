@@ -288,18 +288,29 @@ public class OrderService
         if (order == null) {
             throw new GraphQLException("Order not found for sessionId");
         }
+        OrderStatusEn targetStatus;
         try {
-            order.setStatus(OrderStatusEn.valueOf(newStatus));
+            targetStatus = OrderStatusEn.valueOf(newStatus);
         } catch (IllegalArgumentException e) {
             throw new GraphQLException("Invalid status: " + newStatus);
         }
-        order.persist(); // ensure status update is saved before creating history record
 
+        // Atomic conditional claim from the exact status just read — the same pattern
+        // used for the stock decrement and the other two order-status writers (the
+        // PayFast ITN handler, the abandoned-order release job). A plain setStatus()+
+        // persist() here could silently clobber a concurrent write from either of them.
+        OrderStatusEn previousStatus = order.getStatus();
+        long updated = OrderEntity.update("status = ?1 where id = ?2 and status = ?3",
+                targetStatus, order.getId(), previousStatus);
+        if (updated == 0) {
+            throw new GraphQLException("Order status changed concurrently; please refresh and try again");
+        }
+        order.setStatus(targetStatus);
 
         // 2. Create history record
         OrderStatusHistoryEntity history = new OrderStatusHistoryEntity();
         history.setOrder(order);
-        history.setStatus(OrderStatusEn.valueOf(newStatus));
+        history.setStatus(targetStatus);
         history.setComment("Order Update");
         //history.setChangedBy(staffId);
 

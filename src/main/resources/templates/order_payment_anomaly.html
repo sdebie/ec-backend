@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body {
+            font-family: sans-serif;
+            color: #333;
+            line-height: 1.6;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 600px;
+            margin: 0 auto;
+            border: 1px solid #eee;
+            padding: 20px;
+            border-radius: 10px;
+        }
+
+        .header {
+            text-align: center;
+            border-bottom: 2px solid #dc2626;
+            padding-bottom: 20px;
+        }
+
+        .details-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+
+        .details-table th {
+            text-align: left;
+            padding: 8px 10px;
+            border-bottom: 1px solid #eee;
+            color: #555;
+            width: 160px;
+            vertical-align: top;
+        }
+
+        .details-table td {
+            padding: 8px 10px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .action-section {
+            margin: 20px 0;
+            padding: 15px;
+            background-color: #fef2f2;
+            border-radius: 6px;
+        }
+
+        .action-section h3 {
+            margin: 0 0 10px 0;
+            font-size: 14px;
+            color: #991b1b;
+        }
+
+        .action-section p {
+            margin: 0;
+        }
+
+        .footer {
+            font-size: 12px;
+            color: #777;
+            margin-top: 30px;
+            text-align: center;
+        }
+    </style>
+    <title>Payment received for a closed order</title>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <h1>Payment received for a closed order</h1>
+        <p>Order <strong>#{orderId}</strong></p>
+    </div>
+
+    <table class="details-table">
+        <tr>
+            <th>Order ID</th>
+            <td>{orderId}</td>
+        </tr>
+        <tr>
+            <th>Current status</th>
+            <td>{orderStatus}</td>
+        </tr>
+        <tr>
+            <th>Amount received</th>
+            <td>{amountReceived}</td>
+        </tr>
+        <tr>
+            <th>Order total</th>
+            <td>{orderTotal}</td>
+        </tr>
+    </table>
+
+    <div class="action-section">
+        <h3>What happened</h3>
+        <p>
+            PayFast confirmed a real payment for this order, but by the time the confirmation
+            arrived the order was no longer in progress (current status: {orderStatus}) — most
+            likely it was automatically cancelled for taking too long to pay, and its stock has
+            already been returned to the shop.
+        </p>
+        <p style="margin-top: 10px;">
+            The payment was <strong>not</strong> applied to the order automatically. Please check
+            the order and the payment manually, and reserve stock or arrange a refund as needed.
+        </p>
+    </div>
+
+    <div class="footer">
+        <p>This is an automated alert from the order payment system.</p>
+    </div>
+</div>
+</body>
+</html>
