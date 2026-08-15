@@ -1,15 +1,14 @@
 package org.ecommerce.backend.mapper;
 
+import org.ecommerce.backend.utils.PriceUtils;
 import org.ecommerce.common.dto.*;
 import org.ecommerce.common.entity.*;
-import org.ecommerce.common.enums.PriceTypeEn;
 import org.ecommerce.common.enums.ProductStatusEn;
 import org.ecommerce.common.enums.ProductTypeEn;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 
-import java.time.LocalDate;
-import java.time.temporal.ChronoUnit;
+import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
 
@@ -120,18 +119,11 @@ public interface ProductMapper
 
     default Long calculateSaleDaysRemaining(VariantPricesEntity variantPricesEntity)
     {
-        if (variantPricesEntity == null || variantPricesEntity.getPriceType() == null || variantPricesEntity.getPriceEndDate() == null) {
+        if (variantPricesEntity == null) {
             return null;
         }
-
-        if (variantPricesEntity.getPriceType() != PriceTypeEn.RETAIL_SALE_PRICE && variantPricesEntity.getPriceType() != PriceTypeEn.WHOLESALE_SALE_PRICE) {
-            return null;
-        }
-
-        LocalDate today = LocalDate.now();
-        LocalDate endDate = variantPricesEntity.getPriceEndDate().toLocalDate();
-        long daysRemaining = ChronoUnit.DAYS.between(today, endDate);
-        return Math.max(daysRemaining, 0L);
+        return PriceUtils.saleDaysRemaining(variantPricesEntity.getPriceType(),
+                variantPricesEntity.getPriceEndDate(), LocalDateTime.now());
     }
 
     default CategoryDto mapPrimaryCategory(ProductEntity productEntity)

@@ -57,6 +57,13 @@ class ContactEnquiryMailerTest
         var fromField = ContactEnquiryMailer.class.getDeclaredField("mailerFrom");
         fromField.setAccessible(true);
         fromField.set(mailer, CONFIGURED_FROM);
+
+        // Real resolver over the mocked settings repository — recipient resolution
+        // stays end-to-end here, so a wiring break fails these tests too.
+        EnquiryRecipientResolver resolver = new EnquiryRecipientResolver();
+        resolver.settingsRepository = settingsRepository;
+        resolver.objectMapper = objectMapper;
+        mailer.enquiryRecipientResolver = resolver;
     }
 
     // ── Helpers ─────────────────────────────────────────────────────────────
@@ -97,97 +104,6 @@ class ContactEnquiryMailerTest
         return instance;
     }
 
-    // ── Recipient resolution tests (Req 1.3, 1.4) ──────────────────────────
-
-    @Nested
-    @DisplayName("resolveRecipient — reads enquiryEmail from storefront.contact config")
-    class RecipientResolutionTests
-    {
-
-        @Test
-        @DisplayName("resolves enquiryEmail when present in the storefront.contact JSON")
-        void resolvesFromConfig()
-        {
-            when(settingsRepository.findById("storefront.contact"))
-                    .thenReturn(settingWith("{\"enquiryEmail\":\"info@store.co.za\",\"emails\":[\"accounts@store.co.za\"]}"));
-
-            String recipient = mailer.resolveRecipient();
-
-            assertEquals("info@store.co.za", recipient);
-        }
-
-        @Test
-        @DisplayName("recipient is never taken from the emails array — only enquiryEmail")
-        void neverFallsBackToEmailsList()
-        {
-            // enquiryEmail absent, but emails list has values — must NOT fall back
-            when(settingsRepository.findById("storefront.contact"))
-                    .thenReturn(settingWith("{\"emails\":[\"info@store.co.za\",\"support@store.co.za\"]}"));
-
-            assertThrows(RecipientNotConfiguredException.class, () -> mailer.resolveRecipient());
-        }
-
-        @Test
-        @DisplayName("throws RecipientNotConfiguredException when setting row is null")
-        void throwsWhenSettingRowMissing()
-        {
-            when(settingsRepository.findById("storefront.contact")).thenReturn(null);
-
-            RecipientNotConfiguredException ex = assertThrows(
-                    RecipientNotConfiguredException.class,
-                    () -> mailer.resolveRecipient()
-            );
-            assertTrue(ex.getMessage().contains("missing or empty"));
-        }
-
-        @Test
-        @DisplayName("throws RecipientNotConfiguredException when setting value is blank")
-        void throwsWhenSettingValueBlank()
-        {
-            when(settingsRepository.findById("storefront.contact"))
-                    .thenReturn(settingWith("   "));
-
-            assertThrows(RecipientNotConfiguredException.class, () -> mailer.resolveRecipient());
-        }
-
-        @Test
-        @DisplayName("throws RecipientNotConfiguredException when enquiryEmail field is blank")
-        void throwsWhenEnquiryEmailBlank()
-        {
-            when(settingsRepository.findById("storefront.contact"))
-                    .thenReturn(settingWith("{\"enquiryEmail\":\"   \"}"));
-
-            RecipientNotConfiguredException ex = assertThrows(
-                    RecipientNotConfiguredException.class,
-                    () -> mailer.resolveRecipient()
-            );
-            assertTrue(ex.getMessage().contains("absent or blank"));
-        }
-
-        @Test
-        @DisplayName("throws RecipientNotConfiguredException when enquiryEmail field is null in JSON")
-        void throwsWhenEnquiryEmailNull()
-        {
-            when(settingsRepository.findById("storefront.contact"))
-                    .thenReturn(settingWith("{\"enquiryEmail\":null}"));
-
-            assertThrows(RecipientNotConfiguredException.class, () -> mailer.resolveRecipient());
-        }
-
-        @Test
-        @DisplayName("throws RecipientNotConfiguredException when JSON is malformed")
-        void throwsWhenJsonMalformed()
-        {
-            when(settingsRepository.findById("storefront.contact"))
-                    .thenReturn(settingWith("not valid json {{{"));
-
-            RecipientNotConfiguredException ex = assertThrows(
-                    RecipientNotConfiguredException.class,
-                    () -> mailer.resolveRecipient()
-            );
-            assertTrue(ex.getMessage().contains("Failed to parse"));
-        }
-    }
 
     // ── Mail composition tests (Req 2.2, 2.3) ──────────────────────────────
 

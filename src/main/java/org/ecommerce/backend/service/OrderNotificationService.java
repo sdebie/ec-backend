@@ -29,7 +29,7 @@ public class OrderNotificationService
     MailTemplate order_payment_anomaly;
 
     @Inject
-    ContactEnquiryMailer contactEnquiryMailer;
+    EnquiryRecipientResolver enquiryRecipientResolver;
 
     @ConfigProperty(name = "quarkus.mailer.from")
     String senderAddress;
@@ -66,15 +66,15 @@ public class OrderNotificationService
      * the order). Real money moved and the order disagrees; this needs a human to
      * reconcile, so it is never a silent drop.
      * <p>
-     * Recipient reuses {@link ContactEnquiryMailer#resolveRecipient()} — the same
-     * admin enquiry mailbox {@link WholesaleMailNotifier} alerts staff through — since
-     * that is the only staff-facing notification channel this backend has.
+     * Recipient is the shared admin enquiry mailbox ({@link EnquiryRecipientResolver}),
+     * the same one {@link WholesaleMailNotifier} alerts staff through — that is the only
+     * staff-facing notification channel this backend has.
      */
     public void sendPaymentAnomalyAlert(OrderEntity order, BigDecimal amountReceived)
     {
         String recipient;
         try {
-            recipient = contactEnquiryMailer.resolveRecipient();
+            recipient = enquiryRecipientResolver.require();
         } catch (RecipientNotConfiguredException e) {
             LOG.errorf("Payment anomaly alert for order %s could not be sent — no recipient configured: %s",
                     order.getId(), e.getMessage());

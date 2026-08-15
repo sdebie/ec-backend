@@ -3,7 +3,7 @@ package org.ecommerce.backend.service;
 import io.quarkus.test.TestTransaction;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
-import org.ecommerce.common.dto.CreateTestimonialRequest;
+import org.ecommerce.common.dto.TestimonialRequest;
 import org.ecommerce.common.dto.TestimonialDto;
 import org.ecommerce.common.dto.TestimonialPublicDto;
 import org.ecommerce.common.entity.TestimonialEntity;
@@ -97,7 +97,7 @@ class TestimonialServiceTest
     void create_thenGetById_roundTrip()
     {
         clearTestimonialsWithinTestTransaction();
-        CreateTestimonialRequest request = new CreateTestimonialRequest(
+        TestimonialRequest request = new TestimonialRequest(
                 "Great service!", "Jane Doe", "CEO, Acme Corp", 5, true
         );
 

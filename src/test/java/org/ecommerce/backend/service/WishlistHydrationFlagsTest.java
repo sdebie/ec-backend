@@ -2,6 +2,7 @@ package org.ecommerce.backend.service;
 
 // Feature: wishlist-purchasing-rework, Task 1.4: Flag derivation truth table
 
+import org.ecommerce.backend.mapper.VariantPriceMapper;
 import org.ecommerce.common.dto.WishlistHydratedItemDto;
 import org.ecommerce.common.entity.ProductEntity;
 import org.ecommerce.common.entity.ProductImageEntity;
@@ -219,6 +220,7 @@ class WishlistHydrationFlagsTest
         };
 
         WishlistHydrationService svc = new WishlistHydrationService();
+        svc.variantPriceMapper = new VariantPriceMapper();
         setField(svc, "productVariantRepository", mockVariantRepo);
         setField(svc, "variantPricesRepository", mockPricesRepo);
         setField(svc, "productImageRepository", mockImageRepo);

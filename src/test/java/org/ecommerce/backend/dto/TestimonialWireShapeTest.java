@@ -3,7 +3,7 @@ package org.ecommerce.backend.dto;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
-import org.ecommerce.common.dto.CreateTestimonialRequest;
+import org.ecommerce.common.dto.TestimonialRequest;
 import org.ecommerce.common.dto.TestimonialDto;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -61,7 +61,7 @@ class TestimonialWireShapeTest
         String json = """
                 {"quote":"Test","authorName":"A","authorTitle":null,"sortOrder":0,"published":true}
                 """;
-        CreateTestimonialRequest request = objectMapper.readValue(json, CreateTestimonialRequest.class);
+        TestimonialRequest request = objectMapper.readValue(json, TestimonialRequest.class);
         assertThat(request.published(), is(true));
         assertThat(request.quote(), is("Test"));
         assertThat(request.authorName(), is("A"));
@@ -73,7 +73,7 @@ class TestimonialWireShapeTest
         String json = """
                 {"quote":"Hello","authorName":"Bob","authorTitle":"CEO","sortOrder":3,"published":false}
                 """;
-        CreateTestimonialRequest request = objectMapper.readValue(json, CreateTestimonialRequest.class);
+        TestimonialRequest request = objectMapper.readValue(json, TestimonialRequest.class);
         assertThat(request.published(), is(false));
         assertThat(request.quote(), is("Hello"));
         assertThat(request.authorTitle(), is("CEO"));

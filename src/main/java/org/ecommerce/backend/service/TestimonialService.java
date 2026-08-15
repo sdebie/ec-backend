@@ -4,10 +4,9 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import org.jboss.logging.Logger;
-import org.ecommerce.common.dto.CreateTestimonialRequest;
+import org.ecommerce.common.dto.TestimonialRequest;
 import org.ecommerce.common.dto.TestimonialDto;
 import org.ecommerce.common.dto.TestimonialPublicDto;
-import org.ecommerce.common.dto.UpdateTestimonialRequest;
 import org.ecommerce.common.entity.TestimonialEntity;
 import org.ecommerce.common.repository.TestimonialRepository;
 
@@ -52,7 +51,7 @@ public class TestimonialService
     }
 
     @Transactional
-    public TestimonialDto create(CreateTestimonialRequest request)
+    public TestimonialDto create(TestimonialRequest request)
     {
         TestimonialEntity entity = new TestimonialEntity();
         entity.setQuote(request.quote());
@@ -70,7 +69,7 @@ public class TestimonialService
     }
 
     @Transactional
-    public TestimonialDto update(UUID id, UpdateTestimonialRequest request)
+    public TestimonialDto update(UUID id, TestimonialRequest request)
     {
         if (id == null) {
             return null;

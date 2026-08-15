@@ -55,7 +55,7 @@ class WholesaleMailNotifierTest
     private MailTemplate wholesale_registration;
 
     @Mock
-    private ContactEnquiryMailer contactEnquiryMailer;
+    private EnquiryRecipientResolver enquiryRecipientResolver;
 
     @Spy
     private ObjectMapper objectMapper = new ObjectMapper();
@@ -307,7 +307,7 @@ class WholesaleMailNotifierTest
         @DisplayName("admin notification delivered to the resolved enquiryEmail with full snapshot + replyTo")
         void adminNotificationDelivered()
         {
-            when(contactEnquiryMailer.resolveRecipient()).thenReturn("enquiries@store.co.za");
+            when(enquiryRecipientResolver.require()).thenReturn("enquiries@store.co.za");
             when(settingsRepository.findById("storefront.branding"))
                     .thenReturn(brandingSetting("{\"name\": \"My Store\"}"));
             MailTemplate.MailTemplateInstance admin = stubChain(wholesale_application_received);
@@ -328,7 +328,7 @@ class WholesaleMailNotifierTest
         @DisplayName("applicant confirmation delivered to applicantEmail with store name + full snapshot")
         void applicantConfirmationDelivered()
         {
-            when(contactEnquiryMailer.resolveRecipient()).thenReturn("enquiries@store.co.za");
+            when(enquiryRecipientResolver.require()).thenReturn("enquiries@store.co.za");
             when(settingsRepository.findById("storefront.branding"))
                     .thenReturn(brandingSetting("{\"name\": \"My Store\"}"));
             stubChain(wholesale_application_received);
@@ -349,7 +349,7 @@ class WholesaleMailNotifierTest
         @DisplayName("enquiryEmail not configured → admin skipped, applicant confirmation still delivered")
         void recipientNotConfiguredStillSendsApplicantConfirmation()
         {
-            when(contactEnquiryMailer.resolveRecipient())
+            when(enquiryRecipientResolver.require())
                     .thenThrow(new RecipientNotConfiguredException("enquiryEmail is absent or blank in storefront.contact"));
             when(settingsRepository.findById("storefront.branding"))
                     .thenReturn(brandingSetting("{\"name\": \"My Store\"}"));
@@ -366,7 +366,7 @@ class WholesaleMailNotifierTest
         @DisplayName("blank applicantEmail → confirmation skipped, admin notified without replyTo")
         void blankApplicantEmailSkipsConfirmation()
         {
-            when(contactEnquiryMailer.resolveRecipient()).thenReturn("enquiries@store.co.za");
+            when(enquiryRecipientResolver.require()).thenReturn("enquiries@store.co.za");
             MailTemplate.MailTemplateInstance admin = stubChain(wholesale_application_received);
             WholesaleCustomerDto dto = submittedDto();
             dto.setApplicantEmail(null);
@@ -389,7 +389,7 @@ class WholesaleMailNotifierTest
 
             notifier.onSubmitted(submittedEvent(submittedDto()));
 
-            verifyNoInteractions(contactEnquiryMailer);
+            verifyNoInteractions(enquiryRecipientResolver);
             verifyNoInteractions(wholesale_application_received);
             verifyNoInteractions(wholesale_registration);
         }

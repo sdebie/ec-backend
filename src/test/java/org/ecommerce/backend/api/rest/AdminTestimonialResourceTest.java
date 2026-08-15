@@ -1,9 +1,8 @@
 package org.ecommerce.backend.api.rest;
 
 import org.ecommerce.backend.service.TestimonialService;
-import org.ecommerce.common.dto.CreateTestimonialRequest;
+import org.ecommerce.common.dto.TestimonialRequest;
 import org.ecommerce.common.dto.TestimonialDto;
-import org.ecommerce.common.dto.UpdateTestimonialRequest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;
@@ -74,7 +73,7 @@ class AdminTestimonialResourceTest
     @Test
     void create_returns201()
     {
-        var request = new CreateTestimonialRequest("Quote", "Author", null, 0, true);
+        var request = new TestimonialRequest("Quote", "Author", null, 0, true);
         var dto = makeDto();
         when(testimonialService.create(request)).thenReturn(dto);
         Response response = resource.create(request);
@@ -86,7 +85,7 @@ class AdminTestimonialResourceTest
     void update_returns404_whenNotFound()
     {
         UUID id = UUID.randomUUID();
-        var request = new UpdateTestimonialRequest("Q", "A", null, 0, false);
+        var request = new TestimonialRequest("Q", "A", null, 0, false);
         when(testimonialService.update(eq(id), any())).thenReturn(null);
         Response response = resource.update(id, request);
         assertThat(response.getStatus(), is(404));
@@ -96,7 +95,7 @@ class AdminTestimonialResourceTest
     void update_returns200_whenFound()
     {
         var dto = makeDto();
-        var request = new UpdateTestimonialRequest("Updated", "Author", null, 1, true);
+        var request = new TestimonialRequest("Updated", "Author", null, 1, true);
         when(testimonialService.update(eq(dto.id()), any())).thenReturn(dto);
         Response response = resource.update(dto.id(), request);
         assertThat(response.getStatus(), is(200));
