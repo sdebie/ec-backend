@@ -398,7 +398,12 @@ public class ProductPriceImportService implements ImportBatchService<ProductPric
         ProductVariantEntity variant = productVariantRepository.findBySku(staged.getSku());
 
         if (variant == null) {
-            //TODO::SDB ERRRO
+            // Validation already rejects an unknown SKU, so reaching here means the variant
+            // was deleted between validating the batch and applying it. Skipping the row is
+            // right — there is nothing left to price — but doing it silently is not: the
+            // batch would report every row applied while one was quietly dropped.
+            LOG.warnf("Skipped pricing SKU '%s': its variant no longer exists (deleted after validation)",
+                    staged.getSku());
             return;
         }
 
