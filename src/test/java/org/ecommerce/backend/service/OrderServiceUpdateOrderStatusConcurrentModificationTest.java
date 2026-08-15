@@ -27,7 +27,7 @@ import static org.mockito.Mockito.when;
  * <p>
  * {@link OrderRepository} is mocked directly (rather than relying on {@code PanacheMock} alone)
  * because {@code updateOrderStatus} reads the order via
- * {@code orderRepository.findLatestOrderInfoBySessionId(...)} — an injected repository instance
+ * {@code orderRepository.findOrderInfoById(...)} — an injected repository instance
  * method, not a static {@code OrderEntity} finder. This differs from
  * {@code OrderServiceGetMyOrdersTest}, which can mock only {@code OrderEntity.find(...)} because
  * {@code getMyOrders} calls that static finder directly.
@@ -55,20 +55,19 @@ class OrderServiceUpdateOrderStatusConcurrentModificationTest
     void updateOrderStatus_statusChangedConcurrently_throwsGraphQLException()
     {
         UUID orderId = UUID.randomUUID();
-        UUID sessionId = UUID.randomUUID();
 
         OrderEntity order = new OrderEntity();
         order.setId(orderId);
-        order.setSessionId(sessionId);
+        order.setSessionId(UUID.randomUUID());
         order.setStatus(OrderStatusEn.CREATED);
 
-        when(orderRepository.findLatestOrderInfoBySessionId(any(UUID.class))).thenReturn(order);
+        when(orderRepository.findOrderInfoById(any(UUID.class))).thenReturn(order);
         // Simulates another writer (the PayFast ITN handler or the abandoned-order release job)
         // having already moved the order off CREATED between this read and the claim below.
         when(OrderEntity.update(anyString(), any(Object[].class))).thenReturn(0);
 
         GraphQLException ex = assertThrows(GraphQLException.class,
-                () -> orderService.updateOrderStatus(sessionId.toString(), "PAID"));
+                () -> orderService.updateOrderStatus(orderId, "CANCELLED", "Dana Staff"));
 
         assertEquals("Order status changed concurrently; please refresh and try again", ex.getMessage());
         assertEquals(OrderStatusEn.CREATED, order.getStatus(), "in-memory status must not flip when the claim is lost");

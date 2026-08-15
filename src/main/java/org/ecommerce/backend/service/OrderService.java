@@ -48,6 +48,9 @@ public class OrderService
 
     private static final Logger LOG = Logger.getLogger(OrderService.class);
 
+    /** Recorded on the status timeline for a transition no staff member made. */
+    public static final String SYSTEM_ACTOR = "SYSTEM";
+
     @Transactional
     public OrderCheckoutResponseDto createOrderFromCart(OrderCreationRequestDto request, CustomerTypeEn customerTier, CustomerEntity customer)
     {
@@ -154,6 +157,7 @@ public class OrderService
         }
 
         OrderEntity.persist(order);
+        OrderStatusHistoryEntity.record(order, OrderStatusEn.CREATED, "Order placed", SYSTEM_ACTOR);
 
         // 7. Build and return response
         OrderCheckoutResponseDto response = new OrderCheckoutResponseDto();
@@ -234,19 +238,30 @@ public class OrderService
      */
     public OrderTotals repriceOrder(OrderEntity order)
     {
-        BigDecimal subtotal = BigDecimal.ZERO;
-        if (order.getItems() != null) {
-            for (OrderItemEntity item : order.getItems()) {
-                if (item.getUnitPrice() == null || item.getQuantity() == null) {
-                    continue;
-                }
-                subtotal = subtotal.add(item.getUnitPrice().multiply(BigDecimal.valueOf(item.getQuantity())));
-            }
-        }
-
-        OrderTotals totals = computeTotals(subtotal, order.getShippingMethod());
+        OrderTotals totals = computeTotals(subtotalOf(order), order.getShippingMethod());
         order.setTotalAmount(totals.grandTotal());
         return totals;
+    }
+
+    /**
+     * Sums an order's own persisted line prices. The single definition of what
+     * an order's subtotal is, shared by repricing and by the admin detail
+     * breakdown so the two can never derive it differently.
+     */
+    public BigDecimal subtotalOf(OrderEntity order)
+    {
+        BigDecimal subtotal = BigDecimal.ZERO;
+        if (order.getItems() == null) {
+            return subtotal;
+        }
+
+        for (OrderItemEntity item : order.getItems()) {
+            if (item.getUnitPrice() == null || item.getQuantity() == null) {
+                continue;
+            }
+            subtotal = subtotal.add(item.getUnitPrice().multiply(BigDecimal.valueOf(item.getQuantity())));
+        }
+        return subtotal;
     }
 
     public OrderResponseDto getOrderById(UUID orderId)
@@ -274,19 +289,24 @@ public class OrderService
         }
     }
 
+    /**
+     * Applies a staff-driven status change to one order.
+     *
+     * @param changedBy display name of the staff member making the change, recorded on the timeline
+     */
     @Transactional
-    public OrderResponseDto updateOrderStatus(String sessionId, String newStatus) throws GraphQLException
+    public OrderResponseDto updateOrderStatus(UUID orderId, String newStatus, String changedBy) throws GraphQLException
     {
-        if (sessionId == null || sessionId.isBlank()) {
-            throw new GraphQLException("sessionId is required");
+        if (orderId == null) {
+            throw new GraphQLException("orderId is required");
         }
         if (newStatus == null || newStatus.isBlank()) {
             throw new GraphQLException("status is required");
         }
-        LOG.debugf("Updating order status for sessionId=%s to status=%s", sessionId, newStatus);
-        OrderEntity order = findLatestOrderEntityBySessionId(sessionId);
+        LOG.debugf("Updating order status for orderId=%s to status=%s", orderId, newStatus);
+        OrderEntity order = orderRepository.findOrderInfoById(orderId);
         if (order == null) {
-            throw new GraphQLException("Order not found for sessionId");
+            throw new GraphQLException("Order not found");
         }
         OrderStatusEn targetStatus;
         try {
@@ -295,11 +315,15 @@ public class OrderService
             throw new GraphQLException("Invalid status: " + newStatus);
         }
 
+        OrderStatusEn previousStatus = order.getStatus();
+        if (previousStatus == null || !previousStatus.canTransitionTo(targetStatus)) {
+            throw new GraphQLException("Cannot move an order from " + previousStatus + " to " + targetStatus);
+        }
+
         // Atomic conditional claim from the exact status just read — the same pattern
         // used for the stock decrement and the other two order-status writers (the
         // PayFast ITN handler, the abandoned-order release job). A plain setStatus()+
         // persist() here could silently clobber a concurrent write from either of them.
-        OrderStatusEn previousStatus = order.getStatus();
         long updated = OrderEntity.update("status = ?1 where id = ?2 and status = ?3",
                 targetStatus, order.getId(), previousStatus);
         if (updated == 0) {
@@ -307,15 +331,8 @@ public class OrderService
         }
         order.setStatus(targetStatus);
 
-        // 2. Create history record
-        OrderStatusHistoryEntity history = new OrderStatusHistoryEntity();
-        history.setOrder(order);
-        history.setStatus(targetStatus);
-        history.setComment("Order Update");
-        //history.setChangedBy(staffId);
-
-        history.persist();
-
+        OrderStatusHistoryEntity.record(order, targetStatus,
+                previousStatus + " → " + targetStatus, changedBy);
 
         //Order Created In store Payment
         if (order.getStatus().equals(OrderStatusEn.IN_STORE_PAYMENT)) {

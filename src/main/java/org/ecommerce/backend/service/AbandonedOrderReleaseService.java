@@ -71,12 +71,9 @@ public class AbandonedOrderReleaseService
                     item.getQuantity(), item.getVariant().getId());
         }
 
-        OrderStatusHistoryEntity history = new OrderStatusHistoryEntity();
-        history.setOrder(order);
-        history.setStatus(OrderStatusEn.SYSTEM_CANCELED);
-        history.setComment("Automatically cancelled: checkout was not completed within the stock hold window");
-        history.setChangedBy("SYSTEM");
-        history.persist();
+        OrderStatusHistoryEntity.record(order, OrderStatusEn.SYSTEM_CANCELED,
+                "Automatically cancelled: checkout was not completed within the stock hold window",
+                OrderService.SYSTEM_ACTOR);
 
         LOG.debugf("Released abandoned order %s (created %s), stock restored", order.getId(), order.getCreatedAt());
     }

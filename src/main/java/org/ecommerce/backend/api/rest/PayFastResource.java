@@ -8,10 +8,12 @@ import jakarta.ws.rs.core.MultivaluedMap;
 import jakarta.ws.rs.core.Response;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.ecommerce.backend.service.OrderNotificationService;
+import org.ecommerce.backend.service.OrderService;
 import org.ecommerce.backend.service.payfast.HtmlFormField;
 import org.ecommerce.backend.service.payfast.PayFastService;
 import org.ecommerce.backend.utils.ClientIpUtils;
 import org.ecommerce.common.entity.OrderEntity;
+import org.ecommerce.common.entity.OrderStatusHistoryEntity;
 import org.ecommerce.common.entity.PaymentLogEntity;
 import org.ecommerce.common.enums.OrderStatusEn;
 import org.jboss.logging.Logger;
@@ -177,6 +179,8 @@ public class PayFastResource
                                 OrderStatusEn.PAID, orderId, OrderStatusEn.CREATED);
                         if (claimed == 1) {
                             order.setStatus(OrderStatusEn.PAID);
+                            OrderStatusHistoryEntity.record(order, OrderStatusEn.PAID,
+                                    "Payment confirmed by PayFast", OrderService.SYSTEM_ACTOR);
                             LOG.debug("Updated Order " + orderId + " to PAID");
                             orderNotificationService.sendConfirmationEmail(order);
                         } else {

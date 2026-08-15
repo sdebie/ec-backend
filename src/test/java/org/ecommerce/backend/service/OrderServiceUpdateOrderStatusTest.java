@@ -17,6 +17,7 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
  * DB-backed test for the happy path of {@link OrderService#updateOrderStatus}, which previously
@@ -58,9 +59,9 @@ class OrderServiceUpdateOrderStatusTest
         OrderEntity order = newOrder(OrderStatusEn.CREATED);
         em.flush();
 
-        OrderResponseDto result = orderService.updateOrderStatus(order.getSessionId().toString(), "PAID");
+        OrderResponseDto result = orderService.updateOrderStatus(order.getId(), "CANCELLED", "Dana Staff");
 
-        assertEquals("PAID", result.getStatus());
+        assertEquals("CANCELLED", result.getStatus());
         assertEquals(order.getId().toString(), result.getId());
 
         // Reload from a clean persistence context: proves the new status is durable (came from
@@ -69,7 +70,7 @@ class OrderServiceUpdateOrderStatusTest
         em.clear();
 
         OrderEntity reloaded = em.find(OrderEntity.class, order.getId());
-        assertEquals(OrderStatusEn.PAID, reloaded.getStatus());
+        assertEquals(OrderStatusEn.CANCELLED, reloaded.getStatus());
 
         List<OrderStatusHistoryEntity> history = em.createQuery(
                         "select h from OrderStatusHistoryEntity h where h.order.id = :orderId",
@@ -77,7 +78,44 @@ class OrderServiceUpdateOrderStatusTest
                 .setParameter("orderId", order.getId())
                 .getResultList();
         assertEquals(1, history.size());
-        assertEquals(OrderStatusEn.PAID, history.get(0).getStatus());
-        assertEquals("Order Update", history.get(0).getComment());
+        assertEquals(OrderStatusEn.CANCELLED, history.get(0).getStatus());
+        assertEquals("CREATED → CANCELLED", history.get(0).getComment());
+        assertEquals("Dana Staff", history.get(0).getChangedBy(),
+                "the timeline must name the staff member, not just the status");
+    }
+
+    @Test
+    @TestTransaction
+    @DisplayName("refuses a transition the status does not allow, leaving the order and its timeline untouched")
+    void updateOrderStatus_disallowedTransition_throwsAndChangesNothing()
+    {
+        OrderEntity order = newOrder(OrderStatusEn.DELIVERED);
+        em.flush();
+
+        GraphQLException ex = assertThrows(GraphQLException.class,
+                () -> orderService.updateOrderStatus(order.getId(), "IN_TRANSIT", "Dana Staff"));
+        assertEquals("Cannot move an order from DELIVERED to IN_TRANSIT", ex.getMessage());
+
+        em.flush();
+        em.clear();
+
+        assertEquals(OrderStatusEn.DELIVERED, em.find(OrderEntity.class, order.getId()).getStatus());
+        assertEquals(0L, em.createQuery(
+                        "select count(h) from OrderStatusHistoryEntity h where h.order.id = :orderId", Long.class)
+                .setParameter("orderId", order.getId())
+                .getSingleResult());
+    }
+
+    @Test
+    @TestTransaction
+    @DisplayName("rejects a status name that is not an OrderStatusEn value")
+    void updateOrderStatus_unknownStatus_throws()
+    {
+        OrderEntity order = newOrder(OrderStatusEn.PAID);
+        em.flush();
+
+        GraphQLException ex = assertThrows(GraphQLException.class,
+                () -> orderService.updateOrderStatus(order.getId(), "SHIPPED", "Dana Staff"));
+        assertEquals("Invalid status: SHIPPED", ex.getMessage());
     }
 }

@@ -45,12 +45,31 @@ public class OrderResource
     // OrderResourceContractTest guards its absence.
 
     @Mutation("updateOrderStatus")
-    @Description("Update the status of the latest order for a given sessionId")
+    @Description("Move one order to a new status. Staff JWT required.")
     @RolesAllowed({"SUPER_ADMIN", "ORDER_MANAGER"})
-    public OrderResponseDto updateOrderStatus(@Name("sessionId") String sessionId, @Name("status") String status) throws GraphQLException
+    public OrderResponseDto updateOrderStatus(@Name("orderId") String orderId, @Name("status") String status) throws GraphQLException
     {
-        LOG.debug("updateOrderStatus for sessionId=" + sessionId + ", status=" + status);
-        return orderService.updateOrderStatus(sessionId, status);
+        LOG.debug("updateOrderStatus for orderId=" + orderId + ", status=" + status);
+        UUID id;
+        try {
+            id = UUID.fromString(orderId);
+        } catch (IllegalArgumentException | NullPointerException e) {
+            throw new GraphQLException("Order not found");
+        }
+        return orderService.updateOrderStatus(id, status, staffDisplayName());
+    }
+
+    /**
+     * Who to credit on the status timeline. The staff JWT carries a full_name
+     * claim; the subject (their email) identifies them if it is ever absent.
+     */
+    private String staffDisplayName()
+    {
+        if (jwt == null) {
+            return null;
+        }
+        String fullName = jwt.getClaim("full_name");
+        return fullName != null && !fullName.isBlank() ? fullName : jwt.getSubject();
     }
 
     @Query("orderById")

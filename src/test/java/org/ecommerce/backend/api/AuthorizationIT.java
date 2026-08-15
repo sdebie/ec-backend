@@ -46,7 +46,7 @@ class AuthorizationIT {
             "{\"query\":\"mutation { createBrand(brandDto: {name: \\\"authTest\\\", slug: \\\"auth-test\\\"}) }\"}";
 
     private static final String UPDATE_ORDER_STATUS_BODY =
-            "{\"query\":\"mutation { updateOrderStatus(sessionId: \\\"fake-session\\\", status: \\\"SHIPPED\\\") { sessionId } }\"}";
+            "{\"query\":\"mutation { updateOrderStatus(orderId: \\\"fake-order\\\", status: \\\"CANCELLED\\\") { sessionId } }\"}";
 
     private static final String ADD_STAFF_USER_BODY =
             "{\"query\":\"mutation { addStaffUser(staffDto: {email: \\\"x@test.com\\\", fullName: \\\"X\\\", role: SUPER_ADMIN, active: true, resetPassword: false}) }\"}";
@@ -62,6 +62,12 @@ class AuthorizationIT {
 
     private static final String ALL_ORDERS_BODY =
             "{\"query\":\"{ allOrders { sessionId } }\"}";
+
+    private static final String ADMIN_ORDER_LIST_BODY =
+            "{\"query\":\"{ adminOrderList(pageIndex: 0, pageSize: 1) { totalElements } }\"}";
+
+    private static final String ADMIN_ORDER_BODY =
+            "{\"query\":\"{ adminOrder(id: \\\"fake-order\\\") { id } }\"}";
 
     private static final String SETTINGS_BODY =
             "{\"query\":\"{ settings { storeSettings { key } } }\"}";
@@ -282,6 +288,34 @@ class AuthorizationIT {
         }
 
         @Test
+        @DisplayName("adminOrderList → UNAUTHORIZED")
+        void adminOrderList_unauthenticated_unauthorized() {
+            given()
+                    .contentType("application/json")
+                    .body(ADMIN_ORDER_LIST_BODY)
+            .when()
+                    .post("/api/graphql")
+            .then()
+                    .statusCode(200)
+                    .body("errors", not(empty()))
+                    .body("errors[0].extensions.code", equalTo("unauthorized"));
+        }
+
+        @Test
+        @DisplayName("adminOrder → UNAUTHORIZED")
+        void adminOrder_unauthenticated_unauthorized() {
+            given()
+                    .contentType("application/json")
+                    .body(ADMIN_ORDER_BODY)
+            .when()
+                    .post("/api/graphql")
+            .then()
+                    .statusCode(200)
+                    .body("errors", not(empty()))
+                    .body("errors[0].extensions.code", equalTo("unauthorized"));
+        }
+
+        @Test
         @DisplayName("settings → UNAUTHORIZED")
         void settings_unauthenticated_unauthorized() {
             given()
@@ -403,6 +437,22 @@ class AuthorizationIT {
                     .header("Authorization", "Bearer " + customerToken)
                     .contentType("application/json")
                     .body(ALL_CUSTOMERS_BODY)
+            .when()
+                    .post("/api/graphql")
+            .then()
+                    .statusCode(200)
+                    .body("errors", not(empty()))
+                    .body("errors[0].extensions.code", equalTo("forbidden"));
+        }
+
+        @Test
+        @DisplayName("adminOrderList → FORBIDDEN")
+        void adminOrderList_customer_forbidden() {
+            String customerToken = generateCustomerJwt();
+            given()
+                    .header("Authorization", "Bearer " + customerToken)
+                    .contentType("application/json")
+                    .body(ADMIN_ORDER_LIST_BODY)
             .when()
                     .post("/api/graphql")
             .then()

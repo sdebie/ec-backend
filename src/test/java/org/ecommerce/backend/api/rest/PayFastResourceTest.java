@@ -5,9 +5,11 @@ import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.http.ContentType;
 import org.ecommerce.backend.service.OrderNotificationService;
+import org.ecommerce.backend.service.OrderService;
 import org.ecommerce.backend.service.payfast.HtmlFormField;
 import org.ecommerce.backend.service.payfast.PayFastService;
 import org.ecommerce.common.entity.OrderEntity;
+import org.ecommerce.common.entity.OrderStatusHistoryEntity;
 import org.ecommerce.common.enums.OrderStatusEn;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -35,7 +37,11 @@ class PayFastResourceTest
     @BeforeEach
     void setUp()
     {
-        PanacheMock.mock(OrderEntity.class);
+        // OrderStatusHistoryEntity is mocked alongside OrderEntity because the ITN
+        // handler now records the PAID transition on the status timeline. These
+        // orders exist only as mocks, so a real persist would fail the row's
+        // foreign key to a non-existent order and roll the whole request back.
+        PanacheMock.mock(OrderEntity.class, OrderStatusHistoryEntity.class);
     }
 
     @Test
@@ -138,6 +144,8 @@ class PayFastResourceTest
 
         assertEquals(OrderStatusEn.PAID, order.getStatus());
         verify(orderNotificationService).sendConfirmationEmail(order);
+        PanacheMock.verify(OrderStatusHistoryEntity.class)
+                .record(order, OrderStatusEn.PAID, "Payment confirmed by PayFast", OrderService.SYSTEM_ACTOR);
     }
 
     @Test
