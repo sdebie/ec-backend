@@ -7,6 +7,7 @@ import org.jboss.logging.Logger;
 import org.ecommerce.common.dto.TestimonialRequest;
 import org.ecommerce.common.dto.TestimonialDto;
 import org.ecommerce.common.dto.TestimonialPublicDto;
+import org.ecommerce.backend.mapper.TestimonialMapper;
 import org.ecommerce.common.entity.TestimonialEntity;
 import org.ecommerce.common.repository.TestimonialRepository;
 
@@ -22,11 +23,14 @@ public class TestimonialService
     @Inject
     TestimonialRepository testimonialRepository;
 
+    @Inject
+    TestimonialMapper testimonialMapper;
+
     public List<TestimonialPublicDto> findPublished()
     {
         return testimonialRepository.findPublished()
                 .stream()
-                .map(this::toPublicDto)
+                .map(testimonialMapper::toPublicDto)
                 .toList();
     }
 
@@ -34,7 +38,7 @@ public class TestimonialService
     {
         return testimonialRepository.findAllOrdered()
                 .stream()
-                .map(this::toDto)
+                .map(testimonialMapper::toDto)
                 .toList();
     }
 
@@ -47,7 +51,7 @@ public class TestimonialService
         if (entity == null) {
             return null;
         }
-        return toDto(entity);
+        return testimonialMapper.toDto(entity);
     }
 
     @Transactional
@@ -65,7 +69,7 @@ public class TestimonialService
         testimonialRepository.persist(entity);
         LOG.infof("Testimonial created (id=%s, author=%s)", entity.getId(), entity.getAuthorName());
 
-        return toDto(entity);
+        return testimonialMapper.toDto(entity);
     }
 
     @Transactional
@@ -89,7 +93,7 @@ public class TestimonialService
         testimonialRepository.persist(entity);
         LOG.infof("Testimonial updated (id=%s)", entity.getId());
 
-        return toDto(entity);
+        return testimonialMapper.toDto(entity);
     }
 
     @Transactional
@@ -107,27 +111,4 @@ public class TestimonialService
         return true;
     }
 
-    private TestimonialDto toDto(TestimonialEntity entity)
-    {
-        return new TestimonialDto(
-                entity.getId(),
-                entity.getQuote(),
-                entity.getAuthorName(),
-                entity.getAuthorTitle(),
-                entity.isPublished(),
-                entity.getSortOrder(),
-                entity.getCreatedAt(),
-                entity.getUpdatedAt()
-        );
-    }
-
-    private TestimonialPublicDto toPublicDto(TestimonialEntity entity)
-    {
-        return new TestimonialPublicDto(
-                entity.getId(),
-                entity.getQuote(),
-                entity.getAuthorName(),
-                entity.getAuthorTitle()
-        );
-    }
 }

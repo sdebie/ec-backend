@@ -12,7 +12,6 @@ import org.ecommerce.common.enums.OrderStatusEn;
 import org.ecommerce.common.query.PageRequest;
 import org.ecommerce.common.repository.OrderRepository;
 
-import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeParseException;
@@ -86,14 +85,13 @@ public class OrderAdminService
 
         // The money breakdown comes from the same computeTotals path that priced
         // the order, so the components staff see reconcile with what was charged.
-        BigDecimal subtotal = orderService.subtotalOf(order);
-        OrderTotals totals = orderService.computeTotals(subtotal, order.getShippingMethod());
+        OrderTotals totals = orderService.computeTotals(orderService.subtotalOf(order), order.getShippingMethod());
 
         List<OrderStatusHistoryEntity> history = OrderStatusHistoryEntity
                 .find("select h from OrderStatusHistoryEntity h where h.order.id = ?1 order by h.createdAt desc", id)
                 .list();
 
-        return orderAdminMapper.toDetailDto(order, subtotal, totals.shippingEstimate(), totals.vatAmount(), history);
+        return orderAdminMapper.toDetailDto(order, totals, history);
     }
 
     private OrderStatusEn parseStatus(String status)

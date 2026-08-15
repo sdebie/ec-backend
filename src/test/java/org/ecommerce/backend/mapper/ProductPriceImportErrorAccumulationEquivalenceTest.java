@@ -2,11 +2,13 @@ package org.ecommerce.backend.mapper;
 
 // Feature: service-layer-refactor, Property 4: Import decomposition preserves error accumulation (price import)
 
+import org.ecommerce.backend.csv.ProductPriceImportValidator;
+import org.ecommerce.backend.csv.ProductPriceImportParser;
 import io.quarkus.panache.mock.PanacheMock;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
-import org.ecommerce.backend.mapper.ProductPriceImportParser.ParsedPriceRow;
+import org.ecommerce.backend.csv.ProductPriceImportParser.ParsedPriceRow;
 import org.ecommerce.common.entity.ProductPriceUploadStagedEntity;
 import org.ecommerce.common.entity.ProductVariantEntity;
 import org.ecommerce.common.entity.VariantPricesEntity;

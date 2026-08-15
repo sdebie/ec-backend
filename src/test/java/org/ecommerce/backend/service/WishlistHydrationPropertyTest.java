@@ -3,7 +3,7 @@ package org.ecommerce.backend.service;
 // Feature: wishlist-purchasing-rework, Property: Hydration returns all existing variants + flag derivation
 
 import net.jqwik.api.*;
-import org.ecommerce.backend.mapper.VariantPriceMapper;
+import org.ecommerce.backend.mapper.VariantPriceMapperImpl;
 import org.ecommerce.common.dto.WishlistHydratedItemDto;
 import org.ecommerce.common.entity.ProductEntity;
 import org.ecommerce.common.entity.ProductImageEntity;
@@ -173,7 +173,7 @@ class WishlistHydrationPropertyTest
 
         // Inject mocks into the service via reflection
         WishlistHydrationService service = new WishlistHydrationService();
-        service.variantPriceMapper = new VariantPriceMapper();
+        service.variantPriceMapper = new VariantPriceMapperImpl();
         setField(service, "productVariantRepository", mockVariantRepo);
         setField(service, "variantPricesRepository", mockPricesRepo);
         setField(service, "productImageRepository", mockImageRepo);

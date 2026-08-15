@@ -1,15 +1,11 @@
 package org.ecommerce.backend.mapper;
 
-import io.quarkus.hibernate.orm.panache.PanacheEntityBase;
-import io.quarkus.hibernate.orm.panache.PanacheQuery;
-import io.quarkus.panache.mock.PanacheMock;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
 import org.ecommerce.common.dto.*;
 import org.ecommerce.common.dto.OrderDetailRespDto.OrderStatusHistoryDetailRespDto;
 import org.ecommerce.common.entity.*;
 import org.ecommerce.common.enums.OrderStatusEn;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -50,11 +46,6 @@ class OrderDtoCharacterizationTest
     @Inject
     OrderMapper orderMapper;
 
-    @BeforeEach
-    void setUp()
-    {
-        PanacheMock.mock(OrderStatusHistoryEntity.class);
-    }
 
     // ══════════════════════════════════════════════════════════════════════════
     // Fixture builders
@@ -140,13 +131,6 @@ class OrderDtoCharacterizationTest
         return List.of(h1, h2);
     }
 
-    @SuppressWarnings("unchecked")
-    private void stubHistoryQuery(UUID orderId, List<OrderStatusHistoryEntity> histories)
-    {
-        PanacheQuery<PanacheEntityBase> query = mock(PanacheQuery.class);
-        when(query.list()).thenReturn(histories != null ? (List) histories : Collections.emptyList());
-        when(OrderStatusHistoryEntity.find(anyString(), any(Object[].class))).thenReturn(query);
-    }
 
     // ══════════════════════════════════════════════════════════════════════════
     // toResponseDto — pins OrderResponseDto with canonical OrderItemDetailDto
@@ -288,9 +272,8 @@ class OrderDtoCharacterizationTest
         void pinsOrderDetailRespDtoShape()
         {
             OrderEntity order = buildOrder();
-            stubHistoryQuery(order.getId(), buildHistory(order));
 
-            OrderDetailRespDto dto = orderMapper.toDetailDto(order);
+            OrderDetailRespDto dto = orderMapper.toDetailDto(order, buildHistory(order));
 
             assertNotNull(dto);
             assertInstanceOf(UUID.class, dto.getId());
@@ -324,9 +307,8 @@ class OrderDtoCharacterizationTest
         void pinsOrderItemDetailDtoShapeInDetail()
         {
             OrderEntity order = buildOrder();
-            stubHistoryQuery(order.getId(), Collections.emptyList());
 
-            OrderDetailRespDto dto = orderMapper.toDetailDto(order);
+            OrderDetailRespDto dto = orderMapper.toDetailDto(order, Collections.emptyList());
 
             assertEquals(1, dto.getItems().size());
             OrderItemDetailDto itemDto = dto.getItems().get(0);
@@ -349,9 +331,8 @@ class OrderDtoCharacterizationTest
         void pinsProductVariantDetailDtoShapeInDetail()
         {
             OrderEntity order = buildOrder();
-            stubHistoryQuery(order.getId(), Collections.emptyList());
 
-            OrderDetailRespDto dto = orderMapper.toDetailDto(order);
+            OrderDetailRespDto dto = orderMapper.toDetailDto(order, Collections.emptyList());
             ProductVariantDetailDto variantDto = dto.getItems().get(0).getVariant();
 
             // Shape: ProductVariantDetailDto has id as UUID
@@ -395,14 +376,13 @@ class OrderDtoCharacterizationTest
         void pinsBothPathsProduceSameCanonicalDto()
         {
             OrderEntity order = buildOrder();
-            stubHistoryQuery(order.getId(), Collections.emptyList());
 
             // Response path
             OrderResponseDto responseDto = orderMapper.toResponseDto(order);
             OrderItemDetailDto responseItem = responseDto.getItems().get(0);
 
             // Detail path
-            OrderDetailRespDto detailDto = orderMapper.toDetailDto(order);
+            OrderDetailRespDto detailDto = orderMapper.toDetailDto(order, Collections.emptyList());
             OrderItemDetailDto detailItem = detailDto.getItems().get(0);
 
             // Both use the same DTO type
@@ -428,7 +408,6 @@ class OrderDtoCharacterizationTest
         void pinsImageDtoUnifiedBetweenResponseAndDetail()
         {
             OrderEntity order = buildOrder();
-            stubHistoryQuery(order.getId(), Collections.emptyList());
 
             // Response path
             OrderResponseDto responseDto = orderMapper.toResponseDto(order);
@@ -439,7 +418,7 @@ class OrderDtoCharacterizationTest
             assertTrue(responseImg.isFeatured());
 
             // Detail path
-            OrderDetailRespDto detailDto = orderMapper.toDetailDto(order);
+            OrderDetailRespDto detailDto = orderMapper.toDetailDto(order, Collections.emptyList());
             ProductVariantDetailDto detailVariant = detailDto.getItems().get(0).getVariant();
             assertFalse(detailVariant.getImages().isEmpty());
             ProductImageDto detailImg = detailVariant.getImages().get(0);
@@ -467,9 +446,8 @@ class OrderDtoCharacterizationTest
         {
             OrderEntity order = buildOrder();
             List<OrderStatusHistoryEntity> history = buildHistory(order);
-            stubHistoryQuery(order.getId(), history);
 
-            OrderDetailRespDto dto = orderMapper.toDetailDto(order);
+            OrderDetailRespDto dto = orderMapper.toDetailDto(order, history);
 
             assertNotNull(dto.getStatusHistory());
             assertEquals(2, dto.getStatusHistory().size());
@@ -504,9 +482,8 @@ class OrderDtoCharacterizationTest
         {
             OrderEntity order = buildOrder();
             List<OrderStatusHistoryEntity> history = buildHistory(order);
-            stubHistoryQuery(order.getId(), history);
 
-            OrderDetailRespDto dto = orderMapper.toDetailDto(order);
+            OrderDetailRespDto dto = orderMapper.toDetailDto(order, history);
 
             OrderStatusHistoryDetailRespDto h1 = dto.getStatusHistory().get(0);
             assertNotNull(h1.getComment());
@@ -547,7 +524,7 @@ class OrderDtoCharacterizationTest
         @DisplayName("toDetailDto(null) returns null")
         void toDetailDtoNullReturnsNull()
         {
-            assertNull(orderMapper.toDetailDto(null));
+            assertNull(orderMapper.toDetailDto(null, Collections.emptyList()));
         }
 
         @Test
@@ -583,9 +560,8 @@ class OrderDtoCharacterizationTest
         {
             OrderEntity order = buildOrder();
             order.getItems().get(0).setVariant(null);
-            stubHistoryQuery(order.getId(), Collections.emptyList());
 
-            OrderDetailRespDto dto = orderMapper.toDetailDto(order);
+            OrderDetailRespDto dto = orderMapper.toDetailDto(order, Collections.emptyList());
 
             assertNotNull(dto.getItems().get(0));
             assertNull(dto.getItems().get(0).getVariant());

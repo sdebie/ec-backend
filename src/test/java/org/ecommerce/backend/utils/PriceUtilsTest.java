@@ -26,14 +26,14 @@ class PriceUtilsTest
     }
 
     @Test
-    void getMinimumPrice_shouldReturnZeroWhenVariantIdOrPriceTypeIsMissing()
+    void currentPrice_shouldReturnZeroWhenVariantIdOrPriceTypeIsMissing()
     {
-        assertEquals(BigDecimal.ZERO, PriceUtils.getMinimumPrice(null, PriceTypeEn.RETAIL_PRICE));
-        assertEquals(BigDecimal.ZERO, PriceUtils.getMinimumPrice(UUID.randomUUID(), null));
+        assertEquals(BigDecimal.ZERO, PriceUtils.currentPrice(null, PriceTypeEn.RETAIL_PRICE));
+        assertEquals(BigDecimal.ZERO, PriceUtils.currentPrice(UUID.randomUUID(), null));
     }
 
     @Test
-    void getMinimumPrice_shouldReturnLatestActivePriceWithinDateWindow()
+    void currentPrice_shouldReturnLatestActivePriceWithinDateWindow()
     {
         UUID variantId = UUID.randomUUID();
         LocalDateTime now = LocalDateTime.now();
@@ -85,11 +85,11 @@ class PriceUtilsTest
                 olderActivePrice,
                 latestActivePrice));
 
-        assertEquals(new BigDecimal("24.99"), PriceUtils.getMinimumPrice(variantId, PriceTypeEn.RETAIL_PRICE));
+        assertEquals(new BigDecimal("24.99"), PriceUtils.currentPrice(variantId, PriceTypeEn.RETAIL_PRICE));
     }
 
     @Test
-    void getMinimumPrice_shouldUseRecencyTieBreakersWhenStartDatesMatch()
+    void currentPrice_shouldUseRecencyTieBreakersWhenStartDatesMatch()
     {
         UUID variantId = UUID.randomUUID();
         LocalDateTime now = LocalDateTime.now();
@@ -114,7 +114,7 @@ class PriceUtilsTest
 
         when(VariantPricesEntity.findByVariantId(variantId)).thenReturn(List.of(firstPrice, laterUpdatedPrice));
 
-        assertEquals(new BigDecimal("27.50"), PriceUtils.getMinimumPrice(variantId, PriceTypeEn.RETAIL_PRICE));
+        assertEquals(new BigDecimal("27.50"), PriceUtils.currentPrice(variantId, PriceTypeEn.RETAIL_PRICE));
     }
 
     private VariantPricesEntity price(

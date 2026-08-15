@@ -5,7 +5,7 @@ import io.quarkus.hibernate.orm.panache.PanacheQuery;
 import io.quarkus.panache.mock.PanacheMock;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
-import org.ecommerce.backend.mapper.ProductImportValidator;
+import org.ecommerce.backend.csv.ProductImportValidator;
 import org.ecommerce.common.entity.*;
 import org.ecommerce.common.enums.ProductImportValidationStatusEn;
 import org.ecommerce.common.enums.ProductUploadStatusEn;
@@ -41,7 +41,7 @@ import static org.mockito.Mockito.when;
  *       runtime because the mock is invisible inside the new transaction.</li>
  *   <li><b>validateAndDiff tests target the validator directly:</b> Tests like
  *       {@code validateAndDiff_shouldAddValidationErrorsWhenRequiredFieldsAreMissing} exercise
- *       {@link org.ecommerce.backend.mapper.ProductImportValidator} via the helper method, NOT the
+ *       {@link org.ecommerce.backend.csv.ProductImportValidator} via the helper method, NOT the
  *       import service itself. These work but they don't test the service path and belong in a
  *       dedicated validator test class.</li>
  *   <li><b>Replacement coverage:</b> The new {@code ProductImportRealPathIT} integration test drives

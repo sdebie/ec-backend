@@ -41,7 +41,7 @@ public class WholesaleCustomerService
     {
         return wholesaleApplicationRepository.findAll(pageRequest, filterRequest)
                 .stream()
-                .map(this::toListItemDto)
+                .map(wholesaleMapper::toListItemDto)
                 .toList();
     }
 
@@ -176,7 +176,7 @@ public class WholesaleCustomerService
         applyAddresses(customerEntity, customerDto);
         customerEntity.persist();
 
-        return toDto(customerEntity);
+        return wholesaleMapper.toDto(customerEntity);
     }
 
     @Transactional
@@ -411,65 +411,7 @@ public class WholesaleCustomerService
         return null;
     }
 
-    private WholesaleCustomerDto toDto(CustomerEntity ce)
-    {
-        WholesaleCustomerDto dto = new WholesaleCustomerDto();
-        dto.setId(ce.getId());
-        dto.setEmail(ce.getUser() != null ? ce.getUser().getEmail() : null);
-        dto.setFirstName(ce.getFirstName());
-        dto.setLastName(ce.getLastName());
-        dto.setPhone(ce.getPhone());
 
-        Optional<CustomerAddressEntity> physical = ce.getAddresses()
-                .stream()
-                .filter(a -> a.getAddressType() == AddressTypeEn.PHYSICAL)
-                .findFirst();
-
-        physical.ifPresent(a -> {
-            dto.setPhysicalAddressLine1(a.getAddressLine1());
-            dto.setPhysicalAddressLine2(a.getAddressLine2());
-            dto.setPhysicalSuburb(a.getSuburb());
-            dto.setPhysicalCity(a.getCity());
-            dto.setPhysicalProvince(a.getProvince());
-            dto.setPhysicalPostalCode(a.getPostalCode());
-        });
-
-        Optional<CustomerAddressEntity> postal = ce.getAddresses()
-                .stream()
-                .filter(a -> a.getAddressType() == AddressTypeEn.POSTAL)
-                .findFirst();
-        postal.ifPresent(a -> {
-            dto.setPostalAddressLine1(a.getAddressLine1());
-            dto.setPostalAddressLine2(a.getAddressLine2());
-            dto.setPostalSuburb(a.getSuburb());
-            dto.setPostalCity(a.getCity());
-            dto.setPostalProvince(a.getProvince());
-            dto.setPostalPostalCode(a.getPostalCode());
-        });
-
-        if (ce.getWholesaleProfile() != null) {
-            dto.setCompanyName(ce.getWholesaleProfile().getCompanyName());
-            dto.setVatNumber(ce.getWholesaleProfile().getVatNumber());
-            dto.setRegNumber(ce.getWholesaleProfile().getRegNumber());
-        }
-
-        if (ce.getStatus() != null) {
-            dto.setStatus(WholesaleCustomerStatusEn.valueOf(ce.getStatus().name()));
-        }
-        return dto;
-    }
-
-    private WholesaleApplicationListItemDto toListItemDto(WholesaleApplicationEntity application)
-    {
-        WholesaleApplicationListItemDto dto = new WholesaleApplicationListItemDto();
-        dto.setId(application.getId());
-        dto.setCreatedAt(application.getCreatedAt());
-        dto.setStatus(application.getStatus());
-        dto.setFirstName(application.getFirstName());
-        dto.setLastName(application.getLastName());
-        dto.setEmail(application.getAccountEmail());
-        return dto;
-    }
 
     private WholesaleDecisionEvent buildDecisionEvent(WholesaleApplicationEntity application, String rejectionReason)
     {

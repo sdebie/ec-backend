@@ -14,6 +14,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static org.mapstruct.NullValueCheckStrategy.ALWAYS;
+import static org.mapstruct.ReportingPolicy.ERROR;
 import static org.mapstruct.NullValueMappingStrategy.RETURN_NULL;
 import static org.mapstruct.NullValuePropertyMappingStrategy.SET_TO_NULL;
 
@@ -25,7 +26,7 @@ import static org.mapstruct.NullValuePropertyMappingStrategy.SET_TO_NULL;
  * they map through here so the two cannot disagree about item ordering, snapshot fields,
  * or null handling.
  */
-@Mapper(componentModel = "cdi", nullValueMappingStrategy = RETURN_NULL,
+@Mapper(componentModel = "cdi", unmappedTargetPolicy = ERROR, nullValueMappingStrategy = RETURN_NULL,
         nullValuePropertyMappingStrategy = SET_TO_NULL,
         nullValueCheckStrategy = ALWAYS)
 public interface QuoteRequestMapper

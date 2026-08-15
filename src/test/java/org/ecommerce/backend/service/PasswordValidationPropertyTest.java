@@ -2,6 +2,7 @@ package org.ecommerce.backend.service;
 
 // Feature: customer-portal-backend, Property 8: Password Minimum Length Validation
 
+import org.ecommerce.backend.mapper.CustomerAddressMapperImpl;
 import jakarta.ws.rs.WebApplicationException;
 import net.jqwik.api.*;
 import net.jqwik.api.lifecycle.AfterTry;
@@ -41,6 +42,8 @@ class PasswordValidationPropertyTest
     void setup()
     {
         service = new CustomerPortalService();
+
+        service.customerAddressMapper = new CustomerAddressMapperImpl();
         mockedCustomerEntity = Mockito.mockStatic(CustomerEntity.class);
 
         // Set up a customer with a known password hash

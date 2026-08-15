@@ -2,11 +2,12 @@ package org.ecommerce.backend.mapper;
 
 // Feature: service-layer-refactor, Property 4 (partial): Import parser row equivalence
 
+import org.ecommerce.backend.csv.ProductImportParser;
 import net.jqwik.api.*;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;
 import org.apache.commons.csv.CSVRecord;
-import org.ecommerce.backend.mapper.ProductImportParser.StagedProductCsvRow;
+import org.ecommerce.backend.csv.ProductImportParser.StagedProductCsvRow;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;

@@ -44,9 +44,10 @@ class ImageDtoCharacterizationTest
     {
         productMapper = Mappers.getMapper(ProductMapper.class);
 
-        orderMapper = new OrderMapper();
-        // Inject the productMapper into the OrderMapper's @Inject field
-        Field pmField = OrderMapper.class.getDeclaredField("productMapper");
+        orderMapper = new OrderMapperImpl();
+        // The mapper is CDI-wired in production; constructed directly here, so its
+        // collaborator is set by hand. The field lives on the generated impl.
+        Field pmField = OrderMapperImpl.class.getDeclaredField("productMapper");
         pmField.setAccessible(true);
         pmField.set(orderMapper, productMapper);
     }
@@ -259,13 +260,7 @@ class ImageDtoCharacterizationTest
 
         private OrderItemDetailDto invokeToItemDetailDto(OrderItemEntity item)
         {
-            try {
-                var method = OrderMapper.class.getDeclaredMethod("toItemDetailDto", OrderItemEntity.class);
-                method.setAccessible(true);
-                return (OrderItemDetailDto) method.invoke(orderMapper, item);
-            } catch (Exception e) {
-                throw new RuntimeException("Failed to invoke toItemDetailDto", e);
-            }
+            return orderMapper.toItemDetailDto(item);
         }
     }
 
@@ -381,13 +376,7 @@ class ImageDtoCharacterizationTest
 
         private OrderItemDetailDto invokeToItemDetailDto(OrderItemEntity item)
         {
-            try {
-                var method = OrderMapper.class.getDeclaredMethod("toItemDetailDto", OrderItemEntity.class);
-                method.setAccessible(true);
-                return (OrderItemDetailDto) method.invoke(orderMapper, item);
-            } catch (Exception e) {
-                throw new RuntimeException("Failed to invoke toItemDetailDto", e);
-            }
+            return orderMapper.toItemDetailDto(item);
         }
     }
 }

@@ -48,12 +48,15 @@ public class CustomerAdminMapperOutputPreservationPropertyTest
 
     public CustomerAdminMapperOutputPreservationPropertyTest()
     {
-        CustomerAdminMapper m = new CustomerAdminMapper();
+        CustomerAdminMapper m = new CustomerAdminMapperImpl();
         // Inject the real WholesaleMapper (MapStruct-generated) via reflection
         try {
-            var field = CustomerAdminMapper.class.getDeclaredField("wholesaleMapper");
+            var field = CustomerAdminMapperImpl.class.getDeclaredField("wholesaleMapper");
             field.setAccessible(true);
             field.set(m, new WholesaleMapperImpl());
+            var tsField = CustomerAdminMapperImpl.class.getDeclaredField("timestampMapper");
+            tsField.setAccessible(true);
+            tsField.set(m, new TimestampMapperImpl());
         } catch (ReflectiveOperationException e) {
             throw new RuntimeException("Failed to inject WholesaleMapper into CustomerAdminMapper", e);
         }

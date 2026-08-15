@@ -362,7 +362,12 @@ public class OrderService
             return null;
         }
 
-        return orderMapper.toDetailDto(order);
+        // Loaded here rather than inside the mapper: mappers do not open queries.
+        List<OrderStatusHistoryEntity> history = OrderStatusHistoryEntity
+                .find("select h from OrderStatusHistoryEntity h where h.order.id = ?1 order by h.createdAt desc", orderId)
+                .list();
+
+        return orderMapper.toDetailDto(order, history);
     }
 
     public List<OrderSummaryDto> getMyOrders(UUID customerId)

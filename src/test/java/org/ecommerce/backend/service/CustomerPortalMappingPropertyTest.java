@@ -2,6 +2,7 @@ package org.ecommerce.backend.service;
 
 // Feature: customer-portal-backend, Property 1: Profile Mapping Correctness
 
+import org.ecommerce.backend.mapper.CustomerAddressMapperImpl;
 import net.jqwik.api.*;
 import net.jqwik.api.lifecycle.AfterTry;
 import net.jqwik.api.lifecycle.BeforeTry;
@@ -35,6 +36,8 @@ public class CustomerPortalMappingPropertyTest
     void setup()
     {
         service = new CustomerPortalService();
+
+        service.customerAddressMapper = new CustomerAddressMapperImpl();
         mockedCustomerEntity = Mockito.mockStatic(CustomerEntity.class);
     }
 

@@ -1,6 +1,6 @@
 package org.ecommerce.backend.assembler;
 
-import org.ecommerce.backend.mapper.VariantPriceMapper;
+import org.ecommerce.backend.mapper.VariantPriceMapperImpl;
 import org.ecommerce.backend.mapper.ProductMapper;
 import org.ecommerce.common.dto.ProductShoppingListItemDto;
 import org.ecommerce.common.entity.ProductEntity;
@@ -40,7 +40,7 @@ class ProductListItemAssemblerTest {
         VariantPricesRepository prices = mock(VariantPricesRepository.class);
 
         ProductListItemAssembler assembler = new ProductListItemAssembler();
-        assembler.variantPriceMapper = new VariantPriceMapper();
+        assembler.variantPriceMapper = new VariantPriceMapperImpl();
         assembler.variantRepository = variants;
         assembler.imageRepository = images;
         assembler.variantPricesRepository = prices;
@@ -167,7 +167,7 @@ class ProductListItemAssemblerTest {
         VariantPricesRepository prices = mock(VariantPricesRepository.class);
 
         ProductListItemAssembler assembler = new ProductListItemAssembler();
-        assembler.variantPriceMapper = new VariantPriceMapper();
+        assembler.variantPriceMapper = new VariantPriceMapperImpl();
         assembler.variantRepository = variants;
         assembler.imageRepository = images;
         assembler.variantPricesRepository = prices;
@@ -197,7 +197,7 @@ class ProductListItemAssemblerTest {
 
     private ProductListItemAssembler assemblerWithMocks() {
         ProductListItemAssembler assembler = new ProductListItemAssembler();
-        assembler.variantPriceMapper = new VariantPriceMapper();
+        assembler.variantPriceMapper = new VariantPriceMapperImpl();
         assembler.variantRepository = mock(ProductVariantRepository.class);
         assembler.imageRepository = mock(ProductImageRepository.class);
         assembler.variantPricesRepository = mock(VariantPricesRepository.class);

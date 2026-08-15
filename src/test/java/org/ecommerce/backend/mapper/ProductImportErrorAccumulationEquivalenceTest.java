@@ -2,7 +2,9 @@ package org.ecommerce.backend.mapper;
 
 // Feature: service-layer-refactor, Property 4: Import decomposition preserves error accumulation
 
-import org.ecommerce.backend.mapper.ProductImportParser.StagedProductCsvRow;
+import org.ecommerce.backend.csv.ProductImportValidator;
+import org.ecommerce.backend.csv.ProductImportParser;
+import org.ecommerce.backend.csv.ProductImportParser.StagedProductCsvRow;
 import org.ecommerce.common.entity.*;
 import org.ecommerce.common.enums.ProductImportValidationStatusEn;
 import org.ecommerce.common.repository.*;

@@ -23,10 +23,13 @@ public class PriceUtils
                             Comparator.nullsFirst(UUID::compareTo));
 
     /**
-     * Get the latest active price for a variant and price type within the configured date window.
-     * The method name is kept for compatibility with existing callers.
+     * The price in force right now for a variant and price type — the most recent row whose
+     * date window contains the current instant, ties broken by recency.
+     * <p>
+     * Returns {@link BigDecimal#ZERO} when no row is active, which callers render as
+     * "no price set" rather than as free.
      */
-    public static BigDecimal getMinimumPrice(UUID variantId, PriceTypeEn priceType)
+    public static BigDecimal currentPrice(UUID variantId, PriceTypeEn priceType)
     {
         if (variantId == null || priceType == null) {
             return BigDecimal.ZERO;

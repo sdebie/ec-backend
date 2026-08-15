@@ -2,9 +2,6 @@ package org.ecommerce.backend.mapper;
 
 // Feature: service-layer-refactor, Property 3: Mapper output preservation (customer admin)
 
-import io.quarkus.hibernate.orm.panache.PanacheEntityBase;
-import io.quarkus.hibernate.orm.panache.PanacheQuery;
-import io.quarkus.panache.mock.PanacheMock;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
 import org.ecommerce.common.dto.AdminCustomerListItemDto;
@@ -14,7 +11,6 @@ import org.ecommerce.common.entity.WholesaleApplicationEntity;
 import org.ecommerce.common.enums.CustomerStatusEn;
 import org.ecommerce.common.enums.CustomerTypeEn;
 import org.ecommerce.common.enums.WholesaleApplicationStatusEn;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.time.OffsetDateTime;
@@ -26,8 +22,11 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 /**
- * DB-backed (PanacheMock) test for the query-bearing {@code CustomerAdminMapper.toListItemDto(c)}
- * which internally queries {@code WholesaleApplicationEntity.find("customer.id = ?1", c.id)}.
+ * Output-preservation test for {@code CustomerAdminMapper.toListItemDto(customer, application)}.
+ * <p>
+ * ⚠️ The wholesale-application lookup this class used to exercise now lives in
+ * {@code CustomerAdminService.wholesaleApplicationFor} — mappers do not open queries. These
+ * assertions still pin the mapping, but the query itself no longer has a dedicated test.
  * <p>
  * Asserts that the query-bearing method output equals the pinned inline-method baseline —
  * does NOT re-implement the query in the test (per Requirement 4.4).
@@ -45,11 +44,6 @@ class CustomerAdminMapperQueryBearingIT
     @Inject
     CustomerAdminMapper customerAdminMapper;
 
-    @BeforeEach
-    void setUp()
-    {
-        PanacheMock.mock(WholesaleApplicationEntity.class);
-    }
 
     // ══════════════════════════════════════════════════════════════════════════
     // Reference: old inline toListItemDto logic (the baseline to compare against)
@@ -81,9 +75,8 @@ class CustomerAdminMapperQueryBearingIT
         CustomerEntity customer = buildFullCustomer(customerId);
         WholesaleApplicationEntity app = buildApp(WholesaleApplicationStatusEn.APPROVED);
 
-        stubWholesaleAppQuery(customerId, app);
 
-        AdminCustomerListItemDto mapperResult = customerAdminMapper.toListItemDto(customer);
+        AdminCustomerListItemDto mapperResult = customerAdminMapper.toListItemDto(customer, app);
         AdminCustomerListItemDto baseline = referenceToListItemDto(customer, app);
 
         assertListItemDtoEquals(baseline, mapperResult);
@@ -96,9 +89,8 @@ class CustomerAdminMapperQueryBearingIT
         UUID customerId = UUID.randomUUID();
         CustomerEntity customer = buildRetailCustomer(customerId);
 
-        stubWholesaleAppQuery(customerId, null);
 
-        AdminCustomerListItemDto mapperResult = customerAdminMapper.toListItemDto(customer);
+        AdminCustomerListItemDto mapperResult = customerAdminMapper.toListItemDto(customer, null);
         AdminCustomerListItemDto baseline = referenceToListItemDto(customer, null);
 
         assertListItemDtoEquals(baseline, mapperResult);
@@ -112,9 +104,8 @@ class CustomerAdminMapperQueryBearingIT
         CustomerEntity customer = buildFullCustomer(customerId);
         customer.setUser(null);
 
-        stubWholesaleAppQuery(customerId, null);
 
-        AdminCustomerListItemDto mapperResult = customerAdminMapper.toListItemDto(customer);
+        AdminCustomerListItemDto mapperResult = customerAdminMapper.toListItemDto(customer, null);
         AdminCustomerListItemDto baseline = referenceToListItemDto(customer, null);
 
         assertListItemDtoEquals(baseline, mapperResult);
@@ -131,9 +122,8 @@ class CustomerAdminMapperQueryBearingIT
         customer.setStatus(null);
         customer.setShopperType(null);
 
-        stubWholesaleAppQuery(customerId, null);
 
-        AdminCustomerListItemDto mapperResult = customerAdminMapper.toListItemDto(customer);
+        AdminCustomerListItemDto mapperResult = customerAdminMapper.toListItemDto(customer, null);
         AdminCustomerListItemDto baseline = referenceToListItemDto(customer, null);
 
         assertListItemDtoEquals(baseline, mapperResult);
@@ -149,9 +139,8 @@ class CustomerAdminMapperQueryBearingIT
         CustomerEntity customer = buildFullCustomer(customerId);
         WholesaleApplicationEntity app = buildApp(WholesaleApplicationStatusEn.PENDING);
 
-        stubWholesaleAppQuery(customerId, app);
 
-        AdminCustomerListItemDto mapperResult = customerAdminMapper.toListItemDto(customer);
+        AdminCustomerListItemDto mapperResult = customerAdminMapper.toListItemDto(customer, app);
         AdminCustomerListItemDto baseline = referenceToListItemDto(customer, app);
 
         assertListItemDtoEquals(baseline, mapperResult);
@@ -166,9 +155,8 @@ class CustomerAdminMapperQueryBearingIT
         CustomerEntity customer = buildFullCustomer(customerId);
         WholesaleApplicationEntity app = buildApp(null);
 
-        stubWholesaleAppQuery(customerId, app);
 
-        AdminCustomerListItemDto mapperResult = customerAdminMapper.toListItemDto(customer);
+        AdminCustomerListItemDto mapperResult = customerAdminMapper.toListItemDto(customer, app);
         AdminCustomerListItemDto baseline = referenceToListItemDto(customer, app);
 
         assertListItemDtoEquals(baseline, mapperResult);
@@ -243,15 +231,4 @@ class CustomerAdminMapperQueryBearingIT
         return app;
     }
 
-    // ══════════════════════════════════════════════════════════════════════════
-    // Panache stubs
-    // ══════════════════════════════════════════════════════════════════════════
-
-    @SuppressWarnings("unchecked")
-    private void stubWholesaleAppQuery(UUID customerId, WholesaleApplicationEntity app)
-    {
-        PanacheQuery<PanacheEntityBase> appQuery = mock(PanacheQuery.class);
-        when(appQuery.firstResult()).thenReturn(app);
-        when(WholesaleApplicationEntity.find("customer.id = ?1", customerId)).thenReturn(appQuery);
-    }
 }

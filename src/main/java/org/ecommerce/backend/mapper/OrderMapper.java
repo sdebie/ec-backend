@@ -1,195 +1,121 @@
 package org.ecommerce.backend.mapper;
 
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
-import org.ecommerce.common.dto.*;
-import org.ecommerce.common.entity.*;
+import org.ecommerce.common.dto.CustomerDto;
+import org.ecommerce.common.dto.OrderDetailRespDto;
+import org.ecommerce.common.dto.OrderItemDetailDto;
+import org.ecommerce.common.dto.OrderResponseDto;
+import org.ecommerce.common.dto.OrderSummaryDto;
+import org.ecommerce.common.dto.ProductVariantDetailDto;
+import org.ecommerce.common.entity.CustomerEntity;
+import org.ecommerce.common.entity.OrderEntity;
+import org.ecommerce.common.entity.OrderItemEntity;
+import org.ecommerce.common.entity.OrderStatusHistoryEntity;
+import org.ecommerce.common.entity.ProductVariantEntity;
+import org.mapstruct.AfterMapping;
+import org.mapstruct.Context;
+import org.mapstruct.Mapper;
+import org.mapstruct.Mapping;
+import org.mapstruct.MappingTarget;
 
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 
-@ApplicationScoped
-public class OrderMapper
+import static org.mapstruct.NullValueCheckStrategy.ALWAYS;
+import static org.mapstruct.ReportingPolicy.ERROR;
+import static org.mapstruct.NullValueMappingStrategy.RETURN_NULL;
+import static org.mapstruct.NullValuePropertyMappingStrategy.SET_TO_NULL;
+
+/**
+ * Maps orders into the shopper-facing shapes — a customer's own view of their order.
+ * The staff view is {@link OrderAdminMapper}'s job.
+ * <p>
+ * Pure — no database access. The status timeline is passed in as {@code @Context} because a
+ * mapper must not open queries; {@code OrderService} loads it.
+ * <p>
+ * ⚠️ {@code itemCount} means different things on the two shapes and both are deliberate:
+ * {@link OrderResponseDto} counts distinct lines, {@link OrderSummaryDto} sums quantities.
+ */
+@Mapper(componentModel = "cdi", unmappedTargetPolicy = ERROR, uses = {ProductMapper.class, TimestampMapper.class},
+        nullValueMappingStrategy = RETURN_NULL,
+        nullValuePropertyMappingStrategy = SET_TO_NULL,
+        nullValueCheckStrategy = ALWAYS)
+public interface OrderMapper
 {
-    @Inject
-    ProductMapper productMapper;
+    @Mapping(target = "createDate", source = "createdAt")
+    @Mapping(target = "customer", source = "customerEntity")
+    @Mapping(target = "itemCount", ignore = true)
+    OrderResponseDto toResponseDto(OrderEntity order);
 
-    public OrderResponseDto toResponseDto(OrderEntity orderEntity)
+    /**
+     * Uses {@link ProductVariantDetailDto} (reduced variant — no sku/status/prices) with
+     * {@code ProductDetailDto} (name only) as the nested product reference.
+     */
+    OrderItemDetailDto toItemDetailDto(OrderItemEntity item);
+
+    ProductVariantDetailDto toVariantDetailDto(ProductVariantEntity variant);
+
+    @Mapping(target = "email", source = "user.email")
+    CustomerDto toCustomerDto(CustomerEntity customer);
+
+    /**
+     * @param history status timeline, newest first — loaded by the caller, not queried here
+     */
+    @Mapping(target = "shippingAddressLine1", source = "streetAddress")
+    @Mapping(target = "shippingCity", source = "city")
+    @Mapping(target = "shippingProvince", source = "province")
+    @Mapping(target = "shippingPostalCode", source = "postalCode")
+    // Legacy fields: shippingPhone is no longer on OrderEntity, and the second address line
+    // was merged into streetAddress. Both stay absent rather than being invented.
+    @Mapping(target = "shippingPhone", ignore = true)
+    @Mapping(target = "shippingAddressLine2", ignore = true)
+    // A customer row with no user carries no address to show, so it reads as no customer at
+    // all rather than as a customer whose email is null.
+    @Mapping(target = "customerEntity",
+            expression = "java(order.getCustomerEntity() != null && order.getCustomerEntity().getUser() != null "
+                    + "? toCustomerDto(order.getCustomerEntity()) : null)")
+    @Mapping(target = "statusHistory", expression = "java(toStatusHistoryDtos(history))")
+    OrderDetailRespDto toDetailDto(OrderEntity order, @Context List<OrderStatusHistoryEntity> history);
+
+    OrderDetailRespDto.OrderStatusHistoryDetailRespDto toStatusHistoryDto(OrderStatusHistoryEntity entry);
+
+    List<OrderDetailRespDto.OrderStatusHistoryDetailRespDto> toStatusHistoryDtos(List<OrderStatusHistoryEntity> history);
+
+    // ⚠️ This shape emits seconds (…T10:30:00) while OrderResponseDto.createDate does not
+    // (…T10:30) — two timestamp formats in one API. Preserved as-is rather than unified,
+    // because unifying changes a wire contract clients already parse.
+    @Mapping(target = "orderDate",
+            expression = "java(order.getCreatedAt() == null ? null "
+                    + ": order.getCreatedAt().format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE_TIME))")
+    @Mapping(target = "itemCount", expression = "java(order.totalUnits())")
+    OrderSummaryDto toSummaryDto(OrderEntity order);
+
+    /** Distinct line count — {@link OrderSummaryDto} deliberately counts units instead. */
+    @AfterMapping
+    default void countLines(@MappingTarget OrderResponseDto dto)
     {
-        if (orderEntity == null) {
-            return null;
-        }
-
-        OrderResponseDto dto = new OrderResponseDto();
-        dto.setId(orderEntity.getId() == null ? null : orderEntity.getId().toString());
-        dto.setSessionId(orderEntity.getSessionId() == null ? null : orderEntity.getSessionId().toString());
-        dto.setStatus(orderEntity.getStatus() == null ? null : orderEntity.getStatus().name());
-        dto.setCreateDate(orderEntity.getCreatedAt() == null ? null : orderEntity.getCreatedAt().toString());
-        dto.setTotalAmount(orderEntity.getTotalAmount());
-        dto.setCustomer(toCustomerDto(orderEntity.getCustomerEntity()));
-
-        if (orderEntity.getItems() != null) {
-            dto.setItems(new ArrayList<>(orderEntity.getItems().size()));
-            for (OrderItemEntity item : orderEntity.getItems()) {
-                OrderItemDetailDto itemDto = toItemDetailDto(item);
-                if (itemDto != null) {
-                    dto.getItems().add(itemDto);
-                }
-            }
-        }
-
         dto.setItemCount(dto.getItems() == null ? 0 : dto.getItems().size());
-        return dto;
     }
 
-    /**
-     * Maps an OrderItemEntity to the canonical order-item output DTO.
-     * Uses ProductVariantDetailDto (reduced variant — no sku/status/prices)
-     * with ProductDetailDto (name only) as the nested product reference.
-     */
-    private OrderItemDetailDto toItemDetailDto(OrderItemEntity orderItemEntity)
+    /** An absent timeline reads as empty, never as a null the client has to guard. */
+    @AfterMapping
+    default void defaultCollectionsToEmpty(@MappingTarget OrderDetailRespDto dto)
     {
-        if (orderItemEntity == null) {
-            return null;
+        if (dto.getStatusHistory() == null) {
+            dto.setStatusHistory(new ArrayList<>());
         }
-
-        OrderItemDetailDto dto = new OrderItemDetailDto();
-        dto.setId(orderItemEntity.getId() == null ? null : orderItemEntity.getId().toString());
-        dto.setUnitPrice(orderItemEntity.getUnitPrice());
-        dto.setQuantity(orderItemEntity.getQuantity());
-
-        if (orderItemEntity.getVariant() != null) {
-            ProductVariantDetailDto variantDetailDto = new ProductVariantDetailDto();
-            variantDetailDto.setId(orderItemEntity.getVariant().getId());
-            variantDetailDto.setStockQuantity(orderItemEntity.getVariant().getStockQuantity());
-            variantDetailDto.setAttributesJson(orderItemEntity.getVariant().getAttributesJson());
-            variantDetailDto.setWeightKg(orderItemEntity.getVariant().getWeightKg());
-
-            if (orderItemEntity.getVariant().getProduct() != null) {
-                ProductDetailDto productDetailDto = new ProductDetailDto();
-                productDetailDto.setName(orderItemEntity.getVariant().getProduct().getName());
-                variantDetailDto.setProduct(productDetailDto);
-            }
-
-            variantDetailDto.setImages(toImageDtos(orderItemEntity.getVariant().getImages()));
-            dto.setVariant(variantDetailDto);
+        if (dto.getItems() == null) {
+            dto.setItems(new ArrayList<>());
         }
-
-        return dto;
     }
 
-    private List<ProductImageDto> toImageDtos(List<ProductImageEntity> images)
+    /** A variant with no images reads as an empty gallery, not a null one. */
+    @AfterMapping
+    default void defaultImagesToEmpty(@MappingTarget ProductVariantDetailDto dto)
     {
-        if (images == null || images.isEmpty()) {
-            return Collections.emptyList();
+        if (dto.getImages() == null) {
+            dto.setImages(new ArrayList<>());
         }
-        // Single source of truth for ProductImageEntity → ProductImageDto.
-        List<ProductImageDto> result = new ArrayList<>(images.size());
-        for (ProductImageEntity img : images) {
-            if (img == null) continue;
-            result.add(productMapper.mapImageEntityToDto(img));
-        }
-        return result;
     }
 
-    public CustomerDto toCustomerDto(CustomerEntity customer)
-    {
-        if (customer == null) {
-            return null;
-        }
 
-        CustomerDto dto = new CustomerDto();
-        dto.setEmail(customer.getUser() != null ? customer.getUser().getEmail() : null);
-        return dto;
-    }
-
-    /**
-     * Maps an OrderEntity to an OrderDetailRespDto including nested items,
-     * variant details, images, and status history.
-     * The status history is queried via Panache.
-     */
-    public OrderDetailRespDto toDetailDto(OrderEntity orderEntity)
-    {
-        if (orderEntity == null) {
-            return null;
-        }
-
-        OrderDetailRespDto detail = new OrderDetailRespDto();
-
-        // Map OrderEntity fields
-        detail.setId(orderEntity.getId());
-        detail.setTotalAmount(orderEntity.getTotalAmount());
-        detail.setSessionId(orderEntity.getSessionId());
-        detail.setStatus(orderEntity.getStatus());
-        detail.setShippingPhone(null); // Legacy field — no longer on OrderEntity
-        detail.setShippingAddressLine1(orderEntity.getStreetAddress());
-        detail.setShippingAddressLine2(null); // Legacy field — merged into streetAddress
-        detail.setShippingCity(orderEntity.getCity());
-        detail.setShippingProvince(orderEntity.getProvince());
-        detail.setShippingPostalCode(orderEntity.getPostalCode());
-        detail.setCreatedAt(orderEntity.getCreatedAt());
-
-        // Customer reference — same canonical CustomerDto as toResponseDto
-        if (orderEntity.getCustomerEntity() != null && orderEntity.getCustomerEntity().getUser() != null) {
-            detail.setCustomerEntity(toCustomerDto(orderEntity.getCustomerEntity()));
-        }
-
-        // Items — same canonical DTO as toResponseDto
-        if (orderEntity.getItems() != null) {
-            detail.setItems(new ArrayList<>());
-            for (OrderItemEntity orderItemEntity : orderEntity.getItems()) {
-                OrderItemDetailDto itemDetailDto = toItemDetailDto(orderItemEntity);
-                if (itemDetailDto != null) {
-                    detail.getItems().add(itemDetailDto);
-                }
-            }
-        }
-
-        // Status history (Panache query)
-        List<OrderStatusHistoryEntity> histories = OrderStatusHistoryEntity
-                .find("select h from OrderStatusHistoryEntity h where h.order.id = ?1 order by h.createdAt desc", orderEntity.getId())
-                .list();
-
-        if (histories != null) {
-            for (OrderStatusHistoryEntity history : histories) {
-                if (history == null) {
-                    continue;
-                }
-                OrderDetailRespDto.OrderStatusHistoryDetailRespDto historyDto = new OrderDetailRespDto.OrderStatusHistoryDetailRespDto();
-                historyDto.setId(history.getId());
-                historyDto.setStatus(history.getStatus());
-                historyDto.setComment(history.getComment());
-                historyDto.setChangedBy(history.getChangedBy());
-                historyDto.setCreatedAt(history.getCreatedAt());
-                detail.getStatusHistory().add(historyDto);
-            }
-        }
-
-        return detail;
-    }
-
-    /**
-     * Maps an OrderEntity to an OrderSummaryDto.
-     * Computes itemCount as the sum of quantities across all line items.
-     */
-    public OrderSummaryDto toSummaryDto(OrderEntity orderEntity)
-    {
-        if (orderEntity == null) {
-            return null;
-        }
-
-        OrderSummaryDto dto = new OrderSummaryDto();
-        dto.setId(orderEntity.getId() != null ? orderEntity.getId().toString() : null);
-        dto.setOrderDate(orderEntity.getCreatedAt() != null ? orderEntity.getCreatedAt().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME) : null);
-        dto.setStatus(orderEntity.getStatus() != null ? orderEntity.getStatus().name() : null);
-        dto.setItemCount(orderEntity.getItems() != null ? orderEntity.getItems()
-                .stream()
-                .mapToInt(item -> item.getQuantity() != null ? item.getQuantity() : 0)
-                .sum() : 0);
-
-        dto.setTotalAmount(orderEntity.getTotalAmount() != null ? orderEntity.getTotalAmount().doubleValue() : 0.0);
-        return dto;
-    }
 }

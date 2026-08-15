@@ -6,9 +6,9 @@ import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import jakarta.transaction.Transactional.TxType;
 import jakarta.ws.rs.NotFoundException;
-import org.ecommerce.backend.mapper.ProductImportParser;
-import org.ecommerce.backend.mapper.ProductImportParser.StagedProductCsvRow;
-import org.ecommerce.backend.mapper.ProductImportValidator;
+import org.ecommerce.backend.csv.ProductImportParser;
+import org.ecommerce.backend.csv.ProductImportParser.StagedProductCsvRow;
+import org.ecommerce.backend.csv.ProductImportValidator;
 import org.ecommerce.backend.mapper.UploadBatchDtoMapper;
 import org.ecommerce.common.dto.ProductComparisonDto;
 import org.ecommerce.common.dto.ProductUploadBatchDto;
@@ -41,6 +41,9 @@ public class ProductImportService implements ImportBatchService<ProductCompariso
 
     @Inject
     org.ecommerce.backend.mapper.ProductComparisonMapper productComparisonMapper;
+
+    @Inject
+    UploadBatchDtoMapper uploadBatchDtoMapper;
 
     @Inject
     CategoryRepository categoryRepository;
@@ -366,7 +369,7 @@ public class ProductImportService implements ImportBatchService<ProductCompariso
     public List<ProductUploadBatchDto> getProductUploadBatches()
     {
         List<ProductUploadBatchEntity> batches = productUploadBatchRepository.listAllOrderByCreatedAtDesc();
-        return batches.stream().map(UploadBatchDtoMapper::fromProductBatch).collect(Collectors.toList());
+        return batches.stream().map(uploadBatchDtoMapper::fromProductBatch).collect(Collectors.toList());
     }
 
     private ChunkedImportStateMachine.ChunkImportStrategy<StagedProductCsvRow, ProductUploadStagedEntity, ProductUploadBatchEntity> createStrategy()
