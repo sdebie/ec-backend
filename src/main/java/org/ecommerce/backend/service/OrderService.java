@@ -16,6 +16,7 @@ import org.ecommerce.common.entity.ShippingMethodEntity;
 import org.ecommerce.common.enums.CustomerTypeEn;
 import org.ecommerce.common.enums.OrderStatusEn;
 import org.ecommerce.common.enums.ProductStatusEn;
+import org.ecommerce.common.enums.StockEffect;
 import org.ecommerce.common.query.FilterRequest;
 import org.ecommerce.common.query.PageRequest;
 import org.ecommerce.common.repository.OrderRepository;
@@ -203,21 +204,106 @@ public class OrderService
     }
 
     /**
+     * Moves one order from the status the caller read to a new one, and applies
+     * everything that transition entails — the stock movement and the timeline
+     * entry — as a single unit.
+     * <p>
+     * <b>This is the only way an order's status changes.</b> Every writer goes
+     * through here: checkout's pay-at-collection confirmation, the PayFast ITN
+     * handler, the abandoned-order sweep and the staff mutation. Before that they
+     * each hardcoded their own from/to pair and decided about stock for themselves,
+     * so the field was guarded atomically while its side effects were coordinated
+     * only by convention — a new writer could claim a status correctly and still
+     * strand an order's goods, with nothing to catch it.
+     * <p>
+     * The status the caller already read is the status claimed. The claim is an
+     * atomic conditional UPDATE, so losing it means another writer moved the order
+     * in between; that is reported as an outcome rather than thrown, because what
+     * to do about it differs per caller.
+     * <p>
+     * Ordering matters: nothing is written until the claim is won. Since every
+     * stock-returning status is terminal, and a conditional UPDATE admits exactly
+     * one winner, the loser of a race touches no stock and the restore happens
+     * exactly once — with no version column and no double-restore guard.
+     * <p>
+     * Caller must be in a transaction.
+     *
+     * @throws IllegalArgumentException if the transition is not one this source may
+     *                                  make, or if the restock answer does not match
+     *                                  what the target status needs. Whitelisted in
+     *                                  {@code show-runtime-exception-message}, so the
+     *                                  message reaches the admin UI intact.
+     */
+    public TransitionOutcome applyTransition(OrderEntity order, StatusTransition transition)
+    {
+        OrderStatusEn from = order.getStatus();
+        OrderStatusEn to = transition.to();
+
+        // Checked before legality, and reported rather than thrown. A system writer
+        // names the step it acts on, so finding the order elsewhere means another
+        // writer reached it first — the expected outcome of a race, not a bug. The
+        // conditional UPDATE below still does the real work; this only keeps a lost
+        // race from surfacing as an illegal-transition error.
+        if (transition.expectedFrom() != null && from != transition.expectedFrom()) {
+            LOG.debugf("Order %s is %s, not the expected %s; another writer moved it first",
+                    order.getId(), from, transition.expectedFrom());
+            return TransitionOutcome.lost(from, to);
+        }
+
+        boolean permitted = transition.source() == TransitionSource.STAFF
+                ? from != null && from.canTransitionTo(to)
+                : from != null && from.canSystemTransitionTo(to);
+        if (!permitted) {
+            throw new IllegalArgumentException("Cannot move an order from " + from + " to " + to);
+        }
+
+        long claimed = OrderEntity.update("status = ?1 where id = ?2 and status = ?3", to, order.getId(), from);
+        if (claimed == 0) {
+            LOG.debugf("Lost the status claim on order %s: it is no longer %s", order.getId(), from);
+            return TransitionOutcome.lost(from, to);
+        }
+        order.setStatus(to);
+
+        // The destination decides, on its own, with no input from the caller. A refund
+        // moves no stock: whether the goods came back is a physical fact the server does
+        // not have, and putting them back on sale is the returns feature.
+        boolean stockReturned = to.stockEffect() == StockEffect.RESTORE;
+        if (stockReturned) {
+            restoreStock(order);
+        }
+
+        OrderStatusHistoryEntity.record(order, to,
+                transitionComment(from, transition), transition.changedBy());
+
+        return TransitionOutcome.won(from, to, stockReturned);
+    }
+
+    /**
+     * The timeline entry for a transition: what a system writer supplied, or for a
+     * staff move the transition itself. Stock movement is not spelled out — it follows
+     * from the target status alone, so saying so would be noise on every row.
+     */
+    private String transitionComment(OrderStatusEn from, StatusTransition transition)
+    {
+        return transition.comment() != null
+                ? transition.comment()
+                : from + " → " + transition.to();
+    }
+
+    /**
      * Returns an order's stock to inventory — the inverse of {@link #reserveStock},
      * which consumes it the moment an order reaches CREATED, before payment. Every
      * path that ends an order before its goods are dispatched must give that stock
-     * back through here, or it is held by an order that will never ship and is lost
-     * for good.
+     * back, or it is held by an order that will never ship and is lost for good.
      * <p>
-     * The single definition of what "give the stock back" means, shared by the staff
-     * cancellation and the abandoned-order sweep so the two can never diverge.
-     * <p>
-     * Callers must already have won an atomic status claim on the order. CANCELLED
-     * and SYSTEM_CANCELED are both terminal, so a claimed order can never be
-     * cancelled a second time — that is what makes this exactly-once, with no
-     * version column and no double-restore guard. Caller must be in a transaction.
+     * Private on purpose. The exactly-once guarantee rests entirely on the caller
+     * having won an atomic status claim first, and that precondition used to be
+     * enforced by a sentence in a comment on a public method — so any new caller
+     * that skipped the claim would double-restore, inflating stock invisibly until
+     * an oversell. {@link #applyTransition} is now the only thing that can reach
+     * this, and it always claims first.
      */
-    public void restoreStock(OrderEntity order)
+    private void restoreStock(OrderEntity order)
     {
         if (order == null || order.getItems() == null) {
             return;
@@ -321,14 +407,19 @@ public class OrderService
 
     /**
      * Applies a staff-driven status change to one order.
+     * <p>
+     * Owns only what is specific to a staff request: parsing what was asked for,
+     * turning a lost claim into something the admin UI can act on, and the
+     * confirmation email. The transition itself belongs to
+     * {@link #applyTransition}, which every other writer shares.
      *
-     * @param changedBy    display name of the staff member making the change, recorded on the timeline
-     * @param restockItems whether a refund returns its items to stock — required for REFUNDED,
-     *                     rejected for every other target. See {@link OrderStatusEn#isPreDispatch()}
-     *                     for why this is the caller's answer and not something derived here.
+     * @param changedBy display name of the staff member making the change, recorded on the timeline
+     * @throws IllegalArgumentException if the transition is not one the workflow allows — thrown by
+     *                                  {@link #applyTransition} and whitelisted so its message
+     *                                  reaches the admin UI
      */
     @Transactional
-    public OrderResponseDto updateOrderStatus(UUID orderId, String newStatus, String changedBy, Boolean restockItems) throws GraphQLException
+    public OrderResponseDto updateOrderStatus(UUID orderId, String newStatus, String changedBy) throws GraphQLException
     {
         if (orderId == null) {
             throw new GraphQLException("orderId is required");
@@ -348,69 +439,18 @@ public class OrderService
             throw new GraphQLException("Invalid status: " + newStatus);
         }
 
-        OrderStatusEn previousStatus = order.getStatus();
-        if (previousStatus == null || !previousStatus.canTransitionTo(targetStatus)) {
-            throw new GraphQLException("Cannot move an order from " + previousStatus + " to " + targetStatus);
-        }
-
-        // Both directions are rejections, never defaults. A refund has no safe default
-        // here — whether the goods came back is knowledge the server does not have — and
-        // silently ignoring a restock instruction on some other transition would be the
-        // same invisible stock movement this parameter exists to prevent.
-        if (targetStatus == OrderStatusEn.REFUNDED && restockItems == null) {
-            throw new GraphQLException("A refund must state whether its items return to stock");
-        }
-        if (targetStatus != OrderStatusEn.REFUNDED && restockItems != null) {
-            throw new GraphQLException("Only a refund may carry a restock decision");
-        }
-
-        // Atomic conditional claim from the exact status just read — the same pattern
-        // used for the stock decrement and the other two order-status writers (the
-        // PayFast ITN handler, the abandoned-order release job). A plain setStatus()+
-        // persist() here could silently clobber a concurrent write from either of them.
-        long updated = OrderEntity.update("status = ?1 where id = ?2 and status = ?3",
-                targetStatus, order.getId(), previousStatus);
-        if (updated == 0) {
+        TransitionOutcome outcome = applyTransition(order,
+                StatusTransition.staff(targetStatus, changedBy));
+        if (!outcome.claimed()) {
             throw new GraphQLException("Order status changed concurrently; please refresh and try again");
         }
-        order.setStatus(targetStatus);
 
-        // Stock is consumed at CREATED, before payment, so a status that ends an order
-        // before dispatch must give it back. CANCELLED always does: it is reachable only
-        // from pre-dispatch statuses — IN_TRANSIT allows DELIVERED alone — so its goods
-        // have provably never left. REFUNDED is reachable from both sides of dispatch,
-        // which is why it carries an answer instead of assuming one. The winning claim
-        // above is what makes either run exactly once.
-        boolean stockReturned = targetStatus == OrderStatusEn.CANCELLED
-                || (targetStatus == OrderStatusEn.REFUNDED && Boolean.TRUE.equals(restockItems));
-        if (stockReturned) {
-            restoreStock(order);
-        }
-
-        OrderStatusHistoryEntity.record(order, targetStatus,
-                transitionComment(previousStatus, targetStatus, stockReturned), changedBy);
-
-        //Order Created In store Payment
-        if (order.getStatus().equals(OrderStatusEn.IN_STORE_PAYMENT)) {
+        // Staff marking an order payable at collection is a confirmation to the shopper:
+        // nothing further happens online, so this is the point their order is settled.
+        if (outcome.to() == OrderStatusEn.IN_STORE_PAYMENT) {
             orderNotificationService.sendConfirmationEmail(order);
         }
         return orderMapper.toResponseDto(order);
-    }
-
-    /**
-     * The timeline entry for a staff transition. A refund spells out what happened to
-     * the stock, because a refund is the one transition where either answer is valid —
-     * "no stock came back" has to be distinguishable from "nobody considered it". Every
-     * other transition's stock behaviour follows from its target alone, so saying so
-     * would be noise.
-     */
-    private String transitionComment(OrderStatusEn previousStatus, OrderStatusEn targetStatus, boolean stockReturned)
-    {
-        String transition = previousStatus + " → " + targetStatus;
-        if (targetStatus != OrderStatusEn.REFUNDED) {
-            return transition;
-        }
-        return transition + (stockReturned ? " (stock returned)" : " (stock not returned)");
     }
 
     public List<OrderResponseDto> getAllOrders(PageRequest pageRequest, FilterRequest filterRequest)

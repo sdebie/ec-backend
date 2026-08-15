@@ -7,12 +7,14 @@ import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.ecommerce.backend.service.OrderService;
+import org.ecommerce.backend.service.StatusTransition;
+import org.ecommerce.backend.service.TransitionOutcome;
 import org.ecommerce.common.entity.OrderEntity;
-import org.ecommerce.common.entity.OrderStatusHistoryEntity;
 import org.ecommerce.common.enums.OrderStatusEn;
 import org.jboss.logging.Logger;
 
 import java.time.LocalDateTime;
+import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
 
@@ -23,12 +25,21 @@ import java.util.UUID;
  * otherwise hold that stock forever. This sweep cancels CREATED orders older
  * than the configured hold window and returns their stock to sale.
  * <p>
- * Only CREATED is touched. IN_STORE_PAYMENT, PAID and every later status are
- * real commitments, not abandoned carts, and must never be auto-cancelled.
- * That narrow filter is why this sweep is not the whole story: a staff member
+ * Which statuses it touches is {@link OrderStatusEn#isReclaimableByStockRecovery()},
+ * not a literal here — every unpaid status that keeps its reservation, and no other.
+ * That covers a checkout abandoned before payment was started, one abandoned at the
+ * gateway, and one whose card was declined and never retried; the last of those holds
+ * its stock on purpose so a retry has something to buy, which is exactly why something
+ * has to reclaim it if the retry never comes.
+ * <p>
+ * PAID and every later status are real commitments and must never be auto-cancelled.
+ * IN_STORE_PAYMENT is excluded too, although unpaid: a shopper coming to the shop to
+ * pay has not abandoned anything, so their order is cancelled by hand or not at all.
+ * <p>
+ * That narrow filter is also why this sweep is not the whole story: a staff member
  * cancelling an order by hand recovers its stock through the same
- * {@link OrderService#restoreStock} call, since such an order never becomes
- * visible to this query.
+ * {@link OrderService#applyTransition} call this uses, since such an order never
+ * becomes visible to this query.
  *
  * <h2>Why each order gets its own transaction</h2>
  * A sweep-wide transaction makes this job destroy itself under exactly the
@@ -119,15 +130,30 @@ public class StockRecoveryJob
     }
 
     /**
+     * The statuses this sweep reclaims, asked of the enum rather than listed here.
+     * <p>
+     * A hardcoded status is how this job silently stops working. An order that takes
+     * one more step before payment — reaching the gateway, or having a card declined —
+     * would stop matching, every abandoned checkout would hold its stock forever, and
+     * the logs would still report a clean sweep every five minutes. Deriving the set
+     * means a new unpaid status is covered the moment
+     * {@link OrderStatusEn#isReclaimableByStockRecovery()} says it should be.
+     */
+    private static final List<OrderStatusEn> RECLAIMABLE = Arrays.stream(OrderStatusEn.values())
+            .filter(OrderStatusEn::isReclaimableByStockRecovery)
+            .toList();
+
+    /**
      * Oldest first, so a backlog drains in the order it accumulated and a run
      * cannot starve the orders that have been waiting longest.
      */
     private List<UUID> findAbandonedIds(LocalDateTime cutoff)
     {
         return em.createQuery(
-                        "select o.id from OrderEntity o where o.status = :status and o.createdAt < :cutoff order by o.createdAt",
+                        "select o.id from OrderEntity o where o.status in :statuses and o.createdAt < :cutoff "
+                                + "order by o.createdAt",
                         UUID.class)
-                .setParameter("status", OrderStatusEn.CREATED)
+                .setParameter("statuses", RECLAIMABLE)
                 .setParameter("cutoff", cutoff)
                 .setMaxResults(batchSize)
                 .getResultList();
@@ -136,29 +162,32 @@ public class StockRecoveryJob
     /** @return whether this call is the one that released the order */
     private boolean releaseOrder(UUID orderId)
     {
-        // Claim before loading anything: an atomic conditional UPDATE, exactly like the
-        // stock decrement itself. The candidate query ran in an earlier transaction, so
-        // an ITN or a staff action may have moved this order off CREATED since it was
-        // listed. Zero rows affected means we lost that race and must not touch its
-        // stock; whoever did change it now owns the stock it was holding.
-        long claimed = OrderEntity.update("status = ?1 where id = ?2 and status = ?3",
-                OrderStatusEn.SYSTEM_CANCELED, orderId, OrderStatusEn.CREATED);
-        if (claimed == 0) {
+        OrderEntity order = loadWithLines(orderId);
+        if (order == null) {
+            LOG.warnf("Order %s vanished between being listed and being released", orderId);
+            return false;
+        }
+
+        // The candidate query ran in an earlier transaction, so a payment callback or a
+        // staff action may have moved this order since it was listed. Naming the status
+        // just read as the expected one is what makes that a reported race rather than
+        // an error: whoever did move it now owns the stock it was holding, and returning
+        // it here would hand the same units out twice.
+        OrderStatusEn claimedFrom = order.getStatus();
+        if (claimedFrom == null || !claimedFrom.isReclaimableByStockRecovery()) {
+            LOG.debugf("Skipped releasing order %s: it is now %s, which the sweep does not reclaim",
+                    orderId, claimedFrom);
+            return false;
+        }
+
+        TransitionOutcome outcome = orderService.applyTransition(order,
+                StatusTransition.system(claimedFrom, OrderStatusEn.SYSTEM_CANCELED,
+                        "Automatically cancelled: checkout was not completed within the stock hold window"));
+
+        if (!outcome.claimed()) {
             LOG.debugf("Skipped releasing order %s: its status changed concurrently", orderId);
             return false;
         }
-
-        OrderEntity order = loadWithLines(orderId);
-        if (order == null) {
-            LOG.warnf("Order %s vanished after its status was claimed; no stock recovered for it", orderId);
-            return false;
-        }
-
-        orderService.restoreStock(order);
-
-        OrderStatusHistoryEntity.record(order, OrderStatusEn.SYSTEM_CANCELED,
-                "Automatically cancelled: checkout was not completed within the stock hold window",
-                OrderService.SYSTEM_ACTOR);
 
         LOG.debugf("Released abandoned order %s (created %s), stock recovered", orderId, order.getCreatedAt());
         return true;

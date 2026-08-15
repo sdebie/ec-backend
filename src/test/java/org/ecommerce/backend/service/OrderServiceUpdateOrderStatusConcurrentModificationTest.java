@@ -69,15 +69,21 @@ class OrderServiceUpdateOrderStatusConcurrentModificationTest
         when(OrderEntity.update(anyString(), any(Object[].class))).thenReturn(0);
 
         GraphQLException ex = assertThrows(GraphQLException.class,
-                () -> orderService.updateOrderStatus(orderId, "CANCELLED", "Dana Staff", null));
+                () -> orderService.updateOrderStatus(orderId, "ADMIN_CANCELED", "Dana Staff"));
 
         assertEquals("Order status changed concurrently; please refresh and try again", ex.getMessage());
         assertEquals(OrderStatusEn.CREATED, order.getStatus(), "in-memory status must not flip when the claim is lost");
     }
 
+    /**
+     * The transition that <em>would</em> have restocked is the one worth checking here:
+     * losing the claim means another writer already owns this order, so handing its stock
+     * back would credit the same units twice. Ordering is what guarantees it — nothing is
+     * written until the claim is won — and this pins that rather than trusting it.
+     */
     @Test
-    @DisplayName("a refund that loses the claim returns no stock, even though it asked to")
-    void updateOrderStatus_refundLosesClaim_restocksNothing()
+    @DisplayName("a cancellation that loses the claim returns no stock, though winning would have")
+    void updateOrderStatus_cancellationLosesClaim_restocksNothing()
     {
         UUID orderId = UUID.randomUUID();
 
@@ -86,16 +92,13 @@ class OrderServiceUpdateOrderStatusConcurrentModificationTest
         order.setSessionId(UUID.randomUUID());
         order.setStatus(OrderStatusEn.PAID);
 
-        // Mocked so the stock write can be observed; if the claim were ever allowed to
-        // lose and still restock, stock would be handed back for an order another
-        // writer already owns.
         PanacheMock.mock(ProductVariantEntity.class);
 
         when(orderRepository.findOrderInfoById(any(UUID.class))).thenReturn(order);
         when(OrderEntity.update(anyString(), any(Object[].class))).thenReturn(0);
 
         assertThrows(GraphQLException.class,
-                () -> orderService.updateOrderStatus(orderId, "REFUNDED", "Dana Staff", true));
+                () -> orderService.updateOrderStatus(orderId, "ADMIN_CANCELED", "Dana Staff"));
 
         PanacheMock.verify(ProductVariantEntity.class, never())
                 .update(anyString(), any(Object[].class));

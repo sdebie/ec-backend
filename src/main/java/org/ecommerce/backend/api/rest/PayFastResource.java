@@ -9,11 +9,12 @@ import jakarta.ws.rs.core.Response;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.ecommerce.backend.service.OrderNotificationService;
 import org.ecommerce.backend.service.OrderService;
+import org.ecommerce.backend.service.StatusTransition;
+import org.ecommerce.backend.service.TransitionOutcome;
 import org.ecommerce.backend.service.payfast.HtmlFormField;
 import org.ecommerce.backend.service.payfast.PayFastService;
 import org.ecommerce.backend.utils.ClientIpUtils;
 import org.ecommerce.common.entity.OrderEntity;
-import org.ecommerce.common.entity.OrderStatusHistoryEntity;
 import org.ecommerce.common.entity.PaymentLogEntity;
 import org.ecommerce.common.enums.OrderStatusEn;
 import org.jboss.logging.Logger;
@@ -38,6 +39,9 @@ public class PayFastResource
 
     @Inject
     OrderNotificationService orderNotificationService;
+
+    @Inject
+    OrderService orderService;
 
     @ConfigProperty(name = "payfast.gateway.url")
     String gatewayUrl;
@@ -73,6 +77,22 @@ public class PayFastResource
         }
 
         LOG.debug("Got Order from DB with ID: " + quote.getId());
+
+        // Invoking the gateway is what moves the order to PENDING_PAYMENT — the status
+        // the ITN then claims from. A retry after a declined payment comes back through
+        // here from PAYMENT_FAILED, which is why the source is whatever the order is in
+        // rather than CREATED. An order already at PENDING_PAYMENT is a shopper who went
+        // back and resubmitted, so it stays put rather than erroring.
+        OrderStatusEn from = quote.getStatus();
+        if (from != OrderStatusEn.PENDING_PAYMENT) {
+            TransitionOutcome outcome = orderService.applyTransition(quote,
+                    StatusTransition.system(from, OrderStatusEn.PENDING_PAYMENT, "Payment started"));
+            if (!outcome.claimed()) {
+                LOG.warnf("Could not start payment for order %s: it is %s", orderUuid, quote.getStatus());
+                return Response.status(Response.Status.CONFLICT)
+                        .entity(Map.of("error", "Order can no longer be paid")).build();
+            }
+        }
 
         List<HtmlFormField> hiddenHTMLFormFields = payFastService.generateHiddenHTMLForm(quote, email);
 
@@ -171,20 +191,20 @@ public class PayFastResource
                         LOG.warn("ITN rejected: PayFast server confirmation failed for order " + orderId);
                         return Response.status(Response.Status.UNAUTHORIZED).build();
                     } else {
-                        // Atomic conditional claim, mirroring the stock decrement's own
-                        // pattern: the order could have been cancelled by the abandoned-order
-                        // release job (or a staff action) between the read above and this
-                        // write. A plain setStatus()+persist() would silently clobber that.
-                        long claimed = OrderEntity.update("status = ?1 where id = ?2 and status = ?3",
-                                OrderStatusEn.PAID, orderId, OrderStatusEn.CREATED);
-                        if (claimed == 1) {
-                            order.setStatus(OrderStatusEn.PAID);
-                            OrderStatusHistoryEntity.record(order, OrderStatusEn.PAID,
-                                    "Payment confirmed by PayFast", OrderService.SYSTEM_ACTOR);
+                        // The order could have been cancelled by the abandoned-order sweep,
+                        // or moved by a staff action, between the read above and this write.
+                        // Naming PENDING_PAYMENT as the expected status makes that a lost
+                        // claim rather than an exception, and the claim itself is atomic —
+                        // so a payment can never overwrite a decision another writer made.
+                        TransitionOutcome outcome = orderService.applyTransition(order,
+                                StatusTransition.system(OrderStatusEn.PENDING_PAYMENT, OrderStatusEn.PAID,
+                                        "Payment confirmed by PayFast"));
+
+                        if (outcome.claimed()) {
                             LOG.debug("Updated Order " + orderId + " to PAID");
                             orderNotificationService.sendConfirmationEmail(order);
                         } else {
-                            handlePaidButNoLongerCreated(orderId, order, amountGross);
+                            handlePaidButNoLongerPending(orderId, order, amountGross);
                         }
                     }
                 } else {
@@ -195,14 +215,53 @@ public class PayFastResource
             } catch (Exception ex) {
                 LOG.error("Failed to update Order status to PAID due to: " + ex.getMessage());
             }
+        } else if ("FAILED".equalsIgnoreCase(params.get("payment_status"))) {
+            recordFailedPayment(params.get("m_payment_id"));
         }
 
         return Response.ok().build();
     }
 
     /**
-     * PayFast has confirmed a real payment, but the order is no longer CREATED — the
-     * atomic claim above lost. Re-reads the current status to tell apart the two
+     * The gateway declined the payment. The order keeps its reservation on purpose —
+     * the shopper is told to retry, and releasing their items first would leave nothing
+     * to retry against. The abandoned-order sweep reclaims it if the retry never comes,
+     * which is why PAYMENT_FAILED is one of the statuses it covers.
+     * <p>
+     * A decline that arrives for an order which is no longer awaiting payment is not an
+     * anomaly worth alerting on: no money changed hands, so the worst case is a stale
+     * notification for an order somebody already cancelled.
+     */
+    private void recordFailedPayment(String orderIdStr)
+    {
+        UUID orderId;
+        try {
+            orderId = UUID.fromString(orderIdStr);
+        } catch (IllegalArgumentException | NullPointerException e) {
+            LOG.warn("Invalid m_payment_id on a failed-payment ITN: '" + orderIdStr + "'");
+            return;
+        }
+
+        OrderEntity order = OrderEntity.findById(orderId);
+        if (order == null) {
+            LOG.warn("Order not found for failed-payment ITN m_payment_id=" + orderId);
+            return;
+        }
+
+        TransitionOutcome outcome = orderService.applyTransition(order,
+                StatusTransition.system(OrderStatusEn.PENDING_PAYMENT, OrderStatusEn.PAYMENT_FAILED,
+                        "Payment declined by PayFast"));
+
+        if (outcome.claimed()) {
+            LOG.debug("Order " + orderId + " marked PAYMENT_FAILED; its stock stays reserved for a retry");
+        } else {
+            LOG.debug("Ignoring failed-payment ITN for order " + orderId + ": it is " + order.getStatus());
+        }
+    }
+
+    /**
+     * PayFast has confirmed a real payment, but the order is no longer awaiting one —
+     * the atomic claim above lost. Re-reads the current status to tell apart the two
      * possible causes: a concurrent duplicate ITN already won (already PAID — the
      * same harmless replay case the fast-path above usually catches, just arrived
      * out of order) versus anything else (most likely the abandoned-order release
@@ -210,7 +269,7 @@ public class PayFastResource
      * arrived). The second case is money received against stock that may no longer
      * be reserved for it — that needs a human to reconcile, not a silent drop.
      */
-    private void handlePaidButNoLongerCreated(UUID orderId, OrderEntity staleOrder, BigDecimal amountGross)
+    private void handlePaidButNoLongerPending(UUID orderId, OrderEntity staleOrder, BigDecimal amountGross)
     {
         OrderEntity current = OrderEntity.findById(orderId);
         OrderStatusEn currentStatus = current != null ? current.getStatus() : null;

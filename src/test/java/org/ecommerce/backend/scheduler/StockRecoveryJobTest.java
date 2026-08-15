@@ -17,6 +17,8 @@ import org.ecommerce.common.enums.ProductTypeEn;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -25,6 +27,9 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.doCallRealMethod;
 import static org.mockito.Mockito.doThrow;
@@ -187,6 +192,90 @@ class StockRecoveryJobTest
         assertEquals("SYSTEM", history.get(0).getChangedBy());
     }
 
+    /**
+     * The order sits here for the whole time the shopper is at the gateway, which is
+     * exactly when a checkout gets abandoned. A sweep that only matched CREATED would
+     * find nothing, report a clean run every five minutes, and let every abandoned
+     * online checkout hold its stock forever.
+     */
+    @Test
+    @DisplayName("a PENDING_PAYMENT order is reclaimed — this is where an abandoned online checkout sits")
+    void pendingPaymentOrder_isReleasedAndStockRecovered()
+    {
+        String marker = "ZZSRJ-PP-" + UUID.randomUUID().toString().substring(0, 8);
+        UUID variantId = newVariant(marker, 5);
+        UUID orderId = newOrder(OrderStatusEn.PENDING_PAYMENT, variantId, 3, FAR_PAST);
+
+        job.releaseAbandonedOrders();
+
+        assertEquals(OrderStatusEn.SYSTEM_CANCELED, statusOf(orderId));
+        assertEquals(8, stockOf(variantId), "5 in stock + 3 recovered from the abandoned checkout");
+    }
+
+    /**
+     * A declined payment deliberately keeps its reservation so the shopper can retry.
+     * This is the other half of that bargain: if the retry never comes, the sweep is
+     * the only thing that ever gets those goods back.
+     */
+    @Test
+    @DisplayName("a PAYMENT_FAILED order is reclaimed once the retry window has passed")
+    void paymentFailedOrder_isReleasedAndStockRecovered()
+    {
+        String marker = "ZZSRJ-PF-" + UUID.randomUUID().toString().substring(0, 8);
+        UUID variantId = newVariant(marker, 5);
+        UUID orderId = newOrder(OrderStatusEn.PAYMENT_FAILED, variantId, 3, FAR_PAST);
+
+        job.releaseAbandonedOrders();
+
+        assertEquals(OrderStatusEn.SYSTEM_CANCELED, statusOf(orderId));
+        assertEquals(8, stockOf(variantId), "a retry that never came must not hold stock forever");
+    }
+
+    /**
+     * The guard against the whole class of bug above: whatever the enum says is
+     * reclaimable must actually be reclaimed. Adding an unpaid status and forgetting
+     * the sweep fails here rather than silently leaking stock in production.
+     */
+    @ParameterizedTest
+    @EnumSource(value = OrderStatusEn.class, names = {"CREATED", "PENDING_PAYMENT", "PAYMENT_FAILED"})
+    @DisplayName("every status the enum calls reclaimable is actually swept")
+    void everyReclaimableStatus_isSwept(OrderStatusEn status)
+    {
+        assertTrue(status.isReclaimableByStockRecovery(),
+                status + " is no longer reclaimable; update this test's names alongside the enum");
+
+        String marker = "ZZSRJ-RC-" + UUID.randomUUID().toString().substring(0, 8);
+        UUID variantId = newVariant(marker, 5);
+        UUID orderId = newOrder(status, variantId, 3, FAR_PAST);
+
+        job.releaseAbandonedOrders();
+
+        assertEquals(OrderStatusEn.SYSTEM_CANCELED, statusOf(orderId),
+                status + " is marked reclaimable but the sweep left it alone");
+        assertEquals(8, stockOf(variantId), status + " was swept without its stock coming back");
+    }
+
+    /** The complement: nothing the enum excludes may be touched, whatever its age. */
+    @ParameterizedTest
+    @EnumSource(value = OrderStatusEn.class,
+            names = {"IN_STORE_PAYMENT", "PAID", "PROCESSING", "READY_TO_SHIP", "READY_FOR_COLLECTION"})
+    @DisplayName("a status the enum excludes is never swept, however old the order")
+    void nonReclaimableStatus_isUntouched(OrderStatusEn status)
+    {
+        assertFalse(status.isReclaimableByStockRecovery(),
+                status + " became reclaimable; move it to the other test");
+
+        String marker = "ZZSRJ-NR-" + UUID.randomUUID().toString().substring(0, 8);
+        UUID variantId = newVariant(marker, 5);
+        UUID orderId = newOrder(status, variantId, 3, FAR_PAST);
+
+        job.releaseAbandonedOrders();
+
+        assertEquals(status, statusOf(orderId), status + " is a commitment and must not be auto-cancelled");
+        assertEquals(5, stockOf(variantId), status + " lost its reservation to the sweep");
+        assertEquals(0L, historyCountFor(orderId));
+    }
+
     @Test
     @DisplayName("an IN_STORE_PAYMENT order is a real commitment and must never be auto-cancelled")
     void inStorePaymentOrder_isUntouched()
@@ -242,12 +331,14 @@ class StockRecoveryJobTest
         UUID poisonOrder = newOrder(OrderStatusEn.CREATED, poisonVariant, 4, FAR_PAST);
         UUID healthyOrder = newOrder(OrderStatusEn.CREATED, healthyVariant, 7, FAR_PAST.plusMinutes(1));
 
-        // Fails only the first order's stock recovery. Sweep-wide, this would roll the
+        // Fails only the first order's release. Sweep-wide, this would roll the
         // healthy order's release back too and neither would ever be released.
         doThrow(new IllegalStateException("simulated stock recovery failure"))
-                .when(orderService).restoreStock(argThat(order -> order != null && poisonOrder.equals(order.getId())));
+                .when(orderService).applyTransition(
+                        argThat(order -> order != null && poisonOrder.equals(order.getId())), any());
         doCallRealMethod()
-                .when(orderService).restoreStock(argThat(order -> order != null && !poisonOrder.equals(order.getId())));
+                .when(orderService).applyTransition(
+                        argThat(order -> order != null && !poisonOrder.equals(order.getId())), any());
 
         job.releaseAbandonedOrders();
 

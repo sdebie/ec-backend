@@ -56,6 +56,9 @@ class PayFastResourceTest
         order.setCustomerEntity(null); // Guest order
 
         when(OrderEntity.findById(orderId)).thenReturn(order);
+        // Invoking the gateway moves the order to PENDING_PAYMENT through the atomic
+        // claim. Unstubbed, the PanacheMock static returns 0 and the claim would "lose".
+        when(OrderEntity.update(anyString(), any(Object[].class))).thenReturn(1);
 
         List<HtmlFormField> mockFields = List.of(
                 new HtmlFormField("merchant_id", "hidden", "10000100"),
@@ -125,7 +128,9 @@ class PayFastResourceTest
         OrderEntity order = spy(new OrderEntity());
         order.setId(orderId);
         order.setTotalAmount(new BigDecimal("100.00"));
-        order.setStatus(OrderStatusEn.CREATED);
+        // Where a real order is when its ITN arrives: /payments/checkout moved it here
+        // when the gateway was invoked, and PAID is claimed from exactly this status.
+        order.setStatus(OrderStatusEn.PENDING_PAYMENT);
 
         when(payFastService.verifyItnSignature(anyString())).thenReturn(true);
         when(payFastService.isTrustedSource(anyString())).thenReturn(true);

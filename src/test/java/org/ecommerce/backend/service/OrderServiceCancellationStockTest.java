@@ -24,11 +24,10 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 /**
  * DB-backed tests for the stock side of {@link OrderService#updateOrderStatus}.
  * <p>
- * Stock is consumed at CREATED, before payment, and the abandoned-order sweep — the only
- * other restorer — is hard-filtered to {@code status = CREATED}, so an order a staff member
- * cancels is structurally invisible to it forever. These tests pin that a staff cancellation
- * gives the stock back itself, from every status CANCELLED is reachable from, and that no
- * other transition does.
+ * Stock is consumed at CREATED, before payment, and the abandoned-order sweep only ever
+ * reclaims unpaid orders, so an order a staff member cancels after payment is structurally
+ * invisible to it forever. These tests pin that a staff cancellation gives the stock back
+ * itself, from statuses on both sides of payment, and that no other transition does.
  * <p>
  * Every case asserts a stock figure, not just a status: the defect these cover was a status
  * change that was itself entirely correct.
@@ -98,7 +97,7 @@ class OrderServiceCancellationStockTest
         OrderEntity order = newOrder(OrderStatusEn.CREATED, variant, 3);
         em.flush();
 
-        orderService.updateOrderStatus(order.getId(), "CANCELLED", "Dana Staff", null);
+        orderService.updateOrderStatus(order.getId(), "ADMIN_CANCELED", "Dana Staff");
 
         assertEquals(8, stockOf(variant.getId()), "5 in stock + 3 returned by the cancellation");
     }
@@ -113,7 +112,7 @@ class OrderServiceCancellationStockTest
         OrderEntity order = newOrder(OrderStatusEn.PAID, variant, 3);
         em.flush();
 
-        orderService.updateOrderStatus(order.getId(), "CANCELLED", "Dana Staff", null);
+        orderService.updateOrderStatus(order.getId(), "ADMIN_CANCELED", "Dana Staff");
 
         assertEquals(8, stockOf(variant.getId()), "5 in stock + 3 returned by the cancellation");
     }
@@ -128,7 +127,7 @@ class OrderServiceCancellationStockTest
         OrderEntity order = newOrder(OrderStatusEn.IN_STORE_PAYMENT, variant, 3);
         em.flush();
 
-        orderService.updateOrderStatus(order.getId(), "CANCELLED", "Dana Staff", null);
+        orderService.updateOrderStatus(order.getId(), "ADMIN_CANCELED", "Dana Staff");
 
         assertEquals(8, stockOf(variant.getId()), "5 in stock + 3 returned by the cancellation");
     }
@@ -152,7 +151,7 @@ class OrderServiceCancellationStockTest
         order.getItems().add(secondLine);
         em.flush();
 
-        orderService.updateOrderStatus(order.getId(), "CANCELLED", "Dana Staff", null);
+        orderService.updateOrderStatus(order.getId(), "ADMIN_CANCELED", "Dana Staff");
 
         em.flush();
         em.clear();
@@ -170,7 +169,7 @@ class OrderServiceCancellationStockTest
         OrderEntity order = newOrder(OrderStatusEn.CREATED, variant, 3);
         em.flush();
 
-        orderService.updateOrderStatus(order.getId(), "IN_STORE_PAYMENT", "Dana Staff", null);
+        orderService.updateOrderStatus(order.getId(), "IN_STORE_PAYMENT", "Dana Staff");
 
         assertEquals(5, stockOf(variant.getId()), "a live order must keep holding its stock");
     }
@@ -185,8 +184,8 @@ class OrderServiceCancellationStockTest
         OrderEntity order = newOrder(OrderStatusEn.DELIVERED, variant, 3);
         em.flush();
 
-        assertThrows(GraphQLException.class,
-                () -> orderService.updateOrderStatus(order.getId(), "CANCELLED", "Dana Staff", null));
+        assertThrows(IllegalArgumentException.class,
+                () -> orderService.updateOrderStatus(order.getId(), "ADMIN_CANCELED", "Dana Staff"));
 
         assertEquals(5, stockOf(variant.getId()));
     }
