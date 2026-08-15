@@ -1,4 +1,4 @@
-package org.ecommerce.backend.service;
+package org.ecommerce.backend.scheduler;
 
 import io.quarkus.narayana.jta.QuarkusTransaction;
 import io.quarkus.test.junit.QuarkusTest;
@@ -33,26 +33,26 @@ import java.util.concurrent.TimeUnit;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
- * Genuine two-thread concurrency test for {@code AbandonedOrderReleaseService.releaseOrder}'s
+ * Genuine two-thread concurrency test for {@code StockRecoveryJob.releaseOrder}'s
  * atomic conditional UPDATE. Cannot use {@link io.quarkus.test.TestTransaction} — same reason as
  * {@code OrderServiceCreateOrderFromCartConcurrencyIT}: that wraps the whole test in one
  * transaction, the opposite of what a race needs — so it follows this codebase's tracked-ID +
  * manual {@code @AfterEach} cleanup pattern instead.
  * <p>
- * {@code releaseOrder} is {@code private}, and {@link AbandonedOrderReleaseServiceTest}'s
+ * {@code releaseOrder} is {@code private}, and {@link StockRecoveryJobTest}'s
  * existing negative tests (IN_STORE_PAYMENT/PAID) only prove the SELECT-time status filter, which
  * never calls {@code releaseOrder} at all for those orders — the {@code claimed == 0} branch
  * inside {@code releaseOrder} itself has no coverage otherwise. Two threads both sweeping
- * {@link AbandonedOrderReleaseService#releaseAbandonedOrders()} against the SAME seeded CREATED
+ * {@link StockRecoveryJob#releaseAbandonedOrders()} against the SAME seeded CREATED
  * order reach it directly: with {@code %test.order.abandoned.hold-minutes=0} both threads' SELECT
  * can see the order as CREATED, both attempt the atomic claim, and Postgres's row lock guarantees
  * exactly one UPDATE wins — the loser genuinely observes 0 rows affected, not a simulated one.
  */
 @QuarkusTest
-class AbandonedOrderReleaseServiceConcurrencyIT
+class StockRecoveryJobConcurrencyIT
 {
     @Inject
-    AbandonedOrderReleaseService service;
+    StockRecoveryJob job;
 
     @Inject
     EntityManager em;
@@ -125,7 +125,7 @@ class AbandonedOrderReleaseServiceConcurrencyIT
         Callable<Void> sweep = () -> {
             ready.countDown();
             go.await();
-            service.releaseAbandonedOrders();
+            job.releaseAbandonedOrders();
             return null;
         };
 

@@ -1,4 +1,4 @@
-package org.ecommerce.backend.service;
+package org.ecommerce.backend.scheduler;
 
 import io.quarkus.test.TestTransaction;
 import io.quarkus.test.junit.QuarkusTest;
@@ -22,7 +22,7 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
- * DB-backed integration tests for {@link AbandonedOrderReleaseService#releaseAbandonedOrders()}.
+ * DB-backed integration tests for {@link StockRecoveryJob#releaseAbandonedOrders()}.
  * <p>
  * {@code %test.order.abandoned.hold-minutes=0} (see {@code application.properties}) makes
  * every freshly-persisted CREATED order look "abandoned" the instant it is persisted, since
@@ -33,10 +33,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
  * timer from firing mid-suite; {@code releaseAbandonedOrders()} is invoked directly here.
  */
 @QuarkusTest
-class AbandonedOrderReleaseServiceTest
+class StockRecoveryJobTest
 {
     @Inject
-    AbandonedOrderReleaseService service;
+    StockRecoveryJob job;
 
     @Inject
     EntityManager em;
@@ -98,7 +98,7 @@ class AbandonedOrderReleaseServiceTest
         OrderEntity order = newOrder(OrderStatusEn.CREATED, variant, 3);
         em.flush();
 
-        service.releaseAbandonedOrders();
+        job.releaseAbandonedOrders();
         em.flush();
         em.clear();
 
@@ -124,7 +124,7 @@ class AbandonedOrderReleaseServiceTest
         OrderEntity order = newOrder(OrderStatusEn.IN_STORE_PAYMENT, variant, 3);
         em.flush();
 
-        service.releaseAbandonedOrders();
+        job.releaseAbandonedOrders();
         em.flush();
         em.clear();
 
@@ -147,7 +147,7 @@ class AbandonedOrderReleaseServiceTest
         OrderEntity order = newOrder(OrderStatusEn.PAID, variant, 3);
         em.flush();
 
-        service.releaseAbandonedOrders();
+        job.releaseAbandonedOrders();
         em.flush();
         em.clear();
 

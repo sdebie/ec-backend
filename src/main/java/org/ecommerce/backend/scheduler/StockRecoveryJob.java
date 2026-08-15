@@ -1,13 +1,13 @@
-package org.ecommerce.backend.service;
+package org.ecommerce.backend.scheduler;
 
 import io.quarkus.scheduler.Scheduled;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.ecommerce.backend.service.OrderService;
 import org.ecommerce.common.entity.OrderEntity;
-import org.ecommerce.common.entity.OrderItemEntity;
 import org.ecommerce.common.entity.OrderStatusHistoryEntity;
-import org.ecommerce.common.entity.ProductVariantEntity;
 import org.ecommerce.common.enums.OrderStatusEn;
 import org.jboss.logging.Logger;
 
@@ -15,22 +15,29 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 /**
- * Releases stock held by checkouts that were started but never paid.
+ * Recovers stock held by checkouts that were started but never paid.
  * {@link OrderService#createOrderFromCart} decrements stock the moment an
  * order reaches CREATED, before payment — so an abandoned checkout would
  * otherwise hold that stock forever. This sweep cancels CREATED orders older
- * than the configured hold window and restores their stock.
+ * than the configured hold window and returns their stock to sale.
  * <p>
  * Only CREATED is touched. IN_STORE_PAYMENT, PAID and every later status are
  * real commitments, not abandoned carts, and must never be auto-cancelled.
+ * That narrow filter is why this sweep is not the whole story: a staff member
+ * cancelling an order by hand recovers its stock through the same
+ * {@link OrderService#restoreStock} call, since such an order never becomes
+ * visible to this query.
  */
 @ApplicationScoped
-public class AbandonedOrderReleaseService
+public class StockRecoveryJob
 {
-    private static final Logger LOG = Logger.getLogger(AbandonedOrderReleaseService.class);
+    private static final Logger LOG = Logger.getLogger(StockRecoveryJob.class);
 
     @ConfigProperty(name = "order.abandoned.hold-minutes", defaultValue = "30")
     int holdMinutes;
+
+    @Inject
+    OrderService orderService;
 
     @Scheduled(every = "5m")
     @Transactional
@@ -63,18 +70,12 @@ public class AbandonedOrderReleaseService
         }
         order.setStatus(OrderStatusEn.SYSTEM_CANCELED);
 
-        for (OrderItemEntity item : order.getItems()) {
-            if (item.getVariant() == null || item.getQuantity() == null) {
-                continue;
-            }
-            ProductVariantEntity.update("stockQuantity = stockQuantity + ?1 where id = ?2",
-                    item.getQuantity(), item.getVariant().getId());
-        }
+        orderService.restoreStock(order);
 
         OrderStatusHistoryEntity.record(order, OrderStatusEn.SYSTEM_CANCELED,
                 "Automatically cancelled: checkout was not completed within the stock hold window",
                 OrderService.SYSTEM_ACTOR);
 
-        LOG.debugf("Released abandoned order %s (created %s), stock restored", order.getId(), order.getCreatedAt());
+        LOG.debugf("Released abandoned order %s (created %s), stock recovered", order.getId(), order.getCreatedAt());
     }
 }

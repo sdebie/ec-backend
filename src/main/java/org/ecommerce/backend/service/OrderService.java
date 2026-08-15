@@ -203,6 +203,36 @@ public class OrderService
     }
 
     /**
+     * Returns an order's stock to inventory — the inverse of {@link #reserveStock},
+     * which consumes it the moment an order reaches CREATED, before payment. Every
+     * path that ends an order before its goods are dispatched must give that stock
+     * back through here, or it is held by an order that will never ship and is lost
+     * for good.
+     * <p>
+     * The single definition of what "give the stock back" means, shared by the staff
+     * cancellation and the abandoned-order sweep so the two can never diverge.
+     * <p>
+     * Callers must already have won an atomic status claim on the order. CANCELLED
+     * and SYSTEM_CANCELED are both terminal, so a claimed order can never be
+     * cancelled a second time — that is what makes this exactly-once, with no
+     * version column and no double-restore guard. Caller must be in a transaction.
+     */
+    public void restoreStock(OrderEntity order)
+    {
+        if (order == null || order.getItems() == null) {
+            return;
+        }
+
+        for (OrderItemEntity item : order.getItems()) {
+            if (item.getVariant() == null || item.getQuantity() == null) {
+                continue;
+            }
+            ProductVariantEntity.update("stockQuantity = stockQuantity + ?1 where id = ?2",
+                    item.getQuantity(), item.getVariant().getId());
+        }
+    }
+
+    /**
      * Assembles the money on an order. The ONLY place subtotal, VAT, delivery and
      * grand total are combined, so order creation and later repricing can never
      * build a total differently.
@@ -330,6 +360,14 @@ public class OrderService
             throw new GraphQLException("Order status changed concurrently; please refresh and try again");
         }
         order.setStatus(targetStatus);
+
+        // Stock is consumed at CREATED, before payment. CANCELLED is reachable only
+        // from pre-dispatch statuses — IN_TRANSIT allows DELIVERED alone — so the
+        // goods have never left, and cancelling must return them to inventory. The
+        // winning claim above is what makes this run exactly once.
+        if (targetStatus == OrderStatusEn.CANCELLED) {
+            restoreStock(order);
+        }
 
         OrderStatusHistoryEntity.record(order, targetStatus,
                 previousStatus + " → " + targetStatus, changedBy);
