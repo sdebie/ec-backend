@@ -19,7 +19,7 @@ import static org.mapstruct.NullValuePropertyMappingStrategy.SET_TO_NULL;
  * The summary carries {@code hasUnpublishedChanges} so the list can flag pages whose draft
  * has moved ahead of what readers see, without shipping both bodies to render a list.
  */
-@Mapper(componentModel = "cdi", unmappedTargetPolicy = ERROR,
+@Mapper(componentModel = "jakarta-cdi", unmappedTargetPolicy = ERROR,
         nullValueMappingStrategy = RETURN_NULL,
         nullValuePropertyMappingStrategy = SET_TO_NULL,
         nullValueCheckStrategy = ALWAYS)

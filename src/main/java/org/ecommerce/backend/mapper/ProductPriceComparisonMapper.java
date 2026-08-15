@@ -18,7 +18,7 @@ import static org.mapstruct.NullValuePropertyMappingStrategy.SET_TO_NULL;
  * Same proposed-versus-current pairing as {@link ProductComparisonMapper}, narrowed to the
  * two price tiers a price import can change.
  */
-@Mapper(componentModel = "cdi", unmappedTargetPolicy = ERROR, nullValueMappingStrategy = RETURN_NULL,
+@Mapper(componentModel = "jakarta-cdi", unmappedTargetPolicy = ERROR, nullValueMappingStrategy = RETURN_NULL,
         nullValuePropertyMappingStrategy = SET_TO_NULL,
         nullValueCheckStrategy = ALWAYS)
 public interface ProductPriceComparisonMapper

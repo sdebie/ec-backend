@@ -16,7 +16,7 @@ import static org.mapstruct.NullValuePropertyMappingStrategy.SET_TO_NULL;
  * Selecting <em>which</em> of a customer's addresses to map is the caller's decision —
  * this only converts the row it is handed.
  */
-@Mapper(componentModel = "cdi", unmappedTargetPolicy = ERROR, nullValueMappingStrategy = RETURN_NULL,
+@Mapper(componentModel = "jakarta-cdi", unmappedTargetPolicy = ERROR, nullValueMappingStrategy = RETURN_NULL,
         nullValuePropertyMappingStrategy = SET_TO_NULL,
         nullValueCheckStrategy = ALWAYS)
 public interface CustomerAddressMapper

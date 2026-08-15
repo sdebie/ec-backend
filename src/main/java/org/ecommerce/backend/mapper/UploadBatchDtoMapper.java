@@ -18,7 +18,7 @@ import static org.mapstruct.NullValuePropertyMappingStrategy.SET_TO_NULL;
  * its own method. A product batch has no completion timestamp and no approver, so those two
  * fields stay absent on that side rather than being invented.
  */
-@Mapper(componentModel = "cdi", unmappedTargetPolicy = ERROR, nullValueMappingStrategy = RETURN_NULL,
+@Mapper(componentModel = "jakarta-cdi", unmappedTargetPolicy = ERROR, nullValueMappingStrategy = RETURN_NULL,
         nullValuePropertyMappingStrategy = SET_TO_NULL,
         nullValueCheckStrategy = ALWAYS)
 public interface UploadBatchDtoMapper

@@ -102,6 +102,27 @@ public class OrderContactResource
             }
         }
 
+        // 2b. A delivery method must arrive with somewhere to deliver to. Checked
+        // against the values this request would leave on the order — the address may
+        // have been supplied by an earlier call — and before anything is written, so a
+        // rejected request changes nothing. Collection methods are exempt by
+        // definition; the storefront omits the address entirely for them.
+        ShippingMethodEntity effectiveMethod = shippingMethod != null ? shippingMethod : order.getShippingMethod();
+        if (effectiveMethod != null && effectiveMethod.isRequiresAddress()) {
+            String street = firstNonBlank(request.getStreetAddress(), order.getStreetAddress());
+            String city = firstNonBlank(request.getCity(), order.getCity());
+            String province = firstNonBlank(request.getProvince(), order.getProvince());
+            String postalCode = firstNonBlank(request.getPostalCode(), order.getPostalCode());
+
+            if (street == null || city == null || province == null || postalCode == null) {
+                LOG.debugf("Rejected contact update for order %s: %s requires a delivery address",
+                        orderId, effectiveMethod.getName());
+                return Response.status(422)
+                        .entity(Map.of("error", "A delivery address is required for " + effectiveMethod.getName()))
+                        .build();
+            }
+        }
+
         // 3. Persist contact + address fields
         order.setContactEmail(request.getEmail());
         order.setContactFirstName(request.getFirstName());
@@ -168,5 +189,18 @@ public class OrderContactResource
         LOG.infof("Updated contact for order %s (email: %s)", orderId, order.getContactEmail());
 
         return Response.ok(summary).build();
+    }
+
+    /**
+     * The value an address field would hold after this request: what it sends, else what
+     * the order already carries. Blank counts as absent, so whitespace cannot satisfy a
+     * required address. Returns null when neither has anything usable.
+     */
+    private static String firstNonBlank(String incoming, String existing)
+    {
+        if (incoming != null && !incoming.isBlank()) {
+            return incoming;
+        }
+        return existing != null && !existing.isBlank() ? existing : null;
     }
 }

@@ -32,7 +32,7 @@ import static org.mapstruct.NullValuePropertyMappingStrategy.SET_TO_NULL;
  * ({@code totalUnits}, {@code reachableEmail}, {@code displayImageUrl}) or from the
  * {@link OrderTotals} the service already produced.
  */
-@Mapper(componentModel = "cdi", unmappedTargetPolicy = ERROR, uses = TimestampMapper.class, nullValueMappingStrategy = RETURN_NULL,
+@Mapper(componentModel = "jakarta-cdi", unmappedTargetPolicy = ERROR, uses = TimestampMapper.class, nullValueMappingStrategy = RETURN_NULL,
         nullValuePropertyMappingStrategy = SET_TO_NULL,
         nullValueCheckStrategy = ALWAYS)
 public interface OrderAdminMapper

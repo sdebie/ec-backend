@@ -30,7 +30,7 @@ import static org.mapstruct.NullValuePropertyMappingStrategy.SET_TO_NULL;
  * that lets a null price through to be dereferenced. A missing price tier is the normal case
  * here, so that guard would NPE on any variant without all four tiers.
  */
-@Mapper(componentModel = "cdi", unmappedTargetPolicy = ERROR, imports = PriceUtils.class,
+@Mapper(componentModel = "jakarta-cdi", unmappedTargetPolicy = ERROR, imports = PriceUtils.class,
         nullValueMappingStrategy = RETURN_NULL,
         nullValuePropertyMappingStrategy = SET_TO_NULL,
         nullValueCheckStrategy = ALWAYS)

@@ -29,7 +29,7 @@ import static org.mapstruct.NullValuePropertyMappingStrategy.SET_TO_NULL;
  * expression dereferences a source — MapStruct ANDs the top-level null checks, so an
  * expression reading {@code customer.x} directly would bypass its per-source guard.
  */
-@Mapper(componentModel = "cdi", unmappedTargetPolicy = ERROR, uses = {WholesaleMapper.class, TimestampMapper.class},
+@Mapper(componentModel = "jakarta-cdi", unmappedTargetPolicy = ERROR, uses = {WholesaleMapper.class, TimestampMapper.class},
         nullValueMappingStrategy = RETURN_NULL,
         nullValuePropertyMappingStrategy = SET_TO_NULL,
         nullValueCheckStrategy = ALWAYS)

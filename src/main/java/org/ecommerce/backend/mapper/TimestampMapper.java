@@ -29,7 +29,7 @@ import static org.mapstruct.ReportingPolicy.ERROR;
  * {@code Instant}/{@code TIMESTAMPTZ}, appending a {@code Z} here would claim a precision the
  * stored value does not have.
  */
-@Mapper(componentModel = "cdi", unmappedTargetPolicy = ERROR, nullValueMappingStrategy = RETURN_NULL,
+@Mapper(componentModel = "jakarta-cdi", unmappedTargetPolicy = ERROR, nullValueMappingStrategy = RETURN_NULL,
         nullValuePropertyMappingStrategy = SET_TO_NULL,
         nullValueCheckStrategy = ALWAYS)
 public interface TimestampMapper

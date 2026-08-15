@@ -344,6 +344,10 @@ class OrderContactResourceTest
         collection.setName("In-Store Pickup");
         collection.setActive(true);
         collection.setBaseFee(BigDecimal.ZERO);
+        // Collection: the shopper comes to the store, so no address is required. Stated
+        // rather than inferred — a free same-day collection is indistinguishable from a
+        // free same-day delivery by fee and lead time alone.
+        collection.setRequiresAddress(false);
 
         when(OrderEntity.findOrderInfoById(orderId)).thenReturn(order);
         when(ShippingMethodEntity.findById(shippingMethodId)).thenReturn(collection);

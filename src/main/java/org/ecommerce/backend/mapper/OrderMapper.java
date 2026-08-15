@@ -35,7 +35,7 @@ import static org.mapstruct.NullValuePropertyMappingStrategy.SET_TO_NULL;
  * ⚠️ {@code itemCount} means different things on the two shapes and both are deliberate:
  * {@link OrderResponseDto} counts distinct lines, {@link OrderSummaryDto} sums quantities.
  */
-@Mapper(componentModel = "cdi", unmappedTargetPolicy = ERROR, uses = {ProductMapper.class, TimestampMapper.class},
+@Mapper(componentModel = "jakarta-cdi", unmappedTargetPolicy = ERROR, uses = {ProductMapper.class, TimestampMapper.class},
         nullValueMappingStrategy = RETURN_NULL,
         nullValuePropertyMappingStrategy = SET_TO_NULL,
         nullValueCheckStrategy = ALWAYS)
