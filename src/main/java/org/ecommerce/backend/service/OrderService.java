@@ -322,10 +322,13 @@ public class OrderService
     /**
      * Applies a staff-driven status change to one order.
      *
-     * @param changedBy display name of the staff member making the change, recorded on the timeline
+     * @param changedBy    display name of the staff member making the change, recorded on the timeline
+     * @param restockItems whether a refund returns its items to stock — required for REFUNDED,
+     *                     rejected for every other target. See {@link OrderStatusEn#isPreDispatch()}
+     *                     for why this is the caller's answer and not something derived here.
      */
     @Transactional
-    public OrderResponseDto updateOrderStatus(UUID orderId, String newStatus, String changedBy) throws GraphQLException
+    public OrderResponseDto updateOrderStatus(UUID orderId, String newStatus, String changedBy, Boolean restockItems) throws GraphQLException
     {
         if (orderId == null) {
             throw new GraphQLException("orderId is required");
@@ -350,6 +353,17 @@ public class OrderService
             throw new GraphQLException("Cannot move an order from " + previousStatus + " to " + targetStatus);
         }
 
+        // Both directions are rejections, never defaults. A refund has no safe default
+        // here — whether the goods came back is knowledge the server does not have — and
+        // silently ignoring a restock instruction on some other transition would be the
+        // same invisible stock movement this parameter exists to prevent.
+        if (targetStatus == OrderStatusEn.REFUNDED && restockItems == null) {
+            throw new GraphQLException("A refund must state whether its items return to stock");
+        }
+        if (targetStatus != OrderStatusEn.REFUNDED && restockItems != null) {
+            throw new GraphQLException("Only a refund may carry a restock decision");
+        }
+
         // Atomic conditional claim from the exact status just read — the same pattern
         // used for the stock decrement and the other two order-status writers (the
         // PayFast ITN handler, the abandoned-order release job). A plain setStatus()+
@@ -361,22 +375,42 @@ public class OrderService
         }
         order.setStatus(targetStatus);
 
-        // Stock is consumed at CREATED, before payment. CANCELLED is reachable only
-        // from pre-dispatch statuses — IN_TRANSIT allows DELIVERED alone — so the
-        // goods have never left, and cancelling must return them to inventory. The
-        // winning claim above is what makes this run exactly once.
-        if (targetStatus == OrderStatusEn.CANCELLED) {
+        // Stock is consumed at CREATED, before payment, so a status that ends an order
+        // before dispatch must give it back. CANCELLED always does: it is reachable only
+        // from pre-dispatch statuses — IN_TRANSIT allows DELIVERED alone — so its goods
+        // have provably never left. REFUNDED is reachable from both sides of dispatch,
+        // which is why it carries an answer instead of assuming one. The winning claim
+        // above is what makes either run exactly once.
+        boolean stockReturned = targetStatus == OrderStatusEn.CANCELLED
+                || (targetStatus == OrderStatusEn.REFUNDED && Boolean.TRUE.equals(restockItems));
+        if (stockReturned) {
             restoreStock(order);
         }
 
         OrderStatusHistoryEntity.record(order, targetStatus,
-                previousStatus + " → " + targetStatus, changedBy);
+                transitionComment(previousStatus, targetStatus, stockReturned), changedBy);
 
         //Order Created In store Payment
         if (order.getStatus().equals(OrderStatusEn.IN_STORE_PAYMENT)) {
             orderNotificationService.sendConfirmationEmail(order);
         }
         return orderMapper.toResponseDto(order);
+    }
+
+    /**
+     * The timeline entry for a staff transition. A refund spells out what happened to
+     * the stock, because a refund is the one transition where either answer is valid —
+     * "no stock came back" has to be distinguishable from "nobody considered it". Every
+     * other transition's stock behaviour follows from its target alone, so saying so
+     * would be noise.
+     */
+    private String transitionComment(OrderStatusEn previousStatus, OrderStatusEn targetStatus, boolean stockReturned)
+    {
+        String transition = previousStatus + " → " + targetStatus;
+        if (targetStatus != OrderStatusEn.REFUNDED) {
+            return transition;
+        }
+        return transition + (stockReturned ? " (stock returned)" : " (stock not returned)");
     }
 
     public List<OrderResponseDto> getAllOrders(PageRequest pageRequest, FilterRequest filterRequest)

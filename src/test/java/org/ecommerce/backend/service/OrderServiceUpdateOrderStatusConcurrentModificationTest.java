@@ -6,6 +6,7 @@ import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
 import org.eclipse.microprofile.graphql.GraphQLException;
 import org.ecommerce.common.entity.OrderEntity;
+import org.ecommerce.common.entity.ProductVariantEntity;
 import org.ecommerce.common.enums.OrderStatusEn;
 import org.ecommerce.common.repository.OrderRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -18,6 +19,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.when;
 
 /**
@@ -67,9 +69,36 @@ class OrderServiceUpdateOrderStatusConcurrentModificationTest
         when(OrderEntity.update(anyString(), any(Object[].class))).thenReturn(0);
 
         GraphQLException ex = assertThrows(GraphQLException.class,
-                () -> orderService.updateOrderStatus(orderId, "CANCELLED", "Dana Staff"));
+                () -> orderService.updateOrderStatus(orderId, "CANCELLED", "Dana Staff", null));
 
         assertEquals("Order status changed concurrently; please refresh and try again", ex.getMessage());
         assertEquals(OrderStatusEn.CREATED, order.getStatus(), "in-memory status must not flip when the claim is lost");
+    }
+
+    @Test
+    @DisplayName("a refund that loses the claim returns no stock, even though it asked to")
+    void updateOrderStatus_refundLosesClaim_restocksNothing()
+    {
+        UUID orderId = UUID.randomUUID();
+
+        OrderEntity order = new OrderEntity();
+        order.setId(orderId);
+        order.setSessionId(UUID.randomUUID());
+        order.setStatus(OrderStatusEn.PAID);
+
+        // Mocked so the stock write can be observed; if the claim were ever allowed to
+        // lose and still restock, stock would be handed back for an order another
+        // writer already owns.
+        PanacheMock.mock(ProductVariantEntity.class);
+
+        when(orderRepository.findOrderInfoById(any(UUID.class))).thenReturn(order);
+        when(OrderEntity.update(anyString(), any(Object[].class))).thenReturn(0);
+
+        assertThrows(GraphQLException.class,
+                () -> orderService.updateOrderStatus(orderId, "REFUNDED", "Dana Staff", true));
+
+        PanacheMock.verify(ProductVariantEntity.class, never())
+                .update(anyString(), any(Object[].class));
+        assertEquals(OrderStatusEn.PAID, order.getStatus(), "in-memory status must not flip when the claim is lost");
     }
 }

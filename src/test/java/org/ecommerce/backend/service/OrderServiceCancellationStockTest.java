@@ -98,7 +98,7 @@ class OrderServiceCancellationStockTest
         OrderEntity order = newOrder(OrderStatusEn.CREATED, variant, 3);
         em.flush();
 
-        orderService.updateOrderStatus(order.getId(), "CANCELLED", "Dana Staff");
+        orderService.updateOrderStatus(order.getId(), "CANCELLED", "Dana Staff", null);
 
         assertEquals(8, stockOf(variant.getId()), "5 in stock + 3 returned by the cancellation");
     }
@@ -113,7 +113,7 @@ class OrderServiceCancellationStockTest
         OrderEntity order = newOrder(OrderStatusEn.PAID, variant, 3);
         em.flush();
 
-        orderService.updateOrderStatus(order.getId(), "CANCELLED", "Dana Staff");
+        orderService.updateOrderStatus(order.getId(), "CANCELLED", "Dana Staff", null);
 
         assertEquals(8, stockOf(variant.getId()), "5 in stock + 3 returned by the cancellation");
     }
@@ -128,7 +128,7 @@ class OrderServiceCancellationStockTest
         OrderEntity order = newOrder(OrderStatusEn.IN_STORE_PAYMENT, variant, 3);
         em.flush();
 
-        orderService.updateOrderStatus(order.getId(), "CANCELLED", "Dana Staff");
+        orderService.updateOrderStatus(order.getId(), "CANCELLED", "Dana Staff", null);
 
         assertEquals(8, stockOf(variant.getId()), "5 in stock + 3 returned by the cancellation");
     }
@@ -152,7 +152,7 @@ class OrderServiceCancellationStockTest
         order.getItems().add(secondLine);
         em.flush();
 
-        orderService.updateOrderStatus(order.getId(), "CANCELLED", "Dana Staff");
+        orderService.updateOrderStatus(order.getId(), "CANCELLED", "Dana Staff", null);
 
         em.flush();
         em.clear();
@@ -170,25 +170,9 @@ class OrderServiceCancellationStockTest
         OrderEntity order = newOrder(OrderStatusEn.CREATED, variant, 3);
         em.flush();
 
-        orderService.updateOrderStatus(order.getId(), "IN_STORE_PAYMENT", "Dana Staff");
+        orderService.updateOrderStatus(order.getId(), "IN_STORE_PAYMENT", "Dana Staff", null);
 
         assertEquals(5, stockOf(variant.getId()), "a live order must keep holding its stock");
-    }
-
-    @Test
-    @TestTransaction
-    @DisplayName("REFUNDED is a bookkeeping marker and deliberately does not restore stock")
-    void refundTransition_leavesStockConsumed() throws GraphQLException
-    {
-        String marker = "ZZCSTK-REFUND-" + UUID.randomUUID().toString().substring(0, 8);
-        ProductVariantEntity variant = newVariant(marker, 5);
-        OrderEntity order = newOrder(OrderStatusEn.PAID, variant, 3);
-        em.flush();
-
-        orderService.updateOrderStatus(order.getId(), "REFUNDED", "Dana Staff");
-
-        assertEquals(5, stockOf(variant.getId()),
-                "documented behaviour: a refund records money moved outside the system and corrects no stock");
     }
 
     @Test
@@ -202,7 +186,7 @@ class OrderServiceCancellationStockTest
         em.flush();
 
         assertThrows(GraphQLException.class,
-                () -> orderService.updateOrderStatus(order.getId(), "CANCELLED", "Dana Staff"));
+                () -> orderService.updateOrderStatus(order.getId(), "CANCELLED", "Dana Staff", null));
 
         assertEquals(5, stockOf(variant.getId()));
     }

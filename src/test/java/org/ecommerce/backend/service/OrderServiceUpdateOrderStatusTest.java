@@ -59,7 +59,7 @@ class OrderServiceUpdateOrderStatusTest
         OrderEntity order = newOrder(OrderStatusEn.CREATED);
         em.flush();
 
-        OrderResponseDto result = orderService.updateOrderStatus(order.getId(), "CANCELLED", "Dana Staff");
+        OrderResponseDto result = orderService.updateOrderStatus(order.getId(), "CANCELLED", "Dana Staff", null);
 
         assertEquals("CANCELLED", result.getStatus());
         assertEquals(order.getId().toString(), result.getId());
@@ -93,7 +93,7 @@ class OrderServiceUpdateOrderStatusTest
         em.flush();
 
         GraphQLException ex = assertThrows(GraphQLException.class,
-                () -> orderService.updateOrderStatus(order.getId(), "IN_TRANSIT", "Dana Staff"));
+                () -> orderService.updateOrderStatus(order.getId(), "IN_TRANSIT", "Dana Staff", null));
         assertEquals("Cannot move an order from DELIVERED to IN_TRANSIT", ex.getMessage());
 
         em.flush();
@@ -115,7 +115,7 @@ class OrderServiceUpdateOrderStatusTest
         em.flush();
 
         GraphQLException ex = assertThrows(GraphQLException.class,
-                () -> orderService.updateOrderStatus(order.getId(), "SHIPPED", "Dana Staff"));
+                () -> orderService.updateOrderStatus(order.getId(), "SHIPPED", "Dana Staff", null));
         assertEquals("Invalid status: SHIPPED", ex.getMessage());
     }
 }

@@ -44,10 +44,17 @@ public class OrderResource
     // absent token to the GUEST tier. Do not reintroduce a price-carrying mutation;
     // OrderResourceContractTest guards its absence.
 
+    /**
+     * @param restockItems whether a refund returns its items to stock. Required when
+     *                     {@code status} is REFUNDED and rejected otherwise — the server
+     *                     cannot know whether the goods physically left, so it is told.
+     *                     Boxed so "not supplied" stays distinguishable from "no".
+     */
     @Mutation("updateOrderStatus")
     @Description("Move one order to a new status. Staff JWT required.")
     @RolesAllowed({"SUPER_ADMIN", "ORDER_MANAGER"})
-    public OrderResponseDto updateOrderStatus(@Name("orderId") String orderId, @Name("status") String status) throws GraphQLException
+    public OrderResponseDto updateOrderStatus(@Name("orderId") String orderId, @Name("status") String status,
+                                              @Name("restockItems") Boolean restockItems) throws GraphQLException
     {
         LOG.debug("updateOrderStatus for orderId=" + orderId + ", status=" + status);
         UUID id;
@@ -56,7 +63,7 @@ public class OrderResource
         } catch (IllegalArgumentException | NullPointerException e) {
             throw new GraphQLException("Order not found");
         }
-        return orderService.updateOrderStatus(id, status, staffDisplayName());
+        return orderService.updateOrderStatus(id, status, staffDisplayName(), restockItems);
     }
 
     /**

@@ -20,6 +20,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -97,6 +98,16 @@ class StockRecoveryJobConcurrencyIT
         item.setUnitPrice(BigDecimal.ZERO);
         item.persist();
         order.getItems().add(item);
+
+        // createdAt is a @CreationTimestamp the entity cannot set, so it is backdated
+        // with a JPQL update once the row exists. Required: the test hold window is a
+        // year, which keeps a sweep away from real CREATED orders in the shared
+        // database, so only a far-past fixture is a candidate for the race.
+        em.flush();
+        em.createQuery("update OrderEntity o set o.createdAt = :placedAt where o.id = :id")
+                .setParameter("placedAt", LocalDateTime.of(2001, 1, 1, 0, 0))
+                .setParameter("id", orderId)
+                .executeUpdate();
     }
 
     @AfterEach
