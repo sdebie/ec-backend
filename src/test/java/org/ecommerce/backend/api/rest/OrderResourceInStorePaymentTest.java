@@ -87,7 +87,7 @@ class OrderResourceInStorePaymentTest
 
         PanacheMock.verify(OrderStatusHistoryEntity.class)
                 .record(any(), any(), anyString(), anyString());
-        verify(orderNotificationService, times(1)).sendConfirmationEmail(order);
+        verify(orderNotificationService, times(1)).sendStatusNotification(order, OrderStatusEn.IN_STORE_PAYMENT);
     }
 
     /**
@@ -105,7 +105,7 @@ class OrderResourceInStorePaymentTest
         confirm(orderId).then().statusCode(422);
 
         PanacheMock.verify(OrderEntity.class, never()).update(anyString(), any(Object[].class));
-        verify(orderNotificationService, never()).sendConfirmationEmail(any());
+        verify(orderNotificationService, never()).sendStatusNotification(any(), any());
     }
 
     /**
@@ -143,7 +143,7 @@ class OrderResourceInStorePaymentTest
                 .body("status", equalTo("IN_STORE_PAYMENT"));
 
         PanacheMock.verify(OrderEntity.class, never()).update(anyString(), any(Object[].class));
-        verify(orderNotificationService, never()).sendConfirmationEmail(any());
+        verify(orderNotificationService, never()).sendStatusNotification(any(), any());
     }
 
     /**
@@ -161,7 +161,7 @@ class OrderResourceInStorePaymentTest
 
         confirm(orderId).then().statusCode(409);
 
-        verify(orderNotificationService, never()).sendConfirmationEmail(any());
+        verify(orderNotificationService, never()).sendStatusNotification(any(), any());
     }
 
     @Test

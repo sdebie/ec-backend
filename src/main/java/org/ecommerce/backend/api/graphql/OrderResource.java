@@ -7,6 +7,7 @@ import jakarta.inject.Inject;
 import org.eclipse.microprofile.graphql.*;
 import org.eclipse.microprofile.jwt.JsonWebToken;
 import org.ecommerce.backend.service.OrderService;
+import org.ecommerce.backend.service.OrderTracking;
 import org.ecommerce.common.dto.OrderDetailRespDto;
 import org.ecommerce.common.dto.OrderResponseDto;
 import org.ecommerce.common.dto.OrderSummaryDto;
@@ -52,7 +53,9 @@ public class OrderResource
     @Mutation("updateOrderStatus")
     @Description("Move one order to a new status. Staff JWT required.")
     @RolesAllowed({"SUPER_ADMIN", "ORDER_MANAGER"})
-    public OrderResponseDto updateOrderStatus(@Name("orderId") String orderId, @Name("status") String status)
+    public OrderResponseDto updateOrderStatus(@Name("orderId") String orderId, @Name("status") String status,
+                                              @Name("trackingNumber") String trackingNumber,
+                                              @Name("trackingCarrier") String trackingCarrier)
             throws GraphQLException
     {
         LOG.debug("updateOrderStatus for orderId=" + orderId + ", status=" + status);
@@ -62,7 +65,8 @@ public class OrderResource
         } catch (IllegalArgumentException | NullPointerException e) {
             throw new GraphQLException("Order not found");
         }
-        return orderService.updateOrderStatus(id, status, staffDisplayName());
+        return orderService.updateOrderStatus(id, status, staffDisplayName(),
+                new OrderTracking(trackingNumber, trackingCarrier));
     }
 
     /**

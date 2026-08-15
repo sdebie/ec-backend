@@ -117,7 +117,7 @@ class PayFastResourceTest
                 .then()
                 .statusCode(401);
 
-        verify(orderNotificationService, never()).sendConfirmationEmail(any());
+        verify(orderNotificationService, never()).sendStatusNotification(any(), any());
     }
 
     @Test
@@ -148,7 +148,7 @@ class PayFastResourceTest
                 .statusCode(200);
 
         assertEquals(OrderStatusEn.PAID, order.getStatus());
-        verify(orderNotificationService).sendConfirmationEmail(order);
+        verify(orderNotificationService).sendStatusNotification(order, OrderStatusEn.PAID);
         PanacheMock.verify(OrderStatusHistoryEntity.class)
                 .record(order, OrderStatusEn.PAID, "Payment confirmed by PayFast", OrderService.SYSTEM_ACTOR);
     }
@@ -176,7 +176,7 @@ class PayFastResourceTest
 
         assertEquals(OrderStatusEn.CREATED, order.getStatus());
         PanacheMock.verify(OrderEntity.class, never()).update(anyString(), any(Object[].class));
-        verify(orderNotificationService, never()).sendConfirmationEmail(any());
+        verify(orderNotificationService, never()).sendStatusNotification(any(), any());
     }
 
     @Test
@@ -205,7 +205,7 @@ class PayFastResourceTest
         assertEquals(OrderStatusEn.CREATED, order.getStatus());
         PanacheMock.verify(OrderEntity.class, never()).update(anyString(), any(Object[].class));
         verify(payFastService, never()).confirmWithPayFast(anyString());
-        verify(orderNotificationService, never()).sendConfirmationEmail(any());
+        verify(orderNotificationService, never()).sendStatusNotification(any(), any());
     }
 
     @Test
@@ -232,7 +232,7 @@ class PayFastResourceTest
 
         assertEquals(OrderStatusEn.CREATED, order.getStatus());
         PanacheMock.verify(OrderEntity.class, never()).update(anyString(), any(Object[].class));
-        verify(orderNotificationService, never()).sendConfirmationEmail(any());
+        verify(orderNotificationService, never()).sendStatusNotification(any(), any());
     }
 
     @Test
@@ -258,7 +258,7 @@ class PayFastResourceTest
 
         PanacheMock.verify(OrderEntity.class, never()).update(anyString(), any(Object[].class));
         verify(payFastService, never()).confirmWithPayFast(anyString());
-        verify(orderNotificationService, never()).sendConfirmationEmail(any());
+        verify(orderNotificationService, never()).sendStatusNotification(any(), any());
     }
 
     @Test
@@ -289,6 +289,6 @@ class PayFastResourceTest
 
         assertEquals(OrderStatusEn.SYSTEM_CANCELED, order.getStatus());
         verify(orderNotificationService).sendPaymentAnomalyAlert(order, new BigDecimal("100.00"));
-        verify(orderNotificationService, never()).sendConfirmationEmail(any());
+        verify(orderNotificationService, never()).sendStatusNotification(any(), any());
     }
 }

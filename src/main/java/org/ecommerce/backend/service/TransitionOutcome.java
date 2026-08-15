@@ -11,24 +11,23 @@ import org.ecommerce.common.enums.OrderStatusEn;
  * order, the staff mutation asks the operator to refresh, the ITN handler tells a
  * human that money arrived against an order that had moved on — so this reports it
  * rather than choosing for them.
- *
- * @param stockReturned whether this transition put the order's items back into
- *                      inventory. Always false when the claim was lost: the writer
- *                      that won owns the stock.
+ * <p>
+ * It deliberately does not report what happened to the stock or whether an email went
+ * out. Both follow from the destination status alone, so a caller reading them back
+ * would be re-deriving something it cannot influence.
  */
 public record TransitionOutcome(
         boolean claimed,
         OrderStatusEn from,
-        OrderStatusEn to,
-        boolean stockReturned)
+        OrderStatusEn to)
 {
-    static TransitionOutcome won(OrderStatusEn from, OrderStatusEn to, boolean stockReturned)
+    static TransitionOutcome won(OrderStatusEn from, OrderStatusEn to)
     {
-        return new TransitionOutcome(true, from, to, stockReturned);
+        return new TransitionOutcome(true, from, to);
     }
 
     static TransitionOutcome lost(OrderStatusEn from, OrderStatusEn to)
     {
-        return new TransitionOutcome(false, from, to, false);
+        return new TransitionOutcome(false, from, to);
     }
 }

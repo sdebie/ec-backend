@@ -228,11 +228,9 @@ public class OrderService
      * <p>
      * Caller must be in a transaction.
      *
-     * @throws IllegalArgumentException if the transition is not one this source may
-     *                                  make, or if the restock answer does not match
-     *                                  what the target status needs. Whitelisted in
-     *                                  {@code show-runtime-exception-message}, so the
-     *                                  message reaches the admin UI intact.
+     * @throws IllegalArgumentException if the transition is not one this source may make.
+     *                                  Whitelisted in {@code show-runtime-exception-message},
+     *                                  so the message reaches the admin UI intact.
      */
     public TransitionOutcome applyTransition(OrderEntity order, StatusTransition transition)
     {
@@ -275,7 +273,12 @@ public class OrderService
         OrderStatusHistoryEntity.record(order, to,
                 transitionComment(from, transition), transition.changedBy());
 
-        return TransitionOutcome.won(from, to, stockReturned);
+        // Last, and only once the claim is won: the shopper is never told about a
+        // transition that lost a race. Which email — or none — is a property of the
+        // destination status, so no writer can forget one or send the wrong one.
+        orderNotificationService.sendStatusNotification(order, to);
+
+        return TransitionOutcome.won(from, to);
     }
 
     /**
@@ -413,13 +416,30 @@ public class OrderService
      * confirmation email. The transition itself belongs to
      * {@link #applyTransition}, which every other writer shares.
      *
+     * Tracking details are the one thing a caller may supply, because they are the one
+     * thing the server cannot know: the courier's reference exists only once a human
+     * hands the parcel over. That is unlike a stock instruction, which asks the caller to
+     * decide a rule the status already answers — this is data arriving at the moment it
+     * becomes true. Accepted only on the move to IN_TRANSIT, and rejected elsewhere
+     * rather than silently dropped.
+     *
      * @param changedBy display name of the staff member making the change, recorded on the timeline
+     * @param tracking  courier details recorded against the order, or null
      * @throws IllegalArgumentException if the transition is not one the workflow allows — thrown by
      *                                  {@link #applyTransition} and whitelisted so its message
      *                                  reaches the admin UI
      */
+    /** Most transitions carry no courier details; this is the same move without them. */
     @Transactional
-    public OrderResponseDto updateOrderStatus(UUID orderId, String newStatus, String changedBy) throws GraphQLException
+    public OrderResponseDto updateOrderStatus(UUID orderId, String newStatus, String changedBy)
+            throws GraphQLException
+    {
+        return updateOrderStatus(orderId, newStatus, changedBy, null);
+    }
+
+    @Transactional
+    public OrderResponseDto updateOrderStatus(UUID orderId, String newStatus, String changedBy,
+                                              OrderTracking tracking) throws GraphQLException
     {
         if (orderId == null) {
             throw new GraphQLException("orderId is required");
@@ -439,17 +459,23 @@ public class OrderService
             throw new GraphQLException("Invalid status: " + newStatus);
         }
 
+        // Written before the transition so the notification, which is sent from inside it,
+        // carries the reference rather than an email that arrives without one.
+        if (tracking != null && !tracking.isEmpty()) {
+            if (targetStatus != OrderStatusEn.IN_TRANSIT) {
+                throw new IllegalArgumentException(
+                        "Tracking details belong to the move to IN_TRANSIT, not to " + targetStatus);
+            }
+            order.setTrackingNumber(tracking.number());
+            order.setTrackingCarrier(tracking.carrier());
+        }
+
         TransitionOutcome outcome = applyTransition(order,
                 StatusTransition.staff(targetStatus, changedBy));
         if (!outcome.claimed()) {
             throw new GraphQLException("Order status changed concurrently; please refresh and try again");
         }
 
-        // Staff marking an order payable at collection is a confirmation to the shopper:
-        // nothing further happens online, so this is the point their order is settled.
-        if (outcome.to() == OrderStatusEn.IN_STORE_PAYMENT) {
-            orderNotificationService.sendConfirmationEmail(order);
-        }
         return orderMapper.toResponseDto(order);
     }
 

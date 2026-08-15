@@ -1,0 +1,28 @@
+{@org.ecommerce.common.enums.OrderStatusEn status}
+{#include order_email_layout}
+{#headline}
+    {#if status.name == 'COLLECTED'}Thanks for collecting your order{#else}Your order has been delivered{/if}
+{/headline}
+
+{#body}
+    {#if status.name == 'COLLECTED'}
+        <p>Your order has been handed over — thanks for coming in.</p>
+    {#else}
+        <p>Your order has been delivered. We hope it's everything you expected.</p>
+    {/if}
+
+    <div class="callout">
+        <strong>Order reference:</strong> {order.reference}<br/>
+        <strong>Total:</strong> {#if store.currencySymbol??}{store.currencySymbol} {/if}{order.totalAmount}
+    </div>
+
+    {!
+      This email doubles as proof the order was completed, which is why it restates the
+      reference and total rather than only thanking the shopper.
+    !}
+    <p>
+        Something not right? Reply to this email and we'll sort it out. Otherwise, we'd
+        love to hear what you thought of what you bought.
+    </p>
+{/body}
+{/include}

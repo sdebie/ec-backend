@@ -201,8 +201,8 @@ public class PayFastResource
                                         "Payment confirmed by PayFast"));
 
                         if (outcome.claimed()) {
+                            // The receipt is sent by applyTransition, from the status itself.
                             LOG.debug("Updated Order " + orderId + " to PAID");
-                            orderNotificationService.sendConfirmationEmail(order);
                         } else {
                             handlePaidButNoLongerPending(orderId, order, amountGross);
                         }

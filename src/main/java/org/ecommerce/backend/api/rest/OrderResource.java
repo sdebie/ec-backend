@@ -130,8 +130,8 @@ public class OrderResource {
                     .build();
         }
 
-        orderNotificationService.sendConfirmationEmail(order);
-
+        // The shopper's "reserved for collection" email is sent by applyTransition, from
+        // the status itself — nothing to do here.
         return Response.ok(Map.of("orderId", order.getId().toString(),
                 "status", order.getStatus().name())).build();
     }

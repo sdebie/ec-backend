@@ -1,0 +1,35 @@
+{#include order_email_layout}
+{#headline}Your order is on its way{/headline}
+
+{#body}
+    <p>Your order has left us and is with the courier.</p>
+
+    {!
+      The tracking reference is the whole point of this email. It is guarded rather than
+      assumed because a courier may issue none, and an email that shows an empty tracking
+      box is worse than one that admits it is still coming.
+    !}
+    {#if order.trackingNumber??}
+        <div class="callout">
+            <strong>Tracking number:</strong> {order.trackingNumber}
+            {#if order.trackingCarrier??}<br/><strong>Courier:</strong> {order.trackingCarrier}{/if}
+        </div>
+        <p>Use that reference on the courier's website to follow your delivery.</p>
+    {#else}
+        <div class="callout">
+            <strong>Order reference:</strong> {order.reference}
+        </div>
+        <p>
+            We don't have a tracking number for this delivery yet. Reply to this email and
+            we'll chase the courier for you.
+        </p>
+    {/if}
+
+    {#if order.streetAddress??}
+        <p>
+            Delivering to:<br/>
+            {order.streetAddress}{#if order.city??}, {order.city}{/if}{#if order.province??}, {order.province}{/if}{#if order.postalCode??}, {order.postalCode}{/if}
+        </p>
+    {/if}
+{/body}
+{/include}

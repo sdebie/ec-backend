@@ -1,0 +1,38 @@
+{@java.util.List<org.ecommerce.common.entity.OrderItemEntity> orderItems}
+{#include order_email_layout}
+{#headline}Payment received{/headline}
+
+{#body}
+    {!
+      The shopper's receipt, and the first email they can rely on: it is sent when the
+      money actually arrives, never at CREATED, so it can never confirm an order that
+      then fails or times out.
+    !}
+    <p>Thank you — your payment came through and your order is confirmed. We're getting it ready now.</p>
+
+    <table class="item-table">
+        <thead>
+        <tr>
+            <th>Product</th>
+            <th>Qty</th>
+            <th>Price</th>
+        </tr>
+        </thead>
+        <tbody>
+        {#for item in orderItems}
+            <tr>
+                <td><strong>{item.variant.product.name}</strong></td>
+                <td>{item.quantity}</td>
+                <td>{#if store.currencySymbol??}{store.currencySymbol} {/if}{item.unitPrice}</td>
+            </tr>
+        {/for}
+        </tbody>
+    </table>
+
+    <div class="total-section">
+        Total paid: {#if store.currencySymbol??}{store.currencySymbol} {/if}{order.totalAmount}
+    </div>
+
+    <p>Keep this email — it's your receipt. We'll be in touch when your order is on the move.</p>
+{/body}
+{/include}

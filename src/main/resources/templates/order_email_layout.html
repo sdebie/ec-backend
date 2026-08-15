@@ -1,0 +1,59 @@
+{@org.ecommerce.common.entity.OrderEntity order}
+{@org.ecommerce.backend.service.StoreEmailDetails store}
+{@java.lang.String customerName}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    {!
+      Styles are inline in a <style> block rather than a stylesheet: mail clients do not
+      fetch external CSS, and several strip <style> entirely — so the rules here are the
+      nice-to-have layer and the markup must stay readable without any of them.
+    !}
+    <style>
+        body { font-family: sans-serif; color: #333; line-height: 1.6; margin: 0; padding: 16px; }
+        .container { width: 100%; max-width: 600px; margin: 0 auto; border: 1px solid #eee;
+                     padding: 24px; border-radius: 10px; }
+        .header { text-align: center; border-bottom: 2px solid #3b82f6; padding-bottom: 16px; }
+        .header h1 { margin: 0 0 4px; font-size: 22px; }
+        .reference { color: #666; font-size: 14px; }
+        .callout { background: #f8fafc; border-left: 4px solid #3b82f6; padding: 12px 16px;
+                   margin: 20px 0; border-radius: 4px; }
+        .callout.warn { border-left-color: #d97706; background: #fffbeb; }
+        .callout.ended { border-left-color: #9ca3af; background: #f9fafb; }
+        .item-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+        .item-table th { text-align: left; border-bottom: 1px solid #eee; padding: 10px; }
+        .item-table td { padding: 10px; border-bottom: 1px solid #eee; }
+        .total-section { text-align: right; font-size: 1.15em; font-weight: bold; }
+        .footer { font-size: 12px; color: #777; margin-top: 28px; text-align: center;
+                  border-top: 1px solid #eee; padding-top: 16px; }
+        .footer p { margin: 4px 0; }
+    </style>
+    <title>{#insert headline}Order update{/}</title>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <h1>{#insert headline}Order update{/}</h1>
+        <p class="reference">Order <strong>{order.reference}</strong></p>
+    </div>
+
+    <p>Hi {customerName},</p>
+
+    {#insert body}{/}
+
+    {!
+      Every footer line is guarded on its own. These are operator-supplied and may not be
+      filled in yet; a missing phone number should cost the reader one line rather than
+      leave a dangling label or an empty footer.
+    !}
+    <div class="footer">
+        {#if store.enquiryEmail??}<p>Questions? Reply to this email or contact {store.enquiryEmail}.</p>{/if}
+        {#if store.phone??}<p>{store.phone}</p>{/if}
+        {#if store.name??}<p>{store.name}{#if store.address??} &middot; {store.address}{/if}</p>
+        {#else if store.address??}<p>{store.address}</p>{/if}
+    </div>
+</div>
+</body>
+</html>
