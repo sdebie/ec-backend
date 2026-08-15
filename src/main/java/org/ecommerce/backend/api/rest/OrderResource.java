@@ -11,8 +11,11 @@ import org.eclipse.microprofile.jwt.JsonWebToken;
 import org.ecommerce.backend.exception.UnavailableVariantsException;
 import org.ecommerce.backend.service.OrderNotificationService;
 import org.ecommerce.backend.service.OrderService;
+import org.ecommerce.backend.service.RateLimitDecision;
+import org.ecommerce.backend.service.RateLimiterService;
 import org.ecommerce.backend.service.StatusTransition;
 import org.ecommerce.backend.service.TransitionOutcome;
+import org.ecommerce.backend.utils.ClientIpUtils;
 import org.ecommerce.common.dto.OrderCheckoutResponseDto;
 import org.ecommerce.common.dto.OrderCreationRequestDto;
 import org.ecommerce.common.entity.CustomerEntity;
@@ -42,16 +45,45 @@ public class OrderResource {
     OrderOwnershipGuard ownershipGuard;
 
     @Inject
+    RateLimiterService rateLimiterService;
+
+    @Inject
     JsonWebToken jwt;
 
     @Inject
     SecurityIdentity securityIdentity;
 
+    /**
+     * Maximum checkouts one caller may start per window.
+     * <p>
+     * Deliberately generous. Carrier-grade NAT puts many genuine shoppers behind a
+     * single address, and this is the money path, so a tight limit costs real sales
+     * — while any finite limit is enough to stop a caller reserving a store's stock
+     * faster than {@link org.ecommerce.backend.scheduler.StockRecoveryJob} can
+     * reclaim it. Overridable without a rebuild via {@code ratelimit.checkout.max}.
+     */
+    private static final int CHECKOUT_MAX_PER_WINDOW = 20;
+    private static final long CHECKOUT_WINDOW_SECONDS = 3600;
+
     @POST
     @Transactional
-    public Response createOrder(OrderCreationRequestDto request) {
+    public Response createOrder(
+            OrderCreationRequestDto request,
+            @HeaderParam("CF-Connecting-IP") String cfConnectingIp,
+            @HeaderParam("X-Forwarded-For") String xForwardedFor,
+            @HeaderParam("X-Real-IP") String xRealIp
+    ) {
         if (request == null) {
             return Response.status(Response.Status.BAD_REQUEST).entity("Request body is required").build();
+        }
+
+        // Checked before any work: an accepted order reserves stock immediately, and
+        // nothing returns it until the abandoned-order sweep runs.
+        String clientIp = ClientIpUtils.resolveClientIp(cfConnectingIp, xForwardedFor, xRealIp);
+        RateLimitDecision decision = rateLimiterService.check(
+                "checkout", clientIp, CHECKOUT_MAX_PER_WINDOW, CHECKOUT_WINDOW_SECONDS);
+        if (!decision.allowed()) {
+            return Response.status(429).header("Retry-After", decision.retryAfterSeconds()).build();
         }
 
         CustomerTypeEn customerTier = resolveCustomerTier();

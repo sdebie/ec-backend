@@ -52,11 +52,29 @@ public class OrderService
     /** Recorded on the status timeline for a transition no staff member made. */
     public static final String SYSTEM_ACTOR = "SYSTEM";
 
+    /**
+     * Most distinct lines one cart may check out with.
+     * <p>
+     * Checkout is unauthenticated by design, and every line costs a variant lookup
+     * inside a single transaction, so an unbounded list lets one anonymous request
+     * decide how much database work the server does. This is a structural bound
+     * rather than a tuning knob: it sits far above any real cart — a wholesale
+     * order of 200 distinct SKUs is already extraordinary — so raising it should
+     * mean revisiting the bound, not editing a config value.
+     */
+    public static final int MAX_ORDER_LINES = 200;
+
     @Transactional
     public OrderCheckoutResponseDto createOrderFromCart(OrderCreationRequestDto request, CustomerTypeEn customerTier, CustomerEntity customer)
     {
         if (request == null || request.getItems() == null || request.getItems().isEmpty()) {
             throw new IllegalArgumentException("Order request must contain at least one item");
+        }
+
+        // Bound the work before doing any of it: the checks below cost a query per
+        // line, and this endpoint takes anonymous requests.
+        if (request.getItems().size() > MAX_ORDER_LINES) {
+            throw new IllegalArgumentException("An order may not contain more than " + MAX_ORDER_LINES + " lines");
         }
 
         List<String> unavailableVariantIds = new ArrayList<>();
@@ -65,8 +83,13 @@ public class OrderService
 
         // 1. Validate each item: existence, active status, and stock
         for (OrderCreationItemDto item : request.getItems()) {
-            if (item == null || item.getVariantId() == null) {
-                continue;
+            // A line naming no variant is a malformed request, not a variant that
+            // cannot be bought, so it is refused rather than reported as unavailable:
+            // the caller has nothing to act on. Refusing the whole cart is the point —
+            // skipping the line would hand back an order shorter than the one
+            // submitted, priced accordingly, with nothing to say a line went missing.
+            if (item == null || item.getVariantId() == null || item.getVariantId().isBlank()) {
+                throw new IllegalArgumentException("Every order line must name a variant");
             }
             UUID variantUuid;
             try {
@@ -95,6 +118,16 @@ public class OrderService
         // 2. Bail out if any variants are unavailable
         if (!unavailableVariantIds.isEmpty()) {
             throw new UnavailableVariantsException(unavailableVariantIds);
+        }
+
+        // Nothing above can reach this with an empty list — every line either lands in
+        // validItems or refuses the request. It is asserted anyway because the failure
+        // it guards is a quiet one: an order with no lines still carries the delivery
+        // estimate as its total, so it is payable, it reaches the payment gateway, and
+        // it appears to staff as an ordinary order. Any future path that drops a line
+        // must fail here rather than persist one.
+        if (validItems.isEmpty()) {
+            throw new IllegalArgumentException("Order request must contain at least one item");
         }
 
         // 2b. Reserve stock: aggregate requested quantity per variant (a cart can

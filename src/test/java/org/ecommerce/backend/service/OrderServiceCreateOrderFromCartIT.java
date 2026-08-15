@@ -20,6 +20,7 @@ import org.ecommerce.common.enums.ProductTypeEn;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -100,8 +101,14 @@ class OrderServiceCreateOrderFromCartIT
 
     private OrderCreationItemDto item(UUID variantId, int quantity)
     {
+        return itemWithRawVariantId(variantId.toString(), quantity);
+    }
+
+    /** Builds a line whose variant id bypasses UUID typing, so malformed ids can be posted. */
+    private OrderCreationItemDto itemWithRawVariantId(String variantId, int quantity)
+    {
         OrderCreationItemDto item = new OrderCreationItemDto();
-        item.setVariantId(variantId.toString());
+        item.setVariantId(variantId);
         item.setQuantity(quantity);
         return item;
     }
@@ -229,5 +236,118 @@ class OrderServiceCreateOrderFromCartIT
         assertThrows(UnavailableVariantsException.class,
                 () -> orderService.createOrderFromCart(secondRequest, CustomerTypeEn.RETAILER, null),
                 "second order requests 3 against only 2 remaining — must be refused, proving the first decrement persisted");
+    }
+
+    // ── 6. A line naming no variant is refused, never silently dropped ─────
+
+    @Test
+    @TestTransaction
+    @DisplayName("a cart of nothing but unusable lines cannot leave a zero-line order behind")
+    void cartWithOnlyUnusableLines_persistsNoOrder()
+    {
+        long ordersBefore = OrderEntity.count();
+
+        OrderCreationRequestDto request = requestWith(itemWithRawVariantId(null, 1));
+
+        assertThrows(IllegalArgumentException.class,
+                () -> orderService.createOrderFromCart(request, CustomerTypeEn.GUEST, null));
+
+        em.flush();
+        em.clear();
+
+        assertEquals(ordersBefore, OrderEntity.count(),
+                "a zero-line order is payable (its total is the delivery estimate) and reaches staff as a real order");
+    }
+
+    @Test
+    @TestTransaction
+    @DisplayName("one unusable line refuses the whole cart rather than quietly shortening it")
+    void unusableLineAlongsideValidOne_refusesWholeCartWithoutReservingStock()
+    {
+        String marker = "ZZOFC-MIXED-" + UUID.randomUUID().toString().substring(0, 8);
+        ProductEntity product = newProduct(marker);
+        ProductVariantEntity variant = newVariant(marker, product, 10);
+        em.flush();
+
+        OrderCreationRequestDto request = requestWith(
+                item(variant.getId(), 2),
+                itemWithRawVariantId(null, 1));
+
+        assertThrows(IllegalArgumentException.class,
+                () -> orderService.createOrderFromCart(request, CustomerTypeEn.GUEST, null));
+
+        em.flush();
+        em.clear();
+
+        ProductVariantEntity reloaded = em.find(ProductVariantEntity.class, variant.getId());
+        assertEquals(10, reloaded.getStockQuantity(),
+                "dropping the bad line would have charged the shopper for a cart they never submitted");
+    }
+
+    @Test
+    @TestTransaction
+    @DisplayName("a blank variant id is a malformed line, not an unavailable variant")
+    void blankVariantId_isRefusedAsMalformed()
+    {
+        OrderCreationRequestDto request = requestWith(itemWithRawVariantId("   ", 1));
+
+        assertThrows(IllegalArgumentException.class,
+                () -> orderService.createOrderFromCart(request, CustomerTypeEn.GUEST, null));
+    }
+
+    // ── 7. Line count is bounded on this unauthenticated surface ───────────
+
+    @Test
+    @TestTransaction
+    @DisplayName("a cart with more lines than the cap is refused before any variant is looked up")
+    void lineCountBeyondCap_isRefusedWithoutTouchingStock()
+    {
+        String marker = "ZZOFC-CAP-" + UUID.randomUUID().toString().substring(0, 8);
+        ProductEntity product = newProduct(marker);
+        ProductVariantEntity variant = newVariant(marker, product, 5000);
+        em.flush();
+
+        // Every line is individually valid, so nothing but the cap itself can refuse
+        // this: if stock moves, the cap ran too late (or not at all) and each line
+        // already cost a database round trip.
+        List<OrderCreationItemDto> tooManyLines = new ArrayList<>();
+        for (int i = 0; i < OrderService.MAX_ORDER_LINES + 1; i++) {
+            tooManyLines.add(item(variant.getId(), 1));
+        }
+        OrderCreationRequestDto request = new OrderCreationRequestDto();
+        request.setItems(tooManyLines);
+
+        assertThrows(IllegalArgumentException.class,
+                () -> orderService.createOrderFromCart(request, CustomerTypeEn.GUEST, null));
+
+        em.flush();
+        em.clear();
+
+        ProductVariantEntity reloaded = em.find(ProductVariantEntity.class, variant.getId());
+        assertEquals(5000, reloaded.getStockQuantity(),
+                "the cap must bound the work before it is done, not report it afterwards");
+    }
+
+    @Test
+    @TestTransaction
+    @DisplayName("a cart of exactly the cap is still accepted")
+    void lineCountAtCap_isAccepted()
+    {
+        String marker = "ZZOFC-ATCAP-" + UUID.randomUUID().toString().substring(0, 8);
+        ProductEntity product = newProduct(marker);
+        ProductVariantEntity variant = newVariant(marker, product, 5000);
+        em.flush();
+
+        List<OrderCreationItemDto> maxLines = new ArrayList<>();
+        for (int i = 0; i < OrderService.MAX_ORDER_LINES; i++) {
+            maxLines.add(item(variant.getId(), 1));
+        }
+        OrderCreationRequestDto request = new OrderCreationRequestDto();
+        request.setItems(maxLines);
+
+        OrderCheckoutResponseDto response =
+                orderService.createOrderFromCart(request, CustomerTypeEn.GUEST, null);
+
+        assertNotNull(response.getOrderId(), "the cap is a bound, not an off-by-one rejection of a legal cart");
     }
 }
