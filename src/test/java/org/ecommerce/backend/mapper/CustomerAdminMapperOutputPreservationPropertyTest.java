@@ -76,7 +76,7 @@ public class CustomerAdminMapperOutputPreservationPropertyTest
         dto.setEmail(c.getUser() != null ? c.getUser().getEmail() : null);
         dto.setStatus(c.getStatus() != null ? c.getStatus().name() : null);
         dto.setShopperType(c.getShopperType() != null ? c.getShopperType().name() : null);
-        dto.setRegisteredAt(c.getUser() != null && c.getUser().getCreatedAt() != null ? c.getUser().getCreatedAt().toString() : null);
+        dto.setRegisteredAt(c.getUser() != null && c.getUser().getCreatedAt() != null ? c.getUser().getCreatedAt().format(java.time.format.DateTimeFormatter.ISO_OFFSET_DATE_TIME) : null);
         dto.setWholesaleApplicationStatus(app != null && app.getStatus() != null ? app.getStatus().name() : null);
         return dto;
     }
@@ -86,7 +86,7 @@ public class CustomerAdminMapperOutputPreservationPropertyTest
         AdminOrderRefDto dto = new AdminOrderRefDto();
         dto.setId(o.getId().toString());
         dto.setReference("ORD-" + o.getId().toString().substring(0, 8).toUpperCase());
-        dto.setPlacedAt(o.getCreatedAt() != null ? o.getCreatedAt().toString() : null);
+        dto.setPlacedAt(o.getCreatedAt() != null ? o.getCreatedAt().format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE_TIME) : null);
         dto.setTotal(o.getTotalAmount() != null ? o.getTotalAmount().doubleValue() : 0.0);
         dto.setStatus(o.getStatus() != null ? o.getStatus().name() : null);
         return dto;
@@ -104,7 +104,7 @@ public class CustomerAdminMapperOutputPreservationPropertyTest
         dto.setPhone(c.getPhone());
         dto.setStatus(c.getStatus() != null ? c.getStatus().name() : null);
         dto.setShopperType(c.getShopperType() != null ? c.getShopperType().name() : null);
-        dto.setRegisteredAt(c.getUser() != null && c.getUser().getCreatedAt() != null ? c.getUser().getCreatedAt().toString() : null);
+        dto.setRegisteredAt(c.getUser() != null && c.getUser().getCreatedAt() != null ? c.getUser().getCreatedAt().format(java.time.format.DateTimeFormatter.ISO_OFFSET_DATE_TIME) : null);
 
         // Wholesale application delegates to WholesaleMapper — use same impl
         WholesaleMapper wholesaleMapper = new WholesaleMapperImpl();

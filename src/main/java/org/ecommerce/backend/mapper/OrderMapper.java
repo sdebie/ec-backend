@@ -80,12 +80,7 @@ public interface OrderMapper
 
     List<OrderDetailRespDto.OrderStatusHistoryDetailRespDto> toStatusHistoryDtos(List<OrderStatusHistoryEntity> history);
 
-    // ⚠️ This shape emits seconds (…T10:30:00) while OrderResponseDto.createDate does not
-    // (…T10:30) — two timestamp formats in one API. Preserved as-is rather than unified,
-    // because unifying changes a wire contract clients already parse.
-    @Mapping(target = "orderDate",
-            expression = "java(order.getCreatedAt() == null ? null "
-                    + ": order.getCreatedAt().format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE_TIME))")
+    @Mapping(target = "orderDate", source = "createdAt")
     @Mapping(target = "itemCount", expression = "java(order.totalUnits())")
     OrderSummaryDto toSummaryDto(OrderEntity order);
 

@@ -164,7 +164,7 @@ class OrderDtoCharacterizationTest
             assertEquals("11111111-1111-1111-1111-111111111111", dto.getId());
             assertEquals("22222222-2222-2222-2222-222222222222", dto.getSessionId());
             assertEquals("PAID", dto.getStatus());
-            assertEquals("2026-07-20T12:00", dto.getCreateDate());
+            assertEquals("2026-07-20T12:00:00", dto.getCreateDate());
             assertEquals(0, new BigDecimal("500.00").compareTo(dto.getTotalAmount()));
             assertEquals(1, dto.getItemCount());
             assertEquals("test@example.com", dto.getCustomer().getEmail());

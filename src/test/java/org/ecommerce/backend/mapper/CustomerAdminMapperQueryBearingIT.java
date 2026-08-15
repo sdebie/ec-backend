@@ -58,7 +58,7 @@ class CustomerAdminMapperQueryBearingIT
         dto.setEmail(c.getUser() != null ? c.getUser().getEmail() : null);
         dto.setStatus(c.getStatus() != null ? c.getStatus().name() : null);
         dto.setShopperType(c.getShopperType() != null ? c.getShopperType().name() : null);
-        dto.setRegisteredAt(c.getUser() != null && c.getUser().getCreatedAt() != null ? c.getUser().getCreatedAt().toString() : null);
+        dto.setRegisteredAt(c.getUser() != null && c.getUser().getCreatedAt() != null ? c.getUser().getCreatedAt().format(java.time.format.DateTimeFormatter.ISO_OFFSET_DATE_TIME) : null);
         dto.setWholesaleApplicationStatus(app != null && app.getStatus() != null ? app.getStatus().name() : null);
         return dto;
     }

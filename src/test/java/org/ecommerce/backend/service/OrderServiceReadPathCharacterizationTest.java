@@ -229,7 +229,7 @@ class OrderServiceReadPathCharacterizationTest
             assertEquals("11111111-1111-1111-1111-111111111111", dto.getId());
             assertEquals("22222222-2222-2222-2222-222222222222", dto.getSessionId());
             assertEquals("PAID", dto.getStatus());
-            assertEquals(order.getCreatedAt().toString(), dto.getCreateDate());
+            assertEquals(order.getCreatedAt().format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE_TIME), dto.getCreateDate());
             assertEquals(new BigDecimal("1250.00"), dto.getTotalAmount());
             assertEquals(2, dto.getItemCount());
 
@@ -303,7 +303,7 @@ class OrderServiceReadPathCharacterizationTest
             assertEquals("cccccccc-cccc-cccc-cccc-cccccccccccc", dto.getId());
             assertEquals("dddddddd-dddd-dddd-dddd-dddddddddddd", dto.getSessionId());
             assertEquals("CREATED", dto.getStatus());
-            assertEquals(order.getCreatedAt().toString(), dto.getCreateDate());
+            assertEquals(order.getCreatedAt().format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE_TIME), dto.getCreateDate());
             assertEquals(new BigDecimal("0.00"), dto.getTotalAmount());
             assertNull(dto.getCustomer());
             assertNotNull(dto.getItems());
