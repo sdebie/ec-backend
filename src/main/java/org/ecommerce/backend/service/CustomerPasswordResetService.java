@@ -6,7 +6,9 @@ import jakarta.transaction.Transactional;
 import lombok.extern.slf4j.Slf4j;
 import org.ecommerce.backend.exception.InvalidPasswordResetCodeException;
 import org.ecommerce.backend.exception.PasswordResetLockedException;
+import org.ecommerce.backend.utils.CustomerPasswordHashUtil;
 import org.ecommerce.backend.utils.PasswordHashUtil;
+import org.ecommerce.backend.utils.PasswordStrengthValidator;
 import org.ecommerce.common.entity.CustomerEntity;
 import org.ecommerce.common.entity.UserEntity;
 import org.ecommerce.common.enums.CustomerStatusEn;
@@ -94,9 +96,10 @@ public class CustomerPasswordResetService
         if (newPassword == null || newPassword.isBlank()) {
             throw new IllegalArgumentException("New password is required");
         }
+        PasswordStrengthValidator.validate(newPassword);
 
         UserEntity user = verifyCodeInternal(email, code, clientIp);
-        user.setPasswordHash(PasswordHashUtil.hash(newPassword));
+        user.setPasswordHash(CustomerPasswordHashUtil.hash(newPassword));
         user.setLastLogin(OffsetDateTime.now());
 
         activateCustomerProfile(user.getCustomer());
@@ -117,13 +120,14 @@ public class CustomerPasswordResetService
         if (newPassword == null || newPassword.isBlank()) {
             throw new IllegalArgumentException("New password is required");
         }
+        PasswordStrengthValidator.validate(newPassword);
 
         UserEntity user = UserEntity.findByResetToken(token);
         if (user == null || user.getResetTokenExpiry() == null || user.getResetTokenExpiry().isBefore(OffsetDateTime.now())) {
             throw new IllegalArgumentException("Invalid or expired reset token");
         }
 
-        user.setPasswordHash(PasswordHashUtil.hash(newPassword));
+        user.setPasswordHash(CustomerPasswordHashUtil.hash(newPassword));
         user.setLastLogin(OffsetDateTime.now());
 
         activateCustomerProfile(user.getCustomer());

@@ -4,6 +4,7 @@ import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
+import org.ecommerce.backend.utils.CustomerPasswordHashUtil;
 import org.ecommerce.backend.utils.PasswordHashUtil;
 import org.junit.jupiter.api.*;
 
@@ -253,7 +254,8 @@ class AccountSecurityIT
         String hash = queryPasswordHash(UNCLAIMED_EMAIL);
         assertNotNull(hash, "User should exist");
         assertFalse(hash.isEmpty(), "Hash should no longer be empty");
-        assertTrue(PasswordHashUtil.verify("ClaimPass1", hash),
+        assertTrue(hash.startsWith("$2"), "Registration must write a BCrypt hash, not the legacy SHA-256 format");
+        assertTrue(CustomerPasswordHashUtil.verify("ClaimPass1", hash),
                 "Claimed user's password should now verify");
         assertEquals("ACTIVE", queryCustomerStatus(UNCLAIMED_EMAIL),
                 "Customer status should be ACTIVE after claiming");

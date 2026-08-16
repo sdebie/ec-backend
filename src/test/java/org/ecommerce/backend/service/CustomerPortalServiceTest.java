@@ -304,8 +304,9 @@ class CustomerPortalServiceTest
         // Should not throw — validates current password matches and new password is long enough
         assertDoesNotThrow(() -> service.changePassword(email, currentPassword, newPassword));
 
-        // Verify the password was actually updated to the new hash
-        assertEquals(org.ecommerce.backend.utils.PasswordHashUtil.hash(newPassword), user.getPasswordHash());
+        // Verify the password was actually updated to a BCrypt hash of the new password
+        assertTrue(user.getPasswordHash().startsWith("$2"), "Password change must write a BCrypt hash, not the legacy SHA-256 format");
+        assertTrue(org.ecommerce.backend.utils.CustomerPasswordHashUtil.verify(newPassword, user.getPasswordHash()));
     }
 
     // ── changePassword: Failure scenarios ───────────────────────────────────

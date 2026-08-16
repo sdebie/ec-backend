@@ -4,6 +4,7 @@ import io.quarkus.panache.mock.PanacheMock;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
+import org.ecommerce.backend.utils.CustomerPasswordHashUtil;
 import org.ecommerce.backend.utils.PasswordHashUtil;
 import org.ecommerce.common.entity.CustomerEntity;
 import org.ecommerce.common.entity.UserEntity;
@@ -86,7 +87,8 @@ class CustomerPasswordResetServiceTest
 
         assertEquals(CustomerTypeEn.RETAILER, customer.getShopperType());
         assertEquals(CustomerStatusEn.ACTIVE, customer.getStatus());
-        assertEquals(PasswordHashUtil.hash("newPassword1!"), user.getPasswordHash());
+        assertTrue(user.getPasswordHash().startsWith("$2"), "Password reset must write a BCrypt hash, not the legacy SHA-256 format");
+        assertTrue(CustomerPasswordHashUtil.verify("newPassword1!", user.getPasswordHash()));
     }
 
     @Test
@@ -133,7 +135,22 @@ class CustomerPasswordResetServiceTest
         when(UserEntity.findByEmail(EMAIL)).thenReturn(user);
 
         assertDoesNotThrow(() -> customerPasswordResetService.completePasswordResetWithCode(EMAIL, RESET_CODE, "newPassword1!", CLIENT_IP));
-        assertEquals(PasswordHashUtil.hash("newPassword1!"), user.getPasswordHash());
+        assertTrue(user.getPasswordHash().startsWith("$2"), "Password reset must write a BCrypt hash, not the legacy SHA-256 format");
+        assertTrue(CustomerPasswordHashUtil.verify("newPassword1!", user.getPasswordHash()));
+    }
+
+    @Test
+    void completeWithCode_weakPassword_throwsAndDoesNotUpdateHash()
+    {
+        CustomerEntity customer = customerOf(CustomerTypeEn.GUEST, CustomerStatusEn.PENDING);
+        UserEntity user = userWithValidResetCode(customer);
+        when(UserEntity.findByEmail(EMAIL)).thenReturn(user);
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> customerPasswordResetService.completePasswordResetWithCode(EMAIL, RESET_CODE, "short", CLIENT_IP));
+
+        assertEquals("Password must be at least 8 characters", ex.getMessage());
+        assertEquals("", user.getPasswordHash(), "A rejected weak password must never be hashed or stored");
     }
 
     // ── completePasswordReset (token path) ────────────────────────────────────
@@ -150,7 +167,8 @@ class CustomerPasswordResetServiceTest
         assertEquals(CustomerTypeEn.RETAILER, customer.getShopperType());
         assertEquals(CustomerStatusEn.ACTIVE, customer.getStatus());
         assertNull(user.getResetToken());
-        assertEquals(PasswordHashUtil.hash("newPassword1!"), user.getPasswordHash());
+        assertTrue(user.getPasswordHash().startsWith("$2"), "Password reset must write a BCrypt hash, not the legacy SHA-256 format");
+        assertTrue(CustomerPasswordHashUtil.verify("newPassword1!", user.getPasswordHash()));
     }
 
     @Test
@@ -175,5 +193,19 @@ class CustomerPasswordResetServiceTest
         customerPasswordResetService.completePasswordReset(RESET_TOKEN, "newPassword1!");
 
         assertEquals(CustomerTypeEn.WHOLESALER, customer.getShopperType());
+    }
+
+    @Test
+    void completeWithToken_weakPassword_throwsAndDoesNotUpdateHash()
+    {
+        CustomerEntity customer = customerOf(CustomerTypeEn.GUEST, CustomerStatusEn.PENDING);
+        UserEntity user = userWithValidResetToken(customer);
+        when(UserEntity.findByResetToken(RESET_TOKEN)).thenReturn(user);
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> customerPasswordResetService.completePasswordReset(RESET_TOKEN, "short"));
+
+        assertEquals("Password must be at least 8 characters", ex.getMessage());
+        assertEquals("", user.getPasswordHash(), "A rejected weak password must never be hashed or stored");
     }
 }

@@ -16,7 +16,8 @@ import org.ecommerce.backend.exception.InvalidPasswordResetCodeException;
 import org.ecommerce.backend.exception.PasswordResetLockedException;
 import org.ecommerce.backend.service.*;
 import org.ecommerce.backend.utils.ClientIpUtils;
-import org.ecommerce.backend.utils.PasswordHashUtil;
+import org.ecommerce.backend.utils.CustomerPasswordHashUtil;
+import org.ecommerce.backend.utils.PasswordStrengthValidator;
 import org.ecommerce.common.dto.CustomerLoginResponseDto;
 import org.ecommerce.common.dto.CustomerProfileDto;
 import org.ecommerce.common.dto.PasswordChangeRequestDto;
@@ -238,12 +239,19 @@ public class CustomerResource
 
         boolean ok;
         try {
-            ok = PasswordHashUtil.verify(req.password, user.getPasswordHash());
+            ok = CustomerPasswordHashUtil.verify(req.password, user.getPasswordHash());
         } catch (Throwable t) {
             ok = false;
         }
         if (!ok) {
             return Response.status(Response.Status.UNAUTHORIZED).entity("Invalid credentials").build();
+        }
+
+        // A successful login is the one moment we hold the plaintext for an account that
+        // may still carry a pre-migration hash — upgrade it in place so customers migrate
+        // without a forced reset.
+        if (CustomerPasswordHashUtil.isLegacyHash(user.getPasswordHash())) {
+            user.setPasswordHash(CustomerPasswordHashUtil.hash(req.password));
         }
 
         user.setLastLogin(OffsetDateTime.now());
@@ -401,6 +409,11 @@ public class CustomerResource
         if (req.password == null || req.password.isBlank()) {
             return Response.status(Response.Status.BAD_REQUEST).entity("password is required").build();
         }
+        try {
+            PasswordStrengthValidator.validate(req.password);
+        } catch (IllegalArgumentException ex) {
+            return Response.status(Response.Status.BAD_REQUEST).entity(ex.getMessage()).build();
+        }
 
         // Rate limit check — runs after body-shape validation, before the 409 claimed-account guard
         String clientIp = ClientIpUtils.resolveClientIp(cfConnectingIp, xForwardedFor, xRealIp);
@@ -427,7 +440,7 @@ public class CustomerResource
             user = new UserEntity();
             user.setEmail(email);
         }
-        user.setPasswordHash(PasswordHashUtil.hash(req.password));
+        user.setPasswordHash(CustomerPasswordHashUtil.hash(req.password));
         UserEntity.persist(user);
 
         CustomerEntity ce = user.getCustomer();

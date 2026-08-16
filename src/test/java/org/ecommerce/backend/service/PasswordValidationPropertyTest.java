@@ -115,6 +115,21 @@ class PasswordValidationPropertyTest
         assertEquals(400, ex.getResponse().getStatus(), "Null password should be rejected with HTTP 400");
     }
 
+    /**
+     * <p>
+     * For any new password longer than 72 characters, changePassword SHALL throw
+     * a WebApplicationException with status 400 — BCrypt's effective input limit.
+     */
+    @Property(tries = 30)
+    void passwordsLongerThan72CharactersAreRejected(@ForAll("overlongPasswords") String newPassword)
+    {
+        assertTrue(newPassword.length() > 72, "Test precondition: password must be longer than 72 characters");
+
+        WebApplicationException ex = assertThrows(WebApplicationException.class, () -> service.changePassword(TEST_EMAIL, CURRENT_PASSWORD, newPassword));
+
+        assertEquals(400, ex.getResponse().getStatus(), "Overlong passwords should be rejected with HTTP 400");
+    }
+
     @Provide
     Arbitrary<String> shortPasswords()
     {
@@ -136,13 +151,26 @@ class PasswordValidationPropertyTest
     @Provide
     Arbitrary<String> validPasswords()
     {
-        // Generate random strings of length 8-100
-        return Arbitraries.integers().between(8, 100)
+        // Generate random strings of length 8-72 — PasswordStrengthValidator's upper
+        // bound (BCrypt's effective input limit) narrowed this from the original 8-100.
+        return Arbitraries.integers().between(8, 72)
                 .flatMap(length -> Arbitraries.strings()
                         .withCharRange('a', 'z')
                         .withCharRange('A', 'Z')
                         .withCharRange('0', '9')
                         .withChars('!', '@', '#', '$', '%', '^', '&', '*')
+                        .ofLength(length));
+    }
+
+    @Provide
+    Arbitrary<String> overlongPasswords()
+    {
+        // Generate random strings of length 73-150
+        return Arbitraries.integers().between(73, 150)
+                .flatMap(length -> Arbitraries.strings()
+                        .withCharRange('a', 'z')
+                        .withCharRange('A', 'Z')
+                        .withCharRange('0', '9')
                         .ofLength(length));
     }
 }

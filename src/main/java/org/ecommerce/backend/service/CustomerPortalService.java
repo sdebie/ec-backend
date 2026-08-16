@@ -4,7 +4,8 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.transaction.Transactional;
 import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.core.Response;
-import org.ecommerce.backend.utils.PasswordHashUtil;
+import org.ecommerce.backend.utils.CustomerPasswordHashUtil;
+import org.ecommerce.backend.utils.PasswordStrengthValidator;
 import org.ecommerce.common.dto.StorefrontCustomerPortalDto;
 import jakarta.inject.Inject;
 import org.ecommerce.backend.mapper.CustomerAddressMapper;
@@ -98,7 +99,7 @@ public class CustomerPortalService
         }
 
         // Verify current password
-        if (!PasswordHashUtil.verify(currentPassword, user.getPasswordHash())) {
+        if (!CustomerPasswordHashUtil.verify(currentPassword, user.getPasswordHash())) {
             LOG.warnf("Incorrect current password during password change for: %s", email);
             throw new WebApplicationException(
                     Response.status(Response.Status.UNAUTHORIZED)
@@ -106,16 +107,18 @@ public class CustomerPortalService
                             .build());
         }
 
-        // Validate new password length
-        if (newPassword == null || newPassword.length() < 8) {
+        // Validate new password strength
+        try {
+            PasswordStrengthValidator.validate(newPassword);
+        } catch (IllegalArgumentException ex) {
             throw new WebApplicationException(
                     Response.status(Response.Status.BAD_REQUEST)
-                            .entity(Map.of("error", "Password must be at least 8 characters"))
+                            .entity(Map.of("error", ex.getMessage()))
                             .build());
         }
 
         // Hash and persist
-        user.setPasswordHash(PasswordHashUtil.hash(newPassword));
+        user.setPasswordHash(CustomerPasswordHashUtil.hash(newPassword));
         user.persist();
     }
 
