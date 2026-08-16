@@ -61,14 +61,19 @@ class WholesaleMailNotifierTest
     private ObjectMapper objectMapper = new ObjectMapper();
 
     private static final String CONFIGURED_FROM = "no-reply@store.co.za";
+    private static final String CONFIGURED_FRONTEND_BASE_URL = "http://localhost:3000";
 
     @BeforeEach
     void setUp() throws Exception
     {
-        // Reflectively set the @ConfigProperty field since @InjectMocks won't inject it
+        // Reflectively set the @ConfigProperty fields since @InjectMocks won't inject them
         var fromField = WholesaleMailNotifier.class.getDeclaredField("mailerFrom");
         fromField.setAccessible(true);
         fromField.set(notifier, CONFIGURED_FROM);
+
+        var frontendBaseUrlField = WholesaleMailNotifier.class.getDeclaredField("frontendBaseUrl");
+        frontendBaseUrlField.setAccessible(true);
+        frontendBaseUrlField.set(notifier, CONFIGURED_FRONTEND_BASE_URL);
     }
 
     // ── Helpers ─────────────────────────────────────────────────────────────
@@ -83,13 +88,19 @@ class WholesaleMailNotifierTest
 
     private WholesaleDecisionEvent approvalEvent(String recipientEmail)
     {
+        return approvalEvent(recipientEmail, false);
+    }
+
+    private WholesaleDecisionEvent approvalEvent(String recipientEmail, boolean newAccountCreated)
+    {
         return new WholesaleDecisionEvent(
                 UUID.randomUUID(),
                 WholesaleApplicationStatusEn.APPROVED,
                 recipientEmail,
                 "Jane",
                 "ACME Corp",
-                null
+                null,
+                newAccountCreated
         );
     }
 
@@ -101,7 +112,8 @@ class WholesaleMailNotifierTest
                 "bob@test.com",
                 "Bob",
                 "Beta Inc",
-                "Insufficient documentation"
+                "Insufficient documentation",
+                false
         );
     }
 
@@ -438,6 +450,34 @@ class WholesaleMailNotifierTest
             verify(instance).data("approved", false);
             verify(instance).data("rejectionReason", "Insufficient documentation");
             verify(instance).send();
+        }
+
+        @Test
+        @DisplayName("new-account approval passes newAccountCreated=true and the forgot-password URL")
+        void newAccountApprovalPassesForgotPasswordUrl()
+        {
+            when(settingsRepository.findById("storefront.branding"))
+                    .thenReturn(brandingSetting("{\"name\": \"My Store\"}"));
+            MailTemplate.MailTemplateInstance instance = stubMailTemplateChain();
+
+            notifier.onDecision(approvalEvent("applicant@test.com", true));
+
+            verify(instance).data("newAccountCreated", true);
+            verify(instance).data("forgotPasswordUrl", CONFIGURED_FRONTEND_BASE_URL + "/account/forgot-password");
+        }
+
+        @Test
+        @DisplayName("upgraded-account approval passes newAccountCreated=false")
+        void upgradedAccountApprovalPassesFalse()
+        {
+            when(settingsRepository.findById("storefront.branding"))
+                    .thenReturn(brandingSetting("{\"name\": \"My Store\"}"));
+            MailTemplate.MailTemplateInstance instance = stubMailTemplateChain();
+
+            notifier.onDecision(approvalEvent("applicant@test.com", false));
+
+            verify(instance).data("newAccountCreated", false);
+            verify(instance).data("forgotPasswordUrl", CONFIGURED_FRONTEND_BASE_URL + "/account/forgot-password");
         }
     }
 }

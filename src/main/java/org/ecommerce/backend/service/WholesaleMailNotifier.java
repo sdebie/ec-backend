@@ -53,6 +53,9 @@ public class WholesaleMailNotifier
     @ConfigProperty(name = "quarkus.mailer.from")
     String mailerFrom;
 
+    @ConfigProperty(name = "frontend.base-url")
+    String frontendBaseUrl;
+
     /**
      * Fires after a new application's submission transaction commits successfully.
      * Sends two independent emails:
@@ -156,6 +159,8 @@ public class WholesaleMailNotifier
                 .data("storeName", storeName)
                 .data("approved", event.decision() == WholesaleApplicationStatusEn.APPROVED)
                 .data("rejectionReason", event.rejectionReason())
+                .data("newAccountCreated", event.newAccountCreated())
+                .data("forgotPasswordUrl", frontendBaseUrl + "/account/forgot-password")
                 .send()
                 .subscribe().with(
                         success -> LOG.infof("[WholesaleMailNotifier] delivered for application %s to %s", event.applicationId(), event.recipientEmail()),

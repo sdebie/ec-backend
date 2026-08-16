@@ -205,37 +205,17 @@ public class WholesaleCustomerService
             throw new IllegalArgumentException("application must have an accountEmail or applicantEmail to approve");
         }
 
+        boolean newAccountCreated = false;
+
         if (application.getCustomer() == null) {
-            if (UserEntity.findByEmail(email) != null) {
-                throw new IllegalArgumentException("customer already exists with email: " + email);
+            UserEntity existingUser = UserEntity.findByEmail(email);
+            CustomerEntity customerEntity;
+            if (existingUser != null) {
+                customerEntity = upgradeExistingAccountToWholesaler(application, existingUser);
+            } else {
+                customerEntity = createNewWholesaleAccount(application, email);
+                newAccountCreated = true;
             }
-
-            // Create user account
-            UserEntity user = new UserEntity();
-            user.setEmail(email);
-            user.setPasswordHash(""); // placeholder until the customer sets a password
-            UserEntity.persist(user);
-
-            // Create customer profile
-            CustomerEntity customerEntity = new CustomerEntity();
-            customerEntity.setUser(user);
-            customerEntity.setShopperType(CustomerTypeEn.WHOLESALER);
-            customerEntity.setStatus(CustomerStatusEn.ACTIVE);
-            customerEntity.setFirstName(normalizeText(application.getFirstName()));
-            customerEntity.setLastName(normalizeText(application.getLastName()));
-            customerEntity.setPhone(normalizeText(application.getPhone()));
-            CustomerEntity.persist(customerEntity);
-
-            // Create wholesale profile
-            WholesaleProfileEntity profile = new WholesaleProfileEntity();
-            profile.setCustomer(customerEntity);
-            profile.setCompanyName(firstNonBlank(normalizeText(application.getCompanyName()), customerEntity.getFirstName(), "Unknown Company"));
-            profile.setVatNumber(normalizeText(application.getVatNumber()));
-            profile.setRegNumber(normalizeText(application.getRegNumber()));
-            WholesaleProfileEntity.persist(profile);
-
-            // Apply addresses from application
-            applyAddressesFromApplication(customerEntity, application);
 
             // Link customer to application
             application.setCustomer(customerEntity);
@@ -246,9 +226,83 @@ public class WholesaleCustomerService
         application.setProcessedAt(OffsetDateTime.now());
         application.persist();
 
-        decisionEvent.fire(buildDecisionEvent(application, null));
+        decisionEvent.fire(buildDecisionEvent(application, null, newAccountCreated));
 
         return wholesaleMapper.toDetailsDto(application);
+    }
+
+    /**
+     * Creates a brand-new user + customer + wholesale profile from the application.
+     * {@code passwordHash} is left as an empty (never-matchable) placeholder — the
+     * approval email directs the customer to the Forgot Password flow to set one.
+     */
+    private CustomerEntity createNewWholesaleAccount(WholesaleApplicationEntity application, String email)
+    {
+        UserEntity user = new UserEntity();
+        user.setEmail(email);
+        user.setPasswordHash(""); // placeholder until the customer sets a password
+        UserEntity.persist(user);
+
+        CustomerEntity customerEntity = new CustomerEntity();
+        customerEntity.setUser(user);
+        customerEntity.setShopperType(CustomerTypeEn.WHOLESALER);
+        customerEntity.setStatus(CustomerStatusEn.ACTIVE);
+        customerEntity.setFirstName(normalizeText(application.getFirstName()));
+        customerEntity.setLastName(normalizeText(application.getLastName()));
+        customerEntity.setPhone(normalizeText(application.getPhone()));
+        CustomerEntity.persist(customerEntity);
+
+        WholesaleProfileEntity profile = new WholesaleProfileEntity();
+        profile.setCustomer(customerEntity);
+        profile.setCompanyName(firstNonBlank(normalizeText(application.getCompanyName()), customerEntity.getFirstName(), "Unknown Company"));
+        profile.setVatNumber(normalizeText(application.getVatNumber()));
+        profile.setRegNumber(normalizeText(application.getRegNumber()));
+        WholesaleProfileEntity.persist(profile);
+
+        applyAddressesFromApplication(customerEntity, application);
+
+        return customerEntity;
+    }
+
+    /**
+     * Upgrades an existing account to wholesale rather than rejecting the approval.
+     * Never touches {@code status} beyond promoting PENDING→ACTIVE — a staff-disabled
+     * account must not be silently reactivated by a wholesale approval, mirroring the
+     * same restraint {@link CustomerPasswordResetService#activateCustomerProfile}
+     * applies on password-reset completion.
+     */
+    private CustomerEntity upgradeExistingAccountToWholesaler(WholesaleApplicationEntity application, UserEntity existingUser)
+    {
+        CustomerEntity customerEntity = existingUser.getCustomer();
+        if (customerEntity == null) {
+            throw new IllegalArgumentException("account already exists for " + existingUser.getEmail()
+                    + " but has no linked customer profile — cannot approve wholesale application");
+        }
+
+        if (customerEntity.getShopperType() == CustomerTypeEn.WHOLESALER) {
+            // Already wholesale — a second/duplicate approval must not silently
+            // overwrite wholesale data staff may have since edited.
+            return customerEntity;
+        }
+
+        customerEntity.setShopperType(CustomerTypeEn.WHOLESALER);
+        if (customerEntity.getStatus() == null || customerEntity.getStatus() == CustomerStatusEn.PENDING) {
+            customerEntity.setStatus(CustomerStatusEn.ACTIVE);
+        }
+
+        if (customerEntity.getWholesaleProfile() == null) {
+            WholesaleProfileEntity profile = new WholesaleProfileEntity();
+            profile.setCustomer(customerEntity);
+            profile.setCompanyName(firstNonBlank(normalizeText(application.getCompanyName()), customerEntity.getFirstName(), "Unknown Company"));
+            profile.setVatNumber(normalizeText(application.getVatNumber()));
+            profile.setRegNumber(normalizeText(application.getRegNumber()));
+            WholesaleProfileEntity.persist(profile);
+        }
+
+        applyAddressesFromApplication(customerEntity, application);
+        customerEntity.persist();
+
+        return customerEntity;
     }
 
     @Transactional
@@ -275,7 +329,7 @@ public class WholesaleCustomerService
         application.setRejectionReason(reason.trim());
         application.persist();
 
-        decisionEvent.fire(buildDecisionEvent(application, reason.trim()));
+        decisionEvent.fire(buildDecisionEvent(application, reason.trim(), false));
 
         return wholesaleMapper.toDetailsDto(application);
     }
@@ -413,7 +467,7 @@ public class WholesaleCustomerService
 
 
 
-    private WholesaleDecisionEvent buildDecisionEvent(WholesaleApplicationEntity application, String rejectionReason)
+    private WholesaleDecisionEvent buildDecisionEvent(WholesaleApplicationEntity application, String rejectionReason, boolean newAccountCreated)
     {
         // Recipient: applicantEmail first (nullable = false column), fallback to accountEmail if blank
         String recipientEmail = application.getApplicantEmail();
@@ -429,7 +483,8 @@ public class WholesaleCustomerService
                 recipientEmail,
                 firstName,
                 application.getCompanyName(),
-                rejectionReason
+                rejectionReason,
+                newAccountCreated
         );
     }
 

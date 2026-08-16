@@ -9,14 +9,8 @@ import org.eclipse.microprofile.graphql.GraphQLException;
 import org.ecommerce.backend.exception.IdempotencyConflictException;
 import org.ecommerce.backend.exception.UnavailableVariantsException;
 import org.ecommerce.backend.mapper.OrderMapper;
-import org.hibernate.exception.ConstraintViolationException;
 import org.ecommerce.common.dto.*;
-import org.ecommerce.common.entity.CustomerEntity;
-import org.ecommerce.common.entity.OrderEntity;
-import org.ecommerce.common.entity.OrderItemEntity;
-import org.ecommerce.common.entity.OrderStatusHistoryEntity;
-import org.ecommerce.common.entity.ProductVariantEntity;
-import org.ecommerce.common.entity.ShippingMethodEntity;
+import org.ecommerce.common.entity.*;
 import org.ecommerce.common.enums.CustomerTypeEn;
 import org.ecommerce.common.enums.OrderStatusEn;
 import org.ecommerce.common.enums.ProductStatusEn;
@@ -24,6 +18,7 @@ import org.ecommerce.common.enums.StockEffect;
 import org.ecommerce.common.query.FilterRequest;
 import org.ecommerce.common.query.PageRequest;
 import org.ecommerce.common.repository.OrderRepository;
+import org.hibernate.exception.ConstraintViolationException;
 import org.jboss.logging.Logger;
 
 import java.math.BigDecimal;
@@ -60,7 +55,9 @@ public class OrderService
 
     private static final Logger LOG = Logger.getLogger(OrderService.class);
 
-    /** Recorded on the status timeline for a transition no staff member made. */
+    /**
+     * Recorded on the status timeline for a transition no staff member made.
+     */
     public static final String SYSTEM_ACTOR = "SYSTEM";
 
     /**
@@ -89,7 +86,7 @@ public class OrderService
 
     @Transactional
     public OrderCheckoutResponseDto createOrderFromCart(OrderCreationRequestDto request, CustomerTypeEn customerTier,
-            CustomerEntity customer, UUID idempotencyKey, String cartFingerprint)
+                                                        CustomerEntity customer, UUID idempotencyKey, String cartFingerprint)
     {
         if (request == null || request.getItems() == null || request.getItems().isEmpty()) {
             throw new IllegalArgumentException("Order request must contain at least one item");
@@ -146,7 +143,7 @@ public class OrderService
 
         // Nothing above can reach this with an empty list — every line either lands in
         // validItems or refuses the request. It is asserted anyway because the failure
-        // it guards is a quiet one: an order with no lines still carries the delivery
+        // it guards is a quite one: an order with no lines still carries the delivery
         // estimate as its total, so it is payable, it reaches the payment gateway, and
         // it appears to staff as an ordinary order. Any future path that drops a line
         // must fail here rather than persist one.
@@ -476,7 +473,7 @@ public class OrderService
      * Assembles the money on an order. The ONLY place subtotal, VAT, delivery and
      * grand total are combined, so order creation and later repricing can never
      * build a total differently.
-     *
+     * <p>
      * A null method means "not chosen yet" and falls back to the default
      * estimate, preserving what creation did before a method exists.
      */
@@ -493,21 +490,21 @@ public class OrderService
 
     /**
      * Recomputes an order's totals from its own persisted lines and its currently
-     * selected delivery method, and writes the new grand total back.
-     *
+     * selected delivery method and writes the new grand total back.
+     * <p>
      * The order was priced at creation against the DEFAULT delivery estimate,
      * because no method has been chosen at that point. Once the shopper picks one
-     * at checkout the total must follow, otherwise the summary shows — and the
+     * at checkout, the total must follow, otherwise the summary shows — and the
      * payment gateway charges — a figure that excludes the delivery they chose.
-     *
+     * <p>
      * The subtotal is rebuilt from the stored line prices, which the server set
      * from the shopper's tier at creation. Nothing here re-prices a product.
-     *
+     * <p>
      * Also overwrites the persisted {@code vatAmount}/{@code shippingCost} with this
      * reprice's figures — the admin detail breakdown reads those columns, so a stale
      * creation-time VAT or shipping figure would otherwise survive under a grand total
      * that has since moved on without it.
-     *
+     * <p>
      * Caller must be inside a transaction: the entity is managed, so the new
      * total flushes on commit.
      */
@@ -655,27 +652,8 @@ public class OrderService
     }
 
     /**
-     * Applies a staff-driven status change to one order.
-     * <p>
-     * Owns only what is specific to a staff request: parsing what was asked for,
-     * turning a lost claim into something the admin UI can act on, and the
-     * confirmation email. The transition itself belongs to
-     * {@link #applyTransition}, which every other writer shares.
-     *
-     * Tracking details are the one thing a caller may supply, because they are the one
-     * thing the server cannot know: the courier's reference exists only once a human
-     * hands the parcel over. That is unlike a stock instruction, which asks the caller to
-     * decide a rule the status already answers — this is data arriving at the moment it
-     * becomes true. Accepted only on the move to IN_TRANSIT, and rejected elsewhere
-     * rather than silently dropped.
-     *
-     * @param changedBy display name of the staff member making the change, recorded on the timeline
-     * @param tracking  courier details recorded against the order, or null
-     * @throws IllegalArgumentException if the transition is not one the workflow allows — thrown by
-     *                                  {@link #applyTransition} and whitelisted so its message
-     *                                  reaches the admin UI
+     * Most transitions carry no courier details; this is the same move without them.
      */
-    /** Most transitions carry no courier details; this is the same move without them. */
     @Transactional
     public OrderResponseDto updateOrderStatus(UUID orderId, String newStatus, String changedBy)
             throws GraphQLException
