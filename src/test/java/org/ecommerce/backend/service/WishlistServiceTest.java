@@ -20,8 +20,6 @@ import static org.mockito.Mockito.when;
 /**
  * Unit tests for {@link WishlistService}.
  * Uses PanacheMock for Panache entity static method mocking.
- * <p>
- * Requirements: 4.3, 4.4, 4.5
  */
 @QuarkusTest
 class WishlistServiceTest
@@ -37,8 +35,6 @@ class WishlistServiceTest
         PanacheMock.mock(ProductVariantEntity.class);
         PanacheMock.mock(CustomerEntity.class);
     }
-
-    // ── addToWishlist tests ─────────────────────────────────────────────────
 
     @Test
     void addToWishlist_shouldReturnVariantNotFound_whenVariantDoesNotExist()
@@ -97,20 +93,12 @@ class WishlistServiceTest
         customer.setId(customerId);
         when(CustomerEntity.findById(customerId)).thenReturn(customer);
 
-        // The service logic returns CREATED before the @Transactional commit.
-        // The commit fails because customer_wishlist_items table doesn't exist
-        // in the unit test DB. We catch the ArcUndeclaredThrowableException that
-        // wraps the transaction failure and verify the root cause is the missing table.
-        // The actual persist logic is thoroughly tested by WishlistAddPropertyTest
-        // and will be validated in StorefrontWishlistResourceIT integration tests.
         Exception thrown = assertThrows(Exception.class, () -> wishlistService.addToWishlist(customerId, variantId));
 
         // Verify the failure is due to the missing table (persist attempted = logic correct)
         String errorChain = getFullExceptionChain(thrown);
         assertTrue(errorChain.contains("customer_wishlist_items"), "Expected failure due to persist to customer_wishlist_items table, got: " + thrown);
     }
-
-    // ── removeFromWishlist tests ────────────────────────────────────────────
 
     @Test
     void removeFromWishlist_shouldCallDelete_whenEntryExists()
@@ -138,8 +126,6 @@ class WishlistServiceTest
         // Should not throw — idempotent behavior
         assertDoesNotThrow(() -> wishlistService.removeFromWishlist(customerId, variantId));
     }
-
-    // ── getWishlistVariantIds tests ─────────────────────────────────────────
 
     @Test
     void getWishlistVariantIds_shouldReturnEmptyList_whenNoItems()
@@ -185,8 +171,6 @@ class WishlistServiceTest
         assertEquals(variantId2, result.get(1));
         assertEquals(variantId3, result.get(2));
     }
-
-    // ── Helper methods ──────────────────────────────────────────────────────
 
     private String getFullExceptionChain(Throwable t)
     {

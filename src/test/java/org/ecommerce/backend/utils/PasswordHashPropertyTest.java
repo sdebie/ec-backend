@@ -1,7 +1,5 @@
 package org.ecommerce.backend.utils;
 
-// Feature: customer-portal-backend, Property 7: Password Hash Round-Trip
-
 import net.jqwik.api.*;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -12,13 +10,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * <p>
  * For any password string of length >= 8, PasswordHashUtil.verify(password, PasswordHashUtil.hash(password))
  * SHALL return true. For any two distinct passwords a and b,
- * PasswordHashUtil.verify(a, PasswordHashUtil.hash(b)) SHALL return false.
+ * PasswordHashUtil.verify(a PasswordHashUtil.hash(b)) SHALL return false.
  * <p>
  */
 class PasswordHashPropertyTest
 {
     /**
-     * Property: For any password string of length 8-128 (including special chars and unicode),
+     * Property: For any password string of length 8-128 (including special chars and Unicode),
      * hashing and then verifying with the same password returns true.
      */
     @Property(tries = 100)
@@ -34,7 +32,7 @@ class PasswordHashPropertyTest
 
     /**
      * Property: For any two distinct passwords a and b,
-     * verifying a against the hash of b returns false.
+     * verifying against the hash of b returns false.
      */
     @Property(tries = 100)
     void verifyWithDifferentPasswordReturnsFalse(
@@ -50,12 +48,10 @@ class PasswordHashPropertyTest
                 "verify(a, hash(b)) should return false when a != b");
     }
 
-    // ── Generators ──────────────────────────────────────────────────────────────
-
     @Provide
     Arbitrary<String> passwords()
     {
-        // Generate strings of length 8-128 including alpha, numeric, special chars, and unicode
+        // Generate strings of length 8-128 including alpha, numeric, special chars, and Unicode
         Arbitrary<String> alpha = Arbitraries.strings()
                 .withCharRange('a', 'z')
                 .withCharRange('A', 'Z')
