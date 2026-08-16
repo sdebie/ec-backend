@@ -2,7 +2,6 @@ package org.ecommerce.backend.service;
 
 // Feature: wholesale-application-review-workflow, Property 3: At-most-once, commit-only notification
 // Feature: wholesale-application-review-workflow, Property 5: Mail failure isolation
-// Validates: Requirements 4.3, 4.5, 6.1, 6.2, 6.3, 6.4, 6.5
 
 import io.quarkus.test.TestTransaction;
 import io.quarkus.test.junit.QuarkusTest;

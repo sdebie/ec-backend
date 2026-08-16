@@ -30,7 +30,6 @@ import static org.mockito.Mockito.when;
  * Tests the full HTTP round-trip through the /api/graphql endpoint with JWT-based
  * authentication and ownership checking.
  * <p>
- * Validates: Requirements 3.1, 3.2, 3.3
  */
 @QuarkusTest
 class OrderResourceOwnershipIT
@@ -42,14 +41,8 @@ class OrderResourceOwnershipIT
     @InjectMock
     OrderService orderService;
 
-    private CustomerEntity customerA;
-    private CustomerEntity customerB;
-
     private OrderEntity orderA;
     private OrderEntity orderB;
-
-    private OrderDetailRespDto orderDetailA;
-    private OrderDetailRespDto orderDetailB;
 
     @BeforeEach
     void setUp()
@@ -62,7 +55,7 @@ class OrderResourceOwnershipIT
         userA.setId(UUID.randomUUID());
         userA.setEmail(CUSTOMER_A_EMAIL);
 
-        customerA = new CustomerEntity();
+        CustomerEntity customerA = new CustomerEntity();
         customerA.setId(UUID.randomUUID());
         customerA.setUser(userA);
         customerA.setFirstName("Alice");
@@ -76,7 +69,7 @@ class OrderResourceOwnershipIT
         userB.setId(UUID.randomUUID());
         userB.setEmail(CUSTOMER_B_EMAIL);
 
-        customerB = new CustomerEntity();
+        CustomerEntity customerB = new CustomerEntity();
         customerB.setId(UUID.randomUUID());
         customerB.setUser(userB);
         customerB.setFirstName("Bob");
@@ -104,14 +97,14 @@ class OrderResourceOwnershipIT
         orderB.setItems(new ArrayList<>());
 
         // OrderDetailRespDto for order A
-        orderDetailA = new OrderDetailRespDto();
+        OrderDetailRespDto orderDetailA = new OrderDetailRespDto();
         orderDetailA.setId(orderA.getId());
         orderDetailA.setTotalAmount(orderA.getTotalAmount());
         orderDetailA.setStatus(orderA.getStatus());
         orderDetailA.setCreatedAt(orderA.getCreatedAt());
 
         // OrderDetailRespDto for order B
-        orderDetailB = new OrderDetailRespDto();
+        OrderDetailRespDto orderDetailB = new OrderDetailRespDto();
         orderDetailB.setId(orderB.getId());
         orderDetailB.setTotalAmount(orderB.getTotalAmount());
         orderDetailB.setStatus(orderB.getStatus());
@@ -200,12 +193,12 @@ class OrderResourceOwnershipIT
     }
 
     @Test
-    @DisplayName("Staff JWT returns order data regardless of ownership")
-    void staffJwt_anyOrder_returnsSuccess()
+    @DisplayName("Staff JWT is not a capability or an ownership credential — getOrderDetail refuses it (Requirement 1.6)")
+    void staffJwt_anyOrder_returnsOrderNotFound()
     {
         String token = generateStaffJwt(STAFF_EMAIL);
 
-        // Staff accessing Customer A's order — should succeed
+        // Staff holds neither a valid order-capability token nor the order's owner JWT — refused, same as a stranger.
         given()
                 .header("Authorization", "Bearer " + token)
                 .contentType("application/json")
@@ -214,10 +207,10 @@ class OrderResourceOwnershipIT
                 .post("/api/graphql")
                 .then()
                 .statusCode(200)
-                .body("data.getOrderDetail.id", equalTo(orderA.getId().toString()))
-                .body("errors", nullValue());
+                .body("errors", notNullValue())
+                .body("errors[0].message", equalTo("Order not found"))
+                .body("data.getOrderDetail", nullValue());
 
-        // Staff accessing Customer B's order — should also succeed
         given()
                 .header("Authorization", "Bearer " + token)
                 .contentType("application/json")
@@ -226,13 +219,14 @@ class OrderResourceOwnershipIT
                 .post("/api/graphql")
                 .then()
                 .statusCode(200)
-                .body("data.getOrderDetail.id", equalTo(orderB.getId().toString()))
-                .body("errors", nullValue());
+                .body("errors", notNullValue())
+                .body("errors[0].message", equalTo("Order not found"))
+                .body("data.getOrderDetail", nullValue());
     }
 
     @Test
-    @DisplayName("No JWT (anonymous) returns order data for backwards compatibility")
-    void noJwt_returnsSuccess()
+    @DisplayName("No credential at all refuses a registered customer's order (Requirement 1.1/1.2 — possession of the id is not enough)")
+    void noCredential_customerOwnedOrder_returnsOrderNotFound()
     {
         given()
                 .contentType("application/json")
@@ -241,7 +235,8 @@ class OrderResourceOwnershipIT
                 .post("/api/graphql")
                 .then()
                 .statusCode(200)
-                .body("data.getOrderDetail.id", equalTo(orderA.getId().toString()))
-                .body("errors", nullValue());
+                .body("errors", notNullValue())
+                .body("errors[0].message", equalTo("Order not found"))
+                .body("data.getOrderDetail", nullValue());
     }
 }

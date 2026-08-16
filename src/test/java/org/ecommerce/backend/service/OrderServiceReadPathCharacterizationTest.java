@@ -40,10 +40,14 @@ import static org.mockito.Mockito.when;
  * - getOrderDetail(UUID)
  * - getAllOrders(PageRequest, FilterRequest)
  * - getMyOrders(UUID)
- * - getLatestOrderBySessionId(String)
  * <p>
  * These baselines guard against regressions when extracting DTO mapping
  * into OrderMapper (Task 10.2).
+ * <p>
+ * {@code getLatestOrderBySessionId} was removed (guest-order-authorization Requirement
+ * 4.2/4.3) along with the {@code orderBySessionId} query it backed — replaced by
+ * {@code OrderResource.orderStatus}, tested directly rather than through this
+ * service-level characterization style.
  * <p>
  * Requirements: 4.2, 4.4
  */
@@ -229,7 +233,7 @@ class OrderServiceReadPathCharacterizationTest
             assertEquals("11111111-1111-1111-1111-111111111111", dto.getId());
             assertEquals("22222222-2222-2222-2222-222222222222", dto.getSessionId());
             assertEquals("PAID", dto.getStatus());
-            assertEquals(order.getCreatedAt().toString(), dto.getCreateDate());
+            assertEquals(order.getCreatedAt().format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE_TIME), dto.getCreateDate());
             assertEquals(new BigDecimal("1250.00"), dto.getTotalAmount());
             assertEquals(2, dto.getItemCount());
 
@@ -303,7 +307,7 @@ class OrderServiceReadPathCharacterizationTest
             assertEquals("cccccccc-cccc-cccc-cccc-cccccccccccc", dto.getId());
             assertEquals("dddddddd-dddd-dddd-dddd-dddddddddddd", dto.getSessionId());
             assertEquals("CREATED", dto.getStatus());
-            assertEquals(order.getCreatedAt().toString(), dto.getCreateDate());
+            assertEquals(order.getCreatedAt().format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE_TIME), dto.getCreateDate());
             assertEquals(new BigDecimal("0.00"), dto.getTotalAmount());
             assertNull(dto.getCustomer());
             assertNotNull(dto.getItems());
@@ -354,7 +358,6 @@ class OrderServiceReadPathCharacterizationTest
 
             assertNotNull(detail);
             assertEquals(UUID.fromString("11111111-1111-1111-1111-111111111111"), detail.getId());
-            assertEquals(UUID.fromString("22222222-2222-2222-2222-222222222222"), detail.getSessionId());
             assertEquals(OrderStatusEn.PAID, detail.getStatus());
             assertEquals(new BigDecimal("1250.00"), detail.getTotalAmount());
             assertEquals(LocalDateTime.of(2026, 7, 15, 10, 30, 0), detail.getCreatedAt());
@@ -419,14 +422,12 @@ class OrderServiceReadPathCharacterizationTest
             assertEquals(UUID.fromString("aaa11111-1111-1111-1111-111111111111"), hist1.getId());
             assertEquals(OrderStatusEn.PAID, hist1.getStatus());
             assertEquals("Payment confirmed", hist1.getComment());
-            assertEquals("SYSTEM", hist1.getChangedBy());
             assertEquals(LocalDateTime.of(2026, 7, 15, 10, 35, 0), hist1.getCreatedAt());
 
             var hist2 = detail.getStatusHistory().get(1);
             assertEquals(UUID.fromString("aaa22222-2222-2222-2222-222222222222"), hist2.getId());
             assertEquals(OrderStatusEn.CREATED, hist2.getStatus());
             assertEquals("Order created", hist2.getComment());
-            assertNull(hist2.getChangedBy());
             assertEquals(LocalDateTime.of(2026, 7, 15, 10, 30, 0), hist2.getCreatedAt());
         }
 
@@ -645,57 +646,6 @@ class OrderServiceReadPathCharacterizationTest
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // getLatestOrderBySessionId — pins OrderResponseDto via session lookup
-    // ══════════════════════════════════════════════════════════════════════════
-
-    @Nested
-    @DisplayName("getLatestOrderBySessionId")
-    class GetLatestOrderBySessionIdTests
-    {
-
-        @Test
-        @DisplayName("valid sessionId with order — pins DTO fields")
-        void validSessionId_pinsDtoFields()
-        {
-            OrderEntity order = buildFullyPopulatedOrder();
-            stubOrderRepositoryFindBySessionId(order.getSessionId(), order);
-
-            OrderResponseDto dto = orderService.getLatestOrderBySessionId(
-                    "22222222-2222-2222-2222-222222222222");
-
-            assertNotNull(dto);
-            assertEquals("11111111-1111-1111-1111-111111111111", dto.getId());
-            assertEquals("22222222-2222-2222-2222-222222222222", dto.getSessionId());
-            assertEquals("PAID", dto.getStatus());
-            assertEquals(new BigDecimal("1250.00"), dto.getTotalAmount());
-            assertEquals(2, dto.getItemCount());
-            assertNotNull(dto.getCustomer());
-            assertEquals("customer@example.com", dto.getCustomer().getEmail());
-        }
-
-        @Test
-        @DisplayName("invalid sessionId — returns null DTO (mapper handles null)")
-        void invalidSessionId_returnsNull()
-        {
-            OrderResponseDto dto = orderService.getLatestOrderBySessionId("not-a-uuid");
-
-            assertNull(dto);
-        }
-
-        @Test
-        @DisplayName("no order for sessionId — returns null DTO")
-        void noOrderForSession_returnsNull()
-        {
-            UUID sessionId = UUID.randomUUID();
-            stubOrderRepositoryFindBySessionId(sessionId, null);
-
-            OrderResponseDto dto = orderService.getLatestOrderBySessionId(sessionId.toString());
-
-            assertNull(dto);
-        }
-    }
-
-    // ══════════════════════════════════════════════════════════════════════════
     // Panache / Repository stubs
     // ══════════════════════════════════════════════════════════════════════════
 
@@ -708,12 +658,6 @@ class OrderServiceReadPathCharacterizationTest
     {
         when(orderRepository.findAllOrderInfo(any(), any())).thenReturn(
                 orders != null ? orders : Collections.emptyList());
-    }
-
-    @SuppressWarnings("unchecked")
-    private void stubOrderRepositoryFindBySessionId(UUID sessionId, OrderEntity order)
-    {
-        when(orderRepository.findLatestOrderInfoBySessionId(any(UUID.class))).thenReturn(order);
     }
 
     @SuppressWarnings("unchecked")

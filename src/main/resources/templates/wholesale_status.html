@@ -67,7 +67,13 @@
 
         {#if approved}
             <p>Great news! Your wholesale application has been approved.</p>
-            <p>Wholesale pricing now applies to your account. Simply log in and shop to see your wholesale rates.</p>
+            {#if newAccountCreated}
+                <p>We've set up an account for you using this email address. Before you can log in, set a
+                    password via <a href="{forgotPasswordUrl}">Forgot password</a> using this email address —
+                    then you're ready to shop at your wholesale rates.</p>
+            {#else}
+                <p>Wholesale pricing now applies to your account. Simply log in and shop to see your wholesale rates.</p>
+            {/if}
         {#else}
             <p>Thank you for your interest in a wholesale account. Unfortunately, your application has not been approved
                 at this time.</p>

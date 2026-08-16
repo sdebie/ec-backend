@@ -18,13 +18,12 @@ import org.jboss.logging.Logger;
  * Observes wholesale application lifecycle events after their transactions commit:
  * <ul>
  *   <li>{@link WholesaleApplicationSubmittedEvent} — notifies the admin enquiry inbox
- *       (resolved via {@link ContactEnquiryMailer#resolveRecipient()}, i.e. the same
+ *       (resolved via {@link EnquiryRecipientResolver}, i.e. the same
  *       {@code storefront.contact.enquiryEmail} address that receives contact enquiries).</li>
  *   <li>{@link WholesaleDecisionEvent} — sends a status notification email to the applicant.</li>
  * </ul>
- * Mirrors the fire-and-log pattern of {@link ContactEnquiryMailer}: the mail send is
- * reactive and does not block the caller. A delivery failure is logged but never
- * propagated — the submission/decision is already persisted.
+ * Fire-and-log: the mail send is reactive and does not block the caller. A delivery
+ * failure is logged but never propagated — the submission/decision is already persisted.
  */
 @ApplicationScoped
 public class WholesaleMailNotifier
@@ -43,7 +42,7 @@ public class WholesaleMailNotifier
     MailTemplate wholesale_registration;
 
     @Inject
-    ContactEnquiryMailer contactEnquiryMailer;
+    EnquiryRecipientResolver enquiryRecipientResolver;
 
     @Inject
     SettingsRepository settingsRepository;
@@ -53,6 +52,9 @@ public class WholesaleMailNotifier
 
     @ConfigProperty(name = "quarkus.mailer.from")
     String mailerFrom;
+
+    @ConfigProperty(name = "frontend.base-url")
+    String frontendBaseUrl;
 
     /**
      * Fires after a new application's submission transaction commits successfully.
@@ -82,7 +84,7 @@ public class WholesaleMailNotifier
     {
         String enquiryEmail;
         try {
-            enquiryEmail = contactEnquiryMailer.resolveRecipient();
+            enquiryEmail = enquiryRecipientResolver.require();
         } catch (RecipientNotConfiguredException e) {
             LOG.warnf("[WholesaleMailNotifier] admin notification skipped for application %s: %s", event.applicationId(), e.getMessage());
             return;
@@ -157,6 +159,8 @@ public class WholesaleMailNotifier
                 .data("storeName", storeName)
                 .data("approved", event.decision() == WholesaleApplicationStatusEn.APPROVED)
                 .data("rejectionReason", event.rejectionReason())
+                .data("newAccountCreated", event.newAccountCreated())
+                .data("forgotPasswordUrl", frontendBaseUrl + "/account/forgot-password")
                 .send()
                 .subscribe().with(
                         success -> LOG.infof("[WholesaleMailNotifier] delivered for application %s to %s", event.applicationId(), event.recipientEmail()),

@@ -19,7 +19,6 @@ import static org.junit.jupiter.api.Assertions.*;
  * Covers: blank required fields rejected, over-max sizes rejected,
  * invalid email rejected, valid payload accepted, optional fields nullable.
  *
- * Validates: Requirements 3.1
  */
 class ContactEnquiryRequestDtoValidationTest {
 
@@ -42,7 +41,6 @@ class ContactEnquiryRequestDtoValidationTest {
     // --- Property: valid payloads produce zero violations ---
 
     /**
-     * Validates: Requirements 3.1
      *
      * For any DTO where all required fields are non-blank and within size limits,
      * and email is syntactically valid, validation SHALL produce zero constraint violations.
@@ -64,7 +62,6 @@ class ContactEnquiryRequestDtoValidationTest {
     // --- Property: blank required fields produce violations ---
 
     /**
-     * Validates: Requirements 3.1
      *
      * For any blank name (null, empty, or whitespace-only), validation SHALL reject
      * with at least one violation on the 'name' property.
@@ -79,7 +76,6 @@ class ContactEnquiryRequestDtoValidationTest {
     }
 
     /**
-     * Validates: Requirements 3.1
      *
      * For any blank email, validation SHALL reject with at least one violation on 'email'.
      */
@@ -93,7 +89,6 @@ class ContactEnquiryRequestDtoValidationTest {
     }
 
     /**
-     * Validates: Requirements 3.1
      *
      * For any blank phone, validation SHALL reject with at least one violation on 'phone'.
      */
@@ -107,7 +102,6 @@ class ContactEnquiryRequestDtoValidationTest {
     }
 
     /**
-     * Validates: Requirements 3.1
      *
      * For any blank message, validation SHALL reject with at least one violation on 'message'.
      */
@@ -123,7 +117,6 @@ class ContactEnquiryRequestDtoValidationTest {
     // --- Property: over-max sizes produce violations ---
 
     /**
-     * Validates: Requirements 3.1
      *
      * For any name longer than 120 characters, validation SHALL reject.
      */
@@ -137,7 +130,6 @@ class ContactEnquiryRequestDtoValidationTest {
     }
 
     /**
-     * Validates: Requirements 3.1
      *
      * For any email longer than 254 characters, validation SHALL reject.
      */
@@ -151,7 +143,6 @@ class ContactEnquiryRequestDtoValidationTest {
     }
 
     /**
-     * Validates: Requirements 3.1
      *
      * For any phone longer than 40 characters, validation SHALL reject.
      */
@@ -165,7 +156,6 @@ class ContactEnquiryRequestDtoValidationTest {
     }
 
     /**
-     * Validates: Requirements 3.1
      *
      * For any company longer than 160 characters, validation SHALL reject.
      */
@@ -179,7 +169,6 @@ class ContactEnquiryRequestDtoValidationTest {
     }
 
     /**
-     * Validates: Requirements 3.1
      *
      * For any message longer than 4000 characters, validation SHALL reject.
      */
@@ -193,7 +182,6 @@ class ContactEnquiryRequestDtoValidationTest {
     }
 
     /**
-     * Validates: Requirements 3.1
      *
      * For any website (honeypot) longer than 200 characters, validation SHALL reject.
      */
@@ -209,7 +197,6 @@ class ContactEnquiryRequestDtoValidationTest {
     // --- Property: invalid email format is rejected ---
 
     /**
-     * Validates: Requirements 3.1
      *
      * For any string that is not a valid email format (no '@' or structurally invalid),
      * validation SHALL reject with a violation on 'email'.
@@ -226,7 +213,6 @@ class ContactEnquiryRequestDtoValidationTest {
     // --- Property: optional fields can be null ---
 
     /**
-     * Validates: Requirements 3.1
      *
      * A DTO with null company and null website SHALL pass validation
      * (they are optional fields with no @NotBlank).

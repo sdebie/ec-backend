@@ -20,22 +20,21 @@ import static org.hamcrest.Matchers.*;
  * 4. Correct-role staff JWT reaches admin endpoints (non-401/403)
  * 5. Anonymous access to public storefront reads succeeds (no over-guarding)
  * <p>
- * Validates: Requirements 11.2, 11.3, 11.4, 11.5, 11.9
  */
 @QuarkusTest
 class AuthorizationIT {
 
     // ─── JWT Helpers ─────────────────────────────────────────────────────────
 
-    private String generateStaffJwt(String email, String role) {
-        return Jwt.subject(email)
+    private String generateStaffJwt() {
+        return Jwt.subject("admin@test.com")
                 .issuer("http://localhost:8080")
-                .groups(role)
+                .groups("SUPER_ADMIN")
                 .sign();
     }
 
-    private String generateCustomerJwt(String email) {
-        return Jwt.subject(email)
+    private String generateCustomerJwt() {
+        return Jwt.subject("customer@test.com")
                 .issuer("http://localhost:8080")
                 .groups("customer")
                 .sign();
@@ -47,7 +46,7 @@ class AuthorizationIT {
             "{\"query\":\"mutation { createBrand(brandDto: {name: \\\"authTest\\\", slug: \\\"auth-test\\\"}) }\"}";
 
     private static final String UPDATE_ORDER_STATUS_BODY =
-            "{\"query\":\"mutation { updateOrderStatus(sessionId: \\\"fake-session\\\", status: \\\"SHIPPED\\\") { sessionId } }\"}";
+            "{\"query\":\"mutation { updateOrderStatus(orderId: \\\"fake-order\\\", status: \\\"CANCELLED\\\") { sessionId } }\"}";
 
     private static final String ADD_STAFF_USER_BODY =
             "{\"query\":\"mutation { addStaffUser(staffDto: {email: \\\"x@test.com\\\", fullName: \\\"X\\\", role: SUPER_ADMIN, active: true, resetPassword: false}) }\"}";
@@ -63,6 +62,12 @@ class AuthorizationIT {
 
     private static final String ALL_ORDERS_BODY =
             "{\"query\":\"{ allOrders { sessionId } }\"}";
+
+    private static final String ADMIN_ORDER_LIST_BODY =
+            "{\"query\":\"{ adminOrderList(pageIndex: 0, pageSize: 1) { totalElements } }\"}";
+
+    private static final String ADMIN_ORDER_BODY =
+            "{\"query\":\"{ adminOrder(id: \\\"fake-order\\\") { id } }\"}";
 
     private static final String SETTINGS_BODY =
             "{\"query\":\"{ settings { storeSettings { key } } }\"}";
@@ -283,6 +288,34 @@ class AuthorizationIT {
         }
 
         @Test
+        @DisplayName("adminOrderList → UNAUTHORIZED")
+        void adminOrderList_unauthenticated_unauthorized() {
+            given()
+                    .contentType("application/json")
+                    .body(ADMIN_ORDER_LIST_BODY)
+            .when()
+                    .post("/api/graphql")
+            .then()
+                    .statusCode(200)
+                    .body("errors", not(empty()))
+                    .body("errors[0].extensions.code", equalTo("unauthorized"));
+        }
+
+        @Test
+        @DisplayName("adminOrder → UNAUTHORIZED")
+        void adminOrder_unauthenticated_unauthorized() {
+            given()
+                    .contentType("application/json")
+                    .body(ADMIN_ORDER_BODY)
+            .when()
+                    .post("/api/graphql")
+            .then()
+                    .statusCode(200)
+                    .body("errors", not(empty()))
+                    .body("errors[0].extensions.code", equalTo("unauthorized"));
+        }
+
+        @Test
         @DisplayName("settings → UNAUTHORIZED")
         void settings_unauthenticated_unauthorized() {
             given()
@@ -308,7 +341,7 @@ class AuthorizationIT {
         @Test
         @DisplayName("POST /api/admin/auth/reset-password → 403")
         void resetPassword_customer_returns403() {
-            String customerToken = generateCustomerJwt("customer@test.com");
+            String customerToken = generateCustomerJwt();
             given()
                     .header("Authorization", "Bearer " + customerToken)
                     .contentType("application/json")
@@ -322,7 +355,7 @@ class AuthorizationIT {
         @Test
         @DisplayName("GET /api/admin/products/price_export → 403")
         void priceExport_customer_returns403() {
-            String customerToken = generateCustomerJwt("customer@test.com");
+            String customerToken = generateCustomerJwt();
             given()
                     .header("Authorization", "Bearer " + customerToken)
             .when()
@@ -334,7 +367,7 @@ class AuthorizationIT {
         @Test
         @DisplayName("GET /api/admin/images/directories → 403")
         void imageDirectories_customer_returns403() {
-            String customerToken = generateCustomerJwt("customer@test.com");
+            String customerToken = generateCustomerJwt();
             given()
                     .header("Authorization", "Bearer " + customerToken)
             .when()
@@ -346,7 +379,7 @@ class AuthorizationIT {
         @Test
         @DisplayName("GET /api/admin/me → 403")
         void adminMe_customer_returns403() {
-            String customerToken = generateCustomerJwt("customer@test.com");
+            String customerToken = generateCustomerJwt();
             given()
                     .header("Authorization", "Bearer " + customerToken)
             .when()
@@ -367,7 +400,7 @@ class AuthorizationIT {
         @Test
         @DisplayName("createBrand → FORBIDDEN")
         void createBrand_customer_forbidden() {
-            String customerToken = generateCustomerJwt("customer@test.com");
+            String customerToken = generateCustomerJwt();
             given()
                     .header("Authorization", "Bearer " + customerToken)
                     .contentType("application/json")
@@ -383,7 +416,7 @@ class AuthorizationIT {
         @Test
         @DisplayName("addStaffUser → FORBIDDEN")
         void addStaffUser_customer_forbidden() {
-            String customerToken = generateCustomerJwt("customer@test.com");
+            String customerToken = generateCustomerJwt();
             given()
                     .header("Authorization", "Bearer " + customerToken)
                     .contentType("application/json")
@@ -399,7 +432,7 @@ class AuthorizationIT {
         @Test
         @DisplayName("allCustomers → FORBIDDEN")
         void allCustomers_customer_forbidden() {
-            String customerToken = generateCustomerJwt("customer@test.com");
+            String customerToken = generateCustomerJwt();
             given()
                     .header("Authorization", "Bearer " + customerToken)
                     .contentType("application/json")
@@ -413,9 +446,25 @@ class AuthorizationIT {
         }
 
         @Test
+        @DisplayName("adminOrderList → FORBIDDEN")
+        void adminOrderList_customer_forbidden() {
+            String customerToken = generateCustomerJwt();
+            given()
+                    .header("Authorization", "Bearer " + customerToken)
+                    .contentType("application/json")
+                    .body(ADMIN_ORDER_LIST_BODY)
+            .when()
+                    .post("/api/graphql")
+            .then()
+                    .statusCode(200)
+                    .body("errors", not(empty()))
+                    .body("errors[0].extensions.code", equalTo("forbidden"));
+        }
+
+        @Test
         @DisplayName("staffList → FORBIDDEN")
         void staffList_customer_forbidden() {
-            String customerToken = generateCustomerJwt("customer@test.com");
+            String customerToken = generateCustomerJwt();
             given()
                     .header("Authorization", "Bearer " + customerToken)
                     .contentType("application/json")
@@ -431,7 +480,7 @@ class AuthorizationIT {
         @Test
         @DisplayName("settings → FORBIDDEN")
         void settings_customer_forbidden() {
-            String customerToken = generateCustomerJwt("customer@test.com");
+            String customerToken = generateCustomerJwt();
             given()
                     .header("Authorization", "Bearer " + customerToken)
                     .contentType("application/json")
@@ -456,7 +505,7 @@ class AuthorizationIT {
         @Test
         @DisplayName("GET /api/storefront/customer-portal → 403")
         void customerPortal_staff_returns403() {
-            String staffToken = generateStaffJwt("admin@test.com", "SUPER_ADMIN");
+            String staffToken = generateStaffJwt();
             given()
                     .header("Authorization", "Bearer " + staffToken)
             .when()
@@ -468,7 +517,7 @@ class AuthorizationIT {
         @Test
         @DisplayName("PATCH /api/customers/profile → 403")
         void customerProfile_staff_returns403() {
-            String staffToken = generateStaffJwt("admin@test.com", "SUPER_ADMIN");
+            String staffToken = generateStaffJwt();
             given()
                     .header("Authorization", "Bearer " + staffToken)
                     .contentType("application/json")
@@ -491,7 +540,7 @@ class AuthorizationIT {
         @Test
         @DisplayName("GET /api/admin/me with SUPER_ADMIN → 200")
         void adminMe_superAdmin_succeeds() {
-            String superAdminToken = generateStaffJwt("admin@test.com", "SUPER_ADMIN");
+            String superAdminToken = generateStaffJwt();
             given()
                     .header("Authorization", "Bearer " + superAdminToken)
             .when()
@@ -503,7 +552,7 @@ class AuthorizationIT {
         @Test
         @DisplayName("GET /api/admin/products/price_export with SUPER_ADMIN → non-401/403")
         void priceExport_superAdmin_reachable() {
-            String superAdminToken = generateStaffJwt("admin@test.com", "SUPER_ADMIN");
+            String superAdminToken = generateStaffJwt();
             int status = given()
                     .header("Authorization", "Bearer " + superAdminToken)
             .when()
@@ -519,7 +568,7 @@ class AuthorizationIT {
         @Test
         @DisplayName("GET /api/admin/images/directories with SUPER_ADMIN → non-401/403")
         void imageDirectories_superAdmin_reachable() {
-            String superAdminToken = generateStaffJwt("admin@test.com", "SUPER_ADMIN");
+            String superAdminToken = generateStaffJwt();
             int status = given()
                     .header("Authorization", "Bearer " + superAdminToken)
             .when()
@@ -535,7 +584,7 @@ class AuthorizationIT {
         @Test
         @DisplayName("createBrand with SUPER_ADMIN → no auth error")
         void createBrand_superAdmin_noAuthError() {
-            String superAdminToken = generateStaffJwt("admin@test.com", "SUPER_ADMIN");
+            String superAdminToken = generateStaffJwt();
             given()
                     .header("Authorization", "Bearer " + superAdminToken)
                     .contentType("application/json")
@@ -551,7 +600,7 @@ class AuthorizationIT {
         @Test
         @DisplayName("settings query with SUPER_ADMIN → no auth error")
         void settings_superAdmin_noAuthError() {
-            String superAdminToken = generateStaffJwt("admin@test.com", "SUPER_ADMIN");
+            String superAdminToken = generateStaffJwt();
             given()
                     .header("Authorization", "Bearer " + superAdminToken)
                     .contentType("application/json")
@@ -567,7 +616,7 @@ class AuthorizationIT {
         @Test
         @DisplayName("allOrders with SUPER_ADMIN → no auth error")
         void allOrders_superAdmin_noAuthError() {
-            String superAdminToken = generateStaffJwt("admin@test.com", "SUPER_ADMIN");
+            String superAdminToken = generateStaffJwt();
             given()
                     .header("Authorization", "Bearer " + superAdminToken)
                     .contentType("application/json")
@@ -583,7 +632,7 @@ class AuthorizationIT {
         @Test
         @DisplayName("staffList with SUPER_ADMIN → no auth error")
         void staffList_superAdmin_noAuthError() {
-            String superAdminToken = generateStaffJwt("admin@test.com", "SUPER_ADMIN");
+            String superAdminToken = generateStaffJwt();
             given()
                     .header("Authorization", "Bearer " + superAdminToken)
                     .contentType("application/json")

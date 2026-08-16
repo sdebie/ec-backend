@@ -29,7 +29,6 @@ import static org.mockito.Mockito.*;
  * Exercises the real service via @QuarkusTest + PanacheMock; the property is quantified by
  * iterating every status against a range of below-cap counts.
  * <p>
- * Validates: Requirements 2.6
  */
 @QuarkusTest
 class FeaturedStatusIndependentTogglePropertyTest

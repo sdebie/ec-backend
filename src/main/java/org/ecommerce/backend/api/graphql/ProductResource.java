@@ -133,7 +133,7 @@ public class ProductResource
     @Query("saleProductList")
     @Description("Returns shopping product cards that currently have active RETAIL_SALE_PRICE or WHOLESALE_SALE_PRICE values only.")
     @Transactional(value = TxType.SUPPORTS)
-    public List<ProductShoppingListItemDto> getProductsOnSaleList(
+    public PageResponse<ProductShoppingListItemDto> getProductsOnSaleList(
             @Name("pageRequest") PageRequest pageRequest,
             @Name("ignoreStatus") @DefaultValue("false") @Description("When true, skips the default ACTIVE product and variant status restriction.") boolean ignoreStatus)
     {

@@ -2,7 +2,6 @@ package org.ecommerce.backend.service;
 
 // Feature: service-layer-refactor, Property 1: Mapper output preservation (product list-item)
 // De-duplication proof: a SINGLE ProductListItemMapper now serves all former call sites.
-// Validates: Requirements 2.2, 2.4, 4.1, 4.2
 
 import io.quarkus.test.TestTransaction;
 import io.quarkus.test.junit.QuarkusTest;

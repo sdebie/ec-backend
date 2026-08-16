@@ -7,9 +7,13 @@ import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import org.ecommerce.backend.service.OrderService;
 import org.ecommerce.backend.service.OrderTotals;
+import org.ecommerce.backend.service.RateLimitDecision;
+import org.ecommerce.backend.service.RateLimiterService;
+import org.ecommerce.backend.utils.ClientIpUtils;
 import org.ecommerce.common.dto.OrderContactRequestDto;
 import org.ecommerce.common.entity.OrderEntity;
 import org.ecommerce.common.entity.ShippingMethodEntity;
+import org.ecommerce.common.enums.OrderStatusEn;
 import org.jboss.logging.Logger;
 
 import java.util.LinkedHashMap;
@@ -23,22 +27,69 @@ public class OrderContactResource
 {
     private static final Logger LOG = Logger.getLogger(OrderContactResource.class);
 
+    /**
+     * guest-order-authorization Requirement 7.1 — this endpoint had no ceiling of any
+     * kind before this spec. Generous for the same reason {@code CHECKOUT_MAX_PER_WINDOW}
+     * is: carrier-grade NAT puts many genuine shoppers behind one address, and a
+     * shopper may legitimately PATCH contact/address/shipping several times while
+     * refining checkout.
+     */
+    private static final int ORDER_CONTACT_MAX_PER_WINDOW = 30;
+    private static final long ORDER_CONTACT_WINDOW_SECONDS = 3600;
+
     @Inject
     OrderService orderService;
+
+    @Inject
+    OrderOwnershipGuard ownershipGuard;
+
+    @Inject
+    RateLimiterService rateLimiterService;
 
     @PATCH
     @Transactional
     public Response updateContact(
             @PathParam("orderId") UUID orderId,
+            @HeaderParam("X-Order-Token") String orderToken,
+            @HeaderParam("CF-Connecting-IP") String cfConnectingIp,
+            @HeaderParam("X-Forwarded-For") String xForwardedFor,
+            @HeaderParam("X-Real-IP") String xRealIp,
             OrderContactRequestDto request
     )
     {
+        String clientIp = ClientIpUtils.resolveClientIp(cfConnectingIp, xForwardedFor, xRealIp);
+        RateLimitDecision decision = rateLimiterService.check(
+                "order-contact", clientIp, ORDER_CONTACT_MAX_PER_WINDOW, ORDER_CONTACT_WINDOW_SECONDS);
+        if (!decision.allowed()) {
+            return Response.status(429).header("Retry-After", decision.retryAfterSeconds()).build();
+        }
+
         // 1. Find order by ID → 404 if missing
         OrderEntity order = OrderEntity.findOrderInfoById(orderId);
         if (order == null) {
             LOG.debugf("Order not found: %s", orderId);
             return Response.status(Response.Status.NOT_FOUND)
                     .entity(Map.of("error", "Order not found"))
+                    .build();
+        }
+
+        // 1a. Ownership gate: a valid capability token for this order, or the order's
+        // own customer's JWT — nothing else (guest-order-authorization Requirement 1).
+        if (!ownershipGuard.mayAct(order, orderToken)) {
+            LOG.warnf("Rejected contact update for order %s: caller does not own it", orderId);
+            return Response.status(Response.Status.NOT_FOUND)
+                    .entity(Map.of("error", "Order not found"))
+                    .build();
+        }
+
+        // 1b. Contact/address/shipping are only mutable while the order is still
+        // being assembled at checkout. Once it has left CREATED (paid, fulfilled,
+        // cancelled, ...) this must not be able to rewrite delivery details or
+        // force a reprice on a total the shopper already paid.
+        if (order.getStatus() != OrderStatusEn.CREATED) {
+            LOG.warnf("Rejected contact update for order %s in status %s", orderId, order.getStatus());
+            return Response.status(Response.Status.CONFLICT)
+                    .entity(Map.of("error", "Order can no longer be modified"))
                     .build();
         }
 
@@ -59,6 +110,27 @@ public class OrderContactResource
                 LOG.debugf("Invalid or inactive shipping method: %s", request.getShippingMethodId());
                 return Response.status(422)
                         .entity(Map.of("error", "Shipping method not found or inactive"))
+                        .build();
+            }
+        }
+
+        // 2b. A delivery method must arrive with somewhere to deliver to. Checked
+        // against the values this request would leave on the order — the address may
+        // have been supplied by an earlier call — and before anything is written, so a
+        // rejected request changes nothing. Collection methods are exempt by
+        // definition; the storefront omits the address entirely for them.
+        ShippingMethodEntity effectiveMethod = shippingMethod != null ? shippingMethod : order.getShippingMethod();
+        if (effectiveMethod != null && effectiveMethod.isRequiresAddress()) {
+            String street = firstNonBlank(request.getStreetAddress(), order.getStreetAddress());
+            String city = firstNonBlank(request.getCity(), order.getCity());
+            String province = firstNonBlank(request.getProvince(), order.getProvince());
+            String postalCode = firstNonBlank(request.getPostalCode(), order.getPostalCode());
+
+            if (street == null || city == null || province == null || postalCode == null) {
+                LOG.debugf("Rejected contact update for order %s: %s requires a delivery address",
+                        orderId, effectiveMethod.getName());
+                return Response.status(422)
+                        .entity(Map.of("error", "A delivery address is required for " + effectiveMethod.getName()))
                         .build();
             }
         }
@@ -126,8 +198,23 @@ public class OrderContactResource
             summary.put("postalCode", order.getPostalCode());
         }
 
-        LOG.infof("Updated contact for order %s (email: %s)", orderId, order.getContactEmail());
+        // The email itself is deliberately not logged (Requirement 5.4) — a guest's
+        // address in the logs, on the ordinary success path, at INFO.
+        LOG.infof("Updated contact for order %s", orderId);
 
         return Response.ok(summary).build();
+    }
+
+    /**
+     * The value an address field would hold after this request: what it sends, else what
+     * the order already carries. Blank counts as absent, so whitespace cannot satisfy a
+     * required address. Returns null when neither has anything usable.
+     */
+    private static String firstNonBlank(String incoming, String existing)
+    {
+        if (incoming != null && !incoming.isBlank()) {
+            return incoming;
+        }
+        return existing != null && !existing.isBlank() ? existing : null;
     }
 }

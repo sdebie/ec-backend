@@ -28,15 +28,12 @@ import static org.mockito.Mockito.when;
  * Asserts that SUPER_ADMIN and CATALOG_MANAGER can call addProductInformation
  * and updateProductInformation, while ORDER_MANAGER and VIEWER are rejected (403).
  * <p>
- * Validates: Requirements 6.2, 6.4, 8.3
  */
 @QuarkusTest
 class ProductResourceAuthTest
 {
     @InjectMock
     ProductService productService;
-
-    private ProductInformationDto mockResult;
 
     @BeforeEach
     void setUp()
@@ -59,7 +56,7 @@ class ProductResourceAuthTest
         variant.setPrices(List.of(price));
         variant.setImages(List.of());
 
-        mockResult = new ProductInformationDto(product, List.of(variant));
+        ProductInformationDto mockResult = new ProductInformationDto(product, List.of(variant));
 
         when(productService.addProductInformation(any())).thenReturn(mockResult);
         when(productService.updateProductInformation(anyString(), any())).thenReturn(mockResult);

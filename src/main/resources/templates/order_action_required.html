@@ -1,0 +1,62 @@
+{@org.ecommerce.common.enums.OrderStatusEn status}
+{@java.lang.Integer holdMinutes}
+{#include order_email_layout}
+{#headline}
+    {#if status.name == 'PAYMENT_FAILED'}Your payment didn't go through
+    {#else if status.name == 'IN_STORE_PAYMENT'}Your order is reserved for collection
+    {#else}Your order is waiting for payment{/if}
+{/headline}
+
+{#body}
+    {!
+      Three statuses, one email: each is the order waiting on the shopper. They differ in
+      what to do next, not in what has happened, so the copy branches and the layout does
+      not.
+    !}
+    {#if status.name == 'PAYMENT_FAILED'}
+        <p>
+            Your bank or card provider declined the payment for this order, so we haven't
+            been able to complete it yet.
+        </p>
+        <div class="callout warn">
+            <strong>Your items are still held for you.</strong>
+            {#if holdMinutes??}
+                Try again with another payment method within {holdMinutes} minutes and
+                nothing is lost. After that we release them back to other shoppers.
+            {#else}
+                Try again with another payment method and nothing is lost.
+            {/if}
+        </div>
+        <p>Nothing has been charged. You can start the payment again from your order.</p>
+
+    {#else if status.name == 'IN_STORE_PAYMENT'}
+        <p>
+            Thanks — your order is reserved and waiting for you. You'll pay when you
+            collect it, so there's nothing to do online.
+        </p>
+        <div class="callout">
+            <strong>Bring this order reference:</strong> {order.reference}
+            {#if store.address??}<br/>Collect from {store.address}{/if}
+            {#if store.businessHours??}<br/>Open {store.businessHours}{/if}
+        </div>
+        <p>We'll email you again as soon as it's packed and ready to collect.</p>
+
+    {#else}
+        <p>We've started your payment and are waiting for it to complete.</p>
+        <div class="callout warn">
+            {#if holdMinutes??}
+                Your items are held for {holdMinutes} minutes. If the payment isn't
+                finished by then we release them back to other shoppers, and you'd need to
+                order again.
+            {#else}
+                Your items are held while the payment completes.
+            {/if}
+        </div>
+        <p>If you've already paid, you can ignore this — your confirmation is on its way.</p>
+    {/if}
+
+    <div class="total-section">
+        Total: {#if store.currencySymbol??}{store.currencySymbol} {/if}{order.totalAmount}
+    </div>
+{/body}
+{/include}

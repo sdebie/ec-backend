@@ -33,7 +33,6 @@ import static org.mockito.Mockito.when;
  * - Transition validation via the updateQuoteRequestStatus mutation
  * - Variant-deleted detail still resolves from snapshots
  * <p>
- * Validates: Requirements 6.1, 6.2, 6.3, 6.4
  */
 @QuarkusTest
 @DisplayName("QuoteRequestAdminResource — integration tests")
@@ -46,7 +45,6 @@ class QuoteRequestAdminResourceIT
     QuoteRequestService quoteRequestService;
 
     private UUID testRequestId;
-    private QuoteRequestEntity testEntity;
 
     // ─── JWT Helpers ─────────────────────────────────────────────────────────
 
@@ -82,7 +80,7 @@ class QuoteRequestAdminResourceIT
     void setUp()
     {
         testRequestId = UUID.randomUUID();
-        testEntity = createTestEntity(testRequestId, QuoteRequestStatusEn.NEW);
+        QuoteRequestEntity testEntity = createTestEntity(testRequestId, QuoteRequestStatusEn.NEW);
 
         // Repository mocks
         when(quoteRequestRepository.findAll(any(), any())).thenReturn(List.of(testEntity));

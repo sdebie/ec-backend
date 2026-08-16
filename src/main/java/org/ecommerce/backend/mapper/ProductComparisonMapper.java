@@ -1,55 +1,40 @@
 package org.ecommerce.backend.mapper;
 
-import jakarta.enterprise.context.ApplicationScoped;
 import org.ecommerce.common.dto.ProductComparisonDto;
 import org.ecommerce.common.entity.ProductUploadStagedEntity;
+import org.mapstruct.Mapper;
+import org.mapstruct.Mapping;
 
 import java.util.List;
-import java.util.stream.Collectors;
+
+import static org.mapstruct.NullValueCheckStrategy.ALWAYS;
+import static org.mapstruct.ReportingPolicy.ERROR;
+import static org.mapstruct.NullValueMappingStrategy.RETURN_NULL;
+import static org.mapstruct.NullValuePropertyMappingStrategy.SET_TO_NULL;
 
 /**
  * Maps staged product-import rows to the comparison DTO the admin review screen shows.
- * Pure field copy — extracted from {@code ProductImportService} so the service stays
- * focused on orchestration.
+ * <p>
+ * The DTO pairs each staged value ({@code proposed*}) against the value captured from the
+ * catalogue at import time ({@code current*}), so the reviewer sees both sides of every change.
  */
-@ApplicationScoped
-public class ProductComparisonMapper
+@Mapper(componentModel = "jakarta-cdi", unmappedTargetPolicy = ERROR, nullValueMappingStrategy = RETURN_NULL,
+        nullValuePropertyMappingStrategy = SET_TO_NULL,
+        nullValueCheckStrategy = ALWAYS)
+public interface ProductComparisonMapper
 {
+    @Mapping(target = "stagedId", source = "id")
+    @Mapping(target = "proposedName", source = "name")
+    @Mapping(target = "proposedDescription", source = "description")
+    @Mapping(target = "proposedShortDescription", source = "shortDescription")
+    @Mapping(target = "proposedImages", source = "images")
+    @Mapping(target = "proposedStock", source = "stock")
+    @Mapping(target = "proposedAttributes", source = "attributes")
+    @Mapping(target = "validCategory", source = "isValidCategory")
+    @Mapping(target = "validBrand", source = "isValidBrand")
+    @Mapping(target = "newProduct", source = "isNewProduct")
+    @Mapping(target = "newVariant", source = "isNewVariant")
+    ProductComparisonDto toDto(ProductUploadStagedEntity staged);
 
-    public ProductComparisonDto toDto(ProductUploadStagedEntity staged)
-    {
-        ProductComparisonDto dto = new ProductComparisonDto();
-        dto.setStagedId(staged.getId());
-        dto.setSku(staged.getSku());
-        dto.setProposedName(staged.getName());
-        dto.setProposedDescription(staged.getDescription());
-        dto.setProposedShortDescription(staged.getShortDescription());
-        dto.setCategorySlug(staged.getCategorySlug());
-        dto.setBrandSlug(staged.getBrandSlug());
-        dto.setProposedImages(staged.getImages());
-        dto.setProposedStock(staged.getStock());
-        dto.setProposedAttributes(staged.getAttributes());
-        dto.setValidationErrors(staged.getValidationErrors());
-        dto.setValidationStatus(staged.getValidationStatus());
-        dto.setImageErrors(staged.getImageErrors());
-        dto.setValidCategory(staged.getIsValidCategory());
-        dto.setValidBrand(staged.getIsValidBrand());
-        dto.setNewProduct(staged.getIsNewProduct());
-        dto.setNewVariant(staged.getIsNewVariant());
-        dto.setHasChanges(Boolean.TRUE.equals(staged.getHasChanges()));
-
-        // Persisted current values captured at import time
-        dto.setCurrentName(staged.getCurrentName());
-        dto.setCurrentDescription(staged.getCurrentDescription());
-        dto.setCurrentShortDescription(staged.getCurrentShortDescription());
-        dto.setCurrentStock(staged.getCurrentStock());
-        dto.setCurrentImages(staged.getCurrentImages());
-        dto.setCurrentAttributes(staged.getCurrentAttributes());
-        return dto;
-    }
-
-    public List<ProductComparisonDto> toDtos(List<ProductUploadStagedEntity> staged)
-    {
-        return staged.stream().map(this::toDto).collect(Collectors.toList());
-    }
+    List<ProductComparisonDto> toDtos(List<ProductUploadStagedEntity> staged);
 }

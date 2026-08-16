@@ -35,7 +35,6 @@ import static org.junit.jupiter.api.Assertions.*;
  * the services, so {@code @TestTransaction} would NOT roll back the inner
  * transactions. Instead, tests create unique batches and clean up after themselves.
  * <p>
- * Validates: Requirements 1.4
  */
 @QuarkusTest
 class ProductImportRealPathIT

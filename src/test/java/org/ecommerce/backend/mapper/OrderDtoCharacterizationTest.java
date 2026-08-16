@@ -1,15 +1,11 @@
 package org.ecommerce.backend.mapper;
 
-import io.quarkus.hibernate.orm.panache.PanacheEntityBase;
-import io.quarkus.hibernate.orm.panache.PanacheQuery;
-import io.quarkus.panache.mock.PanacheMock;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
 import org.ecommerce.common.dto.*;
 import org.ecommerce.common.dto.OrderDetailRespDto.OrderStatusHistoryDetailRespDto;
 import org.ecommerce.common.entity.*;
 import org.ecommerce.common.enums.OrderStatusEn;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -35,14 +31,21 @@ import static org.mockito.Mockito.when;
  * <ul>
  *   <li>{@link OrderItemDetailDto}: {id: String, unitPrice: BigDecimal, quantity: Integer, variant: ProductVariantDetailDto}
  *       — the single canonical order-item output DTO used by BOTH OrderResponseDto and OrderDetailRespDto</li>
- *   <li>{@link OrderStatusHistoryDetailRespDto}: {id: UUID, status, comment, changedBy, createdAt}
- *       — pins that the leaked {@code order: OrderEntity} field has been removed</li>
+ *   <li>{@link OrderStatusHistoryDetailRespDto}: {id: UUID, status, comment, createdAt}
+ *       — pins that the leaked {@code order: OrderEntity} field has been removed, and (guest-order-authorization
+ *       Requirement 4.4) that {@code changedBy} — staff members' real names — is removed too, rather than
+ *       conditionally nulled: {@code getOrderDetail} (S1) is a shopper-facing surface only as of Requirement 1.6,
+ *       so there is no remaining staff-caller case for a partial redaction to distinguish.</li>
  * </ul>
  * <p>
  * Both toResponseDto and toDetailDto now produce OrderItemDetailDto with ProductVariantDetailDto
  * (reduced variant: no sku/status/prices; product: ProductDetailDto name-only; images: ProductImageDto).
- *
- * <p>Validates: Requirements 2.4, 4.2</p>
+ * <p>
+ * {@code OrderDetailRespDto} also no longer carries {@code sessionId} (Requirement 4.1) — the escalation chain
+ * that let {@code getOrderDetail}'s response hand out {@code orderBySessionId}'s credential. {@code stockQuantity}
+ * (live, not stock-at-order-time) and {@code statusHistory[].comment} are deliberately left unchanged
+ * (task 3.3a decision): once S1 requires the order's own owner or a valid capability token, an order's owner
+ * seeing their own order's current stock context or status comments is not a new disclosure.
  */
 @QuarkusTest
 @DisplayName("OrderMapper DTO shape characterization")
@@ -51,11 +54,6 @@ class OrderDtoCharacterizationTest
     @Inject
     OrderMapper orderMapper;
 
-    @BeforeEach
-    void setUp()
-    {
-        PanacheMock.mock(OrderStatusHistoryEntity.class);
-    }
 
     // ══════════════════════════════════════════════════════════════════════════
     // Fixture builders
@@ -141,13 +139,6 @@ class OrderDtoCharacterizationTest
         return List.of(h1, h2);
     }
 
-    @SuppressWarnings("unchecked")
-    private void stubHistoryQuery(UUID orderId, List<OrderStatusHistoryEntity> histories)
-    {
-        PanacheQuery<PanacheEntityBase> query = mock(PanacheQuery.class);
-        when(query.list()).thenReturn(histories != null ? (List) histories : Collections.emptyList());
-        when(OrderStatusHistoryEntity.find(anyString(), any(Object[].class))).thenReturn(query);
-    }
 
     // ══════════════════════════════════════════════════════════════════════════
     // toResponseDto — pins OrderResponseDto with canonical OrderItemDetailDto
@@ -181,7 +172,7 @@ class OrderDtoCharacterizationTest
             assertEquals("11111111-1111-1111-1111-111111111111", dto.getId());
             assertEquals("22222222-2222-2222-2222-222222222222", dto.getSessionId());
             assertEquals("PAID", dto.getStatus());
-            assertEquals("2026-07-20T12:00", dto.getCreateDate());
+            assertEquals("2026-07-20T12:00:00", dto.getCreateDate());
             assertEquals(0, new BigDecimal("500.00").compareTo(dto.getTotalAmount()));
             assertEquals(1, dto.getItemCount());
             assertEquals("test@example.com", dto.getCustomer().getEmail());
@@ -284,21 +275,17 @@ class OrderDtoCharacterizationTest
     {
 
         @Test
-        @DisplayName("pins OrderDetailRespDto field set: id(UUID), customerEntity(CustomerDto — canonical, post customer-merge), totalAmount, sessionId(UUID), status(OrderStatusEn), shipping fields, items(List<OrderItemDetailDto>), createdAt, statusHistory")
+        @DisplayName("pins OrderDetailRespDto field set: id(UUID), customerEntity(CustomerDto — canonical, post customer-merge), totalAmount, status(OrderStatusEn), shipping fields, items(List<OrderItemDetailDto>), createdAt, statusHistory — no sessionId (Requirement 4.1)")
         @SuppressWarnings("unchecked")
         void pinsOrderDetailRespDtoShape()
         {
             OrderEntity order = buildOrder();
-            stubHistoryQuery(order.getId(), buildHistory(order));
 
-            OrderDetailRespDto dto = orderMapper.toDetailDto(order);
+            OrderDetailRespDto dto = orderMapper.toDetailDto(order, buildHistory(order));
 
             assertNotNull(dto);
             assertInstanceOf(UUID.class, dto.getId());
             assertEquals(UUID.fromString("11111111-1111-1111-1111-111111111111"), dto.getId());
-
-            assertInstanceOf(UUID.class, dto.getSessionId());
-            assertEquals(UUID.fromString("22222222-2222-2222-2222-222222222222"), dto.getSessionId());
 
             assertInstanceOf(OrderStatusEn.class, dto.getStatus());
             assertEquals(OrderStatusEn.PAID, dto.getStatus());
@@ -320,14 +307,24 @@ class OrderDtoCharacterizationTest
         }
 
         @Test
+        @DisplayName("pins that sessionId does NOT exist on OrderDetailRespDto (guest-order-authorization Requirement 4.1 — the escalation chain this field fed is closed by removing it, not by nulling it)")
+        void pinsSessionIdFieldRemoved()
+        {
+            Field[] fields = OrderDetailRespDto.class.getDeclaredFields();
+            for (Field field : fields) {
+                assertNotEquals("sessionId", field.getName(),
+                        "OrderDetailRespDto must not carry sessionId — orderBySessionId's credential");
+            }
+        }
+
+        @Test
         @DisplayName("pins OrderItemDetailDto shape in detail path: {id: String, unitPrice: BigDecimal, quantity: Integer, variant: ProductVariantDetailDto}")
         @SuppressWarnings("unchecked")
         void pinsOrderItemDetailDtoShapeInDetail()
         {
             OrderEntity order = buildOrder();
-            stubHistoryQuery(order.getId(), Collections.emptyList());
 
-            OrderDetailRespDto dto = orderMapper.toDetailDto(order);
+            OrderDetailRespDto dto = orderMapper.toDetailDto(order, Collections.emptyList());
 
             assertEquals(1, dto.getItems().size());
             OrderItemDetailDto itemDto = dto.getItems().get(0);
@@ -350,9 +347,8 @@ class OrderDtoCharacterizationTest
         void pinsProductVariantDetailDtoShapeInDetail()
         {
             OrderEntity order = buildOrder();
-            stubHistoryQuery(order.getId(), Collections.emptyList());
 
-            OrderDetailRespDto dto = orderMapper.toDetailDto(order);
+            OrderDetailRespDto dto = orderMapper.toDetailDto(order, Collections.emptyList());
             ProductVariantDetailDto variantDto = dto.getItems().get(0).getVariant();
 
             // Shape: ProductVariantDetailDto has id as UUID
@@ -396,14 +392,13 @@ class OrderDtoCharacterizationTest
         void pinsBothPathsProduceSameCanonicalDto()
         {
             OrderEntity order = buildOrder();
-            stubHistoryQuery(order.getId(), Collections.emptyList());
 
             // Response path
             OrderResponseDto responseDto = orderMapper.toResponseDto(order);
             OrderItemDetailDto responseItem = responseDto.getItems().get(0);
 
             // Detail path
-            OrderDetailRespDto detailDto = orderMapper.toDetailDto(order);
+            OrderDetailRespDto detailDto = orderMapper.toDetailDto(order, Collections.emptyList());
             OrderItemDetailDto detailItem = detailDto.getItems().get(0);
 
             // Both use the same DTO type
@@ -429,7 +424,6 @@ class OrderDtoCharacterizationTest
         void pinsImageDtoUnifiedBetweenResponseAndDetail()
         {
             OrderEntity order = buildOrder();
-            stubHistoryQuery(order.getId(), Collections.emptyList());
 
             // Response path
             OrderResponseDto responseDto = orderMapper.toResponseDto(order);
@@ -440,7 +434,7 @@ class OrderDtoCharacterizationTest
             assertTrue(responseImg.isFeatured());
 
             // Detail path
-            OrderDetailRespDto detailDto = orderMapper.toDetailDto(order);
+            OrderDetailRespDto detailDto = orderMapper.toDetailDto(order, Collections.emptyList());
             ProductVariantDetailDto detailVariant = detailDto.getItems().get(0).getVariant();
             assertFalse(detailVariant.getImages().isEmpty());
             ProductImageDto detailImg = detailVariant.getImages().get(0);
@@ -462,15 +456,14 @@ class OrderDtoCharacterizationTest
     {
 
         @Test
-        @DisplayName("pins current shape: {id: UUID, status: OrderStatusEn, comment: String, changedBy: String, createdAt: LocalDateTime}")
+        @DisplayName("pins current shape: {id: UUID, status: OrderStatusEn, comment: String, createdAt: LocalDateTime} — no changedBy (Requirement 4.4)")
         @SuppressWarnings("unchecked")
         void pinsStatusHistoryDtoShape()
         {
             OrderEntity order = buildOrder();
             List<OrderStatusHistoryEntity> history = buildHistory(order);
-            stubHistoryQuery(order.getId(), history);
 
-            OrderDetailRespDto dto = orderMapper.toDetailDto(order);
+            OrderDetailRespDto dto = orderMapper.toDetailDto(order, history);
 
             assertNotNull(dto.getStatusHistory());
             assertEquals(2, dto.getStatusHistory().size());
@@ -483,7 +476,6 @@ class OrderDtoCharacterizationTest
             assertEquals(OrderStatusEn.PAID, h1.getStatus());
 
             assertEquals("Payment received", h1.getComment());
-            assertEquals("SYSTEM", h1.getChangedBy());
             assertEquals(LocalDateTime.of(2026, 7, 20, 12, 5, 0), h1.getCreatedAt());
         }
 
@@ -499,32 +491,40 @@ class OrderDtoCharacterizationTest
         }
 
         @Test
-        @DisplayName("pins that comment and changedBy fields are preserved (not null when populated)")
-        @SuppressWarnings("unchecked")
-        void pinsCommentAndChangedByPreserved()
+        @DisplayName("pins that changedBy does NOT exist on OrderStatusHistoryDetailRespDto — staff members' real names (Requirement 4.4). getOrderDetail is shopper-facing only (Requirement 1.6), so there is no remaining caller this would be safe to show to.")
+        void pinsChangedByFieldRemoved()
         {
-            OrderEntity order = buildOrder();
-            List<OrderStatusHistoryEntity> history = buildHistory(order);
-            stubHistoryQuery(order.getId(), history);
-
-            OrderDetailRespDto dto = orderMapper.toDetailDto(order);
-
-            OrderStatusHistoryDetailRespDto h1 = dto.getStatusHistory().get(0);
-            assertNotNull(h1.getComment());
-            assertNotNull(h1.getChangedBy());
-
-            OrderStatusHistoryDetailRespDto h2 = dto.getStatusHistory().get(1);
-            assertNull(h2.getComment());
-            assertEquals("admin-user-1", h2.getChangedBy());
+            Field[] fields = OrderStatusHistoryDetailRespDto.class.getDeclaredFields();
+            for (Field field : fields) {
+                assertNotEquals("changedBy", field.getName(),
+                        "OrderStatusHistoryDetailRespDto must not carry changedBy on a shopper-facing surface");
+            }
         }
 
         @Test
-        @DisplayName("pins the complete field set of OrderStatusHistoryDetailRespDto: exactly 5 fields")
+        @DisplayName("pins that the comment field is preserved (not null when populated)")
+        @SuppressWarnings("unchecked")
+        void pinsCommentPreserved()
+        {
+            OrderEntity order = buildOrder();
+            List<OrderStatusHistoryEntity> history = buildHistory(order);
+
+            OrderDetailRespDto dto = orderMapper.toDetailDto(order, history);
+
+            OrderStatusHistoryDetailRespDto h1 = dto.getStatusHistory().get(0);
+            assertNotNull(h1.getComment());
+
+            OrderStatusHistoryDetailRespDto h2 = dto.getStatusHistory().get(1);
+            assertNull(h2.getComment());
+        }
+
+        @Test
+        @DisplayName("pins the complete field set of OrderStatusHistoryDetailRespDto: exactly 4 fields")
         void pinsFieldSetSize()
         {
             Field[] fields = OrderStatusHistoryDetailRespDto.class.getDeclaredFields();
-            assertEquals(5, fields.length,
-                    "OrderStatusHistoryDetailRespDto should have exactly 5 fields: id, status, comment, changedBy, createdAt");
+            assertEquals(4, fields.length,
+                    "OrderStatusHistoryDetailRespDto should have exactly 4 fields: id, status, comment, createdAt");
         }
     }
 
@@ -548,7 +548,7 @@ class OrderDtoCharacterizationTest
         @DisplayName("toDetailDto(null) returns null")
         void toDetailDtoNullReturnsNull()
         {
-            assertNull(orderMapper.toDetailDto(null));
+            assertNull(orderMapper.toDetailDto(null, Collections.emptyList()));
         }
 
         @Test
@@ -584,9 +584,8 @@ class OrderDtoCharacterizationTest
         {
             OrderEntity order = buildOrder();
             order.getItems().get(0).setVariant(null);
-            stubHistoryQuery(order.getId(), Collections.emptyList());
 
-            OrderDetailRespDto dto = orderMapper.toDetailDto(order);
+            OrderDetailRespDto dto = orderMapper.toDetailDto(order, Collections.emptyList());
 
             assertNotNull(dto.getItems().get(0));
             assertNull(dto.getItems().get(0).getVariant());

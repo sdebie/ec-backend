@@ -1,0 +1,38 @@
+{@org.ecommerce.common.enums.OrderStatusEn status}
+{#include order_email_layout}
+{#headline}
+    {#if status.name == 'RETURNED_TO_ORIGIN'}Your order has come back to us{#else}We couldn't deliver your order{/if}
+{/headline}
+
+{#body}
+    {!
+      Said plainly and early. A shopper whose delivery failed finds out from the courier
+      or from silence otherwise, and silence is what turns a delivery problem into a
+      support ticket.
+    !}
+    {#if status.name == 'RETURNED_TO_ORIGIN'}
+        <p>
+            After the failed delivery attempts, the courier has returned your order to us.
+            It's safe here and nothing has been lost.
+        </p>
+        <div class="callout warn">
+            <strong>We need to hear from you.</strong> Reply to this email and we'll
+            arrange another delivery, or you can collect it from us instead.
+        </div>
+        <p>Your payment hasn't been refunded — tell us what you'd prefer and we'll take it from there.</p>
+    {#else}
+        <p>The courier tried to deliver your order but wasn't able to complete it.</p>
+        <div class="callout warn">
+            <strong>They'll usually try again.</strong> If nobody is going to be at the
+            address, reply to this email and we'll change the delivery details or arrange
+            collection instead.
+        </div>
+    {/if}
+
+    <div class="callout">
+        <strong>Order reference:</strong> {order.reference}
+        {#if order.trackingNumber??}<br/><strong>Tracking number:</strong> {order.trackingNumber}{/if}
+        {#if order.trackingCarrier??}<br/><strong>Courier:</strong> {order.trackingCarrier}{/if}
+    </div>
+{/body}
+{/include}

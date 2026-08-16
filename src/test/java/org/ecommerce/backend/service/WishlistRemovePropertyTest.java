@@ -1,7 +1,5 @@
 package org.ecommerce.backend.service;
 
-// Feature: customer-portal-backend, Property 6: Wishlist Remove Idempotence
-
 import net.jqwik.api.*;
 import org.ecommerce.common.entity.CustomerEntity;
 import org.ecommerce.common.entity.ProductVariantEntity;
@@ -14,20 +12,19 @@ import static org.junit.jupiter.api.Assertions.*;
 /**
  * Property 6: Wishlist Remove Idempotence
  * <p>
- * For any variant ID (whether or not it exists in the customer's wishlist),
- * the DELETE operation SHALL return 204 and after the operation the variant
+ * For any variant ID (whether it exists in the customer's wishlist),
+ * the DELETE operation SHALL return 204, and after the operation the variant
  * SHALL NOT appear in the customer's wishlist.
  * <p>
  * This test verifies the idempotence property by simulating the WishlistService
- * removeFromWishlist logic with an in-memory store that mirrors Panache entity behavior.
+ * removeFromWishlist logic with an in-memory store that mirrors Panache entity behaviour.
  * <p>
- * Validates: Requirements 4.5
  */
 class WishlistRemovePropertyTest
 {
     /**
-     * Simulates WishlistService.removeFromWishlist behavior with an in-memory store.
-     * Supports pre-populating a wishlist with random variants and then removing.
+     * Simulates WishlistService.removeFromWishlist behaviour with an in-memory store.
+     * Supports pre-populating a wishlist with random variants and then removing it.
      */
     private static class WishlistSimulator
     {
@@ -119,7 +116,7 @@ class WishlistRemovePropertyTest
 
         // Pick the first variant to remove (guaranteed to be in the wishlist)
         Assume.that(!initialVariants.isEmpty());
-        UUID variantToRemove = initialVariants.get(0);
+        UUID variantToRemove = initialVariants.getFirst();
 
         // Verify it exists before removal
         assertTrue(simulator.containsEntry(customerId, variantToRemove), "Variant should exist in wishlist before removal");
@@ -190,7 +187,7 @@ class WishlistRemovePropertyTest
             simulator.seedWishlistEntry(customerId, variantId);
         }
 
-        // Also add the variantToRemove to the variants map (in case it's in the wishlist)
+        // Also add the variantToRemove to the variant map (in case it's in the wishlist)
         simulator.addVariant(variantToRemove);
         // Randomly the variant might be in the initial state or not — doesn't matter
 

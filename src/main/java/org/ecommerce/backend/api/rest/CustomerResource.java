@@ -58,35 +58,6 @@ public class CustomerResource
     @ConfigProperty(name = "google.client.id", defaultValue = "5598643375-sooimltbseub586f1pucut2fut95dnbl.apps.googleusercontent.com")
     String googleClientId;
 
-    // Rate limiting reduces enumeration velocity; guarding the endpoint (not just rate
-    // limiting) is an open product decision deferred by the completed auth-hardening spec
-    // (see docs/complete-specs/auth-hardening/tasks.md).
-    @GET
-    @Path("/lookup")
-    public Response lookup(
-            @QueryParam("email") String email,
-            @HeaderParam("CF-Connecting-IP") String cfConnectingIp,
-            @HeaderParam("X-Forwarded-For") String xForwardedFor,
-            @HeaderParam("X-Real-IP") String xRealIp
-    )
-    {
-        if (email == null || email.isBlank()) {
-            return Response.status(Response.Status.BAD_REQUEST).entity("email is required").build();
-        }
-
-        String clientIp = ClientIpUtils.resolveClientIp(cfConnectingIp, xForwardedFor, xRealIp);
-        RateLimitDecision decision = rateLimiterService.check("customer-lookup", clientIp, 20, 3600);
-        if (!decision.allowed()) {
-            return Response.status(429).header("Retry-After", decision.retryAfterSeconds()).build();
-        }
-
-        CustomerEntity ce = CustomerEntity.findByEmail(email.trim());
-        if (ce == null) {
-            return Response.status(Response.Status.NO_CONTENT).build();
-        }
-        return Response.ok(toProfileDto(ce)).build();
-    }
-
     public static class LoginRequest
     {
         public String email;
@@ -134,7 +105,7 @@ public class CustomerResource
         String clientIp = ClientIpUtils.resolveClientIp(cfConnectingIp, xForwardedFor, xRealIp);
 
         // Chained-check: IP limiter first; if denied, email counter is NOT incremented.
-        // Silent denial — return the identical generic response to prevent enumeration (Req 5.2).
+        // Silent denial — return the identical generic response to prevent enumeration.
         RateLimitDecision ipDecision = rateLimiterService.check("password-reset-request", clientIp, 5, 3600);
         if (!ipDecision.allowed()) {
             return Response.ok("If an account exists, a reset code has been sent.").build();
@@ -193,7 +164,7 @@ public class CustomerResource
         if (req.newPassword == null || req.newPassword.isBlank()) {
             return Response.status(Response.Status.BAD_REQUEST).entity("newPassword is required").build();
         }
-        if (req.confirmPassword == null || !req.newPassword.equals(req.confirmPassword)) {
+        if (!req.newPassword.equals(req.confirmPassword)) {
             return Response.status(Response.Status.BAD_REQUEST).entity("Passwords do not match").build();
         }
 

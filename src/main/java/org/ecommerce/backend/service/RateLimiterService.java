@@ -81,8 +81,8 @@ public class RateLimiterService
         if (!allowed) {
             long elapsedMillis = now - bucket.windowStart;
             long remainingSeconds = Math.max(1, windowSeconds - (elapsedMillis / 1000));
-            // TODO: persist denial events (limiter, masked key, count, timestamp) to a
-            //       rate_limit_denials table for ops/audit visibility — candidate for backend-hygiene.
+            // Denials are logged, not persisted: there is no ops-visible record of who was
+            // limited and how often. Tracked as rate-limit-denial-audit in the backlog.
             LOG.warnf("Rate limit denied: limiter=%s, key=%s, count=%d/%d",
                     name, maskKey(key), bucket.count.get(), max);
             return new RateLimitDecision(false, remainingSeconds);

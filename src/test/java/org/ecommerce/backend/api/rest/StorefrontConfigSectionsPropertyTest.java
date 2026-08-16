@@ -8,7 +8,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import net.jqwik.api.*;
-import net.jqwik.api.constraints.IntRange;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -19,19 +18,21 @@ import static org.junit.jupiter.api.Assertions.*;
  * Property-based tests for the real StorefrontConfigResource.applySections()
  * assembly seam.
  *
- * Validates: Requirements 1.2, 1.3, 1.4
  */
-class StorefrontConfigSectionsPropertyTest {
+class StorefrontConfigSectionsPropertyTest
+{
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    private StorefrontConfigResource resource() {
+    private StorefrontConfigResource resource()
+    {
         StorefrontConfigResource resource = new StorefrontConfigResource();
         resource.objectMapper = objectMapper;
         return resource;
     }
 
-    private JsonNode parseJson(String raw) {
+    private JsonNode parseJson(String raw)
+    {
         try {
             return objectMapper.readTree(raw);
         } catch (Exception e) {
@@ -49,12 +50,12 @@ class StorefrontConfigSectionsPropertyTest {
      * containing only those sections where `enabled` is not explicitly `false`,
      * and no output section SHALL contain the `enabled` field.
      *
-     * Validates: Requirements 1.2
      */
     @Property(tries = 150)
     void enabledFilteringInvariant(
             @ForAll("sectionArrays") ArrayNode inputSections
-    ) {
+    )
+    {
         // Arrange: place the input array in a settings map
         Map<String, JsonNode> settings = new HashMap<>();
         settings.put("storefront.about_sections", inputSections);
@@ -112,12 +113,12 @@ class StorefrontConfigSectionsPropertyTest {
      * produce an empty array and all other fields in the config response SHALL
      * remain unchanged.
      *
-     * Validates: Requirements 1.3
      */
     @Property(tries = 150)
     void malformedInputFallback(
             @ForAll("nonArrayValues") String malformedValue
-    ) {
+    )
+    {
         // Arrange: put a pre-existing field on config to verify it's preserved
         ObjectNode config = objectMapper.createObjectNode();
         config.put("clientId", "test-client");
@@ -146,12 +147,12 @@ class StorefrontConfigSectionsPropertyTest {
      * Additional case: when the setting key is entirely absent from the map,
      * applySections SHALL produce an empty array.
      *
-     * Validates: Requirements 1.3
      */
     @Property(tries = 100)
     void absentKeyProducesEmptyArray(
             @ForAll("randomFieldNames") String outputField
-    ) {
+    )
+    {
         ObjectNode config = objectMapper.createObjectNode();
         config.put("existingField", "preserved");
 
@@ -174,7 +175,8 @@ class StorefrontConfigSectionsPropertyTest {
     // ── Generators ────────────────────────────────────────────────────────────
 
     @Provide
-    Arbitrary<ArrayNode> sectionArrays() {
+    Arbitrary<ArrayNode> sectionArrays()
+    {
         // Generate arrays of 0–10 section objects with mixed enabled states
         Arbitrary<ObjectNode> sectionArb = Combinators.combine(
                 Arbitraries.strings().alpha().ofMinLength(1).ofMaxLength(10),  // id
@@ -204,7 +206,8 @@ class StorefrontConfigSectionsPropertyTest {
     }
 
     @Provide
-    Arbitrary<String> nonArrayValues() {
+    Arbitrary<String> nonArrayValues()
+    {
         return Arbitraries.oneOf(
                 // Invalid JSON strings
                 Arbitraries.of(
@@ -244,7 +247,8 @@ class StorefrontConfigSectionsPropertyTest {
     }
 
     @Provide
-    Arbitrary<String> randomFieldNames() {
+    Arbitrary<String> randomFieldNames()
+    {
         return Arbitraries.of("aboutSections", "sections", "customField", "output");
     }
 }

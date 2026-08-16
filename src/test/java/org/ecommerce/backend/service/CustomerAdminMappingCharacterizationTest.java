@@ -89,7 +89,7 @@ class CustomerAdminMappingCharacterizationTest
         assertEquals("johan@example.com", listItem.getEmail());
         assertEquals("ACTIVE", listItem.getStatus());
         assertEquals("WHOLESALER", listItem.getShopperType());
-        assertEquals(OffsetDateTime.parse("2026-01-15T09:00:00Z").toString(), listItem.getRegisteredAt());
+        assertEquals(OffsetDateTime.parse("2026-01-15T09:00:00Z").format(java.time.format.DateTimeFormatter.ISO_OFFSET_DATE_TIME), listItem.getRegisteredAt());
         assertEquals("APPROVED", listItem.getWholesaleApplicationStatus());
     }
 
@@ -204,7 +204,7 @@ class CustomerAdminMappingCharacterizationTest
         assertEquals("0821234567", detail.getPhone());
         assertEquals("ACTIVE", detail.getStatus());
         assertEquals("WHOLESALER", detail.getShopperType());
-        assertEquals(OffsetDateTime.parse("2026-01-15T09:00:00Z").toString(), detail.getRegisteredAt());
+        assertEquals(OffsetDateTime.parse("2026-01-15T09:00:00Z").format(java.time.format.DateTimeFormatter.ISO_OFFSET_DATE_TIME), detail.getRegisteredAt());
 
         // Wholesale application — delegated to WholesaleMapper
         assertNotNull(detail.getWholesaleApplication(), "wholesaleApplication should be populated");
@@ -217,7 +217,7 @@ class CustomerAdminMappingCharacterizationTest
         AdminOrderRefDto orderRef1 = detail.getRecentOrders().get(0);
         assertEquals(order1.getId().toString(), orderRef1.getId());
         assertEquals("ORD-" + order1.getId().toString().substring(0, 8).toUpperCase(), orderRef1.getReference());
-        assertEquals(order1.getCreatedAt().toString(), orderRef1.getPlacedAt());
+        assertEquals(order1.getCreatedAt().format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE_TIME), orderRef1.getPlacedAt());
         assertEquals(1500.00, orderRef1.getTotal(), 0.001);
         assertEquals("PAID", orderRef1.getStatus());
 
@@ -225,7 +225,7 @@ class CustomerAdminMappingCharacterizationTest
         AdminOrderRefDto orderRef2 = detail.getRecentOrders().get(1);
         assertEquals(order2.getId().toString(), orderRef2.getId());
         assertEquals("ORD-" + order2.getId().toString().substring(0, 8).toUpperCase(), orderRef2.getReference());
-        assertEquals(order2.getCreatedAt().toString(), orderRef2.getPlacedAt());
+        assertEquals(order2.getCreatedAt().format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE_TIME), orderRef2.getPlacedAt());
         assertEquals(3200.50, orderRef2.getTotal(), 0.001);
         assertEquals("DELIVERED", orderRef2.getStatus());
     }
@@ -326,7 +326,7 @@ class CustomerAdminMappingCharacterizationTest
 
         assertEquals("abcdef12-3456-7890-abcd-ef1234567890", ref.getId());
         assertEquals("ORD-ABCDEF12", ref.getReference(), "reference should be ORD- + first 8 chars of UUID uppercased");
-        assertEquals("2026-06-20T16:45", ref.getPlacedAt());
+        assertEquals("2026-06-20T16:45:00", ref.getPlacedAt());
         assertEquals(999.99, ref.getTotal(), 0.001);
         assertEquals("IN_TRANSIT", ref.getStatus());
     }

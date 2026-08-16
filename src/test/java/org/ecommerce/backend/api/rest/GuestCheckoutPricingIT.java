@@ -5,10 +5,14 @@ import io.smallrye.jwt.build.Jwt;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
+import org.ecommerce.common.entity.CustomerEntity;
 import org.ecommerce.common.entity.OrderEntity;
 import org.ecommerce.common.entity.ProductEntity;
 import org.ecommerce.common.entity.ProductVariantEntity;
+import org.ecommerce.common.entity.UserEntity;
 import org.ecommerce.common.entity.VariantPricesEntity;
+import org.ecommerce.common.enums.CustomerStatusEn;
+import org.ecommerce.common.enums.CustomerTypeEn;
 import org.ecommerce.common.enums.PriceTypeEn;
 import org.ecommerce.common.enums.ProductStatusEn;
 import org.ecommerce.common.enums.ProductTypeEn;
@@ -54,6 +58,8 @@ class GuestCheckoutPricingIT
 
     private UUID productId;
     private UUID variantId;
+    private UUID wholesaleCustomerId;
+    private UUID wholesaleUserId;
     private final java.util.List<UUID> createdOrderIds = new java.util.ArrayList<>();
 
     @BeforeEach
@@ -92,6 +98,15 @@ class GuestCheckoutPricingIT
         }
         createdOrderIds.clear();
 
+        if (wholesaleCustomerId != null) {
+            em.createQuery("delete from CustomerEntity c where c.id = :id")
+                    .setParameter("id", wholesaleCustomerId).executeUpdate();
+        }
+        if (wholesaleUserId != null) {
+            em.createQuery("delete from UserEntity u where u.id = :id")
+                    .setParameter("id", wholesaleUserId).executeUpdate();
+        }
+
         em.createQuery("delete from VariantPricesEntity vp where vp.variant.id = :id")
                 .setParameter("id", variantId).executeUpdate();
         em.createQuery("delete from ProductVariantEntity v where v.id = :id")
@@ -125,6 +140,30 @@ class GuestCheckoutPricingIT
                 .sign();
     }
 
+    /**
+     * A "customer" role JWT with no matching {@link CustomerEntity} is now
+     * rejected with 401 (see OrderResource#resolveCustomer), so the wholesale
+     * test needs a real row behind {@link #wholesalerJwt()}'s subject email.
+     */
+    @Transactional
+    void persistWholesaleCustomer()
+    {
+        UserEntity user = new UserEntity();
+        user.setEmail("wholesale-buyer@test.com");
+        user.setPasswordHash("irrelevant-test-hash");
+        user.persist();
+        wholesaleUserId = user.getId();
+
+        CustomerEntity customer = new CustomerEntity();
+        customer.setUser(user);
+        customer.setFirstName("Wholesale");
+        customer.setLastName("Buyer");
+        customer.setShopperType(CustomerTypeEn.WHOLESALER);
+        customer.setStatus(CustomerStatusEn.ACTIVE);
+        customer.persist();
+        wholesaleCustomerId = customer.getId();
+    }
+
     private void trackOrder(String orderId)
     {
         createdOrderIds.add(UUID.fromString(orderId));
@@ -136,6 +175,7 @@ class GuestCheckoutPricingIT
     {
         String orderId = given()
                 .contentType("application/json")
+                .header("Idempotency-Key", UUID.randomUUID().toString())
                 .body(orderBody(2))
         .when()
                 .post("/api/orders")
@@ -153,9 +193,12 @@ class GuestCheckoutPricingIT
     @DisplayName("a signed-in wholesale customer is priced at the wholesale tier from the identical request")
     void wholesaleOrderIsCreatedAtWholesalePrice()
     {
+        persistWholesaleCustomer();
+
         String orderId = given()
                 .contentType("application/json")
                 .header("Authorization", "Bearer " + wholesalerJwt())
+                .header("Idempotency-Key", UUID.randomUUID().toString())
                 .body(orderBody(2))
         .when()
                 .post("/api/orders")
@@ -176,6 +219,7 @@ class GuestCheckoutPricingIT
         // figure could be stored is if the server stopped selecting one.
         String orderId = given()
                 .contentType("application/json")
+                .header("Idempotency-Key", UUID.randomUUID().toString())
                 .body(orderBody(1))
         .when()
                 .post("/api/orders")
@@ -201,6 +245,7 @@ class GuestCheckoutPricingIT
     {
         String orderId = given()
                 .contentType("application/json")
+                .header("Idempotency-Key", UUID.randomUUID().toString())
                 .body(orderBody(1))
         .when()
                 .post("/api/orders")

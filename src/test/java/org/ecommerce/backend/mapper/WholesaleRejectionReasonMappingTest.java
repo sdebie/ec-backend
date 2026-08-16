@@ -1,7 +1,6 @@
 package org.ecommerce.backend.mapper;
 
 // Feature: wholesale-application-review-workflow, Task 1.2
-// Validates: Requirements 1.2, 3.2
 
 import org.ecommerce.common.dto.AdminCustomerDetailDto;
 import org.ecommerce.common.dto.WholesaleApplicationDetailsDto;
@@ -24,7 +23,6 @@ import static org.junit.jupiter.api.Assertions.*;
  *   <li>Customer-admin detail: {@link CustomerAdminMapper#toDetailDto} (delegates to WholesaleMapper)</li>
  * </ol>
  * <p>
- * Validates: Requirements 1.2, 3.2
  */
 class WholesaleRejectionReasonMappingTest
 {
@@ -36,11 +34,14 @@ class WholesaleRejectionReasonMappingTest
     {
         wholesaleMapper = new WholesaleMapperImpl();
 
-        customerAdminMapper = new CustomerAdminMapper();
+        customerAdminMapper = new CustomerAdminMapperImpl();
         try {
-            var field = CustomerAdminMapper.class.getDeclaredField("wholesaleMapper");
+            var field = CustomerAdminMapperImpl.class.getDeclaredField("wholesaleMapper");
             field.setAccessible(true);
             field.set(customerAdminMapper, wholesaleMapper);
+            var tsField = CustomerAdminMapperImpl.class.getDeclaredField("timestampMapper");
+            tsField.setAccessible(true);
+            tsField.set(customerAdminMapper, new TimestampMapperImpl());
         } catch (ReflectiveOperationException e) {
             throw new RuntimeException("Failed to inject WholesaleMapper into CustomerAdminMapper", e);
         }

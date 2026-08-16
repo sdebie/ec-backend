@@ -1,7 +1,6 @@
 package org.ecommerce.backend.service;
 
 // Feature: sale-products-page, Task 1.3: Backend integration tests (DB-backed)
-// Validates: Requirements 1.1, 1.2, 1.3, 1.4, 1.6
 
 import io.quarkus.test.TestTransaction;
 import io.quarkus.test.junit.QuarkusTest;
@@ -190,7 +189,7 @@ class ProductServiceOnSaleIT
         List<ProductShoppingListItemDto> onSaleResults = productService.getShoppingProducts(pageOf(0, 50), null, true, null, null, null);
 
         // Use the legacy findOnSaleShoppingProductList (existing)
-        List<ProductShoppingListItemDto> legacyResults = productService.getProductsOnSale(pageOf(0, 50), false);
+        List<ProductShoppingListItemDto> legacyResults = productService.getProductsOnSale(pageOf(0, 50), false).getContent();
 
         // Filter to our test marker
         List<String> onSaleNames = onSaleResults

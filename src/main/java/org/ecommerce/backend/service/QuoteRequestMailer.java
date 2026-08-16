@@ -1,7 +1,5 @@
 package org.ecommerce.backend.service;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.quarkus.mailer.MailTemplate;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
@@ -9,8 +7,6 @@ import jakarta.enterprise.event.TransactionPhase;
 import jakarta.inject.Inject;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.ecommerce.common.dto.QuoteRequestDetailsDto;
-import org.ecommerce.common.entity.StoreSettingsEntity;
-import org.ecommerce.common.repository.SettingsRepository;
 import org.jboss.logging.Logger;
 
 /**
@@ -27,16 +23,11 @@ public class QuoteRequestMailer
 {
     private static final Logger LOG = Logger.getLogger(QuoteRequestMailer.class);
 
-    private static final String CONTACT_SETTING_KEY = "storefront.contact";
-
     @Inject
     MailTemplate quote_request;
 
     @Inject
-    SettingsRepository settingsRepository;
-
-    @Inject
-    ObjectMapper objectMapper;
+    EnquiryRecipientResolver enquiryRecipientResolver;
 
     @ConfigProperty(name = "quarkus.mailer.from")
     String mailerFrom;
@@ -51,7 +42,7 @@ public class QuoteRequestMailer
         QuoteRequestDetailsDto request = event.request();
 
         // Resolve recipient from storefront.contact → enquiryEmail
-        String recipient = resolveRecipient();
+        String recipient = enquiryRecipientResolver.find().orElse(null);
         if (recipient == null) {
             LOG.warnf("[QuoteRequest] no recipient configured — notification skipped (request %s)", event.requestId());
             return;
@@ -85,30 +76,4 @@ public class QuoteRequestMailer
         }
     }
 
-    /**
-     * Resolves the enquiry recipient from the {@code storefront.contact} setting.
-     * Returns {@code null} if the setting is missing, unparseable, or {@code enquiryEmail}
-     * is absent/blank — the caller logs and skips, never throws.
-     */
-    String resolveRecipient()
-    {
-        StoreSettingsEntity setting = settingsRepository.findById(CONTACT_SETTING_KEY);
-        if (setting == null || setting.getValue() == null || setting.getValue().isBlank()) {
-            return null;
-        }
-
-        try {
-            JsonNode contactNode = objectMapper.readTree(setting.getValue());
-            JsonNode emailNode = contactNode.get("enquiryEmail");
-
-            if (emailNode == null || emailNode.isNull() || emailNode.asText().isBlank()) {
-                return null;
-            }
-
-            return emailNode.asText();
-        } catch (Exception e) {
-            LOG.warnf(e, "[QuoteRequest] failed to parse storefront.contact JSON");
-            return null;
-        }
-    }
 }

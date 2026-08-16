@@ -5,10 +5,10 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import jakarta.ws.rs.NotFoundException;
-import org.ecommerce.backend.mapper.ProductPriceImportParser;
-import org.ecommerce.backend.mapper.ProductPriceImportParser.ParsedPriceRow;
-import org.ecommerce.backend.mapper.ProductPriceImportValidator;
-import org.ecommerce.backend.mapper.ProductPriceImportValidator.ValidationResult;
+import org.ecommerce.backend.csv.ProductPriceImportParser;
+import org.ecommerce.backend.csv.ProductPriceImportParser.ParsedPriceRow;
+import org.ecommerce.backend.csv.ProductPriceImportValidator;
+import org.ecommerce.backend.csv.ProductPriceImportValidator.ValidationResult;
 import org.ecommerce.backend.mapper.UploadBatchDtoMapper;
 import org.ecommerce.common.dto.ProductPriceComparisonDto;
 import org.ecommerce.common.dto.ProductUploadBatchDto;
@@ -45,6 +45,9 @@ public class ProductPriceImportService implements ImportBatchService<ProductPric
 
     @Inject
     org.ecommerce.backend.mapper.ProductPriceComparisonMapper productPriceComparisonMapper;
+
+    @Inject
+    UploadBatchDtoMapper uploadBatchDtoMapper;
 
     @Inject
     ProductVariantRepository productVariantRepository;
@@ -395,7 +398,12 @@ public class ProductPriceImportService implements ImportBatchService<ProductPric
         ProductVariantEntity variant = productVariantRepository.findBySku(staged.getSku());
 
         if (variant == null) {
-            //TODO::SDB ERRRO
+            // Validation already rejects an unknown SKU, so reaching here means the variant
+            // was deleted between validating the batch and applying it. Skipping the row is
+            // right — there is nothing left to price — but doing it silently is not: the
+            // batch would report every row applied while one was quietly dropped.
+            LOG.warnf("Skipped pricing SKU '%s': its variant no longer exists (deleted after validation)",
+                    staged.getSku());
             return;
         }
 
@@ -433,7 +441,7 @@ public class ProductPriceImportService implements ImportBatchService<ProductPric
     public List<ProductUploadBatchDto> getProductPriceUploadBatches()
     {
         List<ProductPriceUploadBatchEntity> batches = productPriceUploadBatchRepository.listAll();
-        return batches.stream().map(UploadBatchDtoMapper::fromProductPriceBatch).collect(Collectors.toList());
+        return batches.stream().map(uploadBatchDtoMapper::fromProductPriceBatch).collect(Collectors.toList());
     }
 
 }

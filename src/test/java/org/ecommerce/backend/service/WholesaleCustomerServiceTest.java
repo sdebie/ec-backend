@@ -8,8 +8,10 @@ import org.ecommerce.common.dto.WholesaleApplicationListItemDto;
 import org.ecommerce.common.entity.CustomerEntity;
 import org.ecommerce.common.entity.WholesaleApplicationEntity;
 import org.ecommerce.common.enums.WholesaleApplicationStatusEn;
+import org.ecommerce.common.query.Filter;
 import org.ecommerce.common.query.FilterRequest;
 import org.ecommerce.common.query.PageRequest;
+import org.ecommerce.common.query.enums.FilterOperator;
 import org.ecommerce.common.repository.WholesaleApplicationRepository;
 import org.junit.jupiter.api.Test;
 
@@ -18,6 +20,9 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @QuarkusTest
@@ -45,9 +50,10 @@ class WholesaleCustomerServiceTest
         second.setCreatedAt(OffsetDateTime.parse("2026-05-14T09:00:00Z"));
         second.setStatus(WholesaleApplicationStatusEn.APPROVED);
 
-        when(wholesaleApplicationRepository.findAll(pageRequest, filterRequest)).thenReturn(List.of(first, second));
+        when(wholesaleApplicationRepository.findForAdmin(isNull(), isNull(), isNull(), isNull(), eq(pageRequest)))
+                .thenReturn(List.of(first, second));
 
-        List<WholesaleApplicationListItemDto> result = wholesaleCustomerService.getWholesaleApplications(pageRequest, filterRequest);
+        List<WholesaleApplicationListItemDto> result = wholesaleCustomerService.getWholesaleApplications(pageRequest, filterRequest, null, null);
 
         assertEquals(2, result.size());
         assertEquals(first.getId(), result.getFirst().getId());
@@ -59,11 +65,38 @@ class WholesaleCustomerServiceTest
     void wholesaleApplicationCount_shouldReturnRepositoryCount()
     {
         FilterRequest filterRequest = new FilterRequest();
-        when(wholesaleApplicationRepository.count(filterRequest)).thenReturn(7L);
+        when(wholesaleApplicationRepository.countForAdmin(isNull(), isNull(), isNull())).thenReturn(7L);
 
-        long count = wholesaleCustomerService.wholesaleApplicationCount(filterRequest);
+        long count = wholesaleCustomerService.wholesaleApplicationCount(filterRequest, null, null);
 
         assertEquals(7L, count);
+    }
+
+    @Test
+    void getWholesaleApplications_extractsStatusFilterFromFilterRequest()
+    {
+        PageRequest pageRequest = new PageRequest();
+        FilterRequest filterRequest = new FilterRequest();
+        filterRequest.setFilters(List.of(new Filter("status", FilterOperator.EQUALS, "PENDING")));
+
+        when(wholesaleApplicationRepository.findForAdmin(eq(WholesaleApplicationStatusEn.PENDING), isNull(), isNull(), isNull(), eq(pageRequest)))
+                .thenReturn(List.of());
+
+        wholesaleCustomerService.getWholesaleApplications(pageRequest, filterRequest, null, null);
+
+        verify(wholesaleApplicationRepository).findForAdmin(eq(WholesaleApplicationStatusEn.PENDING), isNull(), isNull(), isNull(), eq(pageRequest));
+    }
+
+    @Test
+    void getWholesaleApplications_rejectsUnparsableFromDate()
+    {
+        PageRequest pageRequest = new PageRequest();
+        FilterRequest filterRequest = new FilterRequest();
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> wholesaleCustomerService.getWholesaleApplications(pageRequest, filterRequest, "not-a-date", null));
+
+        assertTrue(ex.getMessage().contains("fromDate"));
     }
 
     @Test

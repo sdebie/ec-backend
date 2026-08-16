@@ -19,7 +19,6 @@ import static org.mockito.Mockito.doThrow;
 
 /**
  * Integration test for PATCH /api/customers/password (password change endpoint).
- * Validates: Requirements 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7
  */
 @QuarkusTest
 class CustomerResourcePasswordIT {

@@ -55,12 +55,14 @@ class ProductServiceTest
 
         when(productRepository.findOnSaleProductEntities(pageRequest, false)).thenReturn(List.of(p1, p2));
         when(productListItemAssembler.buildShoppingListItems(anyList(), any(), eq(false))).thenReturn(List.of(first, second));
+        when(productRepository.countOnSaleProducts(false)).thenReturn(2L);
 
-        List<ProductShoppingListItemDto> result = productService.getProductsOnSale(pageRequest, false);
+        org.ecommerce.common.dto.PageResponse<ProductShoppingListItemDto> result = productService.getProductsOnSale(pageRequest, false);
 
-        assertEquals(2, result.size());
-        assertSame(first, result.get(0));
-        assertSame(second, result.get(1));
+        assertEquals(2, result.getContent().size());
+        assertSame(first, result.getContent().get(0));
+        assertSame(second, result.getContent().get(1));
+        assertEquals(2L, result.getTotalElements());
 
         verify(productRepository).findOnSaleProductEntities(pageRequest, false);
         verify(productListItemAssembler).buildShoppingListItems(eq(List.of(p1, p2)), org.mockito.ArgumentMatchers.any(), eq(false));

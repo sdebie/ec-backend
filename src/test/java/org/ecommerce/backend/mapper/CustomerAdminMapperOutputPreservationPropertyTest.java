@@ -1,7 +1,6 @@
 package org.ecommerce.backend.mapper;
 
 // Feature: service-layer-refactor, Property 3: Mapper output preservation (customer admin)
-// Validates: Requirements 1.3, 2.4, 4.2, 4.4
 
 import net.jqwik.api.*;
 import org.ecommerce.common.dto.AdminCustomerDetailDto;
@@ -41,7 +40,6 @@ import static org.junit.jupiter.api.Assertions.*;
  * The reference implementation below is a direct transcription of the deleted inline
  * methods from CustomerAdminService — a field-by-field copy with null-safe navigation.
  * <p>
- * Validates: Requirements 1.3, 2.4, 4.2, 4.4
  */
 public class CustomerAdminMapperOutputPreservationPropertyTest
 {
@@ -50,12 +48,15 @@ public class CustomerAdminMapperOutputPreservationPropertyTest
 
     public CustomerAdminMapperOutputPreservationPropertyTest()
     {
-        CustomerAdminMapper m = new CustomerAdminMapper();
+        CustomerAdminMapper m = new CustomerAdminMapperImpl();
         // Inject the real WholesaleMapper (MapStruct-generated) via reflection
         try {
-            var field = CustomerAdminMapper.class.getDeclaredField("wholesaleMapper");
+            var field = CustomerAdminMapperImpl.class.getDeclaredField("wholesaleMapper");
             field.setAccessible(true);
             field.set(m, new WholesaleMapperImpl());
+            var tsField = CustomerAdminMapperImpl.class.getDeclaredField("timestampMapper");
+            tsField.setAccessible(true);
+            tsField.set(m, new TimestampMapperImpl());
         } catch (ReflectiveOperationException e) {
             throw new RuntimeException("Failed to inject WholesaleMapper into CustomerAdminMapper", e);
         }
@@ -75,7 +76,7 @@ public class CustomerAdminMapperOutputPreservationPropertyTest
         dto.setEmail(c.getUser() != null ? c.getUser().getEmail() : null);
         dto.setStatus(c.getStatus() != null ? c.getStatus().name() : null);
         dto.setShopperType(c.getShopperType() != null ? c.getShopperType().name() : null);
-        dto.setRegisteredAt(c.getUser() != null && c.getUser().getCreatedAt() != null ? c.getUser().getCreatedAt().toString() : null);
+        dto.setRegisteredAt(c.getUser() != null && c.getUser().getCreatedAt() != null ? c.getUser().getCreatedAt().format(java.time.format.DateTimeFormatter.ISO_OFFSET_DATE_TIME) : null);
         dto.setWholesaleApplicationStatus(app != null && app.getStatus() != null ? app.getStatus().name() : null);
         return dto;
     }
@@ -85,7 +86,7 @@ public class CustomerAdminMapperOutputPreservationPropertyTest
         AdminOrderRefDto dto = new AdminOrderRefDto();
         dto.setId(o.getId().toString());
         dto.setReference("ORD-" + o.getId().toString().substring(0, 8).toUpperCase());
-        dto.setPlacedAt(o.getCreatedAt() != null ? o.getCreatedAt().toString() : null);
+        dto.setPlacedAt(o.getCreatedAt() != null ? o.getCreatedAt().format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE_TIME) : null);
         dto.setTotal(o.getTotalAmount() != null ? o.getTotalAmount().doubleValue() : 0.0);
         dto.setStatus(o.getStatus() != null ? o.getStatus().name() : null);
         return dto;
@@ -103,7 +104,7 @@ public class CustomerAdminMapperOutputPreservationPropertyTest
         dto.setPhone(c.getPhone());
         dto.setStatus(c.getStatus() != null ? c.getStatus().name() : null);
         dto.setShopperType(c.getShopperType() != null ? c.getShopperType().name() : null);
-        dto.setRegisteredAt(c.getUser() != null && c.getUser().getCreatedAt() != null ? c.getUser().getCreatedAt().toString() : null);
+        dto.setRegisteredAt(c.getUser() != null && c.getUser().getCreatedAt() != null ? c.getUser().getCreatedAt().format(java.time.format.DateTimeFormatter.ISO_OFFSET_DATE_TIME) : null);
 
         // Wholesale application delegates to WholesaleMapper — use same impl
         WholesaleMapper wholesaleMapper = new WholesaleMapperImpl();

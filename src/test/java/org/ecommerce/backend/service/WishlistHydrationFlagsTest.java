@@ -2,6 +2,7 @@ package org.ecommerce.backend.service;
 
 // Feature: wishlist-purchasing-rework, Task 1.4: Flag derivation truth table
 
+import org.ecommerce.backend.mapper.VariantPriceMapperImpl;
 import org.ecommerce.common.dto.WishlistHydratedItemDto;
 import org.ecommerce.common.entity.ProductEntity;
 import org.ecommerce.common.entity.ProductImageEntity;
@@ -35,7 +36,6 @@ import static org.junit.jupiter.api.Assertions.*;
  *   <li>Nonexistent ID → omitted from response</li>
  * </ul>
  * <p>
- * Validates: Requirements 1.2, 1.3
  */
 class WishlistHydrationFlagsTest
 {
@@ -220,6 +220,7 @@ class WishlistHydrationFlagsTest
         };
 
         WishlistHydrationService svc = new WishlistHydrationService();
+        svc.variantPriceMapper = new VariantPriceMapperImpl();
         setField(svc, "productVariantRepository", mockVariantRepo);
         setField(svc, "variantPricesRepository", mockPricesRepo);
         setField(svc, "productImageRepository", mockImageRepo);

@@ -22,7 +22,6 @@ import static org.mockito.Mockito.*;
  * The auth service is mocked so credential evaluation is irrelevant — we are testing
  * that rate limit responses fire correctly and that credentials are NOT evaluated when denied.
  * <p>
- * Validates: Requirements 4.3, 4.4, 9.2
  */
 @QuarkusTest
 @DisplayName("AdminLoginRateLimitIT — admin login rate limiting")
@@ -43,14 +42,14 @@ class AdminLoginRateLimitIT
         when(adminAuthService.authenticate(any(LoginRequestDto.class))).thenReturn(null);
     }
 
-    private String loginPayload(String email, String password)
+    private String loginPayload(String email)
     {
         return """
                 {
                     "email": "%s",
                     "password": "%s"
                 }
-                """.formatted(email, password);
+                """.formatted(email, "password123");
     }
 
     // ── IP rate limit exceeded → 429 + Retry-After (Req 4.3, 4.4, 9.2) ─────
@@ -65,7 +64,7 @@ class AdminLoginRateLimitIT
         given()
                 .contentType(ContentType.JSON)
                 .header("X-Forwarded-For", "192.0.2.50")
-                .body(loginPayload("admin@test.com", "password123"))
+                .body(loginPayload("admin@test.com"))
                 .when()
                 .post("/api/admin/auth/login")
                 .then()
@@ -86,7 +85,7 @@ class AdminLoginRateLimitIT
         given()
                 .contentType(ContentType.JSON)
                 .header("X-Forwarded-For", "192.0.2.50")
-                .body(loginPayload("admin@test.com", "password123"))
+                .body(loginPayload("admin@test.com"))
                 .when()
                 .post("/api/admin/auth/login")
                 .then()
@@ -112,7 +111,7 @@ class AdminLoginRateLimitIT
         given()
                 .contentType(ContentType.JSON)
                 .header("X-Forwarded-For", "192.0.2.51")
-                .body(loginPayload("admin@test.com", "password123"))
+                .body(loginPayload("admin@test.com"))
                 .when()
                 .post("/api/admin/auth/login")
                 .then()
@@ -132,7 +131,7 @@ class AdminLoginRateLimitIT
         given()
                 .contentType(ContentType.JSON)
                 .header("X-Forwarded-For", "192.0.2.52")
-                .body(loginPayload("  Admin@Test.COM  ", "password123"))
+                .body(loginPayload("  Admin@Test.COM  "))
                 .when()
                 .post("/api/admin/auth/login")
                 .then()
@@ -155,7 +154,7 @@ class AdminLoginRateLimitIT
         given()
                 .contentType(ContentType.JSON)
                 .header("X-Forwarded-For", "192.0.2.53")
-                .body(loginPayload("admin@test.com", "password123"))
+                .body(loginPayload("admin@test.com"))
                 .when()
                 .post("/api/admin/auth/login")
                 .then()
@@ -170,7 +169,7 @@ class AdminLoginRateLimitIT
         given()
                 .contentType(ContentType.JSON)
                 .header("X-Forwarded-For", "192.0.2.53")
-                .body(loginPayload("admin@test.com", "password123"))
+                .body(loginPayload("admin@test.com"))
                 .when()
                 .post("/api/admin/auth/login")
                 .then()
@@ -186,7 +185,7 @@ class AdminLoginRateLimitIT
         given()
                 .contentType(ContentType.JSON)
                 .header("X-Forwarded-For", "203.0.113.99, 10.0.0.1")
-                .body(loginPayload("admin@test.com", "password123"))
+                .body(loginPayload("admin@test.com"))
                 .when()
                 .post("/api/admin/auth/login")
                 .then()
@@ -203,7 +202,7 @@ class AdminLoginRateLimitIT
             given()
                     .contentType(ContentType.JSON)
                     .header("X-Forwarded-For", spoofed + ", 10.0.0.1")
-                    .body(loginPayload("admin@test.com", "password123"))
+                    .body(loginPayload("admin@test.com"))
                     .when()
                     .post("/api/admin/auth/login")
                     .then()
@@ -221,7 +220,7 @@ class AdminLoginRateLimitIT
                 .contentType(ContentType.JSON)
                 .header("CF-Connecting-IP", "203.0.113.7")
                 .header("X-Forwarded-For", "6.6.6.6, 10.0.0.1")
-                .body(loginPayload("admin@test.com", "password123"))
+                .body(loginPayload("admin@test.com"))
                 .when()
                 .post("/api/admin/auth/login")
                 .then()
@@ -237,7 +236,7 @@ class AdminLoginRateLimitIT
         given()
                 .contentType(ContentType.JSON)
                 .header("X-Real-IP", "198.51.100.42")
-                .body(loginPayload("admin@test.com", "password123"))
+                .body(loginPayload("admin@test.com"))
                 .when()
                 .post("/api/admin/auth/login")
                 .then()

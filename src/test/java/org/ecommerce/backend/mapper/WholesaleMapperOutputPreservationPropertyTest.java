@@ -1,7 +1,6 @@
 package org.ecommerce.backend.mapper;
 
 // Feature: service-layer-refactor, Property 2: Mapper output preservation (wholesale application)
-// Validates: Requirements 2.3, 2.4, 4.1, 4.2
 
 import net.jqwik.api.*;
 import org.ecommerce.common.dto.WholesaleApplicationDetailsDto;
@@ -26,7 +25,6 @@ import static org.junit.jupiter.api.Assertions.assertNull;
  * methods — a simple field-by-field copy with {@code accountEmail → email} and
  * null-safe {@code customer.id → customerId}.
  * <p>
- * Validates: Requirements 2.3, 2.4, 4.1, 4.2
  */
 public class WholesaleMapperOutputPreservationPropertyTest
 {
@@ -202,7 +200,7 @@ public class WholesaleMapperOutputPreservationPropertyTest
                 Arbitraries.strings().alpha().ofMinLength(1).ofMaxLength(30)
         );
         Arbitrary<Boolean> nullableBooleans = Arbitraries.oneOf(
-                Arbitraries.just((Boolean) null),
+                Arbitraries.just(null),
                 Arbitraries.of(true, false)
         );
         Arbitrary<WholesaleApplicationStatusEn> statuses = Arbitraries.oneOf(

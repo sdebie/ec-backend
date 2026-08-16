@@ -1,4 +1,4 @@
-package org.ecommerce.backend.mapper;
+package org.ecommerce.backend.csv;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;

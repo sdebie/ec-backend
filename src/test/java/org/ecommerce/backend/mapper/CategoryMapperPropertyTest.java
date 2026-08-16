@@ -2,7 +2,6 @@ package org.ecommerce.backend.mapper;
 
 // Feature: entity-boundary-cleanup, Property 2: CategoryDto parent field round-trip
 // Feature: entity-boundary-cleanup, Property 3: Forward mapping populates parent scalar fields
-// Validates: Requirements 1.1, 1.2, 1.4
 
 import net.jqwik.api.*;
 import org.ecommerce.common.dto.CategoryDto;
@@ -27,7 +26,6 @@ public class CategoryMapperPropertyTest
 
     // ══════════════════════════════════════════════════════════════════════════
     // Property 2: CategoryDto parent field round-trip
-    // Validates: Requirements 1.1
     // Tag: Feature: entity-boundary-cleanup, Property 2: CategoryDto parent field round-trip
     // ══════════════════════════════════════════════════════════════════════════
 
@@ -60,7 +58,6 @@ public class CategoryMapperPropertyTest
 
     // ══════════════════════════════════════════════════════════════════════════
     // Property 3: Forward mapping populates parent scalar fields
-    // Validates: Requirements 1.2, 1.4
     // Tag: Feature: entity-boundary-cleanup, Property 3: Forward mapping populates parent scalar fields
     // ══════════════════════════════════════════════════════════════════════════
 

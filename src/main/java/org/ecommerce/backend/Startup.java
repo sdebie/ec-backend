@@ -67,7 +67,7 @@ public class Startup
      * Validates the CORS_ORIGINS env var in production.
      * An unset var fails to resolve on its own (${CORS_ORIGINS} with no default),
      * but an empty or whitespace-only value resolves successfully and would boot
-     * with a zero-origin config. This guard catches that case (REQ 1.2).
+     * with a zero-origin config. This guard catches that case.
      */
     void validateCorsOrigins(@Observes StartupEvent ev)
     {

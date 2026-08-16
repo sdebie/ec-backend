@@ -3,7 +3,6 @@ package org.ecommerce.backend.api.rest;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.http.ContentType;
-import org.ecommerce.backend.service.CustomerAuthService;
 import org.ecommerce.backend.service.RateLimitDecision;
 import org.ecommerce.backend.service.RateLimiterService;
 import org.junit.jupiter.api.BeforeEach;
@@ -15,23 +14,19 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 /**
- * Integration tests for rate limiting on customer {@code /lookup} and {@code /register} endpoints.
+ * Integration tests for rate limiting on the customer {@code /register} endpoint.
  * <p>
  * The rate limiter is mocked to control denial/allowance independently of wall-clock time.
  * Tests verify that 429 + Retry-After is returned on denial and that requests succeed
  * after the window resets (simulated by toggling the mock).
  * <p>
- * Validates: Requirements 6.1, 6.2, 6.3, 9.2
  */
 @QuarkusTest
-@DisplayName("CustomerEndpointRateLimitIT — lookup and register rate limiting")
+@DisplayName("CustomerEndpointRateLimitIT — register rate limiting")
 class CustomerEndpointRateLimitIT
 {
     @InjectMock
     RateLimiterService rateLimiterService;
-
-    @InjectMock
-    CustomerAuthService customerAuthService;
 
     @BeforeEach
     void setUp()
@@ -39,128 +34,6 @@ class CustomerEndpointRateLimitIT
         // Default: allow all requests
         when(rateLimiterService.check(anyString(), anyString(), anyInt(), anyLong()))
                 .thenReturn(new RateLimitDecision(true, 0));
-    }
-
-    // ═══════════════════════════════════════════════════════════════════════════
-    // /lookup rate limiting (Req 6.1, 9.2)
-    // ═══════════════════════════════════════════════════════════════════════════
-
-    @Test
-    @DisplayName("/lookup: exceeding IP rate limit returns 429 with Retry-After header")
-    void lookup_ipLimitExceeded_returns429WithRetryAfter()
-    {
-        when(rateLimiterService.check(eq("customer-lookup"), anyString(), anyInt(), anyLong()))
-                .thenReturn(new RateLimitDecision(false, 3500));
-
-        given()
-                .contentType(ContentType.JSON)
-                .header("X-Forwarded-For", "192.0.2.10")
-                .queryParam("email", "someone@example.com")
-                .when()
-                .get("/api/customers/lookup")
-                .then()
-                .statusCode(429)
-                .header("Retry-After", "3500");
-    }
-
-    @Test
-    @DisplayName("/lookup: request succeeds after rate limit window resets (recovery)")
-    void lookup_recoveryAfterWindow_requestSucceeds()
-    {
-        // First: denied
-        when(rateLimiterService.check(eq("customer-lookup"), anyString(), anyInt(), anyLong()))
-                .thenReturn(new RateLimitDecision(false, 2));
-
-        given()
-                .contentType(ContentType.JSON)
-                .header("X-Forwarded-For", "192.0.2.11")
-                .queryParam("email", "someone@example.com")
-                .when()
-                .get("/api/customers/lookup")
-                .then()
-                .statusCode(429);
-
-        // After window: allowed again
-        when(rateLimiterService.check(eq("customer-lookup"), anyString(), anyInt(), anyLong()))
-                .thenReturn(new RateLimitDecision(true, 0));
-
-        // A non-existent email returns 204 (NO_CONTENT) — proving it was not denied
-        given()
-                .contentType(ContentType.JSON)
-                .header("X-Forwarded-For", "192.0.2.11")
-                .queryParam("email", "someone@example.com")
-                .when()
-                .get("/api/customers/lookup")
-                .then()
-                .statusCode(204);
-    }
-
-    @Test
-    @DisplayName("/lookup: X-Forwarded-For LAST entry (proxy-appended) is used as IP key for the limiter")
-    void lookup_xForwardedForResolvedCorrectly()
-    {
-        given()
-                .contentType(ContentType.JSON)
-                .header("X-Forwarded-For", "203.0.113.50, 10.0.0.1")
-                .queryParam("email", "someone@example.com")
-                .when()
-                .get("/api/customers/lookup")
-                .then()
-                .statusCode(204);
-
-        verify(rateLimiterService).check(eq("customer-lookup"), eq("10.0.0.1"), anyInt(), anyLong());
-    }
-
-    @Test
-    @DisplayName("/lookup: CF-Connecting-IP takes precedence over X-Forwarded-For")
-    void lookup_cfConnectingIpTakesPrecedence()
-    {
-        given()
-                .contentType(ContentType.JSON)
-                .header("CF-Connecting-IP", "203.0.113.6")
-                .header("X-Forwarded-For", "6.6.6.6, 10.0.0.1")
-                .queryParam("email", "someone@example.com")
-                .when()
-                .get("/api/customers/lookup")
-                .then()
-                .statusCode(204);
-
-        verify(rateLimiterService).check(eq("customer-lookup"), eq("203.0.113.6"), anyInt(), anyLong());
-    }
-
-    @Test
-    @DisplayName("/lookup: falls back to X-Real-IP when X-Forwarded-For is absent")
-    void lookup_xRealIpFallback()
-    {
-        given()
-                .contentType(ContentType.JSON)
-                .header("X-Real-IP", "198.51.100.20")
-                .queryParam("email", "someone@example.com")
-                .when()
-                .get("/api/customers/lookup")
-                .then()
-                .statusCode(204);
-
-        verify(rateLimiterService).check(eq("customer-lookup"), eq("198.51.100.20"), anyInt(), anyLong());
-    }
-
-    @Test
-    @DisplayName("/lookup: body validation (missing email) returns 400 without consulting limiter")
-    void lookup_missingEmail_returns400_noLimiterConsulted()
-    {
-        given()
-                .contentType(ContentType.JSON)
-                .header("X-Forwarded-For", "192.0.2.12")
-                .when()
-                .get("/api/customers/lookup")
-                .then()
-                .statusCode(400);
-
-        // Rate limiter should not have been consulted — 400 fires before it
-        // Note: for /lookup the limiter runs AFTER the email param check (it's a GET with
-        // required query param; there's no body to validate, so the empty-email check IS
-        // the shape validation)
-        verify(rateLimiterService, never()).check(anyString(), anyString(), anyInt(), anyLong());
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -177,7 +50,7 @@ class CustomerEndpointRateLimitIT
         given()
                 .contentType(ContentType.JSON)
                 .header("X-Forwarded-For", "192.0.2.20")
-                .body(registerPayload("newuser@example.com", "StrongPass1!"))
+                .body(registerPayload("newuser@example.com"))
                 .when()
                 .post("/api/customers/register")
                 .then()
@@ -196,7 +69,7 @@ class CustomerEndpointRateLimitIT
         given()
                 .contentType(ContentType.JSON)
                 .header("X-Forwarded-For", "192.0.2.21")
-                .body(registerPayload("recover@example.com", "StrongPass1!"))
+                .body(registerPayload("recover@example.com"))
                 .when()
                 .post("/api/customers/register")
                 .then()
@@ -211,7 +84,7 @@ class CustomerEndpointRateLimitIT
         int status = given()
                 .contentType(ContentType.JSON)
                 .header("X-Forwarded-For", "192.0.2.21")
-                .body(registerPayload("recover@example.com", "StrongPass1!"))
+                .body(registerPayload("recover@example.com"))
                 .when()
                 .post("/api/customers/register")
                 .then()
@@ -228,7 +101,7 @@ class CustomerEndpointRateLimitIT
         given()
                 .contentType(ContentType.JSON)
                 .header("X-Forwarded-For", "203.0.113.60, 10.0.0.1")
-                .body(registerPayload("xff@example.com", "StrongPass1!"))
+                .body(registerPayload("xff@example.com"))
                 .when()
                 .post("/api/customers/register");
 
@@ -242,7 +115,7 @@ class CustomerEndpointRateLimitIT
         given()
                 .contentType(ContentType.JSON)
                 .header("X-Real-IP", "198.51.100.30")
-                .body(registerPayload("realip@example.com", "StrongPass1!"))
+                .body(registerPayload("realip@example.com"))
                 .when()
                 .post("/api/customers/register");
 
@@ -307,7 +180,7 @@ class CustomerEndpointRateLimitIT
         given()
                 .contentType(ContentType.JSON)
                 .header("X-Forwarded-For", "192.0.2.24")
-                .body(registerPayload("existing@example.com", "StrongPass1!"))
+                .body(registerPayload("existing@example.com"))
                 .when()
                 .post("/api/customers/register")
                 .then()
@@ -317,7 +190,7 @@ class CustomerEndpointRateLimitIT
 
     // ── Helpers ─────────────────────────────────────────────────────────────
 
-    private String registerPayload(String email, String password)
+    private String registerPayload(String email)
     {
         return """
                 {
@@ -326,6 +199,6 @@ class CustomerEndpointRateLimitIT
                     "firstName": "Test",
                     "lastName": "User"
                 }
-                """.formatted(email, password);
+                """.formatted(email, "StrongPass1!");
     }
 }

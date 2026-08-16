@@ -18,7 +18,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 class OrderMapperCustomerDtoTest
 {
 
-    private final OrderMapper mapper = new OrderMapper();
+    private final OrderMapper mapper = new OrderMapperImpl();
 
     @Test
     @DisplayName("null customer maps to null")

@@ -6,6 +6,7 @@ import jakarta.transaction.Transactional;
 import lombok.extern.slf4j.Slf4j;
 import org.ecommerce.common.dto.PageContentDto;
 import org.ecommerce.common.dto.PageContentSummaryDto;
+import org.ecommerce.backend.mapper.PageContentMapper;
 import org.ecommerce.common.entity.PageContentEntity;
 import org.ecommerce.common.repository.PageContentRepository;
 
@@ -22,6 +23,9 @@ public class PageContentService
     PageContentRepository pageContentRepository;
 
     @Inject
+    PageContentMapper pageContentMapper;
+
+    @Inject
     HtmlSanitizer htmlSanitizer;
 
     /**
@@ -33,7 +37,7 @@ public class PageContentService
         List<PageContentEntity> entities = pageContentRepository.findByCategory(category);
         return entities
                 .stream()
-                .map(this::toSummaryDto)
+                .map(pageContentMapper::toSummaryDto)
                 .toList();
     }
 
@@ -51,7 +55,7 @@ public class PageContentService
             return null;
         }
 
-        return toDto(entity);
+        return pageContentMapper.toDto(entity);
     }
 
     /**
@@ -105,7 +109,7 @@ public class PageContentService
         pageContentRepository.persist(entity);
         log.info("Draft saved for page '{}' (id={})", entity.getTitle(), entity.getId());
 
-        return toDto(entity);
+        return pageContentMapper.toDto(entity);
     }
 
     /**
@@ -135,35 +139,7 @@ public class PageContentService
         pageContentRepository.persist(entity);
         log.info("Page '{}' (id={}) published", entity.getTitle(), entity.getId());
 
-        return toDto(entity);
+        return pageContentMapper.toDto(entity);
     }
 
-    private PageContentDto toDto(PageContentEntity entity)
-    {
-        return new PageContentDto(
-                entity.getId(),
-                entity.getSlug(),
-                entity.getTitle(),
-                entity.getCategory(),
-                entity.getDraftContent(),
-                entity.getPublishedContent(),
-                entity.getPublishedAt(),
-                entity.getUpdatedAt()
-        );
-    }
-
-    private PageContentSummaryDto toSummaryDto(PageContentEntity entity)
-    {
-        boolean hasUnpublishedChanges = !Objects.equals(entity.getDraftContent(), entity.getPublishedContent());
-
-        return new PageContentSummaryDto(
-                entity.getId(),
-                entity.getSlug(),
-                entity.getTitle(),
-                entity.getCategory(),
-                entity.getPublishedAt(),
-                entity.getUpdatedAt(),
-                hasUnpublishedChanges
-        );
-    }
 }

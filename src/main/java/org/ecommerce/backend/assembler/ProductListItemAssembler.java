@@ -3,10 +3,10 @@ package org.ecommerce.backend.assembler;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import org.ecommerce.backend.mapper.ProductMapper;
+import org.ecommerce.backend.mapper.VariantPriceMapper;
 import org.ecommerce.common.dto.AdminProductListItemDto;
 import org.ecommerce.common.dto.CategoryDto;
 import org.ecommerce.common.dto.ProductShoppingListItemDto;
-import org.ecommerce.common.dto.VariantPriceDto;
 import org.ecommerce.common.entity.*;
 import org.ecommerce.common.enums.PriceTypeEn;
 import org.ecommerce.common.enums.ProductTypeEn;
@@ -15,7 +15,6 @@ import org.ecommerce.common.repository.ProductVariantRepository;
 import org.ecommerce.common.repository.VariantPricesRepository;
 
 import java.time.LocalDateTime;
-import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -44,6 +43,9 @@ public class ProductListItemAssembler
 
     @Inject
     ProductMapper productMapper;
+
+    @Inject
+    VariantPriceMapper variantPriceMapper;
 
     public AdminProductListItemDto buildAdminListItem(ProductEntity product, LocalDateTime now)
     {
@@ -164,10 +166,10 @@ public class ProductListItemAssembler
                 .stream()
                 .map(productMapper::mapImageEntityToDto)
                 .toList());
-        dto.setRetailPrice(toVariantPriceDto(prices.get(PriceTypeEn.RETAIL_PRICE), now));
-        dto.setWholesalePrice(toVariantPriceDto(prices.get(PriceTypeEn.WHOLESALE_PRICE), now));
-        dto.setRetailSalePrice(toVariantPriceDto(prices.get(PriceTypeEn.RETAIL_SALE_PRICE), now));
-        dto.setWholesaleSalePrice(toVariantPriceDto(prices.get(PriceTypeEn.WHOLESALE_SALE_PRICE), now));
+        dto.setRetailPrice(variantPriceMapper.toDto(prices.get(PriceTypeEn.RETAIL_PRICE), now));
+        dto.setWholesalePrice(variantPriceMapper.toDto(prices.get(PriceTypeEn.WHOLESALE_PRICE), now));
+        dto.setRetailSalePrice(variantPriceMapper.toDto(prices.get(PriceTypeEn.RETAIL_SALE_PRICE), now));
+        dto.setWholesaleSalePrice(variantPriceMapper.toDto(prices.get(PriceTypeEn.WHOLESALE_SALE_PRICE), now));
         return dto;
     }
 
@@ -215,33 +217,5 @@ public class ProductListItemAssembler
         } else {
             return "IN_STOCK";
         }
-    }
-
-    private VariantPriceDto toVariantPriceDto(VariantPricesEntity price, LocalDateTime now)
-    {
-        if (price == null) {
-            return null;
-        }
-        VariantPriceDto dto = new VariantPriceDto();
-        dto.setId(price.getId() == null ? null : price.getId().toString());
-        dto.setPriceType(price.getPriceType() == null ? null : price.getPriceType().name());
-        dto.setPrice(price.getPrice());
-        dto.setPriceStartDate(price.getPriceStartDate());
-        dto.setPriceEndDate(price.getPriceEndDate());
-        dto.setIsActive(Boolean.TRUE);
-        dto.setSaleDaysRemaining(calculateSaleDaysRemaining(price.getPriceType(), price.getPriceEndDate(), now));
-        return dto;
-    }
-
-    private Long calculateSaleDaysRemaining(PriceTypeEn priceType, LocalDateTime endDate, LocalDateTime now)
-    {
-        if (priceType == null || endDate == null) {
-            return null;
-        }
-        if (priceType != PriceTypeEn.RETAIL_SALE_PRICE && priceType != PriceTypeEn.WHOLESALE_SALE_PRICE) {
-            return null;
-        }
-        long daysRemaining = ChronoUnit.DAYS.between(now.toLocalDate(), endDate.toLocalDate());
-        return Math.max(daysRemaining, 0L);
     }
 }

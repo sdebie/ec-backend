@@ -2,9 +2,7 @@ package org.ecommerce.backend.service;
 
 import io.quarkus.hibernate.orm.panache.Panache;
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
-import org.ecommerce.common.repository.ProductImportRepository;
 
 import java.io.PrintWriter;
 import java.util.stream.Stream;
@@ -12,9 +10,6 @@ import java.util.stream.Stream;
 @ApplicationScoped
 public class ProductExportService
 {
-    @Inject
-    ProductImportRepository productImportRepository;
-
     private static final String CSV_INFO_HEADER =
             "product_id,sku,name,description,short_description,product_categories,product_type,brand_slug,retail_price,wholesale_price,stock,images,attributes";
 
@@ -48,7 +43,6 @@ public class ProductExportService
             LEFT JOIN brands b ON p.brand_id = b.id
             """;
 
-    //"sku,retail_price,wholesale_price";
     private static final String EXPORT_PRD_PRICE_SQL = """
             SELECT
                 v.sku,

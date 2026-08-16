@@ -1,0 +1,39 @@
+{@org.ecommerce.common.enums.OrderStatusEn status}
+{#include order_email_layout}
+{#headline}
+    {#if status.name == 'SYSTEM_CANCELED'}Your order expired before payment{#else}Your order has been cancelled{/if}
+{/headline}
+
+{#body}
+    {!
+      Three statuses, one email. Whether the shopper cancelled, the store cancelled, or
+      the hold window ran out matters to the timeline, not to the person reading this —
+      what they need is confirmation it is over and a plain answer about their money.
+    !}
+    {#if status.name == 'SYSTEM_CANCELED'}
+        <p>
+            Your order wasn't paid within the time we could hold the items, so it has been
+            cancelled and they've gone back on sale.
+        </p>
+        <div class="callout ended">
+            <strong>You haven't been charged.</strong> No payment was completed, so there's
+            nothing to refund.
+        </div>
+        <p>Still want these items? You're welcome to order again — just note we can't guarantee they're still in stock.</p>
+    {#else}
+        <p>Your order has been cancelled and won't be sent.</p>
+        <div class="callout ended">
+            <strong>If you paid for this order, we'll refund you.</strong> You'll get a
+            separate email confirming the refund once it's been processed. If you never
+            completed payment, there's nothing to refund.
+        </div>
+    {/if}
+
+    <div class="callout">
+        <strong>Order reference:</strong> {order.reference}<br/>
+        <strong>Order total:</strong> {#if store.currencySymbol??}{store.currencySymbol} {/if}{order.totalAmount}
+    </div>
+
+    <p>If this wasn't what you expected, reply to this email and we'll look into it.</p>
+{/body}
+{/include}

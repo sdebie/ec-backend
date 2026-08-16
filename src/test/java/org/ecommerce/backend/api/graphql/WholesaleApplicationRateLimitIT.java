@@ -25,7 +25,6 @@ import static org.mockito.Mockito.*;
  * Test-profile config: {@code %test.ratelimit.wholesale-application.max=2},
  * {@code %test.ratelimit.wholesale-application.window-seconds=2}.
  * <p>
- * Validates: Requirements 3.1, 3.2, 3.3, 9.3
  */
 @QuarkusTest
 @DisplayName("Wholesale Application Rate Limiting — integration")
@@ -78,7 +77,7 @@ class WholesaleApplicationRateLimitIT
                 .then()
                 .statusCode(200)
                 .body("errors", hasSize(1))
-                .body("errors[0].message", equalTo("Too many requests \u2014 please try again later."));
+                .body("errors[0].message", equalTo("Too many requests — please try again later."));
 
         // Service was called exactly 2 times (the allowed requests), not 3
         verify(wholesaleCustomerService, times(2)).createWholesaleApplication(any(WholesaleCustomerDto.class));
@@ -122,7 +121,7 @@ class WholesaleApplicationRateLimitIT
                 .post("/api/graphql")
                 .then()
                 .statusCode(200)
-                .body("errors[0].message", equalTo("Too many requests \u2014 please try again later."));
+                .body("errors[0].message", equalTo("Too many requests — please try again later."));
 
         // Verify no service invocation (no row persisted, no event fired)
         verifyNoInteractions(wholesaleCustomerService);

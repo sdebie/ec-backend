@@ -1,0 +1,27 @@
+{#include order_email_layout}
+{#headline}Your order is ready to collect{/headline}
+
+{#body}
+    <p>Good news — your order is packed and waiting for you.</p>
+
+    {!
+      Everything a shopper needs in order to actually turn up: where, when, and what to
+      bring. Each line is guarded because these are operator-supplied; a missing one
+      should cost the reader that line rather than send them to an empty address.
+    !}
+    <div class="callout">
+        <strong>Bring this order reference:</strong> {order.reference}
+        {#if store.address??}<br/><strong>Collect from:</strong> {store.address}{/if}
+        {#if store.businessHours??}<br/><strong>Open:</strong> {store.businessHours}{/if}
+    </div>
+
+    <p>
+        Please bring photo ID matching the name on the order. If someone else is
+        collecting on your behalf, let us know first.
+    </p>
+
+    <div class="total-section">
+        Total: {#if store.currencySymbol??}{store.currencySymbol} {/if}{order.totalAmount}
+    </div>
+{/body}
+{/include}

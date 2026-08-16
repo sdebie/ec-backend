@@ -1,8 +1,8 @@
 package org.ecommerce.backend.service;
 
 // Feature: customer-portal-backend, Property 1: Profile Mapping Correctness
-// Validates: Requirements 1.3, 1.4, 1.5, 1.6, 1.7
 
+import org.ecommerce.backend.mapper.CustomerAddressMapperImpl;
 import net.jqwik.api.*;
 import net.jqwik.api.lifecycle.AfterTry;
 import net.jqwik.api.lifecycle.BeforeTry;
@@ -26,7 +26,6 @@ import static org.junit.jupiter.api.Assertions.*;
  * correctly transforms any combination of CustomerEntity state into the expected
  * StorefrontCustomerPortalDto shape.
  * <p>
- * Validates: Requirements 1.3, 1.4, 1.5, 1.6, 1.7
  */
 public class CustomerPortalMappingPropertyTest
 {
@@ -37,6 +36,8 @@ public class CustomerPortalMappingPropertyTest
     void setup()
     {
         service = new CustomerPortalService();
+
+        service.customerAddressMapper = new CustomerAddressMapperImpl();
         mockedCustomerEntity = Mockito.mockStatic(CustomerEntity.class);
     }
 

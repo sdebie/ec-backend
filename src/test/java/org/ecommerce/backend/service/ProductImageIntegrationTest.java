@@ -2,7 +2,6 @@ package org.ecommerce.backend.service;
 
 // Feature: admin-product-write, Task 3.3
 // Integration test — images display and clean up safely
-// Validates: Requirements 2.6, 3.7, 5.1, 5.2, 5.4
 
 import io.quarkus.test.TestTransaction;
 import io.quarkus.test.junit.QuarkusTest;

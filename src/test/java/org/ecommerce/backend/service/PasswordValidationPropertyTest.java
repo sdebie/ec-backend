@@ -2,6 +2,7 @@ package org.ecommerce.backend.service;
 
 // Feature: customer-portal-backend, Property 8: Password Minimum Length Validation
 
+import org.ecommerce.backend.mapper.CustomerAddressMapperImpl;
 import jakarta.ws.rs.WebApplicationException;
 import net.jqwik.api.*;
 import net.jqwik.api.lifecycle.AfterTry;
@@ -27,7 +28,6 @@ import static org.junit.jupiter.api.Assertions.*;
  * This test validates the password length validation logic in CustomerPortalService.changePassword()
  * by mocking the static entity finder and testing the validation gate directly.
  * <p>
- * Validates: Requirements 5.5
  */
 class PasswordValidationPropertyTest
 {
@@ -42,6 +42,8 @@ class PasswordValidationPropertyTest
     void setup()
     {
         service = new CustomerPortalService();
+
+        service.customerAddressMapper = new CustomerAddressMapperImpl();
         mockedCustomerEntity = Mockito.mockStatic(CustomerEntity.class);
 
         // Set up a customer with a known password hash
@@ -72,7 +74,6 @@ class PasswordValidationPropertyTest
     }
 
     /**
-     * Validates: Requirements 5.5
      * <p>
      * For any new password with length < 8, changePassword SHALL throw
      * a WebApplicationException with status 400 and message "Password must be at least 8 characters".
@@ -88,7 +89,6 @@ class PasswordValidationPropertyTest
     }
 
     /**
-     * Validates: Requirements 5.5
      * <p>
      * For any new password with length >= 8 (given correct current password),
      * changePassword SHALL accept it without throwing an exception.
@@ -104,7 +104,6 @@ class PasswordValidationPropertyTest
     }
 
     /**
-     * Validates: Requirements 5.5
      * <p>
      * Null new password should be rejected with HTTP 400.
      */

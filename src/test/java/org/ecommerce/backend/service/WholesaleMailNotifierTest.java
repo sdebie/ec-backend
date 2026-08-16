@@ -1,7 +1,6 @@
 package org.ecommerce.backend.service;
 
 // Feature: wholesale-application-review-workflow, Property 4: No hardcoded sender or client identity
-// Validates: Requirements 4.3, 4.5, 5.1, 5.3
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.quarkus.mailer.MailTemplate;
@@ -35,7 +34,6 @@ import static org.mockito.Mockito.*;
  * is mocked so we can verify parameters without sending actual SMTP traffic.
  * <p>
  * Feature: wholesale-application-review-workflow, Property 4: No hardcoded sender or client identity
- * Validates: Requirements 4.3, 4.5, 5.1, 5.3
  */
 @ExtendWith(MockitoExtension.class)
 @DisplayName("WholesaleMailNotifier — store name resolution, from-address & recipient guards")
@@ -57,20 +55,25 @@ class WholesaleMailNotifierTest
     private MailTemplate wholesale_registration;
 
     @Mock
-    private ContactEnquiryMailer contactEnquiryMailer;
+    private EnquiryRecipientResolver enquiryRecipientResolver;
 
     @Spy
     private ObjectMapper objectMapper = new ObjectMapper();
 
     private static final String CONFIGURED_FROM = "no-reply@store.co.za";
+    private static final String CONFIGURED_FRONTEND_BASE_URL = "http://localhost:3000";
 
     @BeforeEach
     void setUp() throws Exception
     {
-        // Reflectively set the @ConfigProperty field since @InjectMocks won't inject it
+        // Reflectively set the @ConfigProperty fields since @InjectMocks won't inject them
         var fromField = WholesaleMailNotifier.class.getDeclaredField("mailerFrom");
         fromField.setAccessible(true);
         fromField.set(notifier, CONFIGURED_FROM);
+
+        var frontendBaseUrlField = WholesaleMailNotifier.class.getDeclaredField("frontendBaseUrl");
+        frontendBaseUrlField.setAccessible(true);
+        frontendBaseUrlField.set(notifier, CONFIGURED_FRONTEND_BASE_URL);
     }
 
     // ── Helpers ─────────────────────────────────────────────────────────────
@@ -85,25 +88,32 @@ class WholesaleMailNotifierTest
 
     private WholesaleDecisionEvent approvalEvent(String recipientEmail)
     {
+        return approvalEvent(recipientEmail, false);
+    }
+
+    private WholesaleDecisionEvent approvalEvent(String recipientEmail, boolean newAccountCreated)
+    {
         return new WholesaleDecisionEvent(
                 UUID.randomUUID(),
                 WholesaleApplicationStatusEn.APPROVED,
                 recipientEmail,
                 "Jane",
                 "ACME Corp",
-                null
+                null,
+                newAccountCreated
         );
     }
 
-    private WholesaleDecisionEvent rejectionEvent(String recipientEmail)
+    private WholesaleDecisionEvent rejectionEvent()
     {
         return new WholesaleDecisionEvent(
                 UUID.randomUUID(),
                 WholesaleApplicationStatusEn.REJECTED,
-                recipientEmail,
+                "bob@test.com",
                 "Bob",
                 "Beta Inc",
-                "Insufficient documentation"
+                "Insufficient documentation",
+                false
         );
     }
 
@@ -309,7 +319,7 @@ class WholesaleMailNotifierTest
         @DisplayName("admin notification delivered to the resolved enquiryEmail with full snapshot + replyTo")
         void adminNotificationDelivered()
         {
-            when(contactEnquiryMailer.resolveRecipient()).thenReturn("enquiries@store.co.za");
+            when(enquiryRecipientResolver.require()).thenReturn("enquiries@store.co.za");
             when(settingsRepository.findById("storefront.branding"))
                     .thenReturn(brandingSetting("{\"name\": \"My Store\"}"));
             MailTemplate.MailTemplateInstance admin = stubChain(wholesale_application_received);
@@ -330,7 +340,7 @@ class WholesaleMailNotifierTest
         @DisplayName("applicant confirmation delivered to applicantEmail with store name + full snapshot")
         void applicantConfirmationDelivered()
         {
-            when(contactEnquiryMailer.resolveRecipient()).thenReturn("enquiries@store.co.za");
+            when(enquiryRecipientResolver.require()).thenReturn("enquiries@store.co.za");
             when(settingsRepository.findById("storefront.branding"))
                     .thenReturn(brandingSetting("{\"name\": \"My Store\"}"));
             stubChain(wholesale_application_received);
@@ -351,7 +361,7 @@ class WholesaleMailNotifierTest
         @DisplayName("enquiryEmail not configured → admin skipped, applicant confirmation still delivered")
         void recipientNotConfiguredStillSendsApplicantConfirmation()
         {
-            when(contactEnquiryMailer.resolveRecipient())
+            when(enquiryRecipientResolver.require())
                     .thenThrow(new RecipientNotConfiguredException("enquiryEmail is absent or blank in storefront.contact"));
             when(settingsRepository.findById("storefront.branding"))
                     .thenReturn(brandingSetting("{\"name\": \"My Store\"}"));
@@ -368,7 +378,7 @@ class WholesaleMailNotifierTest
         @DisplayName("blank applicantEmail → confirmation skipped, admin notified without replyTo")
         void blankApplicantEmailSkipsConfirmation()
         {
-            when(contactEnquiryMailer.resolveRecipient()).thenReturn("enquiries@store.co.za");
+            when(enquiryRecipientResolver.require()).thenReturn("enquiries@store.co.za");
             MailTemplate.MailTemplateInstance admin = stubChain(wholesale_application_received);
             WholesaleCustomerDto dto = submittedDto();
             dto.setApplicantEmail(null);
@@ -391,7 +401,7 @@ class WholesaleMailNotifierTest
 
             notifier.onSubmitted(submittedEvent(submittedDto()));
 
-            verifyNoInteractions(contactEnquiryMailer);
+            verifyNoInteractions(enquiryRecipientResolver);
             verifyNoInteractions(wholesale_application_received);
             verifyNoInteractions(wholesale_registration);
         }
@@ -431,7 +441,7 @@ class WholesaleMailNotifierTest
                     .thenReturn(brandingSetting("{\"name\": \"My Store\"}"));
             MailTemplate.MailTemplateInstance instance = stubMailTemplateChain();
 
-            notifier.onDecision(rejectionEvent("bob@test.com"));
+            notifier.onDecision(rejectionEvent());
 
             verify(wholesale_status).to("bob@test.com");
             verify(instance).from(CONFIGURED_FROM);
@@ -440,6 +450,34 @@ class WholesaleMailNotifierTest
             verify(instance).data("approved", false);
             verify(instance).data("rejectionReason", "Insufficient documentation");
             verify(instance).send();
+        }
+
+        @Test
+        @DisplayName("new-account approval passes newAccountCreated=true and the forgot-password URL")
+        void newAccountApprovalPassesForgotPasswordUrl()
+        {
+            when(settingsRepository.findById("storefront.branding"))
+                    .thenReturn(brandingSetting("{\"name\": \"My Store\"}"));
+            MailTemplate.MailTemplateInstance instance = stubMailTemplateChain();
+
+            notifier.onDecision(approvalEvent("applicant@test.com", true));
+
+            verify(instance).data("newAccountCreated", true);
+            verify(instance).data("forgotPasswordUrl", CONFIGURED_FRONTEND_BASE_URL + "/account/forgot-password");
+        }
+
+        @Test
+        @DisplayName("upgraded-account approval passes newAccountCreated=false")
+        void upgradedAccountApprovalPassesFalse()
+        {
+            when(settingsRepository.findById("storefront.branding"))
+                    .thenReturn(brandingSetting("{\"name\": \"My Store\"}"));
+            MailTemplate.MailTemplateInstance instance = stubMailTemplateChain();
+
+            notifier.onDecision(approvalEvent("applicant@test.com", false));
+
+            verify(instance).data("newAccountCreated", false);
+            verify(instance).data("forgotPasswordUrl", CONFIGURED_FRONTEND_BASE_URL + "/account/forgot-password");
         }
     }
 }

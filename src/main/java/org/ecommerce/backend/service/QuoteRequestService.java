@@ -5,8 +5,7 @@ import jakarta.enterprise.event.Event;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import org.ecommerce.backend.exception.InvalidQuoteStatusTransitionException;
-import org.ecommerce.common.dto.QuoteRequestDetailsDto;
-import org.ecommerce.common.dto.QuoteRequestItemDto;
+import org.ecommerce.backend.mapper.QuoteRequestMapper;
 import org.ecommerce.common.dto.QuoteRequestLineDto;
 import org.ecommerce.common.dto.QuoteRequestSubmissionDto;
 import org.ecommerce.common.entity.ProductVariantEntity;
@@ -27,6 +26,9 @@ public class QuoteRequestService
 
     @Inject
     Event<QuoteRequestSubmittedEvent> submittedEvent;
+
+    @Inject
+    QuoteRequestMapper quoteRequestMapper;
 
     /**
      * Submits a new quote request: resolves each variant (unknown → exception for 422),
@@ -67,7 +69,7 @@ public class QuoteRequestService
         LOG.infof("[QuoteRequest] submitted id=%s, items=%d", request.getId(), items.size());
 
         // Fire post-commit CDI event — observed by QuoteRequestMailer at AFTER_SUCCESS
-        submittedEvent.fire(new QuoteRequestSubmittedEvent(request.getId(), toDetailsDto(request)));
+        submittedEvent.fire(new QuoteRequestSubmittedEvent(request.getId(), quoteRequestMapper.mapEntityToDetailsDto(request)));
 
         return request;
     }
@@ -119,30 +121,4 @@ public class QuoteRequestService
         }
     }
 
-    private QuoteRequestDetailsDto toDetailsDto(QuoteRequestEntity entity)
-    {
-        QuoteRequestDetailsDto dto = new QuoteRequestDetailsDto();
-        dto.setId(entity.getId());
-        dto.setName(entity.getName());
-        dto.setEmail(entity.getEmail());
-        dto.setPhone(entity.getPhone());
-        dto.setCompany(entity.getCompany());
-        dto.setMessage(entity.getMessage());
-        dto.setCreatedAt(entity.getCreatedAt());
-        dto.setStatus(entity.getStatus());
-        dto.setStatusChangedAt(entity.getStatusChangedAt());
-
-        List<QuoteRequestItemDto> itemDtos = new ArrayList<>();
-        for (QuoteRequestItemEntity item : entity.getItems()) {
-            QuoteRequestItemDto itemDto = new QuoteRequestItemDto();
-            itemDto.setVariantId(item.getVariant() != null ? item.getVariant().getId() : null);
-            itemDto.setProductNameSnapshot(item.getProductNameSnapshot());
-            itemDto.setVariantSkuSnapshot(item.getVariantSkuSnapshot());
-            itemDto.setQuantity(item.getQuantity());
-            itemDtos.add(itemDto);
-        }
-        dto.setItems(itemDtos);
-
-        return dto;
-    }
 }

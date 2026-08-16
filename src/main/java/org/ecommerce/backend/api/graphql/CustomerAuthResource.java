@@ -31,7 +31,7 @@ public class CustomerAuthResource {
         String clientIp = currentRequestClientIp.resolve();
 
         // Chained-check: IP limiter first; if denied, email counter is NOT incremented.
-        // Silent denial — return the identical generic response to prevent enumeration (Req 5.2).
+        // Silent denial — return the identical generic response to prevent enumeration.
         RateLimitDecision ipDecision = rateLimiterService.check("password-reset-request", clientIp, 5, 3600);
         if (!ipDecision.allowed()) {
             return "If the account exists, a reset link has been sent.";

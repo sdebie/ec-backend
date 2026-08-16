@@ -3,7 +3,7 @@ package org.ecommerce.backend.service;
 import io.quarkus.test.TestTransaction;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
-import org.ecommerce.common.dto.CreateTestimonialRequest;
+import org.ecommerce.common.dto.TestimonialRequest;
 import org.ecommerce.common.dto.TestimonialDto;
 import org.ecommerce.common.dto.TestimonialPublicDto;
 import org.ecommerce.common.entity.TestimonialEntity;
@@ -20,7 +20,6 @@ import static org.hamcrest.Matchers.*;
  * DB-backed correctness tests for TestimonialService.
  * These call the REAL service (not a re-implementation) and verify Properties 1–3.
  * <p>
- * Validates: Requirements 2.1, 4.3, 4.5, 5.1
  */
 @QuarkusTest
 class TestimonialServiceTest
@@ -36,7 +35,6 @@ class TestimonialServiceTest
      * Persists a mix of published/unpublished with varying sort orders; verifies
      * the service returns only published ones in the correct order with the public shape.
      * <p>
-     * Validates: Requirements 2.1
      */
     @Test
     @TestTransaction
@@ -66,7 +64,6 @@ class TestimonialServiceTest
     /**
      * Property 2: Admin listing returns all testimonials ordered by sortOrder ASC, createdAt DESC.
      * <p>
-     * Validates: Requirements 5.1
      */
     @Test
     @TestTransaction
@@ -94,14 +91,13 @@ class TestimonialServiceTest
     /**
      * Property 3: Create–read round trip preserves all fields.
      * <p>
-     * Validates: Requirements 4.3
      */
     @Test
     @TestTransaction
     void create_thenGetById_roundTrip()
     {
         clearTestimonialsWithinTestTransaction();
-        CreateTestimonialRequest request = new CreateTestimonialRequest(
+        TestimonialRequest request = new TestimonialRequest(
                 "Great service!", "Jane Doe", "CEO, Acme Corp", 5, true
         );
 
@@ -129,7 +125,6 @@ class TestimonialServiceTest
     /**
      * Property 1 edge case: empty DB returns empty list (not null, not error).
      * <p>
-     * Validates: Requirements 2.1
      */
     @Test
     @TestTransaction

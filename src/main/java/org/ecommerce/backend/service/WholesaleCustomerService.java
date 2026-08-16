@@ -10,12 +10,17 @@ import org.ecommerce.common.dto.WholesaleApplicationListItemDto;
 import org.ecommerce.common.dto.WholesaleCustomerDto;
 import org.ecommerce.common.entity.*;
 import org.ecommerce.common.enums.*;
+import org.ecommerce.common.query.Filter;
 import org.ecommerce.common.query.FilterRequest;
 import org.ecommerce.common.query.PageRequest;
+import org.ecommerce.common.query.SortRequest;
 import org.ecommerce.common.repository.WholesaleApplicationRepository;
 import org.jboss.logging.Logger;
 
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -37,17 +42,31 @@ public class WholesaleCustomerService
 
     private static final Logger LOG = Logger.getLogger(WholesaleCustomerService.class);
 
-    public List<WholesaleApplicationListItemDto> getWholesaleApplications(PageRequest pageRequest, FilterRequest filterRequest)
+    /**
+     * @param fromDate inclusive ISO date (yyyy-MM-dd), or null/blank for no lower bound
+     * @param toDate   inclusive ISO date (yyyy-MM-dd), or null/blank for no upper bound
+     */
+    public List<WholesaleApplicationListItemDto> getWholesaleApplications(PageRequest pageRequest, FilterRequest filterRequest, String fromDate, String toDate)
     {
-        return wholesaleApplicationRepository.findAll(pageRequest, filterRequest)
+        WholesaleApplicationStatusEn status = extractStatusFilter(filterRequest);
+        SortRequest sort = extractSort(filterRequest);
+        OffsetDateTime from = toInclusiveStart(fromDate, "fromDate");
+        OffsetDateTime toExclusive = toExclusiveEnd(toDate, "toDate");
+
+        return wholesaleApplicationRepository.findForAdmin(status, from, toExclusive, sort, pageRequest)
                 .stream()
-                .map(this::toListItemDto)
+                .map(wholesaleMapper::toListItemDto)
                 .toList();
     }
 
-    public long wholesaleApplicationCount(FilterRequest filterRequest)
+    /** @see #getWholesaleApplications(PageRequest, FilterRequest, String, String) */
+    public long wholesaleApplicationCount(FilterRequest filterRequest, String fromDate, String toDate)
     {
-        return wholesaleApplicationRepository.count(filterRequest);
+        WholesaleApplicationStatusEn status = extractStatusFilter(filterRequest);
+        OffsetDateTime from = toInclusiveStart(fromDate, "fromDate");
+        OffsetDateTime toExclusive = toExclusiveEnd(toDate, "toDate");
+
+        return wholesaleApplicationRepository.countForAdmin(status, from, toExclusive);
     }
 
     public WholesaleApplicationDetailsDto getWholesaleApplicationById(UUID id)
@@ -176,7 +195,7 @@ public class WholesaleCustomerService
         applyAddresses(customerEntity, customerDto);
         customerEntity.persist();
 
-        return toDto(customerEntity);
+        return wholesaleMapper.toDto(customerEntity);
     }
 
     @Transactional
@@ -205,37 +224,17 @@ public class WholesaleCustomerService
             throw new IllegalArgumentException("application must have an accountEmail or applicantEmail to approve");
         }
 
+        boolean newAccountCreated = false;
+
         if (application.getCustomer() == null) {
-            if (UserEntity.findByEmail(email) != null) {
-                throw new IllegalArgumentException("customer already exists with email: " + email);
+            UserEntity existingUser = UserEntity.findByEmail(email);
+            CustomerEntity customerEntity;
+            if (existingUser != null) {
+                customerEntity = upgradeExistingAccountToWholesaler(application, existingUser);
+            } else {
+                customerEntity = createNewWholesaleAccount(application, email);
+                newAccountCreated = true;
             }
-
-            // Create user account
-            UserEntity user = new UserEntity();
-            user.setEmail(email);
-            user.setPasswordHash(""); // placeholder until the customer sets a password
-            UserEntity.persist(user);
-
-            // Create customer profile
-            CustomerEntity customerEntity = new CustomerEntity();
-            customerEntity.setUser(user);
-            customerEntity.setShopperType(CustomerTypeEn.WHOLESALER);
-            customerEntity.setStatus(CustomerStatusEn.ACTIVE);
-            customerEntity.setFirstName(normalizeText(application.getFirstName()));
-            customerEntity.setLastName(normalizeText(application.getLastName()));
-            customerEntity.setPhone(normalizeText(application.getPhone()));
-            CustomerEntity.persist(customerEntity);
-
-            // Create wholesale profile
-            WholesaleProfileEntity profile = new WholesaleProfileEntity();
-            profile.setCustomer(customerEntity);
-            profile.setCompanyName(firstNonBlank(normalizeText(application.getCompanyName()), customerEntity.getFirstName(), "Unknown Company"));
-            profile.setVatNumber(normalizeText(application.getVatNumber()));
-            profile.setRegNumber(normalizeText(application.getRegNumber()));
-            WholesaleProfileEntity.persist(profile);
-
-            // Apply addresses from application
-            applyAddressesFromApplication(customerEntity, application);
 
             // Link customer to application
             application.setCustomer(customerEntity);
@@ -246,9 +245,83 @@ public class WholesaleCustomerService
         application.setProcessedAt(OffsetDateTime.now());
         application.persist();
 
-        decisionEvent.fire(buildDecisionEvent(application, null));
+        decisionEvent.fire(buildDecisionEvent(application, null, newAccountCreated));
 
         return wholesaleMapper.toDetailsDto(application);
+    }
+
+    /**
+     * Creates a brand-new user + customer + wholesale profile from the application.
+     * {@code passwordHash} is left as an empty (never-matchable) placeholder — the
+     * approval email directs the customer to the Forgot Password flow to set one.
+     */
+    private CustomerEntity createNewWholesaleAccount(WholesaleApplicationEntity application, String email)
+    {
+        UserEntity user = new UserEntity();
+        user.setEmail(email);
+        user.setPasswordHash(""); // placeholder until the customer sets a password
+        UserEntity.persist(user);
+
+        CustomerEntity customerEntity = new CustomerEntity();
+        customerEntity.setUser(user);
+        customerEntity.setShopperType(CustomerTypeEn.WHOLESALER);
+        customerEntity.setStatus(CustomerStatusEn.ACTIVE);
+        customerEntity.setFirstName(normalizeText(application.getFirstName()));
+        customerEntity.setLastName(normalizeText(application.getLastName()));
+        customerEntity.setPhone(normalizeText(application.getPhone()));
+        CustomerEntity.persist(customerEntity);
+
+        WholesaleProfileEntity profile = new WholesaleProfileEntity();
+        profile.setCustomer(customerEntity);
+        profile.setCompanyName(firstNonBlank(normalizeText(application.getCompanyName()), customerEntity.getFirstName(), "Unknown Company"));
+        profile.setVatNumber(normalizeText(application.getVatNumber()));
+        profile.setRegNumber(normalizeText(application.getRegNumber()));
+        WholesaleProfileEntity.persist(profile);
+
+        applyAddressesFromApplication(customerEntity, application);
+
+        return customerEntity;
+    }
+
+    /**
+     * Upgrades an existing account to wholesale rather than rejecting the approval.
+     * Never touches {@code status} beyond promoting PENDING→ACTIVE — a staff-disabled
+     * account must not be silently reactivated by a wholesale approval, mirroring the
+     * same restraint {@link CustomerPasswordResetService#activateCustomerProfile}
+     * applies on password-reset completion.
+     */
+    private CustomerEntity upgradeExistingAccountToWholesaler(WholesaleApplicationEntity application, UserEntity existingUser)
+    {
+        CustomerEntity customerEntity = existingUser.getCustomer();
+        if (customerEntity == null) {
+            throw new IllegalArgumentException("account already exists for " + existingUser.getEmail()
+                    + " but has no linked customer profile — cannot approve wholesale application");
+        }
+
+        if (customerEntity.getShopperType() == CustomerTypeEn.WHOLESALER) {
+            // Already wholesale — a second/duplicate approval must not silently
+            // overwrite wholesale data staff may have since edited.
+            return customerEntity;
+        }
+
+        customerEntity.setShopperType(CustomerTypeEn.WHOLESALER);
+        if (customerEntity.getStatus() == null || customerEntity.getStatus() == CustomerStatusEn.PENDING) {
+            customerEntity.setStatus(CustomerStatusEn.ACTIVE);
+        }
+
+        if (customerEntity.getWholesaleProfile() == null) {
+            WholesaleProfileEntity profile = new WholesaleProfileEntity();
+            profile.setCustomer(customerEntity);
+            profile.setCompanyName(firstNonBlank(normalizeText(application.getCompanyName()), customerEntity.getFirstName(), "Unknown Company"));
+            profile.setVatNumber(normalizeText(application.getVatNumber()));
+            profile.setRegNumber(normalizeText(application.getRegNumber()));
+            WholesaleProfileEntity.persist(profile);
+        }
+
+        applyAddressesFromApplication(customerEntity, application);
+        customerEntity.persist();
+
+        return customerEntity;
     }
 
     @Transactional
@@ -275,12 +348,80 @@ public class WholesaleCustomerService
         application.setRejectionReason(reason.trim());
         application.persist();
 
-        decisionEvent.fire(buildDecisionEvent(application, reason.trim()));
+        decisionEvent.fire(buildDecisionEvent(application, reason.trim(), false));
 
         return wholesaleMapper.toDetailsDto(application);
     }
 
     // ── Private helpers ──────────────────────────────────────────────────────
+
+    /**
+     * The admin queue's only status filter is a single equality — pulled out of the generic
+     * {@link FilterRequest} by hand because {@link #getWholesaleApplications} routes through
+     * {@link WholesaleApplicationRepository#findForAdmin}, hand-written JPQL rather than the
+     * generic {@code PanacheQueryBuilder} path (see that repository for why: the generic
+     * coercion cannot express the date-range bound this method also needs).
+     */
+    private WholesaleApplicationStatusEn extractStatusFilter(FilterRequest filterRequest)
+    {
+        if (filterRequest == null || filterRequest.getFilters() == null) {
+            return null;
+        }
+        return filterRequest.getFilters().stream()
+                .filter(f -> "status".equals(f.getKey()))
+                .findFirst()
+                .map(Filter::getValue)
+                .map(value -> {
+                    try {
+                        return WholesaleApplicationStatusEn.valueOf(value);
+                    } catch (IllegalArgumentException e) {
+                        throw new IllegalArgumentException("invalid status: " + value);
+                    }
+                })
+                .orElse(null);
+    }
+
+    private SortRequest extractSort(FilterRequest filterRequest)
+    {
+        if (filterRequest == null || filterRequest.getSort() == null || filterRequest.getSort().isEmpty()) {
+            return null;
+        }
+        return filterRequest.getSort().get(0);
+    }
+
+    private LocalDate parseDate(String value, String fieldName)
+    {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            return LocalDate.parse(value);
+        } catch (DateTimeParseException e) {
+            throw new IllegalArgumentException("invalid " + fieldName + ": " + value + " (expected yyyy-MM-dd)");
+        }
+    }
+
+    /**
+     * Day boundaries are anchored to UTC, not the JVM's default zone — a server-local zone
+     * would make the window depend on which machine runs the query (see
+     * {@code .kiro/specs/temporal-type-correctness}, which exists because exactly this kind
+     * of implicit-zone comparison has already produced a live defect elsewhere).
+     */
+    private OffsetDateTime toInclusiveStart(String date, String fieldName)
+    {
+        LocalDate day = parseDate(date, fieldName);
+        return day == null ? null : day.atStartOfDay(ZoneOffset.UTC).toOffsetDateTime();
+    }
+
+    /**
+     * The UI sends whole days, so an inclusive "to" is every instant before the following
+     * midnight — a plain {@code <=} would drop everything after 00:00 on the "to" day.
+     */
+    private OffsetDateTime toExclusiveEnd(String date, String fieldName)
+    {
+        LocalDate day = parseDate(date, fieldName);
+        return day == null ? null : day.plusDays(1).atStartOfDay(ZoneOffset.UTC).toOffsetDateTime();
+    }
 
     private void applyProfileFields(CustomerEntity customerEntity, WholesaleCustomerDto dto)
     {
@@ -411,67 +552,9 @@ public class WholesaleCustomerService
         return null;
     }
 
-    private WholesaleCustomerDto toDto(CustomerEntity ce)
-    {
-        WholesaleCustomerDto dto = new WholesaleCustomerDto();
-        dto.setId(ce.getId());
-        dto.setEmail(ce.getUser() != null ? ce.getUser().getEmail() : null);
-        dto.setFirstName(ce.getFirstName());
-        dto.setLastName(ce.getLastName());
-        dto.setPhone(ce.getPhone());
 
-        Optional<CustomerAddressEntity> physical = ce.getAddresses()
-                .stream()
-                .filter(a -> a.getAddressType() == AddressTypeEn.PHYSICAL)
-                .findFirst();
 
-        physical.ifPresent(a -> {
-            dto.setPhysicalAddressLine1(a.getAddressLine1());
-            dto.setPhysicalAddressLine2(a.getAddressLine2());
-            dto.setPhysicalSuburb(a.getSuburb());
-            dto.setPhysicalCity(a.getCity());
-            dto.setPhysicalProvince(a.getProvince());
-            dto.setPhysicalPostalCode(a.getPostalCode());
-        });
-
-        Optional<CustomerAddressEntity> postal = ce.getAddresses()
-                .stream()
-                .filter(a -> a.getAddressType() == AddressTypeEn.POSTAL)
-                .findFirst();
-        postal.ifPresent(a -> {
-            dto.setPostalAddressLine1(a.getAddressLine1());
-            dto.setPostalAddressLine2(a.getAddressLine2());
-            dto.setPostalSuburb(a.getSuburb());
-            dto.setPostalCity(a.getCity());
-            dto.setPostalProvince(a.getProvince());
-            dto.setPostalPostalCode(a.getPostalCode());
-        });
-
-        if (ce.getWholesaleProfile() != null) {
-            dto.setCompanyName(ce.getWholesaleProfile().getCompanyName());
-            dto.setVatNumber(ce.getWholesaleProfile().getVatNumber());
-            dto.setRegNumber(ce.getWholesaleProfile().getRegNumber());
-        }
-
-        if (ce.getStatus() != null) {
-            dto.setStatus(WholesaleCustomerStatusEn.valueOf(ce.getStatus().name()));
-        }
-        return dto;
-    }
-
-    private WholesaleApplicationListItemDto toListItemDto(WholesaleApplicationEntity application)
-    {
-        WholesaleApplicationListItemDto dto = new WholesaleApplicationListItemDto();
-        dto.setId(application.getId());
-        dto.setCreatedAt(application.getCreatedAt());
-        dto.setStatus(application.getStatus());
-        dto.setFirstName(application.getFirstName());
-        dto.setLastName(application.getLastName());
-        dto.setEmail(application.getAccountEmail());
-        return dto;
-    }
-
-    private WholesaleDecisionEvent buildDecisionEvent(WholesaleApplicationEntity application, String rejectionReason)
+    private WholesaleDecisionEvent buildDecisionEvent(WholesaleApplicationEntity application, String rejectionReason, boolean newAccountCreated)
     {
         // Recipient: applicantEmail first (nullable = false column), fallback to accountEmail if blank
         String recipientEmail = application.getApplicantEmail();
@@ -487,7 +570,8 @@ public class WholesaleCustomerService
                 recipientEmail,
                 firstName,
                 application.getCompanyName(),
-                rejectionReason
+                rejectionReason,
+                newAccountCreated
         );
     }
 

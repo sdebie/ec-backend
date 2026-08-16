@@ -1,13 +1,13 @@
 package org.ecommerce.backend.mapper;
 
 // Feature: service-layer-refactor, Property 4 (partial): Import parser row equivalence
-// Validates: Requirements 3.2, 4.1, 4.2
 
+import org.ecommerce.backend.csv.ProductImportParser;
 import net.jqwik.api.*;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;
 import org.apache.commons.csv.CSVRecord;
-import org.ecommerce.backend.mapper.ProductImportParser.StagedProductCsvRow;
+import org.ecommerce.backend.csv.ProductImportParser.StagedProductCsvRow;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -27,7 +27,6 @@ import static org.junit.jupiter.api.Assertions.*;
  * The reference implementation is a straightforward transcription of the pre-extraction
  * CSV field extraction, slug normalization, and stock parsing logic.
  * <p>
- * Validates: Requirements 3.2, 4.1, 4.2
  */
 public class ProductImportParserPropertyTest
 {
@@ -183,7 +182,7 @@ public class ProductImportParserPropertyTest
 
         assertNull(result.stock(), "Invalid stock should result in null");
         assertEquals(1, result.validationErrors().size(), "Invalid stock should produce exactly one error");
-        assertTrue(result.validationErrors().get(0).startsWith("Invalid integer value for stock:"),
+        assertTrue(result.validationErrors().getFirst().startsWith("Invalid integer value for stock:"),
                 "Error message should describe the invalid stock value");
     }
 
@@ -205,7 +204,7 @@ public class ProductImportParserPropertyTest
                 received::add);
 
         assertEquals(rowCount, received.size());
-        assertEquals("SKU-0", received.get(0).sku());
+        assertEquals("SKU-0", received.getFirst().sku());
         assertEquals("SKU-5000", received.get(rowCount - 1).sku());
     }
 
@@ -406,7 +405,7 @@ public class ProductImportParserPropertyTest
             if (records.isEmpty()) {
                 throw new IllegalStateException("No records parsed from CSV content");
             }
-            return records.get(0);
+            return records.getFirst();
         }
     }
 }

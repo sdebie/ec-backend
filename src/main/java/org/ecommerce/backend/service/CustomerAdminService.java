@@ -34,7 +34,7 @@ public class CustomerAdminService
     {
         return customerRepository.findForAdmin(filterRequest, pageRequest)
                 .stream()
-                .map(c -> customerAdminMapper.toListItemDto(c))
+                .map(c -> customerAdminMapper.toListItemDto(c, wholesaleApplicationFor(c)))
                 .toList();
     }
 
@@ -93,7 +93,7 @@ public class CustomerAdminService
         customer.setStatus(newStatus);
         customer.persist();
 
-        return customerAdminMapper.toListItemDto(customer);
+        return customerAdminMapper.toListItemDto(customer, wholesaleApplicationFor(customer));
     }
 
     private void validateStatusTransition(CustomerStatusEn current, CustomerStatusEn next)
@@ -106,5 +106,17 @@ public class CustomerAdminService
         if (!valid) {
             throw new IllegalArgumentException("invalid status transition: " + current + " → " + next);
         }
+    }
+
+    /**
+     * Loaded here rather than inside the mapper: mappers do not open queries.
+     * <p>
+     * ⚠️ Called per row by {@link #allCustomers}, so a page of N customers costs N queries.
+     * Left as-is to keep this change behaviour-preserving — the previous mapper did exactly
+     * the same thing per row — but it is a genuine N+1 worth batching.
+     */
+    private WholesaleApplicationEntity wholesaleApplicationFor(CustomerEntity customer)
+    {
+        return WholesaleApplicationEntity.find("customer.id = ?1", customer.getId()).firstResult();
     }
 }

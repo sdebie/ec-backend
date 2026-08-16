@@ -7,9 +7,8 @@ import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import org.ecommerce.backend.service.TestimonialService;
-import org.ecommerce.common.dto.CreateTestimonialRequest;
+import org.ecommerce.common.dto.TestimonialRequest;
 import org.ecommerce.common.dto.TestimonialDto;
-import org.ecommerce.common.dto.UpdateTestimonialRequest;
 
 import java.util.List;
 import java.util.UUID;
@@ -46,7 +45,7 @@ public class AdminTestimonialResource
 
     @POST
     @RolesAllowed("SUPER_ADMIN")
-    public Response create(@Valid CreateTestimonialRequest request)
+    public Response create(@Valid TestimonialRequest request)
     {
         TestimonialDto dto = testimonialService.create(request);
         return Response.status(Response.Status.CREATED).entity(dto).build();
@@ -55,7 +54,7 @@ public class AdminTestimonialResource
     @PUT
     @Path("/{id}")
     @RolesAllowed("SUPER_ADMIN")
-    public Response update(@PathParam("id") UUID id, @Valid UpdateTestimonialRequest request)
+    public Response update(@PathParam("id") UUID id, @Valid TestimonialRequest request)
     {
         TestimonialDto dto = testimonialService.update(id, request);
         if (dto == null) {

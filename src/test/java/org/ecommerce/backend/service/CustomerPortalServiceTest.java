@@ -1,5 +1,6 @@
 package org.ecommerce.backend.service;
 
+import org.ecommerce.backend.mapper.CustomerAddressMapperImpl;
 import jakarta.ws.rs.WebApplicationException;
 import org.ecommerce.common.dto.StorefrontCustomerPortalDto;
 import org.ecommerce.common.entity.CustomerAddressEntity;
@@ -35,6 +36,8 @@ class CustomerPortalServiceTest
     void setUp()
     {
         service = new CustomerPortalService();
+
+        service.customerAddressMapper = new CustomerAddressMapperImpl();
         customerEntityMock = Mockito.mockStatic(CustomerEntity.class);
     }
 

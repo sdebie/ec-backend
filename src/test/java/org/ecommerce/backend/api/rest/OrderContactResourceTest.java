@@ -3,6 +3,8 @@ package org.ecommerce.backend.api.rest;
 import io.quarkus.panache.mock.PanacheMock;
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.http.ContentType;
+import io.smallrye.jwt.build.Jwt;
+import org.ecommerce.common.entity.CustomerEntity;
 import org.ecommerce.common.entity.OrderEntity;
 import org.ecommerce.common.entity.OrderItemEntity;
 import org.ecommerce.common.entity.ShippingMethodEntity;
@@ -11,12 +13,14 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.util.UUID;
 
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.comparesEqualTo;
 import static org.hamcrest.Matchers.equalTo;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.Mockito.when;
 
 @QuarkusTest
@@ -27,18 +31,47 @@ class OrderContactResourceTest
     {
         PanacheMock.mock(OrderEntity.class);
         PanacheMock.mock(ShippingMethodEntity.class);
+        PanacheMock.mock(CustomerEntity.class);
+    }
+
+    private String generateCustomerJwt(String email)
+    {
+        return Jwt.subject(email)
+                .issuer("http://localhost:8080")
+                .groups("customer")
+                .sign();
+    }
+
+    /**
+     * Mints a token shaped exactly like {@code OrderCapabilityService.mint(orderId)}
+     * (design.md §3.1: subject = order id, scope = order-capability). Built directly
+     * against the JWT signer rather than through the service, which does not exist
+     * until wave 1 — once it does, both constructions sign with the same key and
+     * claim shape, so a token minted here is indistinguishable from a real one.
+     */
+    private String generateOrderToken(UUID orderId)
+    {
+        return Jwt.issuer("http://localhost:8080")
+                .subject(orderId.toString())
+                .claim("scope", "order-capability")
+                .expiresIn(Duration.ofMinutes(60))
+                .sign();
     }
 
     @Test
-    void updateContact_validBody_returns200()
+    void updateContact_noCredential_returns404AndDoesNotMutate()
     {
+        // Requirement 1.1/1.2: possession of the order id alone is no longer enough,
+        // for a guest order exactly as for a customer's. This is the test that used to
+        // be updateContact_validBody_returns200 and asserted 200 with no credential at
+        // all — that assertion is now the vulnerability, not the spec.
         UUID orderId = UUID.randomUUID();
         UUID shippingMethodId = UUID.randomUUID();
 
         OrderEntity order = new OrderEntity();
         order.setId(orderId);
         order.setTotalAmount(new BigDecimal("500.00"));
-        order.setStatus(OrderStatusEn.PENDING);
+        order.setStatus(OrderStatusEn.CREATED);
 
         ShippingMethodEntity shippingMethod = new ShippingMethodEntity();
         shippingMethod.setId(shippingMethodId);
@@ -68,6 +101,54 @@ class OrderContactResourceTest
                 .when()
                 .patch("/api/orders/{orderId}/contact", orderId)
                 .then()
+                .statusCode(404)
+                .body("error", equalTo("Order not found"));
+
+        // Not just the status: a 404 with the write still committed would pass a
+        // status-only assertion (design.md task 0.3's own warning).
+        assertNull(order.getContactEmail());
+    }
+
+    @Test
+    void updateContact_validToken_returns200()
+    {
+        UUID orderId = UUID.randomUUID();
+        UUID shippingMethodId = UUID.randomUUID();
+
+        OrderEntity order = new OrderEntity();
+        order.setId(orderId);
+        order.setTotalAmount(new BigDecimal("500.00"));
+        order.setStatus(OrderStatusEn.CREATED);
+
+        ShippingMethodEntity shippingMethod = new ShippingMethodEntity();
+        shippingMethod.setId(shippingMethodId);
+        shippingMethod.setName("Standard Delivery");
+        shippingMethod.setActive(true);
+        shippingMethod.setBaseFee(new BigDecimal("89.00"));
+
+        when(OrderEntity.findOrderInfoById(orderId)).thenReturn(order);
+        when(ShippingMethodEntity.findById(shippingMethodId)).thenReturn(shippingMethod);
+
+        String body = """
+                {
+                    "email": "test@example.com",
+                    "firstName": "John",
+                    "lastName": "Doe",
+                    "shippingMethodId": "%s",
+                    "streetAddress": "123 Main St",
+                    "city": "Cape Town",
+                    "province": "Western Cape",
+                    "postalCode": "8001"
+                }
+                """.formatted(shippingMethodId);
+
+        given()
+                .header("X-Order-Token", generateOrderToken(orderId))
+                .contentType(ContentType.JSON)
+                .body(body)
+                .when()
+                .patch("/api/orders/{orderId}/contact", orderId)
+                .then()
                 .statusCode(200)
                 .body("orderId", equalTo(orderId.toString()))
                 .body("contactEmail", equalTo("test@example.com"))
@@ -75,6 +156,46 @@ class OrderContactResourceTest
                 .body("contactLastName", equalTo("Doe"))
                 .body("shippingMethodId", equalTo(shippingMethodId.toString()))
                 .body("streetAddress", equalTo("123 Main St"));
+    }
+
+    @Test
+    void updateContact_anonymousCaller_customerOwnedOrder_returns404AndDoesNotMutate()
+    {
+        // The negative case that had never existed anywhere in the suite (design.md
+        // §5a, task 0.4): an anonymous caller — no Authorization, no X-Order-Token —
+        // acting on an order that belongs to a registered customer.
+        UUID orderId = UUID.randomUUID();
+
+        CustomerEntity owner = new CustomerEntity();
+        owner.setId(UUID.randomUUID());
+
+        OrderEntity order = new OrderEntity();
+        order.setId(orderId);
+        order.setTotalAmount(new BigDecimal("500.00"));
+        order.setStatus(OrderStatusEn.CREATED);
+        order.setCustomerEntity(owner);
+
+        when(OrderEntity.findOrderInfoById(orderId)).thenReturn(order);
+
+        String body = """
+                {
+                    "email": "attacker@example.com",
+                    "firstName": "New",
+                    "lastName": "Address",
+                    "streetAddress": "999 Redirect Ave"
+                }
+                """;
+
+        given()
+                .contentType(ContentType.JSON)
+                .body(body)
+                .when()
+                .patch("/api/orders/{orderId}/contact", orderId)
+                .then()
+                .statusCode(404)
+                .body("error", equalTo("Order not found"));
+
+        assertNull(order.getContactEmail());
     }
 
     @Test
@@ -103,6 +224,129 @@ class OrderContactResourceTest
     }
 
     @Test
+    void updateContact_customerJwtOwnOrder_returns200()
+    {
+        UUID orderId = UUID.randomUUID();
+        String email = "alice@test.com";
+
+        CustomerEntity customer = new CustomerEntity();
+        customer.setId(UUID.randomUUID());
+
+        OrderEntity order = new OrderEntity();
+        order.setId(orderId);
+        order.setTotalAmount(new BigDecimal("500.00"));
+        order.setStatus(OrderStatusEn.CREATED);
+        order.setCustomerEntity(customer);
+
+        when(OrderEntity.findOrderInfoById(orderId)).thenReturn(order);
+        when(CustomerEntity.findByEmail(email)).thenReturn(customer);
+
+        String body = """
+                {
+                    "email": "alice@test.com",
+                    "firstName": "Alice",
+                    "lastName": "Test"
+                }
+                """;
+
+        given()
+                .header("Authorization", "Bearer " + generateCustomerJwt(email))
+                .contentType(ContentType.JSON)
+                .body(body)
+                .when()
+                .patch("/api/orders/{orderId}/contact", orderId)
+                .then()
+                .statusCode(200)
+                .body("contactEmail", equalTo("alice@test.com"));
+    }
+
+    @Test
+    void updateContact_customerJwtOtherCustomersOrder_returns404AndDoesNotMutate()
+    {
+        // A signed-in customer must not be able to rewrite another customer's
+        // in-progress order just by knowing/guessing its ID. Reports as "not
+        // found" (not "forbidden") so the endpoint can't be used to enumerate
+        // which order IDs exist.
+        UUID orderId = UUID.randomUUID();
+        String callerEmail = "alice@test.com";
+
+        CustomerEntity caller = new CustomerEntity();
+        caller.setId(UUID.randomUUID());
+
+        CustomerEntity owner = new CustomerEntity();
+        owner.setId(UUID.randomUUID());
+
+        OrderEntity order = new OrderEntity();
+        order.setId(orderId);
+        order.setTotalAmount(new BigDecimal("500.00"));
+        order.setStatus(OrderStatusEn.CREATED);
+        order.setCustomerEntity(owner);
+
+        when(OrderEntity.findOrderInfoById(orderId)).thenReturn(order);
+        when(CustomerEntity.findByEmail(callerEmail)).thenReturn(caller);
+
+        String body = """
+                {
+                    "email": "attacker@example.com",
+                    "firstName": "New",
+                    "lastName": "Address",
+                    "streetAddress": "999 Redirect Ave"
+                }
+                """;
+
+        given()
+                .header("Authorization", "Bearer " + generateCustomerJwt(callerEmail))
+                .contentType(ContentType.JSON)
+                .body(body)
+                .when()
+                .patch("/api/orders/{orderId}/contact", orderId)
+                .then()
+                .statusCode(404)
+                .body("error", equalTo("Order not found"));
+
+        assertNull(order.getContactEmail());
+    }
+
+    @Test
+    void updateContact_orderNotCreated_returns409AndDoesNotMutate()
+    {
+        // Once an order has left CREATED (e.g. paid via PayFast, or fulfilled/
+        // cancelled by staff), contact/address/shipping must be frozen — otherwise
+        // this endpoint can silently redirect a paid order's delivery address or
+        // rewrite its contact email after the fact.
+        UUID orderId = UUID.randomUUID();
+
+        OrderEntity order = new OrderEntity();
+        order.setId(orderId);
+        order.setTotalAmount(new BigDecimal("500.00"));
+        order.setStatus(OrderStatusEn.PAID);
+
+        when(OrderEntity.findOrderInfoById(orderId)).thenReturn(order);
+
+        String body = """
+                {
+                    "email": "attacker@example.com",
+                    "firstName": "New",
+                    "lastName": "Address",
+                    "streetAddress": "999 Redirect Ave"
+                }
+                """;
+
+        given()
+                .header("X-Order-Token", generateOrderToken(orderId))
+                .contentType(ContentType.JSON)
+                .body(body)
+                .when()
+                .patch("/api/orders/{orderId}/contact", orderId)
+                .then()
+                .statusCode(409)
+                .body("error", equalTo("Order can no longer be modified"));
+
+        assertNull(order.getContactEmail());
+        assertEquals(0, order.getTotalAmount().compareTo(new BigDecimal("500.00")));
+    }
+
+    @Test
     void updateContact_invalidShippingMethodId_returns422()
     {
         UUID orderId = UUID.randomUUID();
@@ -111,7 +355,7 @@ class OrderContactResourceTest
         OrderEntity order = new OrderEntity();
         order.setId(orderId);
         order.setTotalAmount(new BigDecimal("500.00"));
-        order.setStatus(OrderStatusEn.PENDING);
+        order.setStatus(OrderStatusEn.CREATED);
 
         when(OrderEntity.findOrderInfoById(orderId)).thenReturn(order);
         when(ShippingMethodEntity.findById(invalidShippingMethodId)).thenReturn(null);
@@ -126,6 +370,7 @@ class OrderContactResourceTest
                 """.formatted(invalidShippingMethodId);
 
         given()
+                .header("X-Order-Token", generateOrderToken(orderId))
                 .contentType(ContentType.JSON)
                 .body(body)
                 .when()
@@ -147,7 +392,7 @@ class OrderContactResourceTest
         OrderEntity order = new OrderEntity();
         order.setId(orderId);
         order.setTotalAmount(new BigDecimal("115.00")); // stale: created with the default estimate
-        order.setStatus(OrderStatusEn.PENDING);
+        order.setStatus(OrderStatusEn.CREATED);
         order.getItems().add(orderItem(new BigDecimal("100.00"), 2));
 
         ShippingMethodEntity express = new ShippingMethodEntity();
@@ -174,6 +419,7 @@ class OrderContactResourceTest
 
         // 200 subtotal + 30 VAT (15%) + 250 delivery = 480
         given()
+                .header("X-Order-Token", generateOrderToken(orderId))
                 .contentType(ContentType.JSON)
                 .body(body)
                 .when()
@@ -201,7 +447,7 @@ class OrderContactResourceTest
         OrderEntity order = new OrderEntity();
         order.setId(orderId);
         order.setTotalAmount(new BigDecimal("1.00"));
-        order.setStatus(OrderStatusEn.PENDING);
+        order.setStatus(OrderStatusEn.CREATED);
         order.getItems().add(orderItem(new BigDecimal("19.99"), 3));
         order.getItems().add(orderItem(new BigDecimal("5.50"), 2));
 
@@ -210,6 +456,10 @@ class OrderContactResourceTest
         collection.setName("In-Store Pickup");
         collection.setActive(true);
         collection.setBaseFee(BigDecimal.ZERO);
+        // Collection: the shopper comes to the store, so no address is required. Stated
+        // rather than inferred — a free same-day collection is indistinguishable from a
+        // free same-day delivery by fee and lead time alone.
+        collection.setRequiresAddress(false);
 
         when(OrderEntity.findOrderInfoById(orderId)).thenReturn(order);
         when(ShippingMethodEntity.findById(shippingMethodId)).thenReturn(collection);
@@ -228,6 +478,7 @@ class OrderContactResourceTest
         // zero fee serialises as `0` (Integer) while 70.97 serialises as a
         // Float, so a typed matcher passes on one and fails on the other.
         io.restassured.response.Response response = given()
+                .header("X-Order-Token", generateOrderToken(orderId))
                 .contentType(ContentType.JSON)
                 .body(body)
                 .when()
@@ -271,7 +522,7 @@ class OrderContactResourceTest
         OrderEntity order = new OrderEntity();
         order.setId(orderId);
         order.setTotalAmount(new BigDecimal("250.00"));
-        order.setStatus(OrderStatusEn.PENDING);
+        order.setStatus(OrderStatusEn.CREATED);
         order.setCustomerEntity(null); // Guest order — no customer
 
         when(OrderEntity.findOrderInfoById(orderId)).thenReturn(order);
@@ -285,6 +536,7 @@ class OrderContactResourceTest
                 """;
 
         given()
+                .header("X-Order-Token", generateOrderToken(orderId))
                 .contentType(ContentType.JSON)
                 .body(body)
                 .when()

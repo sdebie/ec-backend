@@ -16,7 +16,6 @@ import static org.mockito.Mockito.when;
 
 /**
  * Tests for the public storefront page content endpoint.
- * Validates: Requirements 2.1, 2.2, 2.3, 2.4
  */
 @QuarkusTest
 class StorefrontPageResourceTest {

@@ -56,6 +56,13 @@ class QuoteRequestMailerTest
         var fromField = QuoteRequestMailer.class.getDeclaredField("mailerFrom");
         fromField.setAccessible(true);
         fromField.set(mailer, CONFIGURED_FROM);
+
+        // Real resolver over the mocked settings repository — recipient resolution
+        // stays end-to-end here, so a wiring break fails these tests too.
+        EnquiryRecipientResolver resolver = new EnquiryRecipientResolver();
+        resolver.settingsRepository = settingsRepository;
+        resolver.objectMapper = objectMapper;
+        mailer.enquiryRecipientResolver = resolver;
     }
 
     // ── Helpers ─────────────────────────────────────────────────────────────
@@ -101,84 +108,6 @@ class QuoteRequestMailerTest
         return instance;
     }
 
-    // ── Recipient resolution tests ──────────────────────────────────────────
-
-    @Nested
-    @DisplayName("resolveRecipient — reads enquiryEmail from storefront.contact config")
-    class RecipientResolutionTests
-    {
-
-        @Test
-        @DisplayName("resolves enquiryEmail when present in the storefront.contact JSON")
-        void resolvesFromConfig()
-        {
-            when(settingsRepository.findById("storefront.contact"))
-                    .thenReturn(settingWith("{\"enquiryEmail\":\"quotes@store.co.za\"}"));
-
-            String recipient = mailer.resolveRecipient();
-
-            assertEquals("quotes@store.co.za", recipient);
-        }
-
-        @Test
-        @DisplayName("returns null when setting row is missing")
-        void returnsNullWhenSettingMissing()
-        {
-            when(settingsRepository.findById("storefront.contact")).thenReturn(null);
-
-            assertNull(mailer.resolveRecipient());
-        }
-
-        @Test
-        @DisplayName("returns null when setting value is blank")
-        void returnsNullWhenValueBlank()
-        {
-            when(settingsRepository.findById("storefront.contact"))
-                    .thenReturn(settingWith("   "));
-
-            assertNull(mailer.resolveRecipient());
-        }
-
-        @Test
-        @DisplayName("returns null when enquiryEmail field is blank")
-        void returnsNullWhenEnquiryEmailBlank()
-        {
-            when(settingsRepository.findById("storefront.contact"))
-                    .thenReturn(settingWith("{\"enquiryEmail\":\"   \"}"));
-
-            assertNull(mailer.resolveRecipient());
-        }
-
-        @Test
-        @DisplayName("returns null when enquiryEmail field is null in JSON")
-        void returnsNullWhenEnquiryEmailNull()
-        {
-            when(settingsRepository.findById("storefront.contact"))
-                    .thenReturn(settingWith("{\"enquiryEmail\":null}"));
-
-            assertNull(mailer.resolveRecipient());
-        }
-
-        @Test
-        @DisplayName("returns null when enquiryEmail field is absent")
-        void returnsNullWhenFieldAbsent()
-        {
-            when(settingsRepository.findById("storefront.contact"))
-                    .thenReturn(settingWith("{\"phone\":\"0211234567\"}"));
-
-            assertNull(mailer.resolveRecipient());
-        }
-
-        @Test
-        @DisplayName("returns null when JSON is malformed")
-        void returnsNullWhenJsonMalformed()
-        {
-            when(settingsRepository.findById("storefront.contact"))
-                    .thenReturn(settingWith("not valid json {{{"));
-
-            assertNull(mailer.resolveRecipient());
-        }
-    }
 
     // ── onSubmitted behaviour tests ─────────────────────────────────────────
 

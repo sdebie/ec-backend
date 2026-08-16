@@ -23,7 +23,6 @@ import static org.hamcrest.Matchers.*;
  * Integration tests for AdminTestimonialResource and StorefrontTestimonialResource.
  * Uses a real DB with full HTTP round-trips — tests the CRUD flow and role enforcement.
  *
- * Validates: Requirements 2.1, 2.2, 2.3, 4.3, 5.1, 5.2
  */
 @QuarkusTest
 @DisplayName("AdminTestimonialResource — integration tests")

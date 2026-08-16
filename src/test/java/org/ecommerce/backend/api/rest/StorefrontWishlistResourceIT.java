@@ -24,7 +24,6 @@ import static org.mockito.Mockito.when;
 /**
  * Integration test for StorefrontWishlistResource.
  * Tests the full HTTP round-trip with JWT authentication.
- * Validates: Requirements 4.1, 4.2, 4.3, 4.4, 4.5, 4.6
  */
 @QuarkusTest
 class StorefrontWishlistResourceIT
@@ -34,7 +33,6 @@ class StorefrontWishlistResourceIT
     @InjectMock
     WishlistService wishlistService;
 
-    private CustomerEntity customer;
     private UUID customerId;
     private UUID existingVariantId;
 
@@ -52,7 +50,7 @@ class StorefrontWishlistResourceIT
         user.setPasswordHash("somehash");
         user.setActive(true);
 
-        customer = new CustomerEntity();
+        CustomerEntity customer = new CustomerEntity();
         customer.setId(customerId);
         customer.setUser(user);
         customer.setFirstName("Test");
@@ -66,9 +64,9 @@ class StorefrontWishlistResourceIT
         when(CustomerEntity.findByEmail(CUSTOMER_EMAIL)).thenReturn(customer);
     }
 
-    private String generateCustomerJwt(String email)
+    private String generateCustomerJwt()
     {
-        return Jwt.subject(email)
+        return Jwt.subject(StorefrontWishlistResourceIT.CUSTOMER_EMAIL)
                 .issuer("http://localhost:8080")
                 .groups("customer")
                 .sign();
@@ -82,7 +80,7 @@ class StorefrontWishlistResourceIT
         when(wishlistService.getWishlistVariantIds(customerId))
                 .thenReturn(Collections.emptyList());
 
-        String token = generateCustomerJwt(CUSTOMER_EMAIL);
+        String token = generateCustomerJwt();
 
         given()
                 .header("Authorization", "Bearer " + token)
@@ -112,7 +110,7 @@ class StorefrontWishlistResourceIT
         when(wishlistService.getWishlistVariantIds(customerId))
                 .thenReturn(List.of(variantId1, variantId2));
 
-        String token = generateCustomerJwt(CUSTOMER_EMAIL);
+        String token = generateCustomerJwt();
 
         given()
                 .header("Authorization", "Bearer " + token)
@@ -133,7 +131,7 @@ class StorefrontWishlistResourceIT
         when(wishlistService.addToWishlist(customerId, existingVariantId))
                 .thenReturn(WishlistService.AddResult.CREATED);
 
-        String token = generateCustomerJwt(CUSTOMER_EMAIL);
+        String token = generateCustomerJwt();
 
         given()
                 .header("Authorization", "Bearer " + token)
@@ -149,7 +147,7 @@ class StorefrontWishlistResourceIT
         when(wishlistService.addToWishlist(customerId, existingVariantId))
                 .thenReturn(WishlistService.AddResult.ALREADY_EXISTS);
 
-        String token = generateCustomerJwt(CUSTOMER_EMAIL);
+        String token = generateCustomerJwt();
 
         given()
                 .header("Authorization", "Bearer " + token)
@@ -166,7 +164,7 @@ class StorefrontWishlistResourceIT
         when(wishlistService.addToWishlist(customerId, nonExistentVariantId))
                 .thenReturn(WishlistService.AddResult.VARIANT_NOT_FOUND);
 
-        String token = generateCustomerJwt(CUSTOMER_EMAIL);
+        String token = generateCustomerJwt();
 
         given()
                 .header("Authorization", "Bearer " + token)
@@ -180,7 +178,7 @@ class StorefrontWishlistResourceIT
     @Test
     void addToWishlist_invalidUuidFormat_returns400()
     {
-        String token = generateCustomerJwt(CUSTOMER_EMAIL);
+        String token = generateCustomerJwt();
 
         given()
                 .header("Authorization", "Bearer " + token)
@@ -207,7 +205,7 @@ class StorefrontWishlistResourceIT
     void removeFromWishlist_existingEntry_returns204()
     {
         // removeFromWishlist is void — no setup needed for "success" case
-        String token = generateCustomerJwt(CUSTOMER_EMAIL);
+        String token = generateCustomerJwt();
 
         given()
                 .header("Authorization", "Bearer " + token)
@@ -223,7 +221,7 @@ class StorefrontWishlistResourceIT
         // Idempotent: removing something not in the wishlist still returns 204
         UUID otherVariantId = UUID.randomUUID();
 
-        String token = generateCustomerJwt(CUSTOMER_EMAIL);
+        String token = generateCustomerJwt();
 
         given()
                 .header("Authorization", "Bearer " + token)
@@ -246,7 +244,7 @@ class StorefrontWishlistResourceIT
     @Test
     void removeFromWishlist_invalidUuid_returns400()
     {
-        String token = generateCustomerJwt(CUSTOMER_EMAIL);
+        String token = generateCustomerJwt();
 
         given()
                 .header("Authorization", "Bearer " + token)
@@ -266,7 +264,7 @@ class StorefrontWishlistResourceIT
         when(wishlistService.addToWishlist(customerId, existingVariantId))
                 .thenReturn(WishlistService.AddResult.CREATED);
 
-        String token = generateCustomerJwt(CUSTOMER_EMAIL);
+        String token = generateCustomerJwt();
 
         // POST to add variant
         given()
@@ -297,7 +295,7 @@ class StorefrontWishlistResourceIT
         when(wishlistService.getWishlistVariantIds(customerId))
                 .thenReturn(List.of(existingVariantId));
 
-        String token = generateCustomerJwt(CUSTOMER_EMAIL);
+        String token = generateCustomerJwt();
 
         // Verify item is there
         given()

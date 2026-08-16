@@ -1,7 +1,6 @@
 package org.ecommerce.backend.service;
 
 // Feature: wholesale-application-review-workflow, Property 1: Decision guard and state transition, Property 2: Rejection reason invariant
-// Validates: Requirements 2.2, 2.3, 3.1, 3.3
 
 import io.quarkus.test.TestTransaction;
 import io.quarkus.test.junit.QuarkusTest;

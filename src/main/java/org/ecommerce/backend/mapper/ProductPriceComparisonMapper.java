@@ -1,40 +1,32 @@
 package org.ecommerce.backend.mapper;
 
-import jakarta.enterprise.context.ApplicationScoped;
 import org.ecommerce.common.dto.ProductPriceComparisonDto;
 import org.ecommerce.common.entity.ProductPriceUploadStagedEntity;
+import org.mapstruct.Mapper;
+import org.mapstruct.Mapping;
 
 import java.util.List;
-import java.util.stream.Collectors;
+
+import static org.mapstruct.NullValueCheckStrategy.ALWAYS;
+import static org.mapstruct.ReportingPolicy.ERROR;
+import static org.mapstruct.NullValueMappingStrategy.RETURN_NULL;
+import static org.mapstruct.NullValuePropertyMappingStrategy.SET_TO_NULL;
 
 /**
  * Maps staged price-import rows to the comparison DTO the admin review screen shows.
- * Pure field copy — extracted from {@code ProductPriceImportService}.
+ * <p>
+ * Same proposed-versus-current pairing as {@link ProductComparisonMapper}, narrowed to the
+ * two price tiers a price import can change.
  */
-@ApplicationScoped
-public class ProductPriceComparisonMapper
+@Mapper(componentModel = "jakarta-cdi", unmappedTargetPolicy = ERROR, nullValueMappingStrategy = RETURN_NULL,
+        nullValuePropertyMappingStrategy = SET_TO_NULL,
+        nullValueCheckStrategy = ALWAYS)
+public interface ProductPriceComparisonMapper
 {
+    @Mapping(target = "stagedId", source = "id")
+    @Mapping(target = "proposedRetailPrice", source = "retailPrice")
+    @Mapping(target = "proposedWholesalePrice", source = "wholesalePrice")
+    ProductPriceComparisonDto toDto(ProductPriceUploadStagedEntity staged);
 
-    public ProductPriceComparisonDto toDto(ProductPriceUploadStagedEntity productPriceUploadStagedEntity)
-    {
-        ProductPriceComparisonDto dto = new ProductPriceComparisonDto();
-        dto.setStagedId(productPriceUploadStagedEntity.getId());
-        dto.setSku(productPriceUploadStagedEntity.getSku());
-        dto.setValidationErrors(productPriceUploadStagedEntity.getValidationErrors());
-        dto.setValidationStatus(productPriceUploadStagedEntity.getValidationStatus());
-        dto.setProposedRetailPrice(productPriceUploadStagedEntity.getRetailPrice());
-        dto.setProposedWholesalePrice(productPriceUploadStagedEntity.getWholesalePrice());
-        dto.setCurrentRetailPrice(productPriceUploadStagedEntity.getCurrentRetailPrice());
-        dto.setCurrentWholesalePrice(productPriceUploadStagedEntity.getCurrentWholesalePrice());
-        dto.setHasChanges(Boolean.TRUE.equals(productPriceUploadStagedEntity.getHasChanges()));
-        return dto;
-    }
-
-    public List<ProductPriceComparisonDto> toDtos(List<ProductPriceUploadStagedEntity> productPriceUploadStagedEntities)
-    {
-        return productPriceUploadStagedEntities
-                .stream()
-                .map(this::toDto)
-                .collect(Collectors.toList());
-    }
+    List<ProductPriceComparisonDto> toDtos(List<ProductPriceUploadStagedEntity> staged);
 }

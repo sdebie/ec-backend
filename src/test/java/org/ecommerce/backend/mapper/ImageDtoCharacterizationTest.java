@@ -44,9 +44,10 @@ class ImageDtoCharacterizationTest
     {
         productMapper = Mappers.getMapper(ProductMapper.class);
 
-        orderMapper = new OrderMapper();
-        // Inject the productMapper into the OrderMapper's @Inject field
-        Field pmField = OrderMapper.class.getDeclaredField("productMapper");
+        orderMapper = new OrderMapperImpl();
+        // The mapper is CDI-wired in production; constructed directly here, so its
+        // collaborator is set by hand. The field lives on the generated impl.
+        Field pmField = OrderMapperImpl.class.getDeclaredField("productMapper");
         pmField.setAccessible(true);
         pmField.set(orderMapper, productMapper);
     }
@@ -158,11 +159,27 @@ class ImageDtoCharacterizationTest
         }
 
         @Test
-        @DisplayName("ProductImageDto has exactly four fields: id, imageUrl, sortOrder, isFeatured")
-        void fieldCount()
+        @DisplayName("altText maps through from the entity; absent stays null")
+        void altText_mapsThrough()
         {
-            Field[] fields = ProductImageDto.class.getDeclaredFields();
-            assertEquals(4, fields.length, "ProductImageDto must have exactly 4 fields");
+            ProductImageEntity withAlt = imageEntity(UUID.randomUUID(), "/img.jpg", 0, true);
+            withAlt.setAltText("Hero shot of the product");
+            assertEquals("Hero shot of the product", productMapper.mapImageEntityToDto(withAlt).getAltText());
+
+            ProductImageEntity withoutAlt = imageEntity(UUID.randomUUID(), "/img.jpg", 0, true);
+            assertNull(productMapper.mapImageEntityToDto(withoutAlt).getAltText(),
+                    "images without alt text must expose null, not empty string");
+        }
+
+        @Test
+        @DisplayName("ProductImageDto has exactly the fields: id, imageUrl, sortOrder, isFeatured, altText")
+        void fieldShape()
+        {
+            var fieldNames = java.util.Arrays.stream(ProductImageDto.class.getDeclaredFields())
+                    .map(Field::getName)
+                    .collect(java.util.stream.Collectors.toSet());
+            assertEquals(java.util.Set.of("id", "imageUrl", "sortOrder", "featured", "altText"), fieldNames,
+                    "ProductImageDto shape changed — update this characterization deliberately");
         }
     }
 
@@ -243,13 +260,7 @@ class ImageDtoCharacterizationTest
 
         private OrderItemDetailDto invokeToItemDetailDto(OrderItemEntity item)
         {
-            try {
-                var method = OrderMapper.class.getDeclaredMethod("toItemDetailDto", OrderItemEntity.class);
-                method.setAccessible(true);
-                return (OrderItemDetailDto) method.invoke(orderMapper, item);
-            } catch (Exception e) {
-                throw new RuntimeException("Failed to invoke toItemDetailDto", e);
-            }
+            return orderMapper.toItemDetailDto(item);
         }
     }
 
@@ -365,13 +376,7 @@ class ImageDtoCharacterizationTest
 
         private OrderItemDetailDto invokeToItemDetailDto(OrderItemEntity item)
         {
-            try {
-                var method = OrderMapper.class.getDeclaredMethod("toItemDetailDto", OrderItemEntity.class);
-                method.setAccessible(true);
-                return (OrderItemDetailDto) method.invoke(orderMapper, item);
-            } catch (Exception e) {
-                throw new RuntimeException("Failed to invoke toItemDetailDto", e);
-            }
+            return orderMapper.toItemDetailDto(item);
         }
     }
 }

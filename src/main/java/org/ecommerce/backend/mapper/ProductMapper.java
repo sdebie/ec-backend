@@ -1,35 +1,33 @@
 package org.ecommerce.backend.mapper;
 
+import org.ecommerce.backend.utils.PriceUtils;
 import org.ecommerce.common.dto.*;
 import org.ecommerce.common.entity.*;
-import org.ecommerce.common.enums.PriceTypeEn;
 import org.ecommerce.common.enums.ProductStatusEn;
 import org.ecommerce.common.enums.ProductTypeEn;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 
-import java.time.LocalDate;
-import java.time.temporal.ChronoUnit;
+import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
 
 import static org.mapstruct.NullValueCheckStrategy.ALWAYS;
+import static org.mapstruct.ReportingPolicy.ERROR;
 import static org.mapstruct.NullValueMappingStrategy.RETURN_NULL;
 import static org.mapstruct.NullValuePropertyMappingStrategy.SET_TO_NULL;
 
-@Mapper(componentModel = "cdi",
+@Mapper(componentModel = "jakarta-cdi", unmappedTargetPolicy = ERROR, uses = TimestampMapper.class,
         nullValueMappingStrategy = RETURN_NULL,
         nullValuePropertyMappingStrategy = SET_TO_NULL,
         nullValueCheckStrategy = ALWAYS)
 public interface ProductMapper
 {
-    @Mapping(target = "id", expression = "java(entity.getId() == null ? null : entity.getId().toString())")
     @Mapping(target = "featured", expression = "java(entity.getIsFeatured() != null && entity.getIsFeatured())")
     ProductImageDto mapImageEntityToDto(ProductImageEntity entity);
 
     List<ProductImageDto> mapImageEntitiesToDtos(List<ProductImageEntity> entities);
 
-    @Mapping(target = "id", expression = "java(entity.getId() == null ? null : entity.getId().toString())")
     @Mapping(target = "product", ignore = true)
     @Mapping(target = "prices", source = "prices")
     @Mapping(target = "images", source = "images")
@@ -37,8 +35,6 @@ public interface ProductMapper
 
     List<ProductVariantDto> mapVariantEntitiesToDtos(List<ProductVariantEntity> entities);
 
-    @Mapping(target = "id", expression = "java(entity.getId() == null ? null : entity.getId().toString())")
-    @Mapping(target = "priceType", expression = "java(entity.getPriceType() == null ? null : entity.getPriceType().name())")
     @Mapping(target = "isActive", expression = "java(entity.isActive())")
     @Mapping(target = "saleDaysRemaining", expression = "java(calculateSaleDaysRemaining(entity))")
     org.ecommerce.common.dto.VariantPriceDto mapPriceEntityToDto(org.ecommerce.common.entity.VariantPricesEntity entity);
@@ -47,11 +43,9 @@ public interface ProductMapper
 
     BrandDto mapBrandEntityToDto(BrandEntity entity);
 
-    @Mapping(target = "id", expression = "java(entity.getId() == null ? null : entity.getId().toString())")
     @Mapping(target = "shortDescription", source = "shortDescription")
-    @Mapping(target = "productType", expression = "java(entity.getProductType() == null ? null : entity.getProductType().name())")
     @Mapping(target = "status", ignore = true)
-    @Mapping(target = "createdAt", expression = "java(entity.getCreatedAt() == null ? null : entity.getCreatedAt().toString())")
+    @Mapping(target = "createdAt", source = "createdAt")
     @Mapping(target = "category", expression = "java(mapPrimaryCategory(entity))")
     @Mapping(target = "categories", expression = "java(mapCategoryList(entity))")
     @Mapping(target = "brand", source = "brand")
@@ -120,18 +114,11 @@ public interface ProductMapper
 
     default Long calculateSaleDaysRemaining(VariantPricesEntity variantPricesEntity)
     {
-        if (variantPricesEntity == null || variantPricesEntity.getPriceType() == null || variantPricesEntity.getPriceEndDate() == null) {
+        if (variantPricesEntity == null) {
             return null;
         }
-
-        if (variantPricesEntity.getPriceType() != PriceTypeEn.RETAIL_SALE_PRICE && variantPricesEntity.getPriceType() != PriceTypeEn.WHOLESALE_SALE_PRICE) {
-            return null;
-        }
-
-        LocalDate today = LocalDate.now();
-        LocalDate endDate = variantPricesEntity.getPriceEndDate().toLocalDate();
-        long daysRemaining = ChronoUnit.DAYS.between(today, endDate);
-        return Math.max(daysRemaining, 0L);
+        return PriceUtils.saleDaysRemaining(variantPricesEntity.getPriceType(),
+                variantPricesEntity.getPriceEndDate(), LocalDateTime.now());
     }
 
     default CategoryDto mapPrimaryCategory(ProductEntity productEntity)
@@ -153,4 +140,5 @@ public interface ProductMapper
                 .map(this::mapCategoryEntityToDto)
                 .toList();
     }
+
 }

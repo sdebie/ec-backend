@@ -10,7 +10,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import static io.restassured.RestAssured.given;
-import static org.hamcrest.Matchers.*;
+import static org.hamcrest.Matchers.anyOf;
+import static org.hamcrest.Matchers.is;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
@@ -24,37 +25,40 @@ import static org.mockito.Mockito.*;
  * users in the test DB). This proves the limiter correctly short-circuits before credential
  * evaluation when denied.
  * <p>
- * Validates: Requirements 4.1, 4.2, 4.4, 9.2
  */
 @QuarkusTest
 @DisplayName("CustomerLoginRateLimitIT — customer login + Google login rate limiting")
-class CustomerLoginRateLimitIT {
+class CustomerLoginRateLimitIT
+{
 
     @InjectMock
     RateLimiterService rateLimiterService;
 
     @BeforeEach
-    void setUp() {
+    void setUp()
+    {
         // Default: allow all requests
         when(rateLimiterService.check(anyString(), anyString(), anyInt(), anyLong()))
                 .thenReturn(new RateLimitDecision(true, 0));
     }
 
-    private String loginPayload(String email, String password) {
+    private String loginPayload(String email)
+    {
         return """
                 {
                     "email": "%s",
                     "password": "%s"
                 }
-                """.formatted(email, password);
+                """.formatted(email, "password123");
     }
 
-    private String googleLoginPayload(String idToken) {
+    private String googleLoginPayload()
+    {
         return """
                 {
                     "idToken": "%s"
                 }
-                """.formatted(idToken);
+                """.formatted("some-fake-id-token");
     }
 
     // ════════════════════════════════════════════════════════════════════════
@@ -63,14 +67,15 @@ class CustomerLoginRateLimitIT {
 
     @Test
     @DisplayName("customer login: exceeding IP rate limit returns 429 with Retry-After header")
-    void customerLogin_ipLimitExceeded_returns429WithRetryAfter() {
+    void customerLogin_ipLimitExceeded_returns429WithRetryAfter()
+    {
         when(rateLimiterService.check(eq("customer-login"), anyString(), anyInt(), anyLong()))
                 .thenReturn(new RateLimitDecision(false, 180));
 
         given()
                 .contentType(ContentType.JSON)
                 .header("X-Forwarded-For", "192.0.2.10")
-                .body(loginPayload("customer@test.com", "password123"))
+                .body(loginPayload("customer@test.com"))
                 .when()
                 .post("/api/customers/login")
                 .then()
@@ -80,14 +85,15 @@ class CustomerLoginRateLimitIT {
 
     @Test
     @DisplayName("customer login: IP denial does NOT increment the email limiter counter")
-    void customerLogin_ipDenied_emailLimiterNotConsulted() {
+    void customerLogin_ipDenied_emailLimiterNotConsulted()
+    {
         when(rateLimiterService.check(eq("customer-login"), anyString(), anyInt(), anyLong()))
                 .thenReturn(new RateLimitDecision(false, 90));
 
         given()
                 .contentType(ContentType.JSON)
                 .header("X-Forwarded-For", "192.0.2.10")
-                .body(loginPayload("customer@test.com", "password123"))
+                .body(loginPayload("customer@test.com"))
                 .when()
                 .post("/api/customers/login")
                 .then()
@@ -103,7 +109,8 @@ class CustomerLoginRateLimitIT {
 
     @Test
     @DisplayName("customer login: exceeding email rate limit returns 429 with Retry-After header")
-    void customerLogin_emailLimitExceeded_returns429WithRetryAfter() {
+    void customerLogin_emailLimitExceeded_returns429WithRetryAfter()
+    {
         // IP passes
         when(rateLimiterService.check(eq("customer-login"), anyString(), anyInt(), anyLong()))
                 .thenReturn(new RateLimitDecision(true, 0));
@@ -114,7 +121,7 @@ class CustomerLoginRateLimitIT {
         given()
                 .contentType(ContentType.JSON)
                 .header("X-Forwarded-For", "192.0.2.11")
-                .body(loginPayload("customer@test.com", "password123"))
+                .body(loginPayload("customer@test.com"))
                 .when()
                 .post("/api/customers/login")
                 .then()
@@ -128,11 +135,12 @@ class CustomerLoginRateLimitIT {
 
     @Test
     @DisplayName("customer login: email key is normalised to lowercase and trimmed")
-    void customerLogin_emailKeyNormalisedLowercaseTrimmed() {
+    void customerLogin_emailKeyNormalisedLowercaseTrimmed()
+    {
         given()
                 .contentType(ContentType.JSON)
                 .header("X-Forwarded-For", "192.0.2.12")
-                .body(loginPayload("  Customer@Test.COM  ", "password123"))
+                .body(loginPayload("  Customer@Test.COM  "))
                 .when()
                 .post("/api/customers/login")
                 .then()
@@ -148,7 +156,8 @@ class CustomerLoginRateLimitIT {
 
     @Test
     @DisplayName("customer login: recovery after rate limit window expires")
-    void customerLogin_recoveryAfterWindow() {
+    void customerLogin_recoveryAfterWindow()
+    {
         // First: denied
         when(rateLimiterService.check(eq("customer-login"), anyString(), anyInt(), anyLong()))
                 .thenReturn(new RateLimitDecision(false, 2));
@@ -156,7 +165,7 @@ class CustomerLoginRateLimitIT {
         given()
                 .contentType(ContentType.JSON)
                 .header("X-Forwarded-For", "192.0.2.13")
-                .body(loginPayload("customer@test.com", "password123"))
+                .body(loginPayload("customer@test.com"))
                 .when()
                 .post("/api/customers/login")
                 .then()
@@ -171,7 +180,7 @@ class CustomerLoginRateLimitIT {
         given()
                 .contentType(ContentType.JSON)
                 .header("X-Forwarded-For", "192.0.2.13")
-                .body(loginPayload("customer@test.com", "password123"))
+                .body(loginPayload("customer@test.com"))
                 .when()
                 .post("/api/customers/login")
                 .then()
@@ -184,11 +193,12 @@ class CustomerLoginRateLimitIT {
 
     @Test
     @DisplayName("customer login: X-Forwarded-For LAST entry (proxy-appended) is the resolved IP for the limiter")
-    void customerLogin_xForwardedForLastEntryUsedForIpLimiter() {
+    void customerLogin_xForwardedForLastEntryUsedForIpLimiter()
+    {
         given()
                 .contentType(ContentType.JSON)
                 .header("X-Forwarded-For", "203.0.113.42, 10.0.0.1")
-                .body(loginPayload("customer@test.com", "password123"))
+                .body(loginPayload("customer@test.com"))
                 .when()
                 .post("/api/customers/login")
                 .then()
@@ -199,12 +209,13 @@ class CustomerLoginRateLimitIT {
 
     @Test
     @DisplayName("customer login: CF-Connecting-IP takes precedence over X-Forwarded-For")
-    void customerLogin_cfConnectingIpTakesPrecedence() {
+    void customerLogin_cfConnectingIpTakesPrecedence()
+    {
         given()
                 .contentType(ContentType.JSON)
                 .header("CF-Connecting-IP", "203.0.113.8")
                 .header("X-Forwarded-For", "6.6.6.6, 10.0.0.1")
-                .body(loginPayload("customer@test.com", "password123"))
+                .body(loginPayload("customer@test.com"))
                 .when()
                 .post("/api/customers/login")
                 .then()
@@ -215,11 +226,12 @@ class CustomerLoginRateLimitIT {
 
     @Test
     @DisplayName("customer login: falls back to X-Real-IP when X-Forwarded-For is absent")
-    void customerLogin_xRealIpFallback() {
+    void customerLogin_xRealIpFallback()
+    {
         given()
                 .contentType(ContentType.JSON)
                 .header("X-Real-IP", "198.51.100.7")
-                .body(loginPayload("customer@test.com", "password123"))
+                .body(loginPayload("customer@test.com"))
                 .when()
                 .post("/api/customers/login")
                 .then()
@@ -234,7 +246,8 @@ class CustomerLoginRateLimitIT {
 
     @Test
     @DisplayName("customer login: missing email/password returns 400 without consulting rate limiter")
-    void customerLogin_missingBody_returns400_noLimiterConsulted() {
+    void customerLogin_missingBody_returns400_noLimiterConsulted()
+    {
         String payload = """
                 {
                     "email": null,
@@ -261,14 +274,15 @@ class CustomerLoginRateLimitIT {
 
     @Test
     @DisplayName("Google login: exceeding IP rate limit returns 429 with Retry-After header")
-    void googleLogin_ipLimitExceeded_returns429WithRetryAfter() {
+    void googleLogin_ipLimitExceeded_returns429WithRetryAfter()
+    {
         when(rateLimiterService.check(eq("google-login"), anyString(), anyInt(), anyLong()))
                 .thenReturn(new RateLimitDecision(false, 300));
 
         given()
                 .contentType(ContentType.JSON)
                 .header("X-Forwarded-For", "192.0.2.20")
-                .body(googleLoginPayload("some-fake-id-token"))
+                .body(googleLoginPayload())
                 .when()
                 .post("/api/customers/login/google")
                 .then()
@@ -282,11 +296,12 @@ class CustomerLoginRateLimitIT {
 
     @Test
     @DisplayName("Google login: X-Forwarded-For LAST entry (proxy-appended) is the resolved IP for the limiter")
-    void googleLogin_xForwardedForLastEntryUsedForIpLimiter() {
+    void googleLogin_xForwardedForLastEntryUsedForIpLimiter()
+    {
         given()
                 .contentType(ContentType.JSON)
                 .header("X-Forwarded-For", "203.0.113.55, 10.0.0.1")
-                .body(googleLoginPayload("some-fake-id-token"))
+                .body(googleLoginPayload())
                 .when()
                 .post("/api/customers/login/google")
                 .then()
@@ -298,11 +313,12 @@ class CustomerLoginRateLimitIT {
 
     @Test
     @DisplayName("Google login: falls back to X-Real-IP when X-Forwarded-For is absent")
-    void googleLogin_xRealIpFallback() {
+    void googleLogin_xRealIpFallback()
+    {
         given()
                 .contentType(ContentType.JSON)
                 .header("X-Real-IP", "198.51.100.99")
-                .body(googleLoginPayload("some-fake-id-token"))
+                .body(googleLoginPayload())
                 .when()
                 .post("/api/customers/login/google")
                 .then()
@@ -317,7 +333,8 @@ class CustomerLoginRateLimitIT {
 
     @Test
     @DisplayName("Google login: recovery after rate limit window expires")
-    void googleLogin_recoveryAfterWindow() {
+    void googleLogin_recoveryAfterWindow()
+    {
         // First: denied
         when(rateLimiterService.check(eq("google-login"), anyString(), anyInt(), anyLong()))
                 .thenReturn(new RateLimitDecision(false, 2));
@@ -325,7 +342,7 @@ class CustomerLoginRateLimitIT {
         given()
                 .contentType(ContentType.JSON)
                 .header("X-Forwarded-For", "192.0.2.21")
-                .body(googleLoginPayload("some-fake-id-token"))
+                .body(googleLoginPayload())
                 .when()
                 .post("/api/customers/login/google")
                 .then()
@@ -338,7 +355,7 @@ class CustomerLoginRateLimitIT {
         given()
                 .contentType(ContentType.JSON)
                 .header("X-Forwarded-For", "192.0.2.21")
-                .body(googleLoginPayload("some-fake-id-token"))
+                .body(googleLoginPayload())
                 .when()
                 .post("/api/customers/login/google")
                 .then()
@@ -352,7 +369,8 @@ class CustomerLoginRateLimitIT {
 
     @Test
     @DisplayName("Google login: missing idToken returns 400 without consulting rate limiter")
-    void googleLogin_missingIdToken_returns400_noLimiterConsulted() {
+    void googleLogin_missingIdToken_returns400_noLimiterConsulted()
+    {
         String payload = """
                 {
                     "idToken": ""

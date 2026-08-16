@@ -33,7 +33,6 @@ import static org.mockito.Mockito.*;
  * incompatible with @QuarkusTest CDI / PanacheMock; the property is quantified by
  * iterating representative counts and every product status.
  * <p>
- * Validates: Requirements 1.3, 2.4
  */
 @QuarkusTest
 class FeaturedCapEnforcementPropertyTest

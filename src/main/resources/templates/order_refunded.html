@@ -1,0 +1,38 @@
+{@org.ecommerce.common.enums.OrderStatusEn status}
+{#include order_email_layout}
+{#headline}
+    {#if status.name == 'PARTIALLY_REFUNDED'}Part of your order has been refunded{#else}Your refund is on its way{/if}
+{/headline}
+
+{#body}
+    {#if status.name == 'PARTIALLY_REFUNDED'}
+        <p>We've refunded part of this order back to the payment method you used.</p>
+    {#else}
+        <p>We've refunded this order in full, back to the payment method you used.</p>
+    {/if}
+
+    {!
+      The timeline is the point of this email. "It's been refunded" with no idea when the
+      money lands is the single biggest generator of follow-up support tickets, so the
+      wait is stated up front rather than left to be asked about.
+    !}
+    <div class="callout">
+        <strong>It usually takes 3–5 business days</strong> to appear on your statement.
+        That wait is your bank's, not ours — the refund has already left us.
+    </div>
+
+    <div class="callout ended">
+        <strong>Order reference:</strong> {order.reference}<br/>
+        <strong>Order total:</strong> {#if store.currencySymbol??}{store.currencySymbol} {/if}{order.totalAmount}
+    </div>
+
+    {#if status.name == 'PARTIALLY_REFUNDED'}
+        <p>
+            The exact amount refunded is on your statement. If it isn't what you expected,
+            reply to this email and we'll explain the breakdown.
+        </p>
+    {#else}
+        <p>If it hasn't arrived after 5 business days, reply to this email and we'll chase it.</p>
+    {/if}
+{/body}
+{/include}

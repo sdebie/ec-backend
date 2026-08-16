@@ -5,11 +5,9 @@ package org.ecommerce.backend.service;
 import io.quarkus.hibernate.orm.panache.PanacheEntityBase;
 import io.quarkus.hibernate.orm.panache.PanacheQuery;
 import io.quarkus.panache.mock.PanacheMock;
-import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
 import org.ecommerce.common.entity.ProductEntity;
-import org.ecommerce.common.repository.ProductRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -30,16 +28,12 @@ import static org.mockito.Mockito.*;
  * page(offset, size) call can be verified). The property is quantified by iterating
  * representative limits in each clamp region.
  * <p>
- * Validates: Requirements 4.2
  */
 @QuarkusTest
 class FeaturedLimitEnforcementPropertyTest
 {
     @Inject
     FeaturedProductService service;
-
-    @InjectMock
-    ProductRepository productRepository;
 
     private PanacheQuery<PanacheEntityBase> query;
 

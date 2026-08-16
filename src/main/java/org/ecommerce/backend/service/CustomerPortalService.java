@@ -6,6 +6,8 @@ import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.core.Response;
 import org.ecommerce.backend.utils.PasswordHashUtil;
 import org.ecommerce.common.dto.StorefrontCustomerPortalDto;
+import jakarta.inject.Inject;
+import org.ecommerce.backend.mapper.CustomerAddressMapper;
 import org.ecommerce.common.entity.CustomerAddressEntity;
 import org.ecommerce.common.entity.CustomerEntity;
 import org.ecommerce.common.entity.UserEntity;
@@ -20,6 +22,8 @@ import java.util.Map;
 @ApplicationScoped
 public class CustomerPortalService
 {
+    @Inject
+    CustomerAddressMapper customerAddressMapper;
 
     private static final Logger LOG = Logger.getLogger(CustomerPortalService.class);
 
@@ -123,19 +127,8 @@ public class CustomerPortalService
                 .stream()
                 .filter(a -> a.getAddressType() == type)
                 .findFirst()
-                .map(this::toAddressDto)
+                .map(customerAddressMapper::toAddressDto)
                 .orElse(null);
     }
 
-    private StorefrontCustomerPortalDto.AddressDto toAddressDto(CustomerAddressEntity entity)
-    {
-        StorefrontCustomerPortalDto.AddressDto dto = new StorefrontCustomerPortalDto.AddressDto();
-        dto.setLine1(entity.getAddressLine1());
-        dto.setLine2(entity.getAddressLine2());
-        dto.setSuburb(entity.getSuburb());
-        dto.setCity(entity.getCity());
-        dto.setProvince(entity.getProvince());
-        dto.setPostalCode(entity.getPostalCode());
-        return dto;
-    }
 }

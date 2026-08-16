@@ -34,12 +34,12 @@ public class PricingService
             basePriceType = PriceTypeEn.RETAIL_PRICE;
         }
 
-        BigDecimal salePrice = PriceUtils.getMinimumPrice(variantId, salePriceType);
+        BigDecimal salePrice = PriceUtils.currentPrice(variantId, salePriceType);
         if (salePrice != null && salePrice.compareTo(BigDecimal.ZERO) > 0) {
             return salePrice;
         }
 
-        BigDecimal basePrice = PriceUtils.getMinimumPrice(variantId, basePriceType);
+        BigDecimal basePrice = PriceUtils.currentPrice(variantId, basePriceType);
         return basePrice != null ? basePrice : BigDecimal.ZERO;
     }
 }

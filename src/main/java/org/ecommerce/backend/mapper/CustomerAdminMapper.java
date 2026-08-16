@@ -1,104 +1,69 @@
 package org.ecommerce.backend.mapper;
 
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
 import org.ecommerce.common.dto.AdminCustomerDetailDto;
 import org.ecommerce.common.dto.AdminCustomerListItemDto;
 import org.ecommerce.common.dto.AdminOrderRefDto;
 import org.ecommerce.common.entity.CustomerEntity;
 import org.ecommerce.common.entity.OrderEntity;
 import org.ecommerce.common.entity.WholesaleApplicationEntity;
+import org.mapstruct.Mapper;
+import org.mapstruct.Mapping;
 
 import java.util.List;
 
+import static org.mapstruct.NullValueCheckStrategy.ALWAYS;
+import static org.mapstruct.ReportingPolicy.ERROR;
+import static org.mapstruct.NullValueMappingStrategy.RETURN_NULL;
+import static org.mapstruct.NullValuePropertyMappingStrategy.SET_TO_NULL;
+
 /**
- * Hand-written CDI mapper for CustomerAdminService entity→DTO mappings.
+ * Maps customers into the admin-facing shapes — the list staff browse and the detail they
+ * open. The shopper's own view of themselves is {@code CustomerPortalService}'s job.
  * <p>
- * This is NOT a MapStruct @Mapper interface because {@link #toListItemDto(CustomerEntity)}
- * runs a Panache query to fetch the customer's wholesale application — something a
- * MapStruct interface cannot do.
+ * Pure — no database access. The wholesale application and recent orders are loaded by
+ * {@code CustomerAdminService} and passed in as sources; the nested application shape is
+ * delegated to {@link WholesaleMapper}.
  * <p>
- * Pure field-copy parts delegate to {@link WholesaleMapper} for the nested
- * {@code WholesaleApplicationDetailsDto}.
+ * These take multiple <em>source</em> parameters rather than {@code @Context} because each
+ * one contributes mapped fields. That is safe here only because no {@code @Mapping}
+ * expression dereferences a source — MapStruct ANDs the top-level null checks, so an
+ * expression reading {@code customer.x} directly would bypass its per-source guard.
  */
-@ApplicationScoped
-public class CustomerAdminMapper
+@Mapper(componentModel = "jakarta-cdi", unmappedTargetPolicy = ERROR, uses = {WholesaleMapper.class, TimestampMapper.class},
+        nullValueMappingStrategy = RETURN_NULL,
+        nullValuePropertyMappingStrategy = SET_TO_NULL,
+        nullValueCheckStrategy = ALWAYS)
+public interface CustomerAdminMapper
 {
+    // Both sources carry id/firstName/lastName/status, so every collision is qualified.
+    @Mapping(target = "id", source = "customer.id")
+    @Mapping(target = "firstName", source = "customer.firstName")
+    @Mapping(target = "lastName", source = "customer.lastName")
+    @Mapping(target = "status", source = "customer.status")
+    @Mapping(target = "email", source = "customer.user.email")
+    @Mapping(target = "registeredAt", source = "customer.user.createdAt")
+    @Mapping(target = "wholesaleApplicationStatus", source = "application.status")
+    AdminCustomerListItemDto toListItemDto(CustomerEntity customer, WholesaleApplicationEntity application);
 
-    @Inject
-    WholesaleMapper wholesaleMapper;
+    @Mapping(target = "id", source = "customer.id")
+    @Mapping(target = "firstName", source = "customer.firstName")
+    @Mapping(target = "lastName", source = "customer.lastName")
+    @Mapping(target = "phone", source = "customer.phone")
+    @Mapping(target = "status", source = "customer.status")
+    @Mapping(target = "shopperType", source = "customer.shopperType")
+    @Mapping(target = "email", source = "customer.user.email")
+    @Mapping(target = "registeredAt", source = "customer.user.createdAt")
+    @Mapping(target = "wholesaleApplication", source = "application")
+    @Mapping(target = "recentOrders", source = "orders")
+    AdminCustomerDetailDto toDetailDto(CustomerEntity customer,
+                                       WholesaleApplicationEntity application,
+                                       List<OrderEntity> orders);
 
-    // ── Query-bearing: fetches wholesale application via Panache ─────────────
+    @Mapping(target = "total", source = "totalAmount")
+    @Mapping(target = "placedAt", source = "createdAt")
+    AdminOrderRefDto toOrderRefDto(OrderEntity order);
 
-    /**
-     * Maps a customer entity to a list-item DTO, fetching the wholesale application
-     * from the database.
-     */
-    public AdminCustomerListItemDto toListItemDto(CustomerEntity customerEntity)
-    {
-        WholesaleApplicationEntity app = WholesaleApplicationEntity
-                .find("customer.id = ?1", customerEntity.getId())
-                .firstResult();
-        return toListItemDto(customerEntity, app);
-    }
+    List<AdminOrderRefDto> toOrderRefDtos(List<OrderEntity> orders);
 
-    // ── Pure field-copy methods ─────────────────────────────────────────────
 
-    /**
-     * Maps a customer entity and a pre-fetched wholesale application to a list-item DTO.
-     * Pure — no database access.
-     */
-    public AdminCustomerListItemDto toListItemDto(CustomerEntity customerEntity, WholesaleApplicationEntity app)
-    {
-        AdminCustomerListItemDto dto = new AdminCustomerListItemDto();
-        dto.setId(customerEntity.getId().toString());
-        dto.setFirstName(customerEntity.getFirstName());
-        dto.setLastName(customerEntity.getLastName());
-        dto.setEmail(customerEntity.getUser() != null ? customerEntity.getUser().getEmail() : null);
-        dto.setStatus(customerEntity.getStatus() != null ? customerEntity.getStatus().name() : null);
-        dto.setShopperType(customerEntity.getShopperType() != null ? customerEntity.getShopperType().name() : null);
-        dto.setRegisteredAt(customerEntity.getUser() != null && customerEntity.getUser().getCreatedAt() != null ? customerEntity.getUser().getCreatedAt().toString() : null);
-        dto.setWholesaleApplicationStatus(app != null && app.getStatus() != null ? app.getStatus().name() : null);
-        return dto;
-    }
-
-    /**
-     * Maps a customer entity, wholesale application, and recent orders to a detail DTO.
-     * Pure — no database access; delegates wholesale application mapping to WholesaleMapper.
-     */
-    public AdminCustomerDetailDto toDetailDto(CustomerEntity customerEntity, WholesaleApplicationEntity app, List<OrderEntity> orders)
-    {
-        AdminCustomerDetailDto dto = new AdminCustomerDetailDto();
-        dto.setId(customerEntity.getId().toString());
-        dto.setFirstName(customerEntity.getFirstName());
-        dto.setLastName(customerEntity.getLastName());
-        dto.setEmail(customerEntity.getUser() != null ? customerEntity.getUser().getEmail() : null);
-        dto.setPhone(customerEntity.getPhone());
-        dto.setStatus(customerEntity.getStatus() != null ? customerEntity.getStatus().name() : null);
-        dto.setShopperType(customerEntity.getShopperType() != null ? customerEntity.getShopperType().name() : null);
-        dto.setRegisteredAt(customerEntity.getUser() != null && customerEntity.getUser().getCreatedAt() != null ? customerEntity.getUser().getCreatedAt().toString() : null);
-
-        dto.setWholesaleApplication(app != null ? wholesaleMapper.toDetailsDto(app) : null);
-
-        dto.setRecentOrders(orders.stream()
-                .map(this::toOrderRefDto)
-                .toList());
-
-        return dto;
-    }
-
-    /**
-     * Maps an order entity to an order reference DTO.
-     * Pure — no database access.
-     */
-    public AdminOrderRefDto toOrderRefDto(OrderEntity orderEntity)
-    {
-        AdminOrderRefDto dto = new AdminOrderRefDto();
-        dto.setId(orderEntity.getId().toString());
-        dto.setReference("ORD-" + orderEntity.getId().toString().substring(0, 8).toUpperCase());
-        dto.setPlacedAt(orderEntity.getCreatedAt() != null ? orderEntity.getCreatedAt().toString() : null);
-        dto.setTotal(orderEntity.getTotalAmount() != null ? orderEntity.getTotalAmount().doubleValue() : 0.0);
-        dto.setStatus(orderEntity.getStatus() != null ? orderEntity.getStatus().name() : null);
-        return dto;
-    }
 }

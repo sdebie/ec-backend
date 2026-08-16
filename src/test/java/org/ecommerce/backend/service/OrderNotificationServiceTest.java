@@ -65,4 +65,71 @@ class OrderNotificationServiceTest
         OrderEntity noCustomer = new OrderEntity();
         assertNull(service.resolveRecipient(noCustomer));
     }
+
+    // ── Guest / contact-fallback coverage (bug #3 fix) ──────────────────────
+    // customerEntity was always null before the customer-linking fix, so these
+    // fallback paths never actually ran in production; they're new coverage,
+    // not a regression check on existing behavior.
+
+    private OrderEntity orderWithContactOnly(String contactFirstName, String contactEmail)
+    {
+        OrderEntity order = new OrderEntity();
+        order.setContactFirstName(contactFirstName);
+        order.setContactEmail(contactEmail);
+        return order;
+    }
+
+    /**
+     * customerEntity is present but unusable (no user, or a user with a blank
+     * email) — distinct from the "no customerEntity at all" case above.
+     */
+    private OrderEntity orderWithUnusableCustomerAndContactFallback(String userEmail, String contactEmail)
+    {
+        OrderEntity order = new OrderEntity();
+        CustomerEntity customer = new CustomerEntity();
+        customer.setFirstName(null);
+        if (userEmail != null) {
+            UserEntity user = new UserEntity();
+            user.setEmail(userEmail);
+            customer.setUser(user);
+        }
+        order.setCustomerEntity(customer);
+        order.setContactEmail(contactEmail);
+        return order;
+    }
+
+    @Test
+    @DisplayName("recipient falls back to contactEmail when there is no customerEntity at all (guest checkout)")
+    void recipientFallsBackToContactEmail_noCustomerEntity()
+    {
+        assertEquals("guest@x.com", service.resolveRecipient(orderWithContactOnly("Guestperson", "guest@x.com")));
+    }
+
+    @Test
+    @DisplayName("recipient falls back to contactEmail when customerEntity exists but has no usable email")
+    void recipientFallsBackToContactEmail_customerHasNoUsableEmail()
+    {
+        // customer present, user is null
+        assertEquals("guest@x.com",
+                service.resolveRecipient(orderWithUnusableCustomerAndContactFallback(null, "guest@x.com")));
+        // customer present, user present, but email is blank
+        assertEquals("guest@x.com",
+                service.resolveRecipient(orderWithUnusableCustomerAndContactFallback("   ", "guest@x.com")));
+    }
+
+    @Test
+    @DisplayName("display name falls back to contactFirstName when there is no customerEntity at all (guest checkout)")
+    void displayNameFallsBackToContactFirstName_noCustomerEntity()
+    {
+        assertEquals("Jane", service.resolveDisplayName(orderWithContactOnly("Jane", null)));
+    }
+
+    @Test
+    @DisplayName("true last resort: no customer and no contact info at all")
+    void trueLastResort_noCustomerNoContactInfo()
+    {
+        OrderEntity order = new OrderEntity();
+        assertNull(service.resolveRecipient(order));
+        assertEquals("Guest", service.resolveDisplayName(order));
+    }
 }
