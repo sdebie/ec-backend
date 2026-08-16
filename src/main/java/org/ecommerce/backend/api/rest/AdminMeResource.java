@@ -8,6 +8,7 @@ import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import org.eclipse.microprofile.jwt.JsonWebToken;
+import org.ecommerce.backend.security.ForcedPasswordResetIdentityAugmentor;
 import org.ecommerce.common.entity.StaffUserEntity;
 import org.jboss.logging.Logger;
 
@@ -26,7 +27,8 @@ public class AdminMeResource {
 
     @GET
     @Path("/me")
-    @RolesAllowed({"SUPER_ADMIN", "CATALOG_MANAGER", "ORDER_MANAGER", "VIEWER"})
+    @RolesAllowed({"SUPER_ADMIN", "CATALOG_MANAGER", "ORDER_MANAGER", "VIEWER",
+            ForcedPasswordResetIdentityAugmentor.PASSWORD_RESET_REQUIRED_ROLE})
     public Response me() {
         Set<String> groups = jwt.getGroups();
         String role = groups != null && !groups.isEmpty() ? groups.iterator().next() : "VIEWER";

@@ -48,10 +48,12 @@ public class ImageResource
     }
 
     /**
-     * Cleanup endpoint for abandoned product image uploads.
-     * Verifies the file path is not path-traversal-vulnerable, checks if any
-     * ProductImageEntity still references it, and only deletes the physical file
-     * if no association remains.
+     * Safe-delete endpoint for an uploaded image, used both by the abandoned-upload
+     * cleanup flow (product edit/create, mid-form image removal) and by the admin
+     * image library's delete action. Verifies the file path is not path-traversal-
+     * vulnerable, checks whether ANY table capable of holding an image path still
+     * references it (product images, brand logos, category images, store settings,
+     * page content), and only deletes the physical file if no reference remains.
      */
     @DELETE
     @Path("/cleanup")
@@ -67,12 +69,11 @@ public class ImageResource
         }
 
         try {
-            boolean deleted = imageService.cleanupUnassociatedFile(request.filePath());
-            if (deleted) {
+            ImageService.CleanupOutcome outcome = imageService.cleanupUnassociatedFile(request.filePath());
+            if (outcome.deleted()) {
                 return Response.ok(Map.of("deleted", true)).build();
             } else {
-                return Response.ok(Map.of("deleted", false, "reason", "File is still associated with a product image"))
-                        .build();
+                return Response.ok(Map.of("deleted", false, "reason", outcome.reason())).build();
             }
         } catch (IllegalArgumentException e) {
             return Response.status(Response.Status.BAD_REQUEST)

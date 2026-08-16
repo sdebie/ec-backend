@@ -1,5 +1,6 @@
 package org.ecommerce.backend.api.rest;
 
+import io.quarkus.security.identity.SecurityIdentity;
 import jakarta.annotation.security.RolesAllowed;
 import jakarta.inject.Inject;
 import jakarta.validation.Valid;
@@ -8,6 +9,7 @@ import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import lombok.extern.slf4j.Slf4j;
 import org.eclipse.microprofile.jwt.JsonWebToken;
+import org.ecommerce.backend.security.ForcedPasswordResetIdentityAugmentor;
 import org.ecommerce.backend.service.AdminAuthService;
 import org.ecommerce.backend.service.RateLimitDecision;
 import org.ecommerce.backend.service.RateLimiterService;
@@ -38,6 +40,9 @@ public class StaffResource
 
     @Inject
     JsonWebToken jwt;
+
+    @Inject
+    SecurityIdentity securityIdentity;
 
     @POST
     @Path("/login")
@@ -92,17 +97,23 @@ public class StaffResource
      * Two distinct capabilities share this endpoint:
      * <ul>
      *   <li><b>Self-service</b> — any authenticated staff member may reset <i>their own</i>
-     *       password, whatever their role. This is what makes the forced-password-change
-     *       flow completable: that flow is reachable by every role, so gating it on
-     *       SUPER_ADMIN locked out everyone else.</li>
-     *   <li><b>Administrative</b> — a SUPER_ADMIN may reset <i>another</i> account's password.</li>
+     *       password, whatever their role — including one flagged for a forced reset, which
+     *       is what makes that flow completable: {@link ForcedPasswordResetIdentityAugmentor}
+     *       strips a flagged account down to {@code PASSWORD_RESET_REQUIRED}, and this
+     *       endpoint's {@code @RolesAllowed} names that role specifically so self-service
+     *       still reaches it.</li>
+     *   <li><b>Administrative</b> — a SUPER_ADMIN may reset <i>another</i> account's password —
+     *       but not while flagged themselves: the check below reads the augmented
+     *       {@link SecurityIdentity}, not the raw JWT, so a flagged SUPER_ADMIN's stripped
+     *       identity fails it exactly like any other flagged account targeting someone else.</li>
      * </ul>
      * The role check therefore cannot live in {@code @RolesAllowed}, which cannot see the
      * request body. It is enforced below by comparing the target against {@code jwt.getName()}.
      */
     @POST
     @Path("/reset-password")
-    @RolesAllowed({"SUPER_ADMIN", "CATALOG_MANAGER", "ORDER_MANAGER", "VIEWER"})
+    @RolesAllowed({"SUPER_ADMIN", "CATALOG_MANAGER", "ORDER_MANAGER", "VIEWER",
+            ForcedPasswordResetIdentityAugmentor.PASSWORD_RESET_REQUIRED_ROLE})
     public Response resetPassword(@Valid ResetPasswordRequest req)
     {
         if (req == null || req.email() == null || req.email().isBlank() || req.password() == null || req.password().isBlank()) {
@@ -116,7 +127,7 @@ public class StaffResource
         String callerEmail = jwt.getName();
         boolean targetsSelf = callerEmail != null && callerEmail.equalsIgnoreCase(req.email().trim());
 
-        if (!targetsSelf && !jwt.getGroups().contains("SUPER_ADMIN")) {
+        if (!targetsSelf && !securityIdentity.hasRole("SUPER_ADMIN")) {
             log.warn("Staff user attempted to reset another account's password without SUPER_ADMIN");
             return Response.status(Response.Status.FORBIDDEN)
                     .entity("You may only reset your own password")

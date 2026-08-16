@@ -1,11 +1,16 @@
 package org.ecommerce.backend.api.rest;
 
+import jakarta.inject.Inject;
 import jakarta.ws.rs.GET;
+import jakarta.ws.rs.HeaderParam;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
+import org.ecommerce.backend.service.RateLimitDecision;
+import org.ecommerce.backend.service.RateLimiterService;
+import org.ecommerce.backend.utils.ClientIpUtils;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 import java.net.URI;
@@ -19,6 +24,12 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
+/**
+ * Public REST endpoint proxying REST Countries lookups. No auth annotation — public by
+ * design, matching {@link ContactEnquiryResource}. Unlike the other public endpoints, a
+ * successful call here spends a live, metered, paid upstream API key, so the rate-limit
+ * check must run before the key is ever read.
+ */
 @Path("/api/countries")
 @Produces(MediaType.APPLICATION_JSON)
 public class CountriesResource {
@@ -29,6 +40,9 @@ public class CountriesResource {
     @ConfigProperty(name = "restcountries.api.key")
     Optional<String> apiKey;
 
+    @Inject
+    RateLimiterService rateLimiterService;
+
     private final HttpClient httpClient = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(10))
             .build();
@@ -37,8 +51,17 @@ public class CountriesResource {
     public Response getCountries(
             @QueryParam("q") String q,
             @QueryParam("limit") Integer limit,
-            @QueryParam("pretty") String pretty
+            @QueryParam("pretty") String pretty,
+            @HeaderParam("CF-Connecting-IP") String cfConnectingIp,
+            @HeaderParam("X-Forwarded-For") String xForwardedFor,
+            @HeaderParam("X-Real-IP") String xRealIp
     ) {
+        String clientIp = ClientIpUtils.resolveClientIp(cfConnectingIp, xForwardedFor, xRealIp);
+        RateLimitDecision decision = rateLimiterService.check("countries", clientIp, 20, 3600);
+        if (!decision.allowed()) {
+            return Response.status(429).header("Retry-After", decision.retryAfterSeconds()).build();
+        }
+
         String resolvedApiKey = apiKey.map(String::trim).orElse("");
         if (resolvedApiKey.isBlank()) {
             return Response.status(Response.Status.SERVICE_UNAVAILABLE)

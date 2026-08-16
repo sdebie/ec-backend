@@ -32,6 +32,16 @@ public class ImageService
     {
     }
 
+    /**
+     * Outcome of a safe-delete attempt: {@code deleted} is true whenever no reference blocked
+     * it and no IOException occurred while removing the file — including when the file was
+     * already absent from disk, which is a successful no-op, not a block. {@code reason} names
+     * what blocked the delete, or is null when deleted is true.
+     */
+    public record CleanupOutcome(boolean deleted, String reason)
+    {
+    }
+
     @ConfigProperty(name = "storage.path")
     String storagePath;
 
@@ -378,15 +388,19 @@ public class ImageService
     }
 
     /**
-     * Safely delete an uploaded file if no ProductImageEntity references it.
-     * Validates the path is not traversal-vulnerable before checking associations.
+     * Safely delete an uploaded file if it is not referenced anywhere in the system.
+     * Checks every table capable of holding an image path — product images, brand
+     * logos, category images, and any image path embedded inside store settings or
+     * page content text — so a shared library image can't be deleted while it's still
+     * live somewhere else in the store. Validates the path is not traversal-vulnerable
+     * before checking associations.
      *
      * @param filePath storage-relative path (e.g. "abc123.jpg" or "products/abc123.jpg")
-     * @return true if the file was deleted, false if it is still associated
+     * @return the outcome — whether it was deleted, and why not when refused
      * @throws IllegalArgumentException if the path is invalid or traversal-vulnerable
      */
     @Transactional
-    public boolean cleanupUnassociatedFile(String filePath)
+    public CleanupOutcome cleanupUnassociatedFile(String filePath)
     {
         if (filePath == null || filePath.isBlank()) {
             throw new IllegalArgumentException("File path must not be blank");
@@ -402,15 +416,10 @@ public class ImageService
             throw new IllegalArgumentException("Invalid file path: traversal detected");
         }
 
-        // Check if any ProductImageEntity references this path
-        Long refCount = entityManager
-                .createQuery("SELECT COUNT(pi) FROM ProductImageEntity pi WHERE pi.imageUrl = :path", Long.class)
-                .setParameter("path", safePath)
-                .getSingleResult();
-
-        if (refCount != null && refCount > 0) {
-            log.debug("Cannot cleanup file {} — still referenced by {} product image(s)", safePath, refCount);
-            return false;
+        List<String> usages = findImageUsages(safePath);
+        if (!usages.isEmpty()) {
+            log.debug("Cannot cleanup file {} — still referenced: {}", safePath, usages);
+            return new CleanupOutcome(false, "Image is still in use (" + String.join(", ", usages) + ")");
         }
 
         // Delete the physical file and its thumbnail
@@ -422,22 +431,81 @@ public class ImageService
             throw new IllegalArgumentException("Invalid file path: outside storage root");
         }
 
-        boolean deleted = false;
         try {
             if (Files.exists(targetFile)) {
                 Files.delete(targetFile);
-                deleted = true;
             }
             // Also clean up thumbnail
             Path thumbnailFile = storageRoot.resolve("thumbnails").resolve(safePath).normalize();
             if (Files.exists(thumbnailFile)) {
                 Files.delete(thumbnailFile);
             }
+            // Unreferenced is success regardless of whether a physical file remained to
+            // remove — a stale listing pointing at an already-absent file is a no-op,
+            // not a blocked delete, and must not be reported the same as "still in use".
+            return new CleanupOutcome(true, null);
         } catch (IOException e) {
             log.warn("Failed to delete file {}: {}", safePath, e.getMessage());
+            return new CleanupOutcome(false, "Failed to delete file: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Every table capable of holding a reference to an uploaded image path. Product
+     * images, brand logos and category images are checked by exact match against their
+     * dedicated columns. Store settings and page content embed the path inside a larger
+     * JSON/text blob rather than owning a dedicated column, so those are checked by
+     * substring match — safe because uploaded filenames are UUID-based, making an
+     * accidental collision between two different files unrealistic.
+     * ProductUploadStagedEntity is deliberately NOT checked: it holds transient CSV
+     * import staging data cleared per batch, not a live reference — blocking a delete on
+     * stale staging data would be confusing, not protective.
+     */
+    private List<String> findImageUsages(String safePath)
+    {
+        List<String> usages = new ArrayList<>();
+
+        long productImageCount = entityManager
+                .createQuery("SELECT COUNT(pi) FROM ProductImageEntity pi WHERE pi.imageUrl = :path", Long.class)
+                .setParameter("path", safePath)
+                .getSingleResult();
+        if (productImageCount > 0) {
+            usages.add(productImageCount + (productImageCount == 1 ? " product" : " products"));
         }
 
-        return deleted;
+        long brandCount = entityManager
+                .createQuery("SELECT COUNT(b) FROM BrandEntity b WHERE b.logoUrl = :path", Long.class)
+                .setParameter("path", safePath)
+                .getSingleResult();
+        if (brandCount > 0) {
+            usages.add(brandCount + (brandCount == 1 ? " brand" : " brands"));
+        }
+
+        long categoryCount = entityManager
+                .createQuery("SELECT COUNT(c) FROM CategoryEntity c WHERE c.imageUrl = :path", Long.class)
+                .setParameter("path", safePath)
+                .getSingleResult();
+        if (categoryCount > 0) {
+            usages.add(categoryCount + (categoryCount == 1 ? " category" : " categories"));
+        }
+
+        long storeSettingsCount = entityManager
+                .createQuery("SELECT COUNT(s) FROM StoreSettingsEntity s WHERE s.value LIKE CONCAT('%', :path, '%')", Long.class)
+                .setParameter("path", safePath)
+                .getSingleResult();
+        if (storeSettingsCount > 0) {
+            usages.add(storeSettingsCount + (storeSettingsCount == 1 ? " store setting" : " store settings"));
+        }
+
+        long pageContentCount = entityManager
+                .createQuery("SELECT COUNT(p) FROM PageContentEntity p WHERE p.draftContent LIKE CONCAT('%', :path, '%') OR p.publishedContent LIKE CONCAT('%', :path, '%')", Long.class)
+                .setParameter("path", safePath)
+                .getSingleResult();
+        if (pageContentCount > 0) {
+            usages.add(pageContentCount + (pageContentCount == 1 ? " page" : " pages"));
+        }
+
+        return usages;
     }
 
     private String getFileExtension(String fileName)

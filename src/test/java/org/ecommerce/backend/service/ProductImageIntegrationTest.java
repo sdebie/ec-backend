@@ -337,10 +337,10 @@ class ProductImageIntegrationTest
         em.flush();
 
         // WHEN: attempt to cleanup the file that is still associated
-        boolean deleted = imageService.cleanupUnassociatedFile("still-referenced.jpg");
+        ImageService.CleanupOutcome outcome = imageService.cleanupUnassociatedFile("still-referenced.jpg");
 
         // THEN: cleanup must refuse (return false) — the file is still referenced
-        assertFalse(deleted, "cleanupUnassociatedFile must refuse to delete a file still referenced by a ProductImageEntity");
+        assertFalse(outcome.deleted(), "cleanupUnassociatedFile must refuse to delete a file still referenced by a ProductImageEntity");
     }
 
     // ─── Test: Cleanup succeeds after association is removed ─────────────────
@@ -388,12 +388,12 @@ class ProductImageIntegrationTest
         em.clear();
 
         // THEN: cleanup should succeed (no association remains)
-        boolean deleted = imageService.cleanupUnassociatedFile("to-be-removed.jpg");
-        // The file doesn't physically exist in test storage, so cleanupUnassociatedFile
-        // won't find a physical file to delete, but it should NOT be blocked by an association.
-        // The method returns true only if the file was physically deleted; since it doesn't exist,
-        // it returns false — but the key assertion is that it does NOT throw or block due to refs.
-        // Let's verify the association is truly gone.
+        ImageService.CleanupOutcome outcome = imageService.cleanupUnassociatedFile("to-be-removed.jpg");
+        // The file doesn't physically exist in test storage, so there's no physical file to
+        // remove — but that's a successful no-op, not a block: deleted must still be true,
+        // since nothing references the path anymore and no IOException occurred.
+        assertTrue(outcome.deleted(), "cleanupUnassociatedFile must succeed for an unreferenced path even when no physical file exists to remove");
+        // Also verify the association itself is truly gone.
         UUID prodId = UUID.fromString(productId);
         List<ProductImageEntity> remaining = productImageRepository.findByProductId(prodId);
         assertTrue(remaining.isEmpty(), "Image association must be removed after edit with empty manifest");
