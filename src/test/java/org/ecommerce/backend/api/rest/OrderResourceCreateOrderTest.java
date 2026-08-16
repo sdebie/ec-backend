@@ -16,10 +16,12 @@ import org.mockito.ArgumentCaptor;
 import java.util.UUID;
 
 import static io.restassured.RestAssured.given;
+import static org.hamcrest.Matchers.equalTo;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -109,9 +111,12 @@ class OrderResourceCreateOrderTest
     }
 
     @Test
-    @DisplayName("valid customer JWT but no matching CustomerEntity row -> invoked with null, no 500")
-    void createOrder_validCustomerJwtButNoMatchingCustomerRow_resolvesNullCustomerAndDoesNot500()
+    @DisplayName("valid customer JWT but no matching CustomerEntity row -> 401, createOrderFromCart never invoked")
+    void createOrder_validCustomerJwtButNoMatchingCustomerRow_returnsUnauthorized()
     {
+        // A "customer" role with no matching row is not the same thing as no
+        // role at all, and must not collapse into a silent guest checkout —
+        // mirrors getOrderDetail/myOrders, which both throw on exactly this.
         String email = "ghost@test.com";
         when(CustomerEntity.findByEmail(email)).thenReturn(null);
 
@@ -123,10 +128,9 @@ class OrderResourceCreateOrderTest
                 .when()
                 .post("/api/orders")
                 .then()
-                .statusCode(201);
+                .statusCode(401)
+                .body("error", equalTo("Unauthorized"));
 
-        ArgumentCaptor<CustomerEntity> captor = ArgumentCaptor.forClass(CustomerEntity.class);
-        verify(orderService).createOrderFromCart(any(), any(), captor.capture(), any(), any());
-        assertNull(captor.getValue());
+        verify(orderService, never()).createOrderFromCart(any(), any(), any(), any(), any());
     }
 }

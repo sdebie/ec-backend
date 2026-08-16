@@ -321,13 +321,24 @@ public class OrderResource {
 
     /**
      * Resolves the signed-in customer so the order can be linked to their account.
-     * Mirrors the ownership pattern in OrderContactResource/getOrderDetail; guest
-     * checkout (no "customer" role) deliberately resolves to null.
+     * Guest checkout (no "customer" role at all) deliberately resolves to null.
+     * A "customer" role with no matching row is not the same thing and must not
+     * collapse into it — mirrors getOrderDetail/myOrders, which both throw
+     * rather than silently falling back to guest.
      */
     private CustomerEntity resolveCustomer() {
         if (securityIdentity == null || !securityIdentity.hasRole("customer")) {
             return null;
         }
-        return CustomerEntity.findByEmail(jwt.getSubject());
+        String email = jwt.getSubject();
+        CustomerEntity customer = CustomerEntity.findByEmail(email);
+        if (customer == null) {
+            LOG.warnf("createOrder: customer role present but no matching CustomerEntity for email: %s", email);
+            throw new WebApplicationException(
+                    Response.status(Response.Status.UNAUTHORIZED)
+                            .entity(Map.of("error", "Unauthorized"))
+                            .build());
+        }
+        return customer;
     }
 }
