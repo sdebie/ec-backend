@@ -36,10 +36,12 @@ public class WholesaleCustomerResource {
     @RolesAllowed({"SUPER_ADMIN", "ORDER_MANAGER", "VIEWER"})
     public List<WholesaleApplicationListItemDto> getAllWholesaleApplications(
             @Name("pageRequest") PageRequest pageRequest,
-            @Name("filterRequest") FilterRequest filterRequest
+            @Name("filterRequest") FilterRequest filterRequest,
+            @Name("fromDate") String fromDate,
+            @Name("toDate") String toDate
     ) {
         try {
-            return wholesaleCustomerService.getWholesaleApplications(pageRequest, filterRequest);
+            return wholesaleCustomerService.getWholesaleApplications(pageRequest, filterRequest, fromDate, toDate);
         } catch (RuntimeException ex) {
             throw toGraphQlException(ex);
         }
@@ -47,9 +49,13 @@ public class WholesaleCustomerResource {
 
     @Query("wholesaleApplicationCount")
     @RolesAllowed({"SUPER_ADMIN", "ORDER_MANAGER", "VIEWER"})
-    public long wholesaleApplicationCount(@Name("filterRequest") FilterRequest filterRequest) {
+    public long wholesaleApplicationCount(
+            @Name("filterRequest") FilterRequest filterRequest,
+            @Name("fromDate") String fromDate,
+            @Name("toDate") String toDate
+    ) {
         try {
-            return wholesaleCustomerService.wholesaleApplicationCount(filterRequest);
+            return wholesaleCustomerService.wholesaleApplicationCount(filterRequest, fromDate, toDate);
         } catch (RuntimeException ex) {
             throw toGraphQlException(ex);
         }

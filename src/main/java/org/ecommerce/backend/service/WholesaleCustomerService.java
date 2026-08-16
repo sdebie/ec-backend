@@ -10,12 +10,17 @@ import org.ecommerce.common.dto.WholesaleApplicationListItemDto;
 import org.ecommerce.common.dto.WholesaleCustomerDto;
 import org.ecommerce.common.entity.*;
 import org.ecommerce.common.enums.*;
+import org.ecommerce.common.query.Filter;
 import org.ecommerce.common.query.FilterRequest;
 import org.ecommerce.common.query.PageRequest;
+import org.ecommerce.common.query.SortRequest;
 import org.ecommerce.common.repository.WholesaleApplicationRepository;
 import org.jboss.logging.Logger;
 
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -37,17 +42,31 @@ public class WholesaleCustomerService
 
     private static final Logger LOG = Logger.getLogger(WholesaleCustomerService.class);
 
-    public List<WholesaleApplicationListItemDto> getWholesaleApplications(PageRequest pageRequest, FilterRequest filterRequest)
+    /**
+     * @param fromDate inclusive ISO date (yyyy-MM-dd), or null/blank for no lower bound
+     * @param toDate   inclusive ISO date (yyyy-MM-dd), or null/blank for no upper bound
+     */
+    public List<WholesaleApplicationListItemDto> getWholesaleApplications(PageRequest pageRequest, FilterRequest filterRequest, String fromDate, String toDate)
     {
-        return wholesaleApplicationRepository.findAll(pageRequest, filterRequest)
+        WholesaleApplicationStatusEn status = extractStatusFilter(filterRequest);
+        SortRequest sort = extractSort(filterRequest);
+        OffsetDateTime from = toInclusiveStart(fromDate, "fromDate");
+        OffsetDateTime toExclusive = toExclusiveEnd(toDate, "toDate");
+
+        return wholesaleApplicationRepository.findForAdmin(status, from, toExclusive, sort, pageRequest)
                 .stream()
                 .map(wholesaleMapper::toListItemDto)
                 .toList();
     }
 
-    public long wholesaleApplicationCount(FilterRequest filterRequest)
+    /** @see #getWholesaleApplications(PageRequest, FilterRequest, String, String) */
+    public long wholesaleApplicationCount(FilterRequest filterRequest, String fromDate, String toDate)
     {
-        return wholesaleApplicationRepository.count(filterRequest);
+        WholesaleApplicationStatusEn status = extractStatusFilter(filterRequest);
+        OffsetDateTime from = toInclusiveStart(fromDate, "fromDate");
+        OffsetDateTime toExclusive = toExclusiveEnd(toDate, "toDate");
+
+        return wholesaleApplicationRepository.countForAdmin(status, from, toExclusive);
     }
 
     public WholesaleApplicationDetailsDto getWholesaleApplicationById(UUID id)
@@ -335,6 +354,74 @@ public class WholesaleCustomerService
     }
 
     // ── Private helpers ──────────────────────────────────────────────────────
+
+    /**
+     * The admin queue's only status filter is a single equality — pulled out of the generic
+     * {@link FilterRequest} by hand because {@link #getWholesaleApplications} routes through
+     * {@link WholesaleApplicationRepository#findForAdmin}, hand-written JPQL rather than the
+     * generic {@code PanacheQueryBuilder} path (see that repository for why: the generic
+     * coercion cannot express the date-range bound this method also needs).
+     */
+    private WholesaleApplicationStatusEn extractStatusFilter(FilterRequest filterRequest)
+    {
+        if (filterRequest == null || filterRequest.getFilters() == null) {
+            return null;
+        }
+        return filterRequest.getFilters().stream()
+                .filter(f -> "status".equals(f.getKey()))
+                .findFirst()
+                .map(Filter::getValue)
+                .map(value -> {
+                    try {
+                        return WholesaleApplicationStatusEn.valueOf(value);
+                    } catch (IllegalArgumentException e) {
+                        throw new IllegalArgumentException("invalid status: " + value);
+                    }
+                })
+                .orElse(null);
+    }
+
+    private SortRequest extractSort(FilterRequest filterRequest)
+    {
+        if (filterRequest == null || filterRequest.getSort() == null || filterRequest.getSort().isEmpty()) {
+            return null;
+        }
+        return filterRequest.getSort().get(0);
+    }
+
+    private LocalDate parseDate(String value, String fieldName)
+    {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            return LocalDate.parse(value);
+        } catch (DateTimeParseException e) {
+            throw new IllegalArgumentException("invalid " + fieldName + ": " + value + " (expected yyyy-MM-dd)");
+        }
+    }
+
+    /**
+     * Day boundaries are anchored to UTC, not the JVM's default zone — a server-local zone
+     * would make the window depend on which machine runs the query (see
+     * {@code .kiro/specs/temporal-type-correctness}, which exists because exactly this kind
+     * of implicit-zone comparison has already produced a live defect elsewhere).
+     */
+    private OffsetDateTime toInclusiveStart(String date, String fieldName)
+    {
+        LocalDate day = parseDate(date, fieldName);
+        return day == null ? null : day.atStartOfDay(ZoneOffset.UTC).toOffsetDateTime();
+    }
+
+    /**
+     * The UI sends whole days, so an inclusive "to" is every instant before the following
+     * midnight — a plain {@code <=} would drop everything after 00:00 on the "to" day.
+     */
+    private OffsetDateTime toExclusiveEnd(String date, String fieldName)
+    {
+        LocalDate day = parseDate(date, fieldName);
+        return day == null ? null : day.plusDays(1).atStartOfDay(ZoneOffset.UTC).toOffsetDateTime();
+    }
 
     private void applyProfileFields(CustomerEntity customerEntity, WholesaleCustomerDto dto)
     {
