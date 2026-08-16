@@ -199,6 +199,8 @@ public class OrderService
         order.setSessionId(sessionId);
         order.setCustomerEntity(customer);
         order.setTotalAmount(grandTotal);
+        order.setVatAmount(vatAmount);
+        order.setShippingCost(shippingEstimate);
         order.setStatus(OrderStatusEn.CREATED);
         order.setIdempotencyKey(idempotencyKey);
         order.setCartFingerprint(cartFingerprint);
@@ -501,6 +503,11 @@ public class OrderService
      * The subtotal is rebuilt from the stored line prices, which the server set
      * from the shopper's tier at creation. Nothing here re-prices a product.
      *
+     * Also overwrites the persisted {@code vatAmount}/{@code shippingCost} with this
+     * reprice's figures — the admin detail breakdown reads those columns, so a stale
+     * creation-time VAT or shipping figure would otherwise survive under a grand total
+     * that has since moved on without it.
+     *
      * Caller must be inside a transaction: the entity is managed, so the new
      * total flushes on commit.
      */
@@ -508,7 +515,32 @@ public class OrderService
     {
         OrderTotals totals = computeTotals(subtotalOf(order), order.getShippingMethod());
         order.setTotalAmount(totals.grandTotal());
+        order.setVatAmount(totals.vatAmount());
+        order.setShippingCost(totals.shippingEstimate());
         return totals;
+    }
+
+    /**
+     * The money breakdown for the admin order-detail screen: what this order was
+     * actually charged, not what it would cost today.
+     * <p>
+     * {@code vatAmount}/{@code shippingCost} come from the order's own persisted columns
+     * whenever they exist — written once at creation and again at {@link #repriceOrder}
+     * — so a later change to the VAT rate or a shipping method's fee can never move an
+     * already-placed order's figures. Only an order placed before those columns existed
+     * (null on both) falls back to a live {@link #computeTotals} estimate; for that order
+     * alone the breakdown is a best-effort reconstruction against current settings; there
+     * is no historical record to recover it from.
+     */
+    public OrderTotals totalsForAdminDetail(OrderEntity order)
+    {
+        BigDecimal subtotal = subtotalOf(order);
+        if (order.getVatAmount() != null && order.getShippingCost() != null) {
+            return new OrderTotals(subtotal, order.getVatAmount(), order.getShippingCost(), order.getTotalAmount());
+        }
+
+        OrderTotals estimate = computeTotals(subtotal, order.getShippingMethod());
+        return new OrderTotals(subtotal, estimate.vatAmount(), estimate.shippingEstimate(), order.getTotalAmount());
     }
 
     /**

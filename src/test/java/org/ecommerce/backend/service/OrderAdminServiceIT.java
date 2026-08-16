@@ -434,6 +434,10 @@ class OrderAdminServiceIT
         assertEquals(0, new BigDecimal("300.00").compareTo(detail.getSubtotal()));
         assertEquals(0, order.getTotalAmount().compareTo(detail.getGrandTotal()),
                 "the grand total shown must be the amount the order was charged");
+        // newOrder() sets totalAmount directly and leaves vatAmount/shippingCost unset,
+        // the shape of every order placed before those columns existed — exercising the
+        // live-estimate fallback in OrderService.totalsForAdminDetail. A pinned-order
+        // exact breakdown is covered by OrderAdminServiceHistoricalTotalsIT.
         assertNotNull(detail.getVatAmount());
         assertNotNull(detail.getShippingCost());
 

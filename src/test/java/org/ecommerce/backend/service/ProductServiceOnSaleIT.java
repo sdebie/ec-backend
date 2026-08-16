@@ -189,7 +189,7 @@ class ProductServiceOnSaleIT
         List<ProductShoppingListItemDto> onSaleResults = productService.getShoppingProducts(pageOf(0, 50), null, true, null, null, null);
 
         // Use the legacy findOnSaleShoppingProductList (existing)
-        List<ProductShoppingListItemDto> legacyResults = productService.getProductsOnSale(pageOf(0, 50), false);
+        List<ProductShoppingListItemDto> legacyResults = productService.getProductsOnSale(pageOf(0, 50), false).getContent();
 
         // Filter to our test marker
         List<String> onSaleNames = onSaleResults

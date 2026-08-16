@@ -66,10 +66,16 @@ public class ProductService
     }
 
     @Transactional(value = TxType.SUPPORTS)
-    public List<ProductShoppingListItemDto> getProductsOnSale(PageRequest pageRequest, boolean ignoreStatus)
+    public PageResponse<ProductShoppingListItemDto> getProductsOnSale(PageRequest pageRequest, boolean ignoreStatus)
     {
         LocalDateTime now = LocalDateTime.now();
-        return productListItemAssembler.buildShoppingListItems(productRepository.findOnSaleProductEntities(pageRequest, ignoreStatus), now, ignoreStatus);
+        List<ProductShoppingListItemDto> content = productListItemAssembler.buildShoppingListItems(productRepository.findOnSaleProductEntities(pageRequest, ignoreStatus), now, ignoreStatus);
+
+        long totalElements = productRepository.countOnSaleProducts(ignoreStatus);
+        PageRequest effectivePageRequest = pageRequest != null ? pageRequest : new PageRequest();
+        int totalPages = (int) Math.ceil((double) totalElements / effectivePageRequest.getPageSize());
+
+        return new PageResponse<>(content, totalElements, totalPages, effectivePageRequest.getPageIndex(), effectivePageRequest.getPageSize());
     }
 
     /**

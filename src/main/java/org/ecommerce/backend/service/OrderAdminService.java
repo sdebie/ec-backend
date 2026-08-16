@@ -110,9 +110,10 @@ public class OrderAdminService
             return null;
         }
 
-        // The money breakdown comes from the same computeTotals path that priced
-        // the order, so the components staff see reconcile with what was charged.
-        OrderTotals totals = orderService.computeTotals(orderService.subtotalOf(order), order.getShippingMethod());
+        // The money breakdown is what this order actually charged — read back from
+        // its own persisted vatAmount/shippingCost — not a live re-estimate that
+        // could silently drift from the grand total once settings change.
+        OrderTotals totals = orderService.totalsForAdminDetail(order);
 
         List<OrderStatusHistoryEntity> history = OrderStatusHistoryEntity
                 .find("select h from OrderStatusHistoryEntity h where h.order.id = ?1 order by h.createdAt desc", id)

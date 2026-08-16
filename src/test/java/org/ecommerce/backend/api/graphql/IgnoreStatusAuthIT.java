@@ -131,7 +131,7 @@ class IgnoreStatusAuthIT
      */
     private static String saleProductListIgnoreStatusBody()
     {
-        return "{\"query\":\"{ saleProductList(pageRequest: {pageIndex: 0, pageSize: 50}, ignoreStatus: true) { id name status } }\"}";
+        return "{\"query\":\"{ saleProductList(pageRequest: {pageIndex: 0, pageSize: 50}, ignoreStatus: true) { content { id name status } } }\"}";
     }
 
     /**
@@ -139,7 +139,7 @@ class IgnoreStatusAuthIT
      */
     private static String saleProductListDefaultBody()
     {
-        return "{\"query\":\"{ saleProductList(pageRequest: {pageIndex: 0, pageSize: 50}) { id name status } }\"}";
+        return "{\"query\":\"{ saleProductList(pageRequest: {pageIndex: 0, pageSize: 50}) { content { id name status } } }\"}";
     }
 
     /**
@@ -191,8 +191,8 @@ class IgnoreStatusAuthIT
         .then()
                 .statusCode(200)
                 .body("errors", nullValue())
-                .body("data.saleProductList", not(empty()))
-                .body("data.saleProductList.id", hasItem(TRACKED_PRODUCT_ID.toString()));
+                .body("data.saleProductList.content", not(empty()))
+                .body("data.saleProductList.content.id", hasItem(TRACKED_PRODUCT_ID.toString()));
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -240,7 +240,7 @@ class IgnoreStatusAuthIT
         .then()
                 .statusCode(200)
                 .body("errors", nullValue())
-                .body("data.saleProductList", notNullValue());
+                .body("data.saleProductList.content", notNullValue());
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
