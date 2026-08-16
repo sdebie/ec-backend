@@ -99,6 +99,17 @@ class OrderOwnershipGuardTest
         when(CustomerEntity.findByEmail(email)).thenReturn(customer);
     }
 
+    /**
+     * Distinct from the {@code @BeforeEach} default of "no credential at all": a role
+     * only staff hold, so a guard that ever branched on it (rather than solely on
+     * {@code hasRole("customer")}) would diverge from the no-credential cases here.
+     */
+    private void authenticateAsStaff()
+    {
+        when(securityIdentity.hasRole("SUPER_ADMIN")).thenReturn(true);
+        when(jwt.getSubject()).thenReturn("staff@test.com");
+    }
+
     // ── Guest order ─────────────────────────────────────────────────────────
 
     @Test
@@ -142,6 +153,7 @@ class OrderOwnershipGuardTest
     void guestOrder_staffJwt_refused()
     {
         // Staff hold a role name, never "customer" — the same branch as anonymous.
+        authenticateAsStaff();
         assertFalse(guard.mayAct(guestOrder, null));
     }
 
@@ -195,6 +207,7 @@ class OrderOwnershipGuardTest
     @DisplayName("customer-owned order × staff JWT (no token) → refused (Requirement 1.6)")
     void customerOrder_staffJwt_refused()
     {
+        authenticateAsStaff();
         assertFalse(guard.mayAct(customerOrder, null));
     }
 
