@@ -138,12 +138,17 @@ class OrderAdminServiceIT
 
     private PageResponse<AdminOrderListItemDto> listWindow(int pageIndex, int pageSize, String paymentState)
     {
-        return orderAdminService.adminOrderList(pageIndex, pageSize, paymentState, null, WINDOW_FROM, WINDOW_TO);
+        return listWindow(pageIndex, pageSize, paymentState, null, null);
     }
 
     private PageResponse<AdminOrderListItemDto> listWindow(String paymentState, String fulfilmentState)
     {
-        return orderAdminService.adminOrderList(0, 10, paymentState, fulfilmentState, WINDOW_FROM, WINDOW_TO);
+        return orderAdminService.adminOrderList(0, 10, paymentState, fulfilmentState, WINDOW_FROM, WINDOW_TO, null, null);
+    }
+
+    private PageResponse<AdminOrderListItemDto> listWindow(int pageIndex, int pageSize, String paymentState, String sortBy, String sortDir)
+    {
+        return orderAdminService.adminOrderList(pageIndex, pageSize, paymentState, null, WINDOW_FROM, WINDOW_TO, sortBy, sortDir);
     }
 
     // ── List ────────────────────────────────────────────────────────────────
@@ -269,6 +274,87 @@ class OrderAdminServiceIT
         assertEquals(3, secondPage.getTotalElements());
     }
 
+    // ── Sort ────────────────────────────────────────────────────────────────
+
+    @Test
+    @TestTransaction
+    @DisplayName("with no sort given, orders newest first — the same default as before sorting existed")
+    void adminOrderList_noSort_defaultsToNewestFirst()
+    {
+        OrderEntity older = newOrder(OrderStatusEn.PAID, new BigDecimal("10.00"), WINDOW_DAY);
+        OrderEntity newer = newOrder(OrderStatusEn.PAID, new BigDecimal("20.00"), WINDOW_DAY.plusDays(1));
+        syncAndClear();
+
+        List<String> ids = listWindow(0, 10, null, null, null).getContent().stream()
+                .map(AdminOrderListItemDto::getId)
+                .toList();
+
+        assertEquals(List.of(newer.getId().toString(), older.getId().toString()), ids);
+    }
+
+    @Test
+    @TestTransaction
+    @DisplayName("sorts by total in both directions")
+    void adminOrderList_sortByTotal_ordersBothDirections()
+    {
+        OrderEntity small = newOrder(OrderStatusEn.PAID, new BigDecimal("10.00"), WINDOW_DAY);
+        OrderEntity large = newOrder(OrderStatusEn.PAID, new BigDecimal("99.00"), WINDOW_DAY.plusDays(1));
+        syncAndClear();
+
+        List<String> ascending = listWindow(0, 10, null, "totalAmount", "ASC").getContent().stream()
+                .map(AdminOrderListItemDto::getId)
+                .toList();
+        assertEquals(List.of(small.getId().toString(), large.getId().toString()), ascending);
+
+        List<String> descending = listWindow(0, 10, null, "totalAmount", "DESC").getContent().stream()
+                .map(AdminOrderListItemDto::getId)
+                .toList();
+        assertEquals(List.of(large.getId().toString(), small.getId().toString()), descending);
+    }
+
+    @Test
+    @TestTransaction
+    @DisplayName("sorts by status")
+    void adminOrderList_sortByStatus_orders()
+    {
+        // CREATED < PAID alphabetically, and placed in the OPPOSITE order to their creation
+        // timestamps — a fixture where status order and createdAt order agreed would pass
+        // just as well against the createdAt-desc fallback this is supposed to distinguish
+        // itself from, proving nothing about status actually being read.
+        newOrder(OrderStatusEn.CREATED, new BigDecimal("10.00"), WINDOW_DAY);
+        newOrder(OrderStatusEn.PAID, new BigDecimal("20.00"), WINDOW_DAY.plusDays(1));
+        syncAndClear();
+
+        List<String> ascending = listWindow(0, 10, null, "status", "ASC").getContent().stream()
+                .map(AdminOrderListItemDto::getStatus)
+                .toList();
+        assertEquals(List.of("CREATED", "PAID"), ascending);
+    }
+
+    /**
+     * The repository's own defence, exercised through the real service and a real query —
+     * proof this rejects the request the same way an unknown column would if it reached raw
+     * JPQL, rather than merely documenting that intent.
+     */
+    @Test
+    @TestTransaction
+    @DisplayName("an unsortable or unknown column falls back to the default sort rather than erroring")
+    void adminOrderList_unsortableColumn_fallsBackToDefault()
+    {
+        OrderEntity older = newOrder(OrderStatusEn.PAID, new BigDecimal("10.00"), WINDOW_DAY);
+        OrderEntity newer = newOrder(OrderStatusEn.PAID, new BigDecimal("20.00"), WINDOW_DAY.plusDays(1));
+        syncAndClear();
+
+        // itemCount is computed, not a column — exactly the trap the frontend column
+        // definitions were written to avoid triggering.
+        List<String> ids = listWindow(0, 10, null, "itemCount", "ASC").getContent().stream()
+                .map(AdminOrderListItemDto::getId)
+                .toList();
+
+        assertEquals(List.of(newer.getId().toString(), older.getId().toString()), ids,
+                "must fall back to newest-first, not attempt to sort by a non-existent column");
+    }
+
     @Test
     @TestTransaction
     @DisplayName("excludes orders placed outside the requested day range, inclusive of the end day")
@@ -288,7 +374,7 @@ class OrderAdminServiceIT
     void adminOrderList_malformedDate_throws()
     {
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
-                () -> orderAdminService.adminOrderList(0, 10, null, null, "15-03-2001", null));
+                () -> orderAdminService.adminOrderList(0, 10, null, null, "15-03-2001", null, null, null));
         assertTrue(ex.getMessage().contains("invalid fromDate"), ex.getMessage());
     }
 
@@ -297,9 +383,9 @@ class OrderAdminServiceIT
     void adminOrderList_unknownFacet_throws()
     {
         assertThrows(IllegalArgumentException.class,
-                () -> orderAdminService.adminOrderList(0, 10, "SHIPPED", null, null, null));
+                () -> orderAdminService.adminOrderList(0, 10, "SHIPPED", null, null, null, null, null));
         assertThrows(IllegalArgumentException.class,
-                () -> orderAdminService.adminOrderList(0, 10, null, "SHIPPED", null, null));
+                () -> orderAdminService.adminOrderList(0, 10, null, "SHIPPED", null, null, null, null));
     }
 
     // ── Detail ──────────────────────────────────────────────────────────────

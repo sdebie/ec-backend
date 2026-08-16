@@ -128,7 +128,8 @@ class OrderServiceCreateOrderFromCartIT
 
         OrderCreationRequestDto request = requestWith(item(variant.getId(), 2));
 
-        OrderCheckoutResponseDto response = orderService.createOrderFromCart(request, CustomerTypeEn.RETAILER, customer);
+        OrderCheckoutResponseDto response =
+                orderService.createOrderFromCart(request, CustomerTypeEn.RETAILER, customer, UUID.randomUUID(), null);
         em.flush();
         em.clear();
 
@@ -152,7 +153,8 @@ class OrderServiceCreateOrderFromCartIT
 
         OrderCreationRequestDto request = requestWith(item(variant.getId(), 1));
 
-        OrderCheckoutResponseDto response = orderService.createOrderFromCart(request, CustomerTypeEn.GUEST, null);
+        OrderCheckoutResponseDto response =
+                orderService.createOrderFromCart(request, CustomerTypeEn.GUEST, null, UUID.randomUUID(), null);
         em.flush();
         em.clear();
 
@@ -180,7 +182,7 @@ class OrderServiceCreateOrderFromCartIT
                 item(variant.getId(), 3));
 
         assertThrows(UnavailableVariantsException.class,
-                () -> orderService.createOrderFromCart(request, CustomerTypeEn.RETAILER, null));
+                () -> orderService.createOrderFromCart(request, CustomerTypeEn.RETAILER, null, UUID.randomUUID(), null));
 
         em.flush();
         em.clear();
@@ -203,7 +205,7 @@ class OrderServiceCreateOrderFromCartIT
         em.flush();
 
         OrderCreationRequestDto request = requestWith(item(variant.getId(), 4));
-        orderService.createOrderFromCart(request, CustomerTypeEn.RETAILER, null);
+        orderService.createOrderFromCart(request, CustomerTypeEn.RETAILER, null, UUID.randomUUID(), null);
 
         em.flush();
         em.clear();
@@ -225,7 +227,7 @@ class OrderServiceCreateOrderFromCartIT
         em.flush();
 
         OrderCreationRequestDto firstRequest = requestWith(item(variant.getId(), 3));
-        orderService.createOrderFromCart(firstRequest, CustomerTypeEn.RETAILER, null);
+        orderService.createOrderFromCart(firstRequest, CustomerTypeEn.RETAILER, null, UUID.randomUUID(), null);
         em.flush();
         em.clear();
 
@@ -234,7 +236,7 @@ class OrderServiceCreateOrderFromCartIT
 
         OrderCreationRequestDto secondRequest = requestWith(item(variant.getId(), 3));
         assertThrows(UnavailableVariantsException.class,
-                () -> orderService.createOrderFromCart(secondRequest, CustomerTypeEn.RETAILER, null),
+                () -> orderService.createOrderFromCart(secondRequest, CustomerTypeEn.RETAILER, null, UUID.randomUUID(), null),
                 "second order requests 3 against only 2 remaining — must be refused, proving the first decrement persisted");
     }
 
@@ -250,7 +252,7 @@ class OrderServiceCreateOrderFromCartIT
         OrderCreationRequestDto request = requestWith(itemWithRawVariantId(null, 1));
 
         assertThrows(IllegalArgumentException.class,
-                () -> orderService.createOrderFromCart(request, CustomerTypeEn.GUEST, null));
+                () -> orderService.createOrderFromCart(request, CustomerTypeEn.GUEST, null, UUID.randomUUID(), null));
 
         em.flush();
         em.clear();
@@ -274,7 +276,7 @@ class OrderServiceCreateOrderFromCartIT
                 itemWithRawVariantId(null, 1));
 
         assertThrows(IllegalArgumentException.class,
-                () -> orderService.createOrderFromCart(request, CustomerTypeEn.GUEST, null));
+                () -> orderService.createOrderFromCart(request, CustomerTypeEn.GUEST, null, UUID.randomUUID(), null));
 
         em.flush();
         em.clear();
@@ -292,7 +294,7 @@ class OrderServiceCreateOrderFromCartIT
         OrderCreationRequestDto request = requestWith(itemWithRawVariantId("   ", 1));
 
         assertThrows(IllegalArgumentException.class,
-                () -> orderService.createOrderFromCart(request, CustomerTypeEn.GUEST, null));
+                () -> orderService.createOrderFromCart(request, CustomerTypeEn.GUEST, null, UUID.randomUUID(), null));
     }
 
     // ── 7. Line count is bounded on this unauthenticated surface ───────────
@@ -318,7 +320,7 @@ class OrderServiceCreateOrderFromCartIT
         request.setItems(tooManyLines);
 
         assertThrows(IllegalArgumentException.class,
-                () -> orderService.createOrderFromCart(request, CustomerTypeEn.GUEST, null));
+                () -> orderService.createOrderFromCart(request, CustomerTypeEn.GUEST, null, UUID.randomUUID(), null));
 
         em.flush();
         em.clear();
@@ -346,7 +348,7 @@ class OrderServiceCreateOrderFromCartIT
         request.setItems(maxLines);
 
         OrderCheckoutResponseDto response =
-                orderService.createOrderFromCart(request, CustomerTypeEn.GUEST, null);
+                orderService.createOrderFromCart(request, CustomerTypeEn.GUEST, null, UUID.randomUUID(), null);
 
         assertNotNull(response.getOrderId(), "the cap is a bound, not an off-by-one rejection of a legal cart");
     }

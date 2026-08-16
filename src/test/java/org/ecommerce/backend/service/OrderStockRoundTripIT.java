@@ -75,7 +75,7 @@ class OrderStockRoundTripIT
         OrderCreationRequestDto request = new OrderCreationRequestDto();
         request.setItems(new ArrayList<>(List.of(lines)));
         String orderId = orderService
-                .createOrderFromCart(request, CustomerTypeEn.RETAILER, null)
+                .createOrderFromCart(request, CustomerTypeEn.RETAILER, null, UUID.randomUUID(), null)
                 .getOrderId();
         em.flush();
         return UUID.fromString(orderId);

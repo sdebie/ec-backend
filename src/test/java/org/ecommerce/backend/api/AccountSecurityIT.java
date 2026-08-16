@@ -270,8 +270,15 @@ class AccountSecurityIT
     @DisplayName("REQ 11.7: POST /api/orders without token → non-401/403 (guest-reachable)")
     void createOrder_anonymous_notAuthRejected()
     {
+        // Idempotency-Key is required (checkout-idempotency Requirement 2), and the
+        // header gate runs before any auth check — a keyless request would satisfy
+        // this assertion (400 is still non-401/403) without ever reaching the
+        // customer-resolution logic REQ 11.7 exists to guard. A real key keeps this
+        // test on the path it always exercised: today, 422 for a variant that does
+        // not exist, proving the request reached variant validation unauthenticated.
         int status = given()
                 .contentType("application/json")
+                .header("Idempotency-Key", UUID.randomUUID().toString())
                 .body("{\"items\":[{\"variantId\":\"" + UUID.randomUUID() + "\",\"quantity\":1}]}")
                 .when()
                 .post("/api/orders")

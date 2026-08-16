@@ -136,6 +136,7 @@ class GuestCheckoutPricingIT
     {
         String orderId = given()
                 .contentType("application/json")
+                .header("Idempotency-Key", UUID.randomUUID().toString())
                 .body(orderBody(2))
         .when()
                 .post("/api/orders")
@@ -156,6 +157,7 @@ class GuestCheckoutPricingIT
         String orderId = given()
                 .contentType("application/json")
                 .header("Authorization", "Bearer " + wholesalerJwt())
+                .header("Idempotency-Key", UUID.randomUUID().toString())
                 .body(orderBody(2))
         .when()
                 .post("/api/orders")
@@ -176,6 +178,7 @@ class GuestCheckoutPricingIT
         // figure could be stored is if the server stopped selecting one.
         String orderId = given()
                 .contentType("application/json")
+                .header("Idempotency-Key", UUID.randomUUID().toString())
                 .body(orderBody(1))
         .when()
                 .post("/api/orders")
@@ -201,6 +204,7 @@ class GuestCheckoutPricingIT
     {
         String orderId = given()
                 .contentType("application/json")
+                .header("Idempotency-Key", UUID.randomUUID().toString())
                 .body(orderBody(1))
         .when()
                 .post("/api/orders")

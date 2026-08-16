@@ -38,9 +38,12 @@ public class OrderAdminResource
             @Name("paymentState") String paymentState,
             @Name("fulfilmentState") String fulfilmentState,
             @Name("fromDate") String fromDate,
-            @Name("toDate") String toDate)
+            @Name("toDate") String toDate,
+            @Name("sortBy") String sortBy,
+            @Name("sortDir") String sortDir)
     {
-        return orderAdminService.adminOrderList(pageIndex, pageSize, paymentState, fulfilmentState, fromDate, toDate);
+        return orderAdminService.adminOrderList(
+                pageIndex, pageSize, paymentState, fulfilmentState, fromDate, toDate, sortBy, sortDir);
     }
 
     @Query("adminOrder")

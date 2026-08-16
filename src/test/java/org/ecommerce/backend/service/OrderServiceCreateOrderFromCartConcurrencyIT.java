@@ -114,7 +114,12 @@ class OrderServiceCreateOrderFromCartConcurrencyIT
             request.setItems(List.of(item));
 
             try {
-                OrderCheckoutResponseDto response = orderService.createOrderFromCart(request, CustomerTypeEn.RETAILER, null);
+                // Each racing buyer is a genuinely different checkout intent, so
+                // each gets its own key — this test is about reserveStock's atomic
+                // UPDATE, not about idempotency, and a shared key would collide on
+                // the unique index instead of racing for stock.
+                OrderCheckoutResponseDto response = orderService.createOrderFromCart(
+                        request, CustomerTypeEn.RETAILER, null, UUID.randomUUID(), null);
                 createdOrderIds.add(UUID.fromString(response.getOrderId()));
                 return true;
             } catch (UnavailableVariantsException e) {

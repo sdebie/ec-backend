@@ -58,7 +58,18 @@ class OrderCheckoutRateLimitIT
         OrderCheckoutResponseDto response = new OrderCheckoutResponseDto();
         response.setOrderId(UUID.randomUUID().toString());
         response.setSessionId(UUID.randomUUID().toString());
-        when(orderService.createOrderFromCart(any(), any(), any())).thenReturn(response);
+        when(orderService.createOrderFromCart(any(), any(), any(), any(), any())).thenReturn(response);
+    }
+
+    /**
+     * A fresh header per call: the header is now required (Requirement 2.3) and
+     * checked ahead of the rate limiter, and two requests sharing a key would
+     * collide on the fast-path idempotency lookup instead of exercising the
+     * limiter this suite is about.
+     */
+    private String freshIdempotencyKey()
+    {
+        return UUID.randomUUID().toString();
     }
 
     private String validOrderBody()
@@ -81,6 +92,7 @@ class OrderCheckoutRateLimitIT
 
         given()
                 .contentType(ContentType.JSON)
+                .header("Idempotency-Key", freshIdempotencyKey())
                 .header("X-Forwarded-For", "192.0.2.30")
                 .body(validOrderBody())
                 .when()
@@ -89,7 +101,7 @@ class OrderCheckoutRateLimitIT
                 .statusCode(429)
                 .header("Retry-After", "1800");
 
-        verify(orderService, never()).createOrderFromCart(any(), any(), any());
+        verify(orderService, never()).createOrderFromCart(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -101,6 +113,7 @@ class OrderCheckoutRateLimitIT
         // real peer at the end.
         given()
                 .contentType(ContentType.JSON)
+                .header("Idempotency-Key", freshIdempotencyKey())
                 .header("X-Forwarded-For", "10.9.9.9, 203.0.113.77")
                 .body(validOrderBody())
                 .when()
@@ -117,6 +130,7 @@ class OrderCheckoutRateLimitIT
     {
         given()
                 .contentType(ContentType.JSON)
+                .header("Idempotency-Key", freshIdempotencyKey())
                 .header("CF-Connecting-IP", "198.51.100.5")
                 .header("X-Forwarded-For", "10.9.9.9, 203.0.113.77")
                 .body(validOrderBody())
@@ -134,6 +148,7 @@ class OrderCheckoutRateLimitIT
     {
         given()
                 .contentType(ContentType.JSON)
+                .header("Idempotency-Key", freshIdempotencyKey())
                 .header("X-Forwarded-For", "192.0.2.31")
                 .body(validOrderBody())
                 .when()
@@ -141,6 +156,6 @@ class OrderCheckoutRateLimitIT
                 .then()
                 .statusCode(201);
 
-        verify(orderService).createOrderFromCart(any(), any(), any());
+        verify(orderService).createOrderFromCart(any(), any(), any(), any(), any());
     }
 }

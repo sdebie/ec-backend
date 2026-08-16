@@ -2,10 +2,14 @@ package org.ecommerce.backend.service;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+import jakarta.persistence.PersistenceException;
 import jakarta.transaction.Transactional;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.eclipse.microprofile.graphql.GraphQLException;
+import org.ecommerce.backend.exception.IdempotencyConflictException;
 import org.ecommerce.backend.exception.UnavailableVariantsException;
 import org.ecommerce.backend.mapper.OrderMapper;
+import org.hibernate.exception.ConstraintViolationException;
 import org.ecommerce.common.dto.*;
 import org.ecommerce.common.entity.CustomerEntity;
 import org.ecommerce.common.entity.OrderEntity;
@@ -23,6 +27,10 @@ import org.ecommerce.common.repository.OrderRepository;
 import org.jboss.logging.Logger;
 
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -47,10 +55,25 @@ public class OrderService
     @Inject
     ShippingService shippingService;
 
+    @ConfigProperty(name = "order.idempotency.replay-hours", defaultValue = "24")
+    int replayWindowHours;
+
     private static final Logger LOG = Logger.getLogger(OrderService.class);
 
     /** Recorded on the status timeline for a transition no staff member made. */
     public static final String SYSTEM_ACTOR = "SYSTEM";
+
+    /**
+     * The four refusal codes an idempotency-key request can receive in a
+     * {@code 409} body's {@code code} field — the only field a caller may
+     * branch on; {@code error} is a human message and may change wording
+     * freely (design §6). Defined once here, read by the endpoint, the
+     * backend tests and the storefront client.
+     */
+    public static final String CODE_IDEMPOTENCY_KEY_EXPIRED = "IDEMPOTENCY_KEY_EXPIRED";
+    public static final String CODE_IDEMPOTENCY_ORDER_VOIDED = "IDEMPOTENCY_ORDER_VOIDED";
+    public static final String CODE_IDEMPOTENCY_CART_MISMATCH = "IDEMPOTENCY_CART_MISMATCH";
+    public static final String CODE_IDEMPOTENCY_WRONG_OWNER = "IDEMPOTENCY_WRONG_OWNER";
 
     /**
      * Most distinct lines one cart may check out with.
@@ -65,7 +88,8 @@ public class OrderService
     public static final int MAX_ORDER_LINES = 200;
 
     @Transactional
-    public OrderCheckoutResponseDto createOrderFromCart(OrderCreationRequestDto request, CustomerTypeEn customerTier, CustomerEntity customer)
+    public OrderCheckoutResponseDto createOrderFromCart(OrderCreationRequestDto request, CustomerTypeEn customerTier,
+            CustomerEntity customer, UUID idempotencyKey, String cartFingerprint)
     {
         if (request == null || request.getItems() == null || request.getItems().isEmpty()) {
             throw new IllegalArgumentException("Order request must contain at least one item");
@@ -176,6 +200,8 @@ public class OrderService
         order.setCustomerEntity(customer);
         order.setTotalAmount(grandTotal);
         order.setStatus(OrderStatusEn.CREATED);
+        order.setIdempotencyKey(idempotencyKey);
+        order.setCartFingerprint(cartFingerprint);
 
         for (int i = 0; i < validItems.size(); i++) {
             OrderCreationItemDto item = validItems.get(i);
@@ -190,7 +216,21 @@ public class OrderService
             order.getItems().add(orderItem);
         }
 
-        OrderEntity.persist(order);
+        // The claim is a race, not a check (design §3.2): insert optimistically
+        // and let the unique index on idempotency_key decide who won. flush()
+        // forces the constraint now, inside this method's own catch, rather than
+        // at commit where it would surface as an opaque transaction failure.
+        try {
+            OrderEntity.persist(order);
+            OrderEntity.flush();
+        } catch (PersistenceException e) {
+            if (!isUniqueViolationOf(e, "ux_orders_idempotency_key")) {
+                throw e;
+            }
+            // Another delivery of this same intent won the race. Its order is
+            // the real one; the caller re-resolves against it.
+            throw new IdempotencyConflictException(idempotencyKey);
+        }
         OrderStatusHistoryEntity.record(order, OrderStatusEn.CREATED, "Order placed", SYSTEM_ACTOR);
 
         // 7. Build and return response
@@ -203,6 +243,82 @@ public class OrderService
         response.setShippingEstimate(shippingEstimate);
         response.setGrandTotal(grandTotal);
         return response;
+    }
+
+    /**
+     * Whether a persistence failure is a unique-constraint violation on the
+     * named constraint — the signal that a concurrent delivery of the same
+     * idempotency key won the race, not a genuine fault (design §3.2).
+     * <p>
+     * {@code em.flush()} wraps the real failure in
+     * {@code jakarta.persistence.PersistenceException}; the underlying
+     * {@code org.hibernate.exception.ConstraintViolationException} — never
+     * {@code jakarta.validation.ConstraintViolationException}, a same-named
+     * bean-validation class that is never thrown here — is found by
+     * unwrapping the cause chain. Matched on constraint name so an unrelated
+     * fault on {@code orders} is never mistaken for a lost race.
+     */
+    static boolean isUniqueViolationOf(Throwable e, String constraintName)
+    {
+        Throwable cause = e;
+        while (cause != null) {
+            if (cause instanceof ConstraintViolationException cve) {
+                return constraintName.equals(cve.getConstraintName());
+            }
+            cause = cause.getCause();
+        }
+        return false;
+    }
+
+    /**
+     * A stable identity for one checkout request's cart, used to detect an
+     * {@code Idempotency-Key} reused against a changed cart (Requirement 3).
+     * <p>
+     * Computed from the submitted lines alone — before validation, without
+     * touching the database — because the fast-path idempotency lookup needs it
+     * on a cart that may never be validated at all. It is therefore total: a
+     * line naming no variant or carrying a null quantity is hashed as given
+     * rather than thrown on.
+     * <p>
+     * Aggregates quantity per variant id and sorts by variant id before hashing,
+     * so the same cart submitted with its lines reordered, or split across two
+     * lines for one variant, fingerprints identically. Hashes the normalised
+     * cart, never the raw request body: two serialisations of an identical cart
+     * are not guaranteed byte-identical (JSON key order, whitespace), so a
+     * raw-body hash would turn the network retry this feature protects into a
+     * hard checkout failure.
+     */
+    public static String fingerprint(List<OrderCreationItemDto> items)
+    {
+        Map<String, Integer> quantityByVariantId = new HashMap<>();
+        if (items != null) {
+            for (OrderCreationItemDto item : items) {
+                if (item == null) {
+                    continue;
+                }
+                String variantId = String.valueOf(item.getVariantId());
+                int quantity = item.getQuantity() != null ? item.getQuantity() : 0;
+                quantityByVariantId.merge(variantId, quantity, Integer::sum);
+            }
+        }
+
+        String normalised = quantityByVariantId.entrySet().stream()
+                .sorted(Map.Entry.comparingByKey())
+                .map(entry -> entry.getKey() + ":" + entry.getValue())
+                .collect(Collectors.joining("|"));
+
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(normalised.getBytes(StandardCharsets.UTF_8));
+            StringBuilder hex = new StringBuilder(hash.length * 2);
+            for (byte b : hash) {
+                hex.append(String.format("%02x", b));
+            }
+            return hex.toString();
+        } catch (NoSuchAlgorithmException e) {
+            // SHA-256 is a mandatory JCA algorithm on every JVM.
+            throw new IllegalStateException("SHA-256 unavailable", e);
+        }
     }
 
     /**
@@ -414,6 +530,71 @@ public class OrderService
             subtotal = subtotal.add(item.getUnitPrice().multiply(BigDecimal.valueOf(item.getQuantity())));
         }
         return subtotal;
+    }
+
+    /**
+     * Rebuilds a checkout response from an already-persisted order, for a
+     * request replaying an {@code Idempotency-Key} (design §4).
+     * <p>
+     * <b>A read.</b> Must never call {@link #reserveStock}, must never call
+     * {@link OrderStatusHistoryEntity#record}, must never notify, and must
+     * never write {@code totalAmount} — which is exactly why this recomputes
+     * totals via {@link #computeTotals} rather than calling
+     * {@link #repriceOrder}: the latter is those same two lines plus a write.
+     * Lives beside {@link #createOrderFromCart}, never inside it, so no
+     * shared path can accidentally acquire a side effect.
+     * <p>
+     * The response can legitimately differ from the original if the shopper
+     * has since chosen a delivery method — {@code shippingEstimate} and
+     * {@code grandTotal} follow the order's current state, deliberately not
+     * pinned by Requirement 1.5, which equates only the priced facts
+     * (orderId, sessionId, lines' variantId/quantity/unitPrice/lineTotal,
+     * subtotal) that cannot drift.
+     */
+    public OrderCheckoutResponseDto replayOrder(OrderEntity order)
+    {
+        BigDecimal subtotal = subtotalOf(order);
+        OrderTotals totals = computeTotals(subtotal, order.getShippingMethod());
+
+        List<OrderCheckoutLineDto> lines = new ArrayList<>();
+        for (OrderItemEntity item : order.getItems()) {
+            OrderCheckoutLineDto line = new OrderCheckoutLineDto();
+            line.setVariantId(item.getVariant() != null ? item.getVariant().getId().toString() : null);
+            line.setName(item.getVariant() != null && item.getVariant().getProduct() != null
+                    ? item.getVariant().getProduct().getName() : null);
+            line.setUnitPrice(item.getUnitPrice());
+            line.setQuantity(item.getQuantity());
+            line.setLineTotal(item.getUnitPrice() != null && item.getQuantity() != null
+                    ? item.getUnitPrice().multiply(BigDecimal.valueOf(item.getQuantity())) : null);
+            lines.add(line);
+        }
+
+        OrderCheckoutResponseDto response = new OrderCheckoutResponseDto();
+        response.setOrderId(order.getId().toString());
+        response.setSessionId(order.getSessionId() != null ? order.getSessionId().toString() : null);
+        response.setLines(lines);
+        response.setSubtotal(subtotal);
+        response.setVatAmount(totals.vatAmount());
+        response.setShippingEstimate(totals.shippingEstimate());
+        response.setGrandTotal(totals.grandTotal());
+        return response;
+    }
+
+    /**
+     * Whether a matched order is still within its replay window, measured
+     * from {@code created_at} (Requirement 5). Compared in
+     * {@code LocalDateTime}, the basis the column was written with — do not
+     * mix in {@code Instant}/{@code OffsetDateTime}.
+     * <p>
+     * A domain rule with a config value behind it, so it lives here rather
+     * than inline in the resource (law 13c).
+     */
+    public boolean isWithinReplayWindow(OrderEntity order)
+    {
+        if (order.getCreatedAt() == null) {
+            return false;
+        }
+        return order.getCreatedAt().isAfter(LocalDateTime.now().minusHours(replayWindowHours));
     }
 
     public OrderResponseDto getOrderById(UUID orderId)

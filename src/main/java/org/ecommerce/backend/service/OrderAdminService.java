@@ -10,6 +10,8 @@ import org.ecommerce.common.entity.OrderEntity;
 import org.ecommerce.common.entity.OrderStatusHistoryEntity;
 import org.ecommerce.common.enums.OrderStatusEn;
 import org.ecommerce.common.query.PageRequest;
+import org.ecommerce.common.query.SortRequest;
+import org.ecommerce.common.query.enums.SortDirection;
 import org.ecommerce.common.repository.OrderRepository;
 
 import java.time.LocalDate;
@@ -53,10 +55,15 @@ public class OrderAdminService
      * @param fulfilmentState a {@link FulfilmentState} name, or null/"ALL" for any
      * @param fromDate        inclusive ISO date (yyyy-MM-dd), or null
      * @param toDate          inclusive ISO date (yyyy-MM-dd), or null
+     * @param sortBy          the column to sort by, or null/blank for the default (newest
+     *                        first). An unrecognised column falls back to the default rather
+     *                        than erroring — see {@link OrderRepository#findForAdmin}.
+     * @param sortDir         "ASC" or "DESC" (case-insensitive); anything else is DESC
      */
     public PageResponse<AdminOrderListItemDto> adminOrderList(int pageIndex, int pageSize,
                                                               String paymentState, String fulfilmentState,
-                                                              String fromDate, String toDate)
+                                                              String fromDate, String toDate,
+                                                              String sortBy, String sortDir)
     {
         Set<OrderStatusEn> statusFilter = resolveStatuses(paymentState, fulfilmentState);
 
@@ -67,6 +74,8 @@ public class OrderAdminService
         // the following midnight — a plain <= would drop everything after 00:00.
         LocalDate toDay = parseDate(toDate, "toDate");
         LocalDateTime toExclusive = toDay == null ? null : toDay.plusDays(1).atStartOfDay();
+
+        SortRequest sort = toSortRequest(sortBy, sortDir);
 
         PageRequest pageRequest = new PageRequest();
         pageRequest.setPageIndex(pageIndex);
@@ -79,7 +88,7 @@ public class OrderAdminService
         }
 
         List<AdminOrderListItemDto> content = orderRepository
-                .findForAdmin(statusFilter, from, toExclusive, pageRequest)
+                .findForAdmin(statusFilter, from, toExclusive, sort, pageRequest)
                 .stream()
                 .map(orderAdminMapper::toListItemDto)
                 .toList();
@@ -156,5 +165,21 @@ public class OrderAdminService
         } catch (DateTimeParseException e) {
             throw new IllegalArgumentException("invalid " + fieldName + ": " + value + " (expected yyyy-MM-dd)");
         }
+    }
+
+    /**
+     * Null rather than throwing on a blank/missing column: {@link OrderRepository} treats an
+     * absent sort as "use the default", the same way an absent status or date filter means
+     * "don't narrow" rather than an error.
+     */
+    private SortRequest toSortRequest(String sortBy, String sortDir)
+    {
+        if (sortBy == null || sortBy.isBlank()) {
+            return null;
+        }
+        SortRequest sort = new SortRequest();
+        sort.setField(sortBy);
+        sort.setDirection("ASC".equalsIgnoreCase(sortDir) ? SortDirection.ASC : SortDirection.DESC);
+        return sort;
     }
 }

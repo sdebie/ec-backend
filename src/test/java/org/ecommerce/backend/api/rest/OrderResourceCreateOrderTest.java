@@ -43,7 +43,7 @@ class OrderResourceCreateOrderTest
         OrderCheckoutResponseDto response = new OrderCheckoutResponseDto();
         response.setOrderId(UUID.randomUUID().toString());
         response.setSessionId(UUID.randomUUID().toString());
-        when(orderService.createOrderFromCart(any(), any(), any())).thenReturn(response);
+        when(orderService.createOrderFromCart(any(), any(), any(), any(), any())).thenReturn(response);
     }
 
     private String generateCustomerJwt(String email)
@@ -70,6 +70,7 @@ class OrderResourceCreateOrderTest
     void createOrder_noAuthorizationHeader_resolvesNullCustomer()
     {
         given()
+                .header("Idempotency-Key", UUID.randomUUID().toString())
                 .contentType(ContentType.JSON)
                 .body(validOrderBody())
                 .when()
@@ -78,7 +79,7 @@ class OrderResourceCreateOrderTest
                 .statusCode(201);
 
         ArgumentCaptor<CustomerEntity> captor = ArgumentCaptor.forClass(CustomerEntity.class);
-        verify(orderService).createOrderFromCart(any(), any(), captor.capture());
+        verify(orderService).createOrderFromCart(any(), any(), captor.capture(), any(), any());
         assertNull(captor.getValue());
     }
 
@@ -93,6 +94,7 @@ class OrderResourceCreateOrderTest
 
         given()
                 .header("Authorization", "Bearer " + generateCustomerJwt(email))
+                .header("Idempotency-Key", UUID.randomUUID().toString())
                 .contentType(ContentType.JSON)
                 .body(validOrderBody())
                 .when()
@@ -101,7 +103,7 @@ class OrderResourceCreateOrderTest
                 .statusCode(201);
 
         ArgumentCaptor<CustomerEntity> captor = ArgumentCaptor.forClass(CustomerEntity.class);
-        verify(orderService).createOrderFromCart(any(), any(), captor.capture());
+        verify(orderService).createOrderFromCart(any(), any(), captor.capture(), any(), any());
         assertNotNull(captor.getValue(), "expected a resolved customer, got null");
         assertEquals(customer.getId(), captor.getValue().getId());
     }
@@ -115,6 +117,7 @@ class OrderResourceCreateOrderTest
 
         given()
                 .header("Authorization", "Bearer " + generateCustomerJwt(email))
+                .header("Idempotency-Key", UUID.randomUUID().toString())
                 .contentType(ContentType.JSON)
                 .body(validOrderBody())
                 .when()
@@ -123,7 +126,7 @@ class OrderResourceCreateOrderTest
                 .statusCode(201);
 
         ArgumentCaptor<CustomerEntity> captor = ArgumentCaptor.forClass(CustomerEntity.class);
-        verify(orderService).createOrderFromCart(any(), any(), captor.capture());
+        verify(orderService).createOrderFromCart(any(), any(), captor.capture(), any(), any());
         assertNull(captor.getValue());
     }
 }
