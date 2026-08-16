@@ -3,7 +3,10 @@ package org.ecommerce.backend.api.rest;
 import io.quarkus.panache.mock.PanacheMock;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
+import jakarta.inject.Inject;
+import org.ecommerce.backend.service.OrderCapabilityService;
 import org.ecommerce.backend.service.OrderNotificationService;
+import org.ecommerce.common.entity.CustomerEntity;
 import org.ecommerce.common.entity.OrderEntity;
 import org.ecommerce.common.entity.OrderStatusHistoryEntity;
 import org.ecommerce.common.entity.ShippingMethodEntity;
@@ -45,6 +48,9 @@ class OrderResourceInStorePaymentTest
     @InjectMock
     OrderNotificationService orderNotificationService;
 
+    @Inject
+    OrderCapabilityService orderCapability;
+
     @BeforeEach
     void setUp()
     {
@@ -72,6 +78,21 @@ class OrderResourceInStorePaymentTest
         return given().when().post("/api/orders/" + orderId + "/in-store-payment");
     }
 
+    /**
+     * Every case that means to reach past the ownership gate needs a real, valid
+     * capability token for that exact order id (guest-order-authorization) — the
+     * suite runs with {@code order.capability.enforce=true} and no {@code %test}
+     * override, so an anonymous call is refused before any of these tests' own
+     * business rule is ever reached.
+     */
+    private io.restassured.response.Response confirmWithToken(UUID orderId)
+    {
+        return given()
+                .header("X-Order-Token", orderCapability.mint(orderId))
+                .when()
+                .post("/api/orders/" + orderId + "/in-store-payment");
+    }
+
     @Test
     @DisplayName("confirms a collection order, moving it out of the sweep's reach and emailing the shopper")
     void collectionOrder_isConfirmed()
@@ -81,7 +102,7 @@ class OrderResourceInStorePaymentTest
         when(OrderEntity.findOrderInfoById(orderId)).thenReturn(order);
         when(OrderEntity.update(anyString(), any(Object[].class))).thenReturn(1);
 
-        confirm(orderId).then()
+        confirmWithToken(orderId).then()
                 .statusCode(200)
                 .body("status", equalTo("IN_STORE_PAYMENT"));
 
@@ -102,7 +123,7 @@ class OrderResourceInStorePaymentTest
         UUID orderId = UUID.randomUUID();
         when(OrderEntity.findOrderInfoById(orderId)).thenReturn(order(orderId, OrderStatusEn.CREATED, true));
 
-        confirm(orderId).then().statusCode(422);
+        confirmWithToken(orderId).then().statusCode(422);
 
         PanacheMock.verify(OrderEntity.class, never()).update(anyString(), any(Object[].class));
         verify(orderNotificationService, never()).sendStatusNotification(any(), any());
@@ -121,7 +142,7 @@ class OrderResourceInStorePaymentTest
         order.setShippingMethod(null);
         when(OrderEntity.findOrderInfoById(orderId)).thenReturn(order);
 
-        confirm(orderId).then().statusCode(422);
+        confirmWithToken(orderId).then().statusCode(422);
 
         PanacheMock.verify(OrderEntity.class, never()).update(anyString(), any(Object[].class));
     }
@@ -138,7 +159,7 @@ class OrderResourceInStorePaymentTest
         when(OrderEntity.findOrderInfoById(orderId))
                 .thenReturn(order(orderId, OrderStatusEn.IN_STORE_PAYMENT, false));
 
-        confirm(orderId).then()
+        confirmWithToken(orderId).then()
                 .statusCode(200)
                 .body("status", equalTo("IN_STORE_PAYMENT"));
 
@@ -159,7 +180,7 @@ class OrderResourceInStorePaymentTest
         when(OrderEntity.findOrderInfoById(orderId))
                 .thenReturn(order(orderId, OrderStatusEn.SYSTEM_CANCELED, false));
 
-        confirm(orderId).then().statusCode(409);
+        confirmWithToken(orderId).then().statusCode(409);
 
         verify(orderNotificationService, never()).sendStatusNotification(any(), any());
     }
@@ -172,5 +193,36 @@ class OrderResourceInStorePaymentTest
         when(OrderEntity.findOrderInfoById(orderId)).thenReturn(null);
 
         confirm(orderId).then().statusCode(404);
+    }
+
+    /**
+     * The negative case that had never existed anywhere in the suite (design.md §5a,
+     * task 0.4): an anonymous caller — no credential of any kind — confirming an
+     * order that belongs to a registered customer. Today {@code mayAccess} bypasses
+     * for any caller without the "customer" role, so this currently succeeds; it must
+     * not.
+     */
+    @Test
+    @DisplayName("refuses an anonymous caller confirming a registered customer's order (Requirement 1.1/1.2)")
+    void anonymousCaller_customerOwnedOrder_returnsOrderNotFound()
+    {
+        UUID orderId = UUID.randomUUID();
+        OrderEntity order = order(orderId, OrderStatusEn.CREATED, false);
+        CustomerEntity owner = new CustomerEntity();
+        owner.setId(UUID.randomUUID());
+        order.setCustomerEntity(owner);
+        when(OrderEntity.findOrderInfoById(orderId)).thenReturn(order);
+        // Stubbed so that, while the guard is bypassed, the request reaches a genuine
+        // 200 rather than a false-negative 409 from PanacheMock's unstubbed-update
+        // default of 0 rows affected — the failure this test must show is the
+        // authorization bypass, not a mocking artifact (tasks.md Notes).
+        when(OrderEntity.update(anyString(), any(Object[].class))).thenReturn(1);
+
+        confirm(orderId).then()
+                .statusCode(404)
+                .body("error", equalTo("Order not found"));
+
+        PanacheMock.verify(OrderEntity.class, never()).update(anyString(), any(Object[].class));
+        verify(orderNotificationService, never()).sendStatusNotification(any(), any());
     }
 }

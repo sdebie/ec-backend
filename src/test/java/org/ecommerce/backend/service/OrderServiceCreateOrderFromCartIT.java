@@ -28,6 +28,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * DB-backed integration tests for {@link OrderService#createOrderFromCart}.
@@ -50,6 +51,9 @@ class OrderServiceCreateOrderFromCartIT
 
     @Inject
     EntityManager em;
+
+    @Inject
+    OrderCapabilityService orderCapability;
 
     // ── Fixture builders ────────────────────────────────────────────────────
 
@@ -137,6 +141,29 @@ class OrderServiceCreateOrderFromCartIT
         assertNotNull(persisted);
         assertNotNull(persisted.getCustomerEntity(), "order must be linked to the authenticated customer");
         assertEquals(customer.getId(), persisted.getCustomerEntity().getId());
+    }
+
+    // ── 1a. Checkout mints a usable order capability token (guest-order-authorization) ──
+
+    @Test
+    @TestTransaction
+    @DisplayName("createOrderFromCart mints a valid capability token bound to the new order")
+    void createOrderFromCart_mintsUsableToken()
+    {
+        String marker = "ZZOFC-TOKEN-" + UUID.randomUUID().toString().substring(0, 8);
+        ProductEntity product = newProduct(marker);
+        ProductVariantEntity variant = newVariant(marker, product, 10);
+        em.flush();
+
+        OrderCreationRequestDto request = requestWith(item(variant.getId(), 1));
+
+        OrderCheckoutResponseDto response =
+                orderService.createOrderFromCart(request, CustomerTypeEn.GUEST, null, UUID.randomUUID(), null);
+
+        assertNotNull(response.getOrderToken());
+        UUID orderId = UUID.fromString(response.getOrderId());
+        assertTrue(orderCapability.isValidFor(response.getOrderToken(), orderId),
+                "the minted token must verify for the exact order just created");
     }
 
     // ── 2. Guest checkout leaves the order unlinked (no regression) ────────

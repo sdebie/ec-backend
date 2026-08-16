@@ -19,6 +19,8 @@ import java.math.BigDecimal;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Direct test of {@link OrderService#replayOrder(OrderEntity)}, called from
@@ -40,6 +42,9 @@ class OrderServiceReplayOrderTest
 
     @Inject
     EntityManager em;
+
+    @Inject
+    OrderCapabilityService orderCapability;
 
     @Test
     @TestTransaction
@@ -90,5 +95,31 @@ class OrderServiceReplayOrderTest
         // The response itself must still be correct — a read that returns the wrong
         // number is just as broken as a read that writes.
         assertEquals(0, new BigDecimal("100.00").compareTo(response.getSubtotal()));
+    }
+
+    /**
+     * guest-order-authorization Requirement 3.2: a replay must carry a USABLE token
+     * for the replayed order, not merely a non-null one — a shopper recovering a lost
+     * connection needs to complete checkout with it. Proven by minting-and-verifying
+     * through the real service, not by reading a shape back.
+     */
+    @Test
+    @TestTransaction
+    @DisplayName("replayOrder mints a fresh, valid capability token for the replayed order")
+    void replayOrder_mintsUsableToken()
+    {
+        OrderEntity order = new OrderEntity();
+        order.setSessionId(UUID.randomUUID());
+        order.setStatus(OrderStatusEn.CREATED);
+        order.setIdempotencyKey(UUID.randomUUID());
+        order.setTotalAmount(new BigDecimal("50.00"));
+        order.persist();
+        em.flush();
+
+        OrderCheckoutResponseDto response = orderService.replayOrder(order);
+
+        assertNotNull(response.getOrderToken());
+        assertTrue(orderCapability.isValidFor(response.getOrderToken(), order.getId()),
+                "the replayed order's token must verify for that exact order");
     }
 }

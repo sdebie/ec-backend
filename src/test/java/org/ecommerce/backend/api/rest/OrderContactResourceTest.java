@@ -13,6 +13,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.util.UUID;
 
 import static io.restassured.RestAssured.given;
@@ -41,9 +42,29 @@ class OrderContactResourceTest
                 .sign();
     }
 
-    @Test
-    void updateContact_validBody_returns200()
+    /**
+     * Mints a token shaped exactly like {@code OrderCapabilityService.mint(orderId)}
+     * (design.md §3.1: subject = order id, scope = order-capability). Built directly
+     * against the JWT signer rather than through the service, which does not exist
+     * until wave 1 — once it does, both constructions sign with the same key and
+     * claim shape, so a token minted here is indistinguishable from a real one.
+     */
+    private String generateOrderToken(UUID orderId)
     {
+        return Jwt.issuer("http://localhost:8080")
+                .subject(orderId.toString())
+                .claim("scope", "order-capability")
+                .expiresIn(Duration.ofMinutes(60))
+                .sign();
+    }
+
+    @Test
+    void updateContact_noCredential_returns404AndDoesNotMutate()
+    {
+        // Requirement 1.1/1.2: possession of the order id alone is no longer enough,
+        // for a guest order exactly as for a customer's. This is the test that used to
+        // be updateContact_validBody_returns200 and asserted 200 with no credential at
+        // all — that assertion is now the vulnerability, not the spec.
         UUID orderId = UUID.randomUUID();
         UUID shippingMethodId = UUID.randomUUID();
 
@@ -80,6 +101,54 @@ class OrderContactResourceTest
                 .when()
                 .patch("/api/orders/{orderId}/contact", orderId)
                 .then()
+                .statusCode(404)
+                .body("error", equalTo("Order not found"));
+
+        // Not just the status: a 404 with the write still committed would pass a
+        // status-only assertion (design.md task 0.3's own warning).
+        assertNull(order.getContactEmail());
+    }
+
+    @Test
+    void updateContact_validToken_returns200()
+    {
+        UUID orderId = UUID.randomUUID();
+        UUID shippingMethodId = UUID.randomUUID();
+
+        OrderEntity order = new OrderEntity();
+        order.setId(orderId);
+        order.setTotalAmount(new BigDecimal("500.00"));
+        order.setStatus(OrderStatusEn.CREATED);
+
+        ShippingMethodEntity shippingMethod = new ShippingMethodEntity();
+        shippingMethod.setId(shippingMethodId);
+        shippingMethod.setName("Standard Delivery");
+        shippingMethod.setActive(true);
+        shippingMethod.setBaseFee(new BigDecimal("89.00"));
+
+        when(OrderEntity.findOrderInfoById(orderId)).thenReturn(order);
+        when(ShippingMethodEntity.findById(shippingMethodId)).thenReturn(shippingMethod);
+
+        String body = """
+                {
+                    "email": "test@example.com",
+                    "firstName": "John",
+                    "lastName": "Doe",
+                    "shippingMethodId": "%s",
+                    "streetAddress": "123 Main St",
+                    "city": "Cape Town",
+                    "province": "Western Cape",
+                    "postalCode": "8001"
+                }
+                """.formatted(shippingMethodId);
+
+        given()
+                .header("X-Order-Token", generateOrderToken(orderId))
+                .contentType(ContentType.JSON)
+                .body(body)
+                .when()
+                .patch("/api/orders/{orderId}/contact", orderId)
+                .then()
                 .statusCode(200)
                 .body("orderId", equalTo(orderId.toString()))
                 .body("contactEmail", equalTo("test@example.com"))
@@ -87,6 +156,46 @@ class OrderContactResourceTest
                 .body("contactLastName", equalTo("Doe"))
                 .body("shippingMethodId", equalTo(shippingMethodId.toString()))
                 .body("streetAddress", equalTo("123 Main St"));
+    }
+
+    @Test
+    void updateContact_anonymousCaller_customerOwnedOrder_returns404AndDoesNotMutate()
+    {
+        // The negative case that had never existed anywhere in the suite (design.md
+        // §5a, task 0.4): an anonymous caller — no Authorization, no X-Order-Token —
+        // acting on an order that belongs to a registered customer.
+        UUID orderId = UUID.randomUUID();
+
+        CustomerEntity owner = new CustomerEntity();
+        owner.setId(UUID.randomUUID());
+
+        OrderEntity order = new OrderEntity();
+        order.setId(orderId);
+        order.setTotalAmount(new BigDecimal("500.00"));
+        order.setStatus(OrderStatusEn.CREATED);
+        order.setCustomerEntity(owner);
+
+        when(OrderEntity.findOrderInfoById(orderId)).thenReturn(order);
+
+        String body = """
+                {
+                    "email": "attacker@example.com",
+                    "firstName": "New",
+                    "lastName": "Address",
+                    "streetAddress": "999 Redirect Ave"
+                }
+                """;
+
+        given()
+                .contentType(ContentType.JSON)
+                .body(body)
+                .when()
+                .patch("/api/orders/{orderId}/contact", orderId)
+                .then()
+                .statusCode(404)
+                .body("error", equalTo("Order not found"));
+
+        assertNull(order.getContactEmail());
     }
 
     @Test
@@ -224,6 +333,7 @@ class OrderContactResourceTest
                 """;
 
         given()
+                .header("X-Order-Token", generateOrderToken(orderId))
                 .contentType(ContentType.JSON)
                 .body(body)
                 .when()
@@ -260,6 +370,7 @@ class OrderContactResourceTest
                 """.formatted(invalidShippingMethodId);
 
         given()
+                .header("X-Order-Token", generateOrderToken(orderId))
                 .contentType(ContentType.JSON)
                 .body(body)
                 .when()
@@ -308,6 +419,7 @@ class OrderContactResourceTest
 
         // 200 subtotal + 30 VAT (15%) + 250 delivery = 480
         given()
+                .header("X-Order-Token", generateOrderToken(orderId))
                 .contentType(ContentType.JSON)
                 .body(body)
                 .when()
@@ -366,6 +478,7 @@ class OrderContactResourceTest
         // zero fee serialises as `0` (Integer) while 70.97 serialises as a
         // Float, so a typed matcher passes on one and fails on the other.
         io.restassured.response.Response response = given()
+                .header("X-Order-Token", generateOrderToken(orderId))
                 .contentType(ContentType.JSON)
                 .body(body)
                 .when()
@@ -423,6 +536,7 @@ class OrderContactResourceTest
                 """;
 
         given()
+                .header("X-Order-Token", generateOrderToken(orderId))
                 .contentType(ContentType.JSON)
                 .body(body)
                 .when()

@@ -193,12 +193,12 @@ class OrderResourceOwnershipIT
     }
 
     @Test
-    @DisplayName("Staff JWT returns order data regardless of ownership")
-    void staffJwt_anyOrder_returnsSuccess()
+    @DisplayName("Staff JWT is not a capability or an ownership credential — getOrderDetail refuses it (Requirement 1.6)")
+    void staffJwt_anyOrder_returnsOrderNotFound()
     {
         String token = generateStaffJwt(STAFF_EMAIL);
 
-        // Staff accessing Customer A's order — should succeed
+        // Staff holds neither a valid order-capability token nor the order's owner JWT — refused, same as a stranger.
         given()
                 .header("Authorization", "Bearer " + token)
                 .contentType("application/json")
@@ -207,10 +207,10 @@ class OrderResourceOwnershipIT
                 .post("/api/graphql")
                 .then()
                 .statusCode(200)
-                .body("data.getOrderDetail.id", equalTo(orderA.getId().toString()))
-                .body("errors", nullValue());
+                .body("errors", notNullValue())
+                .body("errors[0].message", equalTo("Order not found"))
+                .body("data.getOrderDetail", nullValue());
 
-        // Staff accessing Customer B's order — should also succeed
         given()
                 .header("Authorization", "Bearer " + token)
                 .contentType("application/json")
@@ -219,13 +219,14 @@ class OrderResourceOwnershipIT
                 .post("/api/graphql")
                 .then()
                 .statusCode(200)
-                .body("data.getOrderDetail.id", equalTo(orderB.getId().toString()))
-                .body("errors", nullValue());
+                .body("errors", notNullValue())
+                .body("errors[0].message", equalTo("Order not found"))
+                .body("data.getOrderDetail", nullValue());
     }
 
     @Test
-    @DisplayName("No JWT (anonymous) returns order data for backwards compatibility")
-    void noJwt_returnsSuccess()
+    @DisplayName("No credential at all refuses a registered customer's order (Requirement 1.1/1.2 — possession of the id is not enough)")
+    void noCredential_customerOwnedOrder_returnsOrderNotFound()
     {
         given()
                 .contentType("application/json")
@@ -234,7 +235,8 @@ class OrderResourceOwnershipIT
                 .post("/api/graphql")
                 .then()
                 .statusCode(200)
-                .body("data.getOrderDetail.id", equalTo(orderA.getId().toString()))
-                .body("errors", nullValue());
+                .body("errors", notNullValue())
+                .body("errors[0].message", equalTo("Order not found"))
+                .body("data.getOrderDetail", nullValue());
     }
 }

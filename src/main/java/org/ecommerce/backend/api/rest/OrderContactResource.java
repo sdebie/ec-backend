@@ -7,6 +7,9 @@ import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import org.ecommerce.backend.service.OrderService;
 import org.ecommerce.backend.service.OrderTotals;
+import org.ecommerce.backend.service.RateLimitDecision;
+import org.ecommerce.backend.service.RateLimiterService;
+import org.ecommerce.backend.utils.ClientIpUtils;
 import org.ecommerce.common.dto.OrderContactRequestDto;
 import org.ecommerce.common.entity.OrderEntity;
 import org.ecommerce.common.entity.ShippingMethodEntity;
@@ -24,19 +27,43 @@ public class OrderContactResource
 {
     private static final Logger LOG = Logger.getLogger(OrderContactResource.class);
 
+    /**
+     * guest-order-authorization Requirement 7.1 — this endpoint had no ceiling of any
+     * kind before this spec. Generous for the same reason {@code CHECKOUT_MAX_PER_WINDOW}
+     * is: carrier-grade NAT puts many genuine shoppers behind one address, and a
+     * shopper may legitimately PATCH contact/address/shipping several times while
+     * refining checkout.
+     */
+    private static final int ORDER_CONTACT_MAX_PER_WINDOW = 30;
+    private static final long ORDER_CONTACT_WINDOW_SECONDS = 3600;
+
     @Inject
     OrderService orderService;
 
     @Inject
     OrderOwnershipGuard ownershipGuard;
 
+    @Inject
+    RateLimiterService rateLimiterService;
+
     @PATCH
     @Transactional
     public Response updateContact(
             @PathParam("orderId") UUID orderId,
+            @HeaderParam("X-Order-Token") String orderToken,
+            @HeaderParam("CF-Connecting-IP") String cfConnectingIp,
+            @HeaderParam("X-Forwarded-For") String xForwardedFor,
+            @HeaderParam("X-Real-IP") String xRealIp,
             OrderContactRequestDto request
     )
     {
+        String clientIp = ClientIpUtils.resolveClientIp(cfConnectingIp, xForwardedFor, xRealIp);
+        RateLimitDecision decision = rateLimiterService.check(
+                "order-contact", clientIp, ORDER_CONTACT_MAX_PER_WINDOW, ORDER_CONTACT_WINDOW_SECONDS);
+        if (!decision.allowed()) {
+            return Response.status(429).header("Retry-After", decision.retryAfterSeconds()).build();
+        }
+
         // 1. Find order by ID → 404 if missing
         OrderEntity order = OrderEntity.findOrderInfoById(orderId);
         if (order == null) {
@@ -46,8 +73,9 @@ public class OrderContactResource
                     .build();
         }
 
-        // 1a. Ownership gate: a signed-in customer may only touch their own order.
-        if (!ownershipGuard.mayAccess(order)) {
+        // 1a. Ownership gate: a valid capability token for this order, or the order's
+        // own customer's JWT — nothing else (guest-order-authorization Requirement 1).
+        if (!ownershipGuard.mayAct(order, orderToken)) {
             LOG.warnf("Rejected contact update for order %s: caller does not own it", orderId);
             return Response.status(Response.Status.NOT_FOUND)
                     .entity(Map.of("error", "Order not found"))
@@ -170,7 +198,9 @@ public class OrderContactResource
             summary.put("postalCode", order.getPostalCode());
         }
 
-        LOG.infof("Updated contact for order %s (email: %s)", orderId, order.getContactEmail());
+        // The email itself is deliberately not logged (Requirement 5.4) — a guest's
+        // address in the logs, on the ordinary success path, at INFO.
+        LOG.infof("Updated contact for order %s", orderId);
 
         return Response.ok(summary).build();
     }

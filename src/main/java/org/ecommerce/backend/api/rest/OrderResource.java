@@ -253,9 +253,10 @@ public class OrderResource {
     @Path("/{orderId}/in-store-payment")
     @Consumes(MediaType.WILDCARD)
     @Transactional
-    public Response confirmInStorePayment(@PathParam("orderId") UUID orderId) {
+    public Response confirmInStorePayment(@PathParam("orderId") UUID orderId,
+                                           @HeaderParam("X-Order-Token") String orderToken) {
         OrderEntity order = OrderEntity.findOrderInfoById(orderId);
-        if (order == null || !ownershipGuard.mayAccess(order)) {
+        if (order == null || !ownershipGuard.mayAct(order, orderToken)) {
             return Response.status(Response.Status.NOT_FOUND)
                     .entity(Map.of("error", "Order not found"))
                     .build();

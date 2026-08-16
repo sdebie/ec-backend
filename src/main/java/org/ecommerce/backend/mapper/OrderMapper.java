@@ -4,6 +4,7 @@ import org.ecommerce.common.dto.CustomerDto;
 import org.ecommerce.common.dto.OrderDetailRespDto;
 import org.ecommerce.common.dto.OrderItemDetailDto;
 import org.ecommerce.common.dto.OrderResponseDto;
+import org.ecommerce.common.dto.OrderStatusRespDto;
 import org.ecommerce.common.dto.OrderSummaryDto;
 import org.ecommerce.common.dto.ProductVariantDetailDto;
 import org.ecommerce.common.entity.CustomerEntity;
@@ -83,6 +84,9 @@ public interface OrderMapper
     @Mapping(target = "orderDate", source = "createdAt")
     @Mapping(target = "itemCount", expression = "java(order.totalUnits())")
     OrderSummaryDto toSummaryDto(OrderEntity order);
+
+    /** S2′ — the guest checkout success-page poll (guest-order-authorization Requirement 4.3). */
+    OrderStatusRespDto toStatusRespDto(OrderEntity order);
 
     /** Distinct line count — {@link OrderSummaryDto} deliberately counts units instead. */
     @AfterMapping

@@ -31,13 +31,21 @@ import static org.mockito.Mockito.when;
  * <ul>
  *   <li>{@link OrderItemDetailDto}: {id: String, unitPrice: BigDecimal, quantity: Integer, variant: ProductVariantDetailDto}
  *       — the single canonical order-item output DTO used by BOTH OrderResponseDto and OrderDetailRespDto</li>
- *   <li>{@link OrderStatusHistoryDetailRespDto}: {id: UUID, status, comment, changedBy, createdAt}
- *       — pins that the leaked {@code order: OrderEntity} field has been removed</li>
+ *   <li>{@link OrderStatusHistoryDetailRespDto}: {id: UUID, status, comment, createdAt}
+ *       — pins that the leaked {@code order: OrderEntity} field has been removed, and (guest-order-authorization
+ *       Requirement 4.4) that {@code changedBy} — staff members' real names — is removed too, rather than
+ *       conditionally nulled: {@code getOrderDetail} (S1) is a shopper-facing surface only as of Requirement 1.6,
+ *       so there is no remaining staff-caller case for a partial redaction to distinguish.</li>
  * </ul>
  * <p>
  * Both toResponseDto and toDetailDto now produce OrderItemDetailDto with ProductVariantDetailDto
  * (reduced variant: no sku/status/prices; product: ProductDetailDto name-only; images: ProductImageDto).
- *
+ * <p>
+ * {@code OrderDetailRespDto} also no longer carries {@code sessionId} (Requirement 4.1) — the escalation chain
+ * that let {@code getOrderDetail}'s response hand out {@code orderBySessionId}'s credential. {@code stockQuantity}
+ * (live, not stock-at-order-time) and {@code statusHistory[].comment} are deliberately left unchanged
+ * (task 3.3a decision): once S1 requires the order's own owner or a valid capability token, an order's owner
+ * seeing their own order's current stock context or status comments is not a new disclosure.
  */
 @QuarkusTest
 @DisplayName("OrderMapper DTO shape characterization")
@@ -267,7 +275,7 @@ class OrderDtoCharacterizationTest
     {
 
         @Test
-        @DisplayName("pins OrderDetailRespDto field set: id(UUID), customerEntity(CustomerDto — canonical, post customer-merge), totalAmount, sessionId(UUID), status(OrderStatusEn), shipping fields, items(List<OrderItemDetailDto>), createdAt, statusHistory")
+        @DisplayName("pins OrderDetailRespDto field set: id(UUID), customerEntity(CustomerDto — canonical, post customer-merge), totalAmount, status(OrderStatusEn), shipping fields, items(List<OrderItemDetailDto>), createdAt, statusHistory — no sessionId (Requirement 4.1)")
         @SuppressWarnings("unchecked")
         void pinsOrderDetailRespDtoShape()
         {
@@ -278,9 +286,6 @@ class OrderDtoCharacterizationTest
             assertNotNull(dto);
             assertInstanceOf(UUID.class, dto.getId());
             assertEquals(UUID.fromString("11111111-1111-1111-1111-111111111111"), dto.getId());
-
-            assertInstanceOf(UUID.class, dto.getSessionId());
-            assertEquals(UUID.fromString("22222222-2222-2222-2222-222222222222"), dto.getSessionId());
 
             assertInstanceOf(OrderStatusEn.class, dto.getStatus());
             assertEquals(OrderStatusEn.PAID, dto.getStatus());
@@ -299,6 +304,17 @@ class OrderDtoCharacterizationTest
             // Customer — canonical CustomerDto (CustomerDetailDto merged away)
             assertInstanceOf(CustomerDto.class, dto.getCustomerEntity());
             assertEquals("test@example.com", dto.getCustomerEntity().getEmail());
+        }
+
+        @Test
+        @DisplayName("pins that sessionId does NOT exist on OrderDetailRespDto (guest-order-authorization Requirement 4.1 — the escalation chain this field fed is closed by removing it, not by nulling it)")
+        void pinsSessionIdFieldRemoved()
+        {
+            Field[] fields = OrderDetailRespDto.class.getDeclaredFields();
+            for (Field field : fields) {
+                assertNotEquals("sessionId", field.getName(),
+                        "OrderDetailRespDto must not carry sessionId — orderBySessionId's credential");
+            }
         }
 
         @Test
@@ -440,7 +456,7 @@ class OrderDtoCharacterizationTest
     {
 
         @Test
-        @DisplayName("pins current shape: {id: UUID, status: OrderStatusEn, comment: String, changedBy: String, createdAt: LocalDateTime}")
+        @DisplayName("pins current shape: {id: UUID, status: OrderStatusEn, comment: String, createdAt: LocalDateTime} — no changedBy (Requirement 4.4)")
         @SuppressWarnings("unchecked")
         void pinsStatusHistoryDtoShape()
         {
@@ -460,7 +476,6 @@ class OrderDtoCharacterizationTest
             assertEquals(OrderStatusEn.PAID, h1.getStatus());
 
             assertEquals("Payment received", h1.getComment());
-            assertEquals("SYSTEM", h1.getChangedBy());
             assertEquals(LocalDateTime.of(2026, 7, 20, 12, 5, 0), h1.getCreatedAt());
         }
 
@@ -476,9 +491,20 @@ class OrderDtoCharacterizationTest
         }
 
         @Test
-        @DisplayName("pins that comment and changedBy fields are preserved (not null when populated)")
+        @DisplayName("pins that changedBy does NOT exist on OrderStatusHistoryDetailRespDto — staff members' real names (Requirement 4.4). getOrderDetail is shopper-facing only (Requirement 1.6), so there is no remaining caller this would be safe to show to.")
+        void pinsChangedByFieldRemoved()
+        {
+            Field[] fields = OrderStatusHistoryDetailRespDto.class.getDeclaredFields();
+            for (Field field : fields) {
+                assertNotEquals("changedBy", field.getName(),
+                        "OrderStatusHistoryDetailRespDto must not carry changedBy on a shopper-facing surface");
+            }
+        }
+
+        @Test
+        @DisplayName("pins that the comment field is preserved (not null when populated)")
         @SuppressWarnings("unchecked")
-        void pinsCommentAndChangedByPreserved()
+        void pinsCommentPreserved()
         {
             OrderEntity order = buildOrder();
             List<OrderStatusHistoryEntity> history = buildHistory(order);
@@ -487,20 +513,18 @@ class OrderDtoCharacterizationTest
 
             OrderStatusHistoryDetailRespDto h1 = dto.getStatusHistory().get(0);
             assertNotNull(h1.getComment());
-            assertNotNull(h1.getChangedBy());
 
             OrderStatusHistoryDetailRespDto h2 = dto.getStatusHistory().get(1);
             assertNull(h2.getComment());
-            assertEquals("admin-user-1", h2.getChangedBy());
         }
 
         @Test
-        @DisplayName("pins the complete field set of OrderStatusHistoryDetailRespDto: exactly 5 fields")
+        @DisplayName("pins the complete field set of OrderStatusHistoryDetailRespDto: exactly 4 fields")
         void pinsFieldSetSize()
         {
             Field[] fields = OrderStatusHistoryDetailRespDto.class.getDeclaredFields();
-            assertEquals(5, fields.length,
-                    "OrderStatusHistoryDetailRespDto should have exactly 5 fields: id, status, comment, changedBy, createdAt");
+            assertEquals(4, fields.length,
+                    "OrderStatusHistoryDetailRespDto should have exactly 4 fields: id, status, comment, createdAt");
         }
     }
 

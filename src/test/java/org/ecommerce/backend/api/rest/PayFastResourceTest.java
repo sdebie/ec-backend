@@ -4,14 +4,18 @@ import io.quarkus.panache.mock.PanacheMock;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.http.ContentType;
+import jakarta.inject.Inject;
+import org.ecommerce.backend.service.OrderCapabilityService;
 import org.ecommerce.backend.service.OrderNotificationService;
 import org.ecommerce.backend.service.OrderService;
 import org.ecommerce.backend.service.payfast.HtmlFormField;
 import org.ecommerce.backend.service.payfast.PayFastService;
+import org.ecommerce.common.entity.CustomerEntity;
 import org.ecommerce.common.entity.OrderEntity;
 import org.ecommerce.common.entity.OrderStatusHistoryEntity;
 import org.ecommerce.common.enums.OrderStatusEn;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -34,6 +38,9 @@ class PayFastResourceTest
     @InjectMock
     OrderNotificationService orderNotificationService;
 
+    @Inject
+    OrderCapabilityService orderCapability;
+
     @BeforeEach
     void setUp()
     {
@@ -45,7 +52,8 @@ class PayFastResourceTest
     }
 
     @Test
-    void checkout_withEmailParam_returns202WithGatewayUrl()
+    @DisplayName("a valid token resolves the payer email from the order's own contactEmail, never a caller-supplied parameter (Requirement 8)")
+    void checkout_validToken_resolvesEmailFromContactEmail_returns202WithGatewayUrl()
     {
         UUID orderId = UUID.randomUUID();
 
@@ -54,6 +62,7 @@ class PayFastResourceTest
         order.setTotalAmount(new BigDecimal("1000.00"));
         order.setStatus(OrderStatusEn.CREATED);
         order.setCustomerEntity(null); // Guest order
+        order.setContactEmail("guest@example.com");
 
         when(OrderEntity.findById(orderId)).thenReturn(order);
         // Invoking the gateway moves the order to PENDING_PAYMENT through the atomic
@@ -68,9 +77,9 @@ class PayFastResourceTest
                 .thenReturn(mockFields);
 
         given()
+                .header("X-Order-Token", orderCapability.mint(orderId))
                 .contentType(ContentType.URLENC)
                 .formParam("id", orderId.toString())
-                .formParam("email", "guest@example.com")
                 .when()
                 .post("/api/payments/checkout")
                 .then()
@@ -79,6 +88,81 @@ class PayFastResourceTest
                 .body("fields", hasSize(2))
                 .body("fields[0].name", equalTo("merchant_id"))
                 .body("fields[0].value", equalTo("10000100"));
+    }
+
+    /**
+     * Sabotage-adjacent by construction: a caller-supplied {@code email} form param is
+     * sent alongside a DIFFERENT order-held {@code contactEmail}, and the mock only
+     * stubs {@code generateHiddenHTMLForm} for the order's own email. If the removed
+     * parameter were ever silently honoured again, the unstubbed-mock default would
+     * make this fail loudly rather than passing by coincidence.
+     */
+    @Test
+    @DisplayName("a caller-supplied email form param is ignored — the parameter no longer exists on the contract (Requirement 8.2)")
+    void checkout_callerSuppliedEmailParam_isIgnored()
+    {
+        UUID orderId = UUID.randomUUID();
+
+        OrderEntity order = new OrderEntity();
+        order.setId(orderId);
+        order.setTotalAmount(new BigDecimal("1000.00"));
+        order.setStatus(OrderStatusEn.CREATED);
+        order.setCustomerEntity(null);
+        order.setContactEmail("real-owner@example.com");
+
+        when(OrderEntity.findById(orderId)).thenReturn(order);
+        when(OrderEntity.update(anyString(), any(Object[].class))).thenReturn(1);
+
+        List<HtmlFormField> mockFields = List.of(new HtmlFormField("merchant_id", "hidden", "10000100"));
+        when(payFastService.generateHiddenHTMLForm(any(OrderEntity.class), eq("real-owner@example.com")))
+                .thenReturn(mockFields);
+
+        given()
+                .header("X-Order-Token", orderCapability.mint(orderId))
+                .contentType(ContentType.URLENC)
+                .formParam("id", orderId.toString())
+                .formParam("email", "attacker-controlled@example.com")
+                .when()
+                .post("/api/payments/checkout")
+                .then()
+                .statusCode(202);
+
+        verify(payFastService).generateHiddenHTMLForm(any(OrderEntity.class), eq("real-owner@example.com"));
+        verify(payFastService, never()).generateHiddenHTMLForm(any(OrderEntity.class), eq("attacker-controlled@example.com"));
+    }
+
+    @Test
+    @DisplayName("falls back to the linked customer's account email when contactEmail is absent")
+    void checkout_fallsBackToCustomerEmail_whenContactEmailAbsent()
+    {
+        UUID orderId = UUID.randomUUID();
+
+        var user = new org.ecommerce.common.entity.UserEntity();
+        user.setEmail("customer@example.com");
+        CustomerEntity customer = new CustomerEntity();
+        customer.setUser(user);
+
+        OrderEntity order = new OrderEntity();
+        order.setId(orderId);
+        order.setTotalAmount(new BigDecimal("1000.00"));
+        order.setStatus(OrderStatusEn.CREATED);
+        order.setCustomerEntity(customer);
+
+        when(OrderEntity.findById(orderId)).thenReturn(order);
+        when(OrderEntity.update(anyString(), any(Object[].class))).thenReturn(1);
+
+        List<HtmlFormField> mockFields = List.of(new HtmlFormField("merchant_id", "hidden", "10000100"));
+        when(payFastService.generateHiddenHTMLForm(any(OrderEntity.class), eq("customer@example.com")))
+                .thenReturn(mockFields);
+
+        given()
+                .header("X-Order-Token", orderCapability.mint(orderId))
+                .contentType(ContentType.URLENC)
+                .formParam("id", orderId.toString())
+                .when()
+                .post("/api/payments/checkout")
+                .then()
+                .statusCode(202);
     }
 
     @Test
@@ -95,6 +179,7 @@ class PayFastResourceTest
         when(OrderEntity.findById(orderId)).thenReturn(order);
 
         given()
+                .header("X-Order-Token", orderCapability.mint(orderId))
                 .contentType(ContentType.URLENC)
                 .formParam("id", orderId.toString())
                 .when()
@@ -102,6 +187,46 @@ class PayFastResourceTest
                 .then()
                 .statusCode(400)
                 .body("error", equalTo("Email is required"));
+    }
+
+    @Test
+    @DisplayName("without a token, checkout is refused before the email/status logic ever runs (Requirement 1.1/1.2 — S4 had no guard of any kind before this)")
+    void checkout_noToken_returnsOrderNotFound()
+    {
+        UUID orderId = UUID.randomUUID();
+
+        OrderEntity order = new OrderEntity();
+        order.setId(orderId);
+        order.setTotalAmount(new BigDecimal("500.00"));
+        order.setStatus(OrderStatusEn.CREATED);
+        order.setContactEmail("guest@example.com");
+
+        when(OrderEntity.findById(orderId)).thenReturn(order);
+
+        given()
+                .contentType(ContentType.URLENC)
+                .formParam("id", orderId.toString())
+                .when()
+                .post("/api/payments/checkout")
+                .then()
+                .statusCode(404)
+                .body("error", equalTo("Order not found"));
+
+        PanacheMock.verify(OrderEntity.class, never()).update(anyString(), any(Object[].class));
+        verify(payFastService, never()).generateHiddenHTMLForm(any(), any());
+    }
+
+    @Test
+    @DisplayName("a malformed order id is a clean 400, not an unmapped 500 (tasks.md 6.3)")
+    void checkout_malformedOrderId_returns400()
+    {
+        given()
+                .contentType(ContentType.URLENC)
+                .formParam("id", "not-a-uuid")
+                .when()
+                .post("/api/payments/checkout")
+                .then()
+                .statusCode(400);
     }
 
     @Test

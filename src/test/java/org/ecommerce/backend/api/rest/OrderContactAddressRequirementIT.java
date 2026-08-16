@@ -5,6 +5,7 @@ import io.quarkus.narayana.jta.QuarkusTransaction;
 import io.restassured.http.ContentType;
 import jakarta.persistence.EntityManager;
 import jakarta.inject.Inject;
+import org.ecommerce.backend.service.OrderCapabilityService;
 import org.ecommerce.common.entity.OrderEntity;
 import org.ecommerce.common.entity.ShippingMethodEntity;
 import org.ecommerce.common.enums.OrderStatusEn;
@@ -35,6 +36,9 @@ class OrderContactAddressRequirementIT
 {
     @Inject
     EntityManager em;
+
+    @Inject
+    OrderCapabilityService orderCapability;
 
     private UUID orderId;
     private UUID deliveryMethodId;
@@ -101,11 +105,23 @@ class OrderContactAddressRequirementIT
         return QuarkusTransaction.requiringNew().call(() -> OrderEntity.findById(orderId));
     }
 
+    /**
+     * Every case here means to reach past the ownership gate to exercise its own
+     * address-requirement rule — none of them are testing authorization — so each
+     * needs a real, valid capability token for the seeded order
+     * (guest-order-authorization). The suite runs with
+     * {@code order.capability.enforce=true} and no {@code %test} override.
+     */
+    private String token()
+    {
+        return orderCapability.mint(orderId);
+    }
+
     @Test
     @DisplayName("a collection order is accepted with no address at all")
     void collectionMethod_needsNoAddress()
     {
-        given().contentType(ContentType.JSON)
+        given().header("X-Order-Token", token()).contentType(ContentType.JSON)
                 .body(contactPayload(collectionMethodId))
                 .when().patch("/api/orders/" + orderId + "/contact")
                 .then().statusCode(200);
@@ -119,7 +135,7 @@ class OrderContactAddressRequirementIT
     @DisplayName("a delivery order without an address is rejected and nothing is written")
     void deliveryMethod_withoutAddress_isRejected()
     {
-        given().contentType(ContentType.JSON)
+        given().header("X-Order-Token", token()).contentType(ContentType.JSON)
                 .body(contactPayload(deliveryMethodId))
                 .when().patch("/api/orders/" + orderId + "/contact")
                 .then().statusCode(422);
@@ -139,7 +155,7 @@ class OrderContactAddressRequirementIT
         body.put("province", "Western Cape");
         body.put("postalCode", "8001");
 
-        given().contentType(ContentType.JSON)
+        given().header("X-Order-Token", token()).contentType(ContentType.JSON)
                 .body(body)
                 .when().patch("/api/orders/" + orderId + "/contact")
                 .then().statusCode(200);
@@ -155,7 +171,7 @@ class OrderContactAddressRequirementIT
         body.put("streetAddress", "12 Main Road");
         body.put("city", "Cape Town");
 
-        given().contentType(ContentType.JSON)
+        given().header("X-Order-Token", token()).contentType(ContentType.JSON)
                 .body(body)
                 .when().patch("/api/orders/" + orderId + "/contact")
                 .then().statusCode(422);
@@ -173,7 +189,7 @@ class OrderContactAddressRequirementIT
         body.put("province", "Western Cape");
         body.put("postalCode", "8001");
 
-        given().contentType(ContentType.JSON)
+        given().header("X-Order-Token", token()).contentType(ContentType.JSON)
                 .body(body)
                 .when().patch("/api/orders/" + orderId + "/contact")
                 .then().statusCode(422);
@@ -191,11 +207,11 @@ class OrderContactAddressRequirementIT
         first.put("province", "Western Cape");
         first.put("postalCode", "8001");
 
-        given().contentType(ContentType.JSON).body(first)
+        given().header("X-Order-Token", token()).contentType(ContentType.JSON).body(first)
                 .when().patch("/api/orders/" + orderId + "/contact")
                 .then().statusCode(200);
 
-        given().contentType(ContentType.JSON).body(contactPayload(deliveryMethodId))
+        given().header("X-Order-Token", token()).contentType(ContentType.JSON).body(contactPayload(deliveryMethodId))
                 .when().patch("/api/orders/" + orderId + "/contact")
                 .then().statusCode(200);
 

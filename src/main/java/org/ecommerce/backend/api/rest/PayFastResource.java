@@ -9,6 +9,8 @@ import jakarta.ws.rs.core.Response;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.ecommerce.backend.service.OrderNotificationService;
 import org.ecommerce.backend.service.OrderService;
+import org.ecommerce.backend.service.RateLimitDecision;
+import org.ecommerce.backend.service.RateLimiterService;
 import org.ecommerce.backend.service.StatusTransition;
 import org.ecommerce.backend.service.TransitionOutcome;
 import org.ecommerce.backend.service.payfast.HtmlFormField;
@@ -34,6 +36,16 @@ public class PayFastResource
     private static final Logger LOG = Logger.getLogger(PayFastResource.class);
     private static final BigDecimal AMOUNT_TOLERANCE = new BigDecimal("0.01");
 
+    /**
+     * guest-order-authorization Requirement 7.2 — payment initiation had no ceiling of
+     * any kind before this spec (the {@code checkout} limiter on {@code POST /api/orders}
+     * covers order *creation*, not this). Mirrors {@code CHECKOUT_MAX_PER_WINDOW}'s own
+     * reasoning: generous, because carrier-grade NAT and a shopper retrying a declined
+     * card both cost real attempts from one address.
+     */
+    private static final int PAYMENT_CHECKOUT_MAX_PER_WINDOW = 20;
+    private static final long PAYMENT_CHECKOUT_WINDOW_SECONDS = 3600;
+
     @Inject
     PayFastService payFastService;
 
@@ -43,6 +55,12 @@ public class PayFastResource
     @Inject
     OrderService orderService;
 
+    @Inject
+    OrderOwnershipGuard ownershipGuard;
+
+    @Inject
+    RateLimiterService rateLimiterService;
+
     @ConfigProperty(name = "payfast.gateway.url")
     String gatewayUrl;
 
@@ -50,9 +68,20 @@ public class PayFastResource
     @Path("/checkout")
     @Consumes(MediaType.APPLICATION_FORM_URLENCODED)
     @Transactional
-    public Response checkout(MultivaluedMap<String, String> formParams)
+    public Response checkout(MultivaluedMap<String, String> formParams,
+                              @HeaderParam("X-Order-Token") String orderToken,
+                              @HeaderParam("CF-Connecting-IP") String cfConnectingIp,
+                              @HeaderParam("X-Forwarded-For") String xForwardedFor,
+                              @HeaderParam("X-Real-IP") String xRealIp)
     {
         LOG.debug("Checkout received: " + formParams);
+
+        String clientIp = ClientIpUtils.resolveClientIp(cfConnectingIp, xForwardedFor, xRealIp);
+        RateLimitDecision decision = rateLimiterService.check(
+                "payment-checkout", clientIp, PAYMENT_CHECKOUT_MAX_PER_WINDOW, PAYMENT_CHECKOUT_WINDOW_SECONDS);
+        if (!decision.allowed()) {
+            return Response.status(429).header("Retry-After", decision.retryAfterSeconds()).build();
+        }
 
         String orderIdParam = formParams.getFirst("id");
         if (orderIdParam == null || orderIdParam.isBlank()) {
@@ -60,16 +89,36 @@ public class PayFastResource
                     .entity(Map.of("error", "Order ID is required")).build();
         }
 
-        UUID orderUuid = UUID.fromString(orderIdParam);
+        UUID orderUuid;
+        try {
+            orderUuid = UUID.fromString(orderIdParam);
+        } catch (IllegalArgumentException e) {
+            // Previously uncaught, surfacing as an unmapped 500 (tasks.md 6.3) — nothing
+            // to log beyond "malformed", since Requirement 5.6 forbids logging the raw
+            // request string and there is no parsed id yet to log instead.
+            return Response.status(Response.Status.BAD_REQUEST)
+                    .entity(Map.of("error", "Order ID is not a valid identifier")).build();
+        }
+
         OrderEntity quote = OrderEntity.findById(orderUuid);
         if (quote == null) {
+            LOG.debugf("checkout: order not found: %s", orderUuid);
             return Response.status(Response.Status.NOT_FOUND)
                     .entity(Map.of("error", "Order not found")).build();
         }
 
-        // Resolve email: form param takes priority, then fall back to customerEntity.user.email
-        String formEmail = formParams.getFirst("email");
-        String email = resolveEmail(formEmail, quote);
+        // guest-order-authorization Requirement 1: S4 had no ownership check of any
+        // kind before this — not a bypassed check, an absent one.
+        if (!ownershipGuard.mayAct(quote, orderToken)) {
+            LOG.warnf("checkout: refused for order %s", orderUuid);
+            return Response.status(Response.Status.NOT_FOUND)
+                    .entity(Map.of("error", "Order not found")).build();
+        }
+
+        // Requirement 8: the payer email comes from the order — contactEmail, then the
+        // linked customer's account email — never from a caller-supplied parameter,
+        // which used to take priority over both and let anyone redirect the receipt.
+        String email = resolveEmail(quote);
 
         if (email == null || email.isBlank()) {
             return Response.status(Response.Status.BAD_REQUEST)
@@ -102,13 +151,17 @@ public class PayFastResource
     }
 
     /**
-     * Resolves the email to use for checkout.
-     * Prefers the form-param email; falls back to the customer entity user email.
+     * Resolves the payer email from the order itself (guest-order-authorization
+     * Requirement 8) — {@code contactEmail} (set by the checkout contact step, S3,
+     * which {@code useCheckoutSubmit} always calls before this), falling back to the
+     * linked customer's account email for the rare case a signed-in customer reaches
+     * this without one. Never a caller-supplied parameter: that used to override both
+     * and let anyone redirect the PayFast receipt to an address of their choosing.
      */
-    private String resolveEmail(String formEmail, OrderEntity order)
+    private String resolveEmail(OrderEntity order)
     {
-        if (formEmail != null && !formEmail.isBlank()) {
-            return formEmail.trim();
+        if (order.getContactEmail() != null && !order.getContactEmail().isBlank()) {
+            return order.getContactEmail();
         }
         if (order.getCustomerEntity() != null && order.getCustomerEntity().getUser() != null
                 && order.getCustomerEntity().getUser().getEmail() != null && !order.getCustomerEntity().getUser().getEmail().isBlank()) {

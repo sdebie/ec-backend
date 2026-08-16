@@ -50,6 +50,9 @@ public class OrderService
     @Inject
     ShippingService shippingService;
 
+    @Inject
+    OrderCapabilityService orderCapability;
+
     @ConfigProperty(name = "order.idempotency.replay-hours", defaultValue = "24")
     int replayWindowHours;
 
@@ -241,6 +244,7 @@ public class OrderService
         response.setVatAmount(vatAmount);
         response.setShippingEstimate(shippingEstimate);
         response.setGrandTotal(grandTotal);
+        response.setOrderToken(orderCapability.mint(order.getId()));
         return response;
     }
 
@@ -579,6 +583,11 @@ public class OrderService
      * pinned by Requirement 1.5, which equates only the priced facts
      * (orderId, sessionId, lines' variantId/quantity/unitPrice/lineTotal,
      * subtotal) that cannot drift.
+     * <p>
+     * {@code orderToken} is minted fresh on every call (guest-order-authorization
+     * Requirement 3.2) — there is no stored token to return (design.md §2), so a
+     * replay at hour 20 of the 24-hour idempotency window still returns a token
+     * usable for a full 60 minutes from that moment, never one already expired.
      */
     public OrderCheckoutResponseDto replayOrder(OrderEntity order)
     {
@@ -606,6 +615,7 @@ public class OrderService
         response.setVatAmount(totals.vatAmount());
         response.setShippingEstimate(totals.shippingEstimate());
         response.setGrandTotal(totals.grandTotal());
+        response.setOrderToken(orderCapability.mint(order.getId()));
         return response;
     }
 
@@ -632,23 +642,6 @@ public class OrderService
             return null;
         }
         return orderMapper.toResponseDto(orderRepository.findOrderInfoById(orderId));
-    }
-
-    public OrderResponseDto getLatestOrderBySessionId(String sessionId)
-    {
-        OrderEntity order = findLatestOrderEntityBySessionId(sessionId);
-        return orderMapper.toResponseDto(order);
-    }
-
-    private OrderEntity findLatestOrderEntityBySessionId(String sessionId)
-    {
-        try {
-            UUID sid = UUID.fromString(sessionId);
-            LOG.debugf("getLatestOrderBySessionId for sessionId=%s", sid);
-            return orderRepository.findLatestOrderInfoBySessionId(sid);
-        } catch (Exception e) {
-            return null;
-        }
     }
 
     /**
