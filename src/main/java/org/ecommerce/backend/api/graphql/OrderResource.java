@@ -129,19 +129,6 @@ public class OrderResource
         return fullName != null && !fullName.isBlank() ? fullName : jwt.getSubject();
     }
 
-    @Query("orderById")
-    @Description("Update an order and return")
-    @RolesAllowed({"SUPER_ADMIN", "ORDER_MANAGER", "VIEWER"})
-    public OrderResponseDto getOrderById(@Name("id") String id) throws GraphQLException
-    {
-        LOG.debug("getOrderById");
-        try {
-            return orderService.getOrderById(UUID.fromString(id));
-        } catch (IllegalArgumentException e) {
-            throw new GraphQLException("Invalid id format: " + id);
-        }
-    }
-
     /**
      * S2′ (guest-order-authorization Requirement 4) — replaces {@code orderBySessionId}
      * rather than guarding it: that query was keyed on {@code sessionId}, a second

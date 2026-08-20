@@ -636,14 +636,6 @@ public class OrderService
         return order.getCreatedAt().isAfter(LocalDateTime.now().minusHours(replayWindowHours));
     }
 
-    public OrderResponseDto getOrderById(UUID orderId)
-    {
-        if (orderId == null) {
-            return null;
-        }
-        return orderMapper.toResponseDto(orderRepository.findOrderInfoById(orderId));
-    }
-
     /**
      * Most transitions carry no courier details; this is the same move without them.
      */

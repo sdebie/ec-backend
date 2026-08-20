@@ -36,7 +36,6 @@ import static org.mockito.Mockito.when;
  * Characterization tests for OrderService read-path DTO construction.
  * <p>
  * Pins the current output of:
- * - getOrderById(UUID)
  * - getOrderDetail(UUID)
  * - getAllOrders(PageRequest, FilterRequest)
  * - getMyOrders(UUID)
@@ -209,129 +208,6 @@ class OrderServiceReadPathCharacterizationTest
         h2.setCreatedAt(LocalDateTime.of(2026, 7, 15, 10, 30, 0));
 
         return List.of(h1, h2);
-    }
-
-    // ══════════════════════════════════════════════════════════════════════════
-    // getOrderById — pins OrderResponseDto construction via OrderMapper
-    // ══════════════════════════════════════════════════════════════════════════
-
-    @Nested
-    @DisplayName("getOrderById")
-    class GetOrderByIdTests
-    {
-
-        @Test
-        @DisplayName("fully populated order — pins all OrderResponseDto fields")
-        void fullyPopulatedOrder_pinsAllFields()
-        {
-            OrderEntity order = buildFullyPopulatedOrder();
-            stubOrderRepositoryFindById(order);
-
-            OrderResponseDto dto = orderService.getOrderById(order.getId());
-
-            assertNotNull(dto);
-            assertEquals("11111111-1111-1111-1111-111111111111", dto.getId());
-            assertEquals("22222222-2222-2222-2222-222222222222", dto.getSessionId());
-            assertEquals("PAID", dto.getStatus());
-            assertEquals(order.getCreatedAt().format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE_TIME), dto.getCreateDate());
-            assertEquals(new BigDecimal("1250.00"), dto.getTotalAmount());
-            assertEquals(2, dto.getItemCount());
-
-            // Customer
-            assertNotNull(dto.getCustomer());
-            assertEquals("customer@example.com", dto.getCustomer().getEmail());
-
-            // Items
-            assertNotNull(dto.getItems());
-            assertEquals(2, dto.getItems().size());
-
-            // First item
-            var item1Dto = dto.getItems().get(0);
-            assertEquals("88888888-8888-8888-8888-888888888888", item1Dto.getId());
-            assertEquals(new BigDecimal("250.00"), item1Dto.getUnitPrice());
-            assertEquals(3, item1Dto.getQuantity());
-            assertNotNull(item1Dto.getVariant());
-            assertEquals(UUID.fromString("77777777-7777-7777-7777-777777777777"), item1Dto.getVariant().getId());
-            assertEquals(50, item1Dto.getVariant().getStockQuantity());
-            assertEquals("{\"color\":\"red\",\"size\":\"L\"}", item1Dto.getVariant().getAttributesJson());
-            assertEquals(new BigDecimal("0.75"), item1Dto.getVariant().getWeightKg());
-            assertNotNull(item1Dto.getVariant().getProduct());
-            assertEquals("Premium Widget", item1Dto.getVariant().getProduct().getName());
-
-            // Images on first item's variant
-            assertNotNull(item1Dto.getVariant().getImages());
-            assertEquals(2, item1Dto.getVariant().getImages().size());
-            assertEquals("55555555-5555-5555-5555-555555555555", item1Dto.getVariant().getImages().get(0).getId());
-            assertEquals("https://cdn.example.com/widget1.jpg", item1Dto.getVariant().getImages().get(0).getImageUrl());
-            assertEquals(1, item1Dto.getVariant().getImages().get(0).getSortOrder());
-            assertTrue(item1Dto.getVariant().getImages().get(0).isFeatured());
-            assertEquals("66666666-6666-6666-6666-666666666666", item1Dto.getVariant().getImages().get(1).getId());
-            assertEquals("https://cdn.example.com/widget2.jpg", item1Dto.getVariant().getImages().get(1).getImageUrl());
-            assertEquals(2, item1Dto.getVariant().getImages().get(1).getSortOrder());
-            assertFalse(item1Dto.getVariant().getImages().get(1).isFeatured());
-
-            // Second item — no images
-            var item2Dto = dto.getItems().get(1);
-            assertEquals("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb", item2Dto.getId());
-            assertEquals(new BigDecimal("125.00"), item2Dto.getUnitPrice());
-            assertEquals(2, item2Dto.getQuantity());
-            assertNotNull(item2Dto.getVariant());
-            assertEquals(UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"), item2Dto.getVariant().getId());
-            assertEquals(100, item2Dto.getVariant().getStockQuantity());
-            assertNull(item2Dto.getVariant().getAttributesJson());
-            assertEquals(new BigDecimal("1.20"), item2Dto.getVariant().getWeightKg());
-            assertNotNull(item2Dto.getVariant().getProduct());
-            assertEquals("Basic Gadget", item2Dto.getVariant().getProduct().getName());
-            assertNotNull(item2Dto.getVariant().getImages());
-            assertTrue(item2Dto.getVariant().getImages().isEmpty());
-        }
-
-        @Test
-        @DisplayName("null orderId — returns null")
-        void nullOrderId_returnsNull()
-        {
-            OrderResponseDto dto = orderService.getOrderById(null);
-            assertNull(dto);
-        }
-
-        @Test
-        @DisplayName("minimal order (no customer, no items) — pins null handling")
-        void minimalOrder_pinsNullHandling()
-        {
-            OrderEntity order = buildMinimalOrder();
-            stubOrderRepositoryFindById(order);
-
-            OrderResponseDto dto = orderService.getOrderById(order.getId());
-
-            assertNotNull(dto);
-            assertEquals("cccccccc-cccc-cccc-cccc-cccccccccccc", dto.getId());
-            assertEquals("dddddddd-dddd-dddd-dddd-dddddddddddd", dto.getSessionId());
-            assertEquals("CREATED", dto.getStatus());
-            assertEquals(order.getCreatedAt().format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE_TIME), dto.getCreateDate());
-            assertEquals(new BigDecimal("0.00"), dto.getTotalAmount());
-            assertNull(dto.getCustomer());
-            assertNotNull(dto.getItems());
-            assertTrue(dto.getItems().isEmpty());
-            assertEquals(0, dto.getItemCount());
-        }
-
-        @Test
-        @DisplayName("order with null variant item — pins null variant handling")
-        void orderWithNullVariant_pinsNullVariantHandling()
-        {
-            OrderEntity order = buildOrderWithNullVariant();
-            stubOrderRepositoryFindById(order);
-
-            OrderResponseDto dto = orderService.getOrderById(order.getId());
-
-            assertNotNull(dto);
-            assertEquals(1, dto.getItems().size());
-            var itemDto = dto.getItems().get(0);
-            assertEquals("12345678-1234-1234-1234-123456789abc", itemDto.getId());
-            assertEquals(new BigDecimal("50.00"), itemDto.getUnitPrice());
-            assertEquals(1, itemDto.getQuantity());
-            assertNull(itemDto.getVariant());
-        }
     }
 
     // ══════════════════════════════════════════════════════════════════════════

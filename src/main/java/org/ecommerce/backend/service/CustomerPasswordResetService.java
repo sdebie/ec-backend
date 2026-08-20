@@ -17,7 +17,6 @@ import org.ecommerce.common.enums.CustomerTypeEn;
 import java.security.SecureRandom;
 import java.time.OffsetDateTime;
 import java.util.Map;
-import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Slf4j
@@ -39,24 +38,6 @@ public class CustomerPasswordResetService
     {
         int failedAttempts;
         OffsetDateTime lockedUntil;
-    }
-
-    @Transactional
-    public void initiatePasswordReset(String email)
-    {
-        if (email == null || email.isBlank()) {
-            return;
-        }
-
-        UserEntity user = UserEntity.findByEmail(email.trim());
-        if (user != null) {
-            String token = UUID.randomUUID().toString();
-            user.setResetToken(token);
-            user.setResetTokenExpiry(OffsetDateTime.now().plusMinutes(20));
-
-            // Keep generic caller response; notification transport can be upgraded later.
-            passwordResetNotificationService.sendResetLink(user.getEmail(), token);
-        }
     }
 
     @Transactional
@@ -108,32 +89,6 @@ public class CustomerPasswordResetService
         user.setPasswordResetCodeExpiry(null);
         user.setPasswordResetCodeAttempts(0);
         user.setPasswordResetCodeLockedUntil(null);
-    }
-
-    @Transactional
-    public void completePasswordReset(String token, String newPassword)
-    {
-        if (token == null || token.isBlank()) {
-            throw new IllegalArgumentException("Reset token is required");
-        }
-
-        if (newPassword == null || newPassword.isBlank()) {
-            throw new IllegalArgumentException("New password is required");
-        }
-        PasswordStrengthValidator.validate(newPassword);
-
-        UserEntity user = UserEntity.findByResetToken(token);
-        if (user == null || user.getResetTokenExpiry() == null || user.getResetTokenExpiry().isBefore(OffsetDateTime.now())) {
-            throw new IllegalArgumentException("Invalid or expired reset token");
-        }
-
-        user.setPasswordHash(CustomerPasswordHashUtil.hash(newPassword));
-        user.setLastLogin(OffsetDateTime.now());
-
-        activateCustomerProfile(user.getCustomer());
-
-        user.setResetToken(null);
-        user.setResetTokenExpiry(null);
     }
 
     /**

@@ -23,7 +23,6 @@ class CustomerPasswordResetServiceTest
 {
     private static final String EMAIL = "shopper@example.com";
     private static final String RESET_CODE = "123456";
-    private static final String RESET_TOKEN = "token-1234";
     private static final String CLIENT_IP = "203.0.113.10";
 
     @Inject
@@ -45,20 +44,6 @@ class CustomerPasswordResetServiceTest
         user.setPasswordHash("");
         user.setPasswordResetCodeHash(PasswordHashUtil.hash(RESET_CODE));
         user.setPasswordResetCodeExpiry(OffsetDateTime.now().plusMinutes(5));
-        user.setCustomer(customer);
-        if (customer != null) {
-            customer.setUser(user);
-        }
-        return user;
-    }
-
-    private static UserEntity userWithValidResetToken(CustomerEntity customer)
-    {
-        UserEntity user = new UserEntity();
-        user.setEmail(EMAIL);
-        user.setPasswordHash("");
-        user.setResetToken(RESET_TOKEN);
-        user.setResetTokenExpiry(OffsetDateTime.now().plusMinutes(5));
         user.setCustomer(customer);
         if (customer != null) {
             customer.setUser(user);
@@ -153,59 +138,4 @@ class CustomerPasswordResetServiceTest
         assertEquals("", user.getPasswordHash(), "A rejected weak password must never be hashed or stored");
     }
 
-    // ── completePasswordReset (token path) ────────────────────────────────────
-
-    @Test
-    void completeWithToken_guestCustomer_upgradesToRetailer()
-    {
-        CustomerEntity customer = customerOf(CustomerTypeEn.GUEST, CustomerStatusEn.PENDING);
-        UserEntity user = userWithValidResetToken(customer);
-        when(UserEntity.findByResetToken(RESET_TOKEN)).thenReturn(user);
-
-        customerPasswordResetService.completePasswordReset(RESET_TOKEN, "newPassword1!");
-
-        assertEquals(CustomerTypeEn.RETAILER, customer.getShopperType());
-        assertEquals(CustomerStatusEn.ACTIVE, customer.getStatus());
-        assertNull(user.getResetToken());
-        assertTrue(user.getPasswordHash().startsWith("$2"), "Password reset must write a BCrypt hash, not the legacy SHA-256 format");
-        assertTrue(CustomerPasswordHashUtil.verify("newPassword1!", user.getPasswordHash()));
-    }
-
-    @Test
-    void completeWithToken_nullShopperType_upgradesToRetailer()
-    {
-        CustomerEntity customer = customerOf(null, CustomerStatusEn.PENDING);
-        UserEntity user = userWithValidResetToken(customer);
-        when(UserEntity.findByResetToken(RESET_TOKEN)).thenReturn(user);
-
-        customerPasswordResetService.completePasswordReset(RESET_TOKEN, "newPassword1!");
-
-        assertEquals(CustomerTypeEn.RETAILER, customer.getShopperType());
-    }
-
-    @Test
-    void completeWithToken_wholesalerCustomer_isNotDowngraded()
-    {
-        CustomerEntity customer = customerOf(CustomerTypeEn.WHOLESALER, CustomerStatusEn.ACTIVE);
-        UserEntity user = userWithValidResetToken(customer);
-        when(UserEntity.findByResetToken(RESET_TOKEN)).thenReturn(user);
-
-        customerPasswordResetService.completePasswordReset(RESET_TOKEN, "newPassword1!");
-
-        assertEquals(CustomerTypeEn.WHOLESALER, customer.getShopperType());
-    }
-
-    @Test
-    void completeWithToken_weakPassword_throwsAndDoesNotUpdateHash()
-    {
-        CustomerEntity customer = customerOf(CustomerTypeEn.GUEST, CustomerStatusEn.PENDING);
-        UserEntity user = userWithValidResetToken(customer);
-        when(UserEntity.findByResetToken(RESET_TOKEN)).thenReturn(user);
-
-        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
-                () -> customerPasswordResetService.completePasswordReset(RESET_TOKEN, "short"));
-
-        assertEquals("Password must be at least 8 characters", ex.getMessage());
-        assertEquals("", user.getPasswordHash(), "A rejected weak password must never be hashed or stored");
-    }
 }
