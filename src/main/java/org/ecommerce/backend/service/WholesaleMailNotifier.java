@@ -1,7 +1,5 @@
 package org.ecommerce.backend.service;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.quarkus.mailer.MailTemplate;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
@@ -9,9 +7,7 @@ import jakarta.enterprise.event.TransactionPhase;
 import jakarta.inject.Inject;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.ecommerce.backend.exception.RecipientNotConfiguredException;
-import org.ecommerce.common.entity.StoreSettingsEntity;
 import org.ecommerce.common.enums.WholesaleApplicationStatusEn;
-import org.ecommerce.common.repository.SettingsRepository;
 import org.jboss.logging.Logger;
 
 /**
@@ -30,8 +26,6 @@ public class WholesaleMailNotifier
 {
     private static final Logger LOG = Logger.getLogger(WholesaleMailNotifier.class);
 
-    private static final String BRANDING_SETTING_KEY = "storefront.branding";
-
     @Inject
     MailTemplate wholesale_status;
 
@@ -45,10 +39,7 @@ public class WholesaleMailNotifier
     EnquiryRecipientResolver enquiryRecipientResolver;
 
     @Inject
-    SettingsRepository settingsRepository;
-
-    @Inject
-    ObjectMapper objectMapper;
+    StoreEmailDetailsResolver storeEmailDetailsResolver;
 
     @ConfigProperty(name = "quarkus.mailer.from")
     String mailerFrom;
@@ -149,7 +140,6 @@ public class WholesaleMailNotifier
             return;
         }
 
-        // Resolve store name from storefront.branding setting
         String storeName = resolveStoreName(event.applicationId());
 
         wholesale_status.to(event.recipientEmail())
@@ -169,30 +159,17 @@ public class WholesaleMailNotifier
     }
 
     /**
-     * Resolves the store display name from the {@code storefront.branding} setting.
-     * Returns the bare from-address as fallback if the setting is missing or the name is blank.
+     * Resolves the store's display name via {@link StoreEmailDetailsResolver}, falling
+     * back to the bare from-address when the store has no configured name — these
+     * templates interpolate the value unguarded, so it must never be blank.
      */
     private String resolveStoreName(java.util.UUID applicationId)
     {
-        try {
-            StoreSettingsEntity setting = settingsRepository.findById(BRANDING_SETTING_KEY);
-            if (setting == null || setting.getValue() == null || setting.getValue().isBlank()) {
-                LOG.warnf("[WholesaleMailNotifier] storefront.branding setting missing — using bare from-address for application %s", applicationId);
-                return mailerFrom;
-            }
-
-            JsonNode brandingNode = objectMapper.readTree(setting.getValue());
-            JsonNode nameNode = brandingNode.get("name");
-
-            if (nameNode == null || nameNode.isNull() || nameNode.asText().isBlank()) {
-                LOG.warnf("[WholesaleMailNotifier] storefront.branding name is blank — using bare from-address for application %s", applicationId);
-                return mailerFrom;
-            }
-
-            return nameNode.asText();
-        } catch (Exception e) {
-            LOG.warnf(e, "[WholesaleMailNotifier] failed to parse storefront.branding — using bare from-address for application %s", applicationId);
+        String storeName = storeEmailDetailsResolver.resolveStoreName();
+        if (storeName == null) {
+            LOG.warnf("[WholesaleMailNotifier] no store name configured in storefront.branding or storefront.config — using bare from-address for application %s", applicationId);
             return mailerFrom;
         }
+        return storeName;
     }
 }

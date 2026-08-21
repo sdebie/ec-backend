@@ -7,7 +7,8 @@ package org.ecommerce.backend.service;
  * filled in yet. Templates guard each individually rather than assuming a complete set —
  * an unconfigured phone number should cost the reader a line, not the whole footer.
  *
- * @param name           the trading name, from {@code storefront.config → clientName}
+ * @param name           the trading name, from {@code storefront.branding → name},
+ *                       falling back to {@code storefront.config → clientName}
  * @param currencySymbol what to put in front of an amount, derived from the configured
  *                       currency; falls back to the currency code when the symbol is not
  *                       one this platform knows, which reads oddly but never wrongly

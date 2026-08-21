@@ -8,6 +8,7 @@ import io.quarkus.security.runtime.QuarkusSecurityIdentity;
 import io.smallrye.mutiny.Uni;
 import jakarta.enterprise.context.ApplicationScoped;
 import org.ecommerce.common.entity.StaffUserEntity;
+import org.ecommerce.common.enums.StaffRoleEn;
 
 import java.util.Set;
 
@@ -43,7 +44,7 @@ public class ForcedPasswordResetIdentityAugmentor implements SecurityIdentityAug
 {
     public static final String PASSWORD_RESET_REQUIRED_ROLE = "PASSWORD_RESET_REQUIRED";
 
-    private static final Set<String> STAFF_ROLES = Set.of("SUPER_ADMIN", "CATALOG_MANAGER", "ORDER_MANAGER", "VIEWER");
+    private static final Set<String> STAFF_ROLES = StaffRoleEn.names();
 
     @Override
     public Uni<SecurityIdentity> augment(SecurityIdentity identity, AuthenticationRequestContext context)
