@@ -6,6 +6,7 @@ import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.core.Response;
 import org.ecommerce.backend.utils.CustomerPasswordHashUtil;
 import org.ecommerce.backend.utils.PasswordStrengthValidator;
+import org.ecommerce.common.dto.AddressDto;
 import org.ecommerce.common.dto.StorefrontCustomerPortalDto;
 import jakarta.inject.Inject;
 import org.ecommerce.backend.mapper.CustomerAddressMapper;
@@ -124,7 +125,7 @@ public class CustomerPortalService
 
     // ── Private helpers ──────────────────────────────────────────────────────
 
-    private StorefrontCustomerPortalDto.AddressDto mapAddress(CustomerEntity customer, AddressTypeEn type)
+    private AddressDto mapAddress(CustomerEntity customer, AddressTypeEn type)
     {
         return customer.getAddresses()
                 .stream()

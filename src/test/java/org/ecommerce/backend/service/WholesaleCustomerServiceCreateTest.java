@@ -6,6 +6,7 @@ import io.quarkus.panache.mock.PanacheMock;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
+import org.ecommerce.common.dto.AddressDto;
 import org.ecommerce.common.dto.WholesaleCustomerDto;
 import org.ecommerce.common.entity.CustomerEntity;
 import org.ecommerce.common.entity.UserEntity;
@@ -74,10 +75,12 @@ class WholesaleCustomerServiceCreateTest
         dto.setFinanceContactPhone("0119876543");
         dto.setPurchaseOrderRequired(true);
         dto.setNotes("Test application");
-        dto.setPhysicalAddressLine1("123 Main St");
-        dto.setPhysicalCity("Johannesburg");
-        dto.setPhysicalProvince("Gauteng");
-        dto.setPhysicalPostalCode("2000");
+        AddressDto physical = new AddressDto();
+        physical.setLine1("123 Main St");
+        physical.setCity("Johannesburg");
+        physical.setProvince("Gauteng");
+        physical.setPostalCode("2000");
+        dto.setPhysicalAddress(physical);
         return dto;
     }
 

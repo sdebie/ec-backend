@@ -5,6 +5,7 @@ import jakarta.enterprise.event.Event;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import org.ecommerce.backend.mapper.WholesaleMapper;
+import org.ecommerce.common.dto.AddressDto;
 import org.ecommerce.common.dto.WholesaleApplicationDetailsDto;
 import org.ecommerce.common.dto.WholesaleApplicationListItemDto;
 import org.ecommerce.common.dto.WholesaleCustomerDto;
@@ -33,6 +34,9 @@ public class WholesaleCustomerService
 
     @Inject
     WholesaleMapper wholesaleMapper;
+
+    @Inject
+    CustomerAddressService customerAddressService;
 
     @Inject
     Event<WholesaleDecisionEvent> decisionEvent;
@@ -131,19 +135,21 @@ public class WholesaleCustomerService
         application.setStatus(WholesaleApplicationStatusEn.PENDING);
         application.setNotes(normalizeText(customerDto.getNotes()));
 
-        application.setPhysicalAddressLine1(normalizeText(customerDto.getPhysicalAddressLine1()));
-        application.setPhysicalAddressLine2(normalizeText(customerDto.getPhysicalAddressLine2()));
-        application.setPhysicalSuburb(normalizeText(customerDto.getPhysicalSuburb()));
-        application.setPhysicalCity(normalizeText(customerDto.getPhysicalCity()));
-        application.setPhysicalProvince(normalizeText(customerDto.getPhysicalProvince()));
-        application.setPhysicalPostalCode(normalizeText(customerDto.getPhysicalPostalCode()));
+        AddressDto physical = customerDto.getPhysicalAddress();
+        application.setPhysicalAddressLine1(physical != null ? normalizeText(physical.getLine1()) : null);
+        application.setPhysicalAddressLine2(physical != null ? normalizeText(physical.getLine2()) : null);
+        application.setPhysicalSuburb(physical != null ? normalizeText(physical.getSuburb()) : null);
+        application.setPhysicalCity(physical != null ? normalizeText(physical.getCity()) : null);
+        application.setPhysicalProvince(physical != null ? normalizeText(physical.getProvince()) : null);
+        application.setPhysicalPostalCode(physical != null ? normalizeText(physical.getPostalCode()) : null);
 
-        application.setPostalAddressLine1(normalizeText(customerDto.getPostalAddressLine1()));
-        application.setPostalAddressLine2(normalizeText(customerDto.getPostalAddressLine2()));
-        application.setPostalSuburb(normalizeText(customerDto.getPostalSuburb()));
-        application.setPostalCity(normalizeText(customerDto.getPostalCity()));
-        application.setPostalProvince(normalizeText(customerDto.getPostalProvince()));
-        application.setPostalPostalCode(normalizeText(customerDto.getPostalPostalCode()));
+        AddressDto postal = customerDto.getPostalAddress();
+        application.setPostalAddressLine1(postal != null ? normalizeText(postal.getLine1()) : null);
+        application.setPostalAddressLine2(postal != null ? normalizeText(postal.getLine2()) : null);
+        application.setPostalSuburb(postal != null ? normalizeText(postal.getSuburb()) : null);
+        application.setPostalCity(postal != null ? normalizeText(postal.getCity()) : null);
+        application.setPostalProvince(postal != null ? normalizeText(postal.getProvince()) : null);
+        application.setPostalPostalCode(postal != null ? normalizeText(postal.getPostalCode()) : null);
 
         WholesaleApplicationEntity.persist(application);
 
@@ -438,66 +444,33 @@ public class WholesaleCustomerService
 
     private void applyAddresses(CustomerEntity ce, WholesaleCustomerDto dto)
     {
-        upsertAddress(ce, AddressTypeEn.PHYSICAL,
-                dto.getPhysicalAddressLine1(), dto.getPhysicalAddressLine2(),
-                dto.getPhysicalSuburb(), dto.getPhysicalCity(),
-                dto.getPhysicalProvince(), dto.getPhysicalPostalCode());
-
-        upsertAddress(ce, AddressTypeEn.POSTAL,
-                dto.getPostalAddressLine1(), dto.getPostalAddressLine2(),
-                dto.getPostalSuburb(), dto.getPostalCity(),
-                dto.getPostalProvince(), dto.getPostalPostalCode());
+        customerAddressService.upsertAddress(ce, AddressTypeEn.PHYSICAL, dto.getPhysicalAddress());
+        customerAddressService.upsertAddress(ce, AddressTypeEn.POSTAL, dto.getPostalAddress());
     }
 
+    /**
+     * WholesaleApplicationEntity's flat columns are written exactly once, by
+     * {@link #createWholesaleApplication}, which already normalizes — but this read is a
+     * second, independent use of that data, so it re-normalizes defensively rather than
+     * trusting the invariant to hold forever.
+     */
     private void applyAddressesFromApplication(CustomerEntity ce, WholesaleApplicationEntity application)
     {
-        upsertAddress(ce, AddressTypeEn.PHYSICAL,
-                normalizeText(application.getPhysicalAddressLine1()), normalizeText(application.getPhysicalAddressLine2()),
-                normalizeText(application.getPhysicalSuburb()), normalizeText(application.getPhysicalCity()),
-                normalizeText(application.getPhysicalProvince()), normalizeText(application.getPhysicalPostalCode()));
-
-        upsertAddress(ce, AddressTypeEn.POSTAL,
-                normalizeText(application.getPostalAddressLine1()), normalizeText(application.getPostalAddressLine2()),
-                normalizeText(application.getPostalSuburb()), normalizeText(application.getPostalCity()),
-                normalizeText(application.getPostalProvince()), normalizeText(application.getPostalPostalCode()));
+        customerAddressService.upsertAddress(ce, AddressTypeEn.PHYSICAL,
+                normalizeAddress(wholesaleMapper.wholesaleApplicationPhysicalAddress(application)));
+        customerAddressService.upsertAddress(ce, AddressTypeEn.POSTAL,
+                normalizeAddress(wholesaleMapper.wholesaleApplicationPostalAddress(application)));
     }
 
-    private static void upsertAddress(CustomerEntity ce, AddressTypeEn type, String line1, String line2, String suburb, String city, String province, String postalCode)
+    private AddressDto normalizeAddress(AddressDto address)
     {
-        if (line1 == null && city == null && province == null && postalCode == null) {
-            return;
-        }
-
-        CustomerAddressEntity addr = ce.getAddresses()
-                .stream()
-                .filter(a -> a.getAddressType() == type)
-                .findFirst()
-                .orElseGet(() -> {
-                    CustomerAddressEntity a = new CustomerAddressEntity();
-                    a.setCustomer(ce);
-                    a.setAddressType(type);
-                    ce.getAddresses().add(a);
-                    return a;
-                });
-
-        if (line1 != null) {
-            addr.setAddressLine1(line1);
-        }
-        if (line2 != null) {
-            addr.setAddressLine2(line2);
-        }
-        if (suburb != null) {
-            addr.setSuburb(suburb);
-        }
-        if (city != null) {
-            addr.setCity(city);
-        }
-        if (province != null) {
-            addr.setProvince(province);
-        }
-        if (postalCode != null) {
-            addr.setPostalCode(postalCode);
-        }
+        address.setLine1(normalizeText(address.getLine1()));
+        address.setLine2(normalizeText(address.getLine2()));
+        address.setSuburb(normalizeText(address.getSuburb()));
+        address.setCity(normalizeText(address.getCity()));
+        address.setProvince(normalizeText(address.getProvince()));
+        address.setPostalCode(normalizeText(address.getPostalCode()));
+        return address;
     }
 
     private String normalizeEmail(String email)

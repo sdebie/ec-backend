@@ -11,6 +11,7 @@ import io.quarkus.panache.mock.PanacheMock;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
+import org.ecommerce.common.dto.AddressDto;
 import org.ecommerce.common.dto.WholesaleCustomerDto;
 import org.ecommerce.common.entity.CustomerEntity;
 import org.ecommerce.common.entity.UserEntity;
@@ -108,20 +109,20 @@ public class WholesaleApplicationCreatePropertyTest
             assertEquals(expectedCompanyName, result.getCompanyName(), "Iteration " + i + ": companyName mismatch");
 
             // Address fields — physical
-            assertEquals(normalize(dto.getPhysicalAddressLine1()), result.getPhysicalAddressLine1(), "Iteration " + i + ": physicalAddressLine1 mismatch");
-            assertEquals(normalize(dto.getPhysicalAddressLine2()), result.getPhysicalAddressLine2(), "Iteration " + i + ": physicalAddressLine2 mismatch");
-            assertEquals(normalize(dto.getPhysicalSuburb()), result.getPhysicalSuburb(), "Iteration " + i + ": physicalSuburb mismatch");
-            assertEquals(normalize(dto.getPhysicalCity()), result.getPhysicalCity(), "Iteration " + i + ": physicalCity mismatch");
-            assertEquals(normalize(dto.getPhysicalProvince()), result.getPhysicalProvince(), "Iteration " + i + ": physicalProvince mismatch");
-            assertEquals(normalize(dto.getPhysicalPostalCode()), result.getPhysicalPostalCode(), "Iteration " + i + ": physicalPostalCode mismatch");
+            assertEquals(normalize(dto.getPhysicalAddress().getLine1()), result.getPhysicalAddress().getLine1(), "Iteration " + i + ": physicalAddress.line1 mismatch");
+            assertEquals(normalize(dto.getPhysicalAddress().getLine2()), result.getPhysicalAddress().getLine2(), "Iteration " + i + ": physicalAddress.line2 mismatch");
+            assertEquals(normalize(dto.getPhysicalAddress().getSuburb()), result.getPhysicalAddress().getSuburb(), "Iteration " + i + ": physicalAddress.suburb mismatch");
+            assertEquals(normalize(dto.getPhysicalAddress().getCity()), result.getPhysicalAddress().getCity(), "Iteration " + i + ": physicalAddress.city mismatch");
+            assertEquals(normalize(dto.getPhysicalAddress().getProvince()), result.getPhysicalAddress().getProvince(), "Iteration " + i + ": physicalAddress.province mismatch");
+            assertEquals(normalize(dto.getPhysicalAddress().getPostalCode()), result.getPhysicalAddress().getPostalCode(), "Iteration " + i + ": physicalAddress.postalCode mismatch");
 
             // Address fields — postal
-            assertEquals(normalize(dto.getPostalAddressLine1()), result.getPostalAddressLine1(), "Iteration " + i + ": postalAddressLine1 mismatch");
-            assertEquals(normalize(dto.getPostalAddressLine2()), result.getPostalAddressLine2(), "Iteration " + i + ": postalAddressLine2 mismatch");
-            assertEquals(normalize(dto.getPostalSuburb()), result.getPostalSuburb(), "Iteration " + i + ": postalSuburb mismatch");
-            assertEquals(normalize(dto.getPostalCity()), result.getPostalCity(), "Iteration " + i + ": postalCity mismatch");
-            assertEquals(normalize(dto.getPostalProvince()), result.getPostalProvince(), "Iteration " + i + ": postalProvince mismatch");
-            assertEquals(normalize(dto.getPostalPostalCode()), result.getPostalPostalCode(), "Iteration " + i + ": postalPostalCode mismatch");
+            assertEquals(normalize(dto.getPostalAddress().getLine1()), result.getPostalAddress().getLine1(), "Iteration " + i + ": postalAddress.line1 mismatch");
+            assertEquals(normalize(dto.getPostalAddress().getLine2()), result.getPostalAddress().getLine2(), "Iteration " + i + ": postalAddress.line2 mismatch");
+            assertEquals(normalize(dto.getPostalAddress().getSuburb()), result.getPostalAddress().getSuburb(), "Iteration " + i + ": postalAddress.suburb mismatch");
+            assertEquals(normalize(dto.getPostalAddress().getCity()), result.getPostalAddress().getCity(), "Iteration " + i + ": postalAddress.city mismatch");
+            assertEquals(normalize(dto.getPostalAddress().getProvince()), result.getPostalAddress().getProvince(), "Iteration " + i + ": postalAddress.province mismatch");
+            assertEquals(normalize(dto.getPostalAddress().getPostalCode()), result.getPostalAddress().getPostalCode(), "Iteration " + i + ": postalAddress.postalCode mismatch");
         }
     }
 
@@ -291,18 +292,22 @@ public class WholesaleApplicationCreatePropertyTest
         dto.setFinanceContactPhone(randomNullableString());
         dto.setPurchaseOrderRequired(randomNullableBoolean());
         dto.setNotes(randomNullableString());
-        dto.setPhysicalAddressLine1(randomNullableString());
-        dto.setPhysicalAddressLine2(randomNullableString());
-        dto.setPhysicalSuburb(randomNullableString());
-        dto.setPhysicalCity(randomNullableString());
-        dto.setPhysicalProvince(randomNullableString());
-        dto.setPhysicalPostalCode(randomNullableString());
-        dto.setPostalAddressLine1(randomNullableString());
-        dto.setPostalAddressLine2(randomNullableString());
-        dto.setPostalSuburb(randomNullableString());
-        dto.setPostalCity(randomNullableString());
-        dto.setPostalProvince(randomNullableString());
-        dto.setPostalPostalCode(randomNullableString());
+        AddressDto physical = new AddressDto();
+        physical.setLine1(randomNullableString());
+        physical.setLine2(randomNullableString());
+        physical.setSuburb(randomNullableString());
+        physical.setCity(randomNullableString());
+        physical.setProvince(randomNullableString());
+        physical.setPostalCode(randomNullableString());
+        dto.setPhysicalAddress(physical);
+        AddressDto postal = new AddressDto();
+        postal.setLine1(randomNullableString());
+        postal.setLine2(randomNullableString());
+        postal.setSuburb(randomNullableString());
+        postal.setCity(randomNullableString());
+        postal.setProvince(randomNullableString());
+        postal.setPostalCode(randomNullableString());
+        dto.setPostalAddress(postal);
         return dto;
     }
 

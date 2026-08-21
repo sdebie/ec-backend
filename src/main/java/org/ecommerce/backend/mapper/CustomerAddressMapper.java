@@ -1,6 +1,6 @@
 package org.ecommerce.backend.mapper;
 
-import org.ecommerce.common.dto.StorefrontCustomerPortalDto;
+import org.ecommerce.common.dto.AddressDto;
 import org.ecommerce.common.entity.CustomerAddressEntity;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
@@ -23,5 +23,5 @@ public interface CustomerAddressMapper
 {
     @Mapping(target = "line1", source = "addressLine1")
     @Mapping(target = "line2", source = "addressLine2")
-    StorefrontCustomerPortalDto.AddressDto toAddressDto(CustomerAddressEntity entity);
+    AddressDto toAddressDto(CustomerAddressEntity entity);
 }

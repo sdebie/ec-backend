@@ -228,18 +228,18 @@ class WholesaleCustomerServiceTest
         assertEquals(customerId, result.getCustomerId());
 
         // Address fields
-        assertEquals("10 Main Road", result.getPhysicalAddressLine1());
-        assertEquals("Unit 5", result.getPhysicalAddressLine2());
-        assertEquals("Sandton", result.getPhysicalSuburb());
-        assertEquals("Johannesburg", result.getPhysicalCity());
-        assertEquals("Gauteng", result.getPhysicalProvince());
-        assertEquals("2196", result.getPhysicalPostalCode());
-        assertEquals("PO Box 100", result.getPostalAddressLine1());
-        assertNull(result.getPostalAddressLine2());
-        assertEquals("Braamfontein", result.getPostalSuburb());
-        assertEquals("Johannesburg", result.getPostalCity());
-        assertEquals("Gauteng", result.getPostalProvince());
-        assertEquals("2001", result.getPostalPostalCode());
+        assertEquals("10 Main Road", result.getPhysicalAddress().getLine1());
+        assertEquals("Unit 5", result.getPhysicalAddress().getLine2());
+        assertEquals("Sandton", result.getPhysicalAddress().getSuburb());
+        assertEquals("Johannesburg", result.getPhysicalAddress().getCity());
+        assertEquals("Gauteng", result.getPhysicalAddress().getProvince());
+        assertEquals("2196", result.getPhysicalAddress().getPostalCode());
+        assertEquals("PO Box 100", result.getPostalAddress().getLine1());
+        assertNull(result.getPostalAddress().getLine2());
+        assertEquals("Braamfontein", result.getPostalAddress().getSuburb());
+        assertEquals("Johannesburg", result.getPostalAddress().getCity());
+        assertEquals("Gauteng", result.getPostalAddress().getProvince());
+        assertEquals("2001", result.getPostalAddress().getPostalCode());
     }
 }
 

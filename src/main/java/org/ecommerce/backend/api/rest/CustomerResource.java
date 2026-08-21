@@ -14,14 +14,15 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.eclipse.microprofile.jwt.JsonWebToken;
 import org.ecommerce.backend.exception.InvalidPasswordResetCodeException;
 import org.ecommerce.backend.exception.PasswordResetLockedException;
+import org.ecommerce.backend.mapper.CustomerAddressMapper;
 import org.ecommerce.backend.service.*;
 import org.ecommerce.backend.utils.ClientIpUtils;
 import org.ecommerce.backend.utils.CustomerPasswordHashUtil;
 import org.ecommerce.backend.utils.PasswordStrengthValidator;
+import org.ecommerce.common.dto.AddressDto;
 import org.ecommerce.common.dto.CustomerLoginResponseDto;
 import org.ecommerce.common.dto.CustomerProfileDto;
 import org.ecommerce.common.dto.PasswordChangeRequestDto;
-import org.ecommerce.common.entity.CustomerAddressEntity;
 import org.ecommerce.common.entity.CustomerEntity;
 import org.ecommerce.common.entity.UserEntity;
 import org.ecommerce.common.enums.AddressTypeEn;
@@ -30,7 +31,6 @@ import org.ecommerce.common.enums.CustomerTypeEn;
 import org.jboss.logging.Logger;
 
 import java.time.OffsetDateTime;
-import java.util.Optional;
 
 // Minimal REST API to support checkout UX (lookup, login, register, profile)
 @Path("/api/customers")
@@ -49,6 +49,12 @@ public class CustomerResource
 
     @Inject
     CustomerPortalService customerPortalService;
+
+    @Inject
+    CustomerAddressService customerAddressService;
+
+    @Inject
+    CustomerAddressMapper customerAddressMapper;
 
     @Inject
     RateLimiterService rateLimiterService;
@@ -350,18 +356,8 @@ public class CustomerResource
         public String firstName;
         public String lastName;
         public String phone;
-        public String physicalAddressLine1;
-        public String physicalAddressLine2;
-        public String physicalSuburb;
-        public String physicalCity;
-        public String physicalProvince;
-        public String physicalPostalCode;
-        public String postalAddressLine1;
-        public String postalAddressLine2;
-        public String postalSuburb;
-        public String postalCity;
-        public String postalProvince;
-        public String postalPostalCode;
+        public AddressDto physicalAddress;
+        public AddressDto postalAddress;
     }
 
     public static class ProfileUpdateRequest
@@ -369,18 +365,8 @@ public class CustomerResource
         public String firstName;
         public String lastName;
         public String phone;
-        public String physicalAddressLine1;
-        public String physicalAddressLine2;
-        public String physicalSuburb;
-        public String physicalCity;
-        public String physicalProvince;
-        public String physicalPostalCode;
-        public String postalAddressLine1;
-        public String postalAddressLine2;
-        public String postalSuburb;
-        public String postalCity;
-        public String postalProvince;
-        public String postalPostalCode;
+        public AddressDto physicalAddress;
+        public AddressDto postalAddress;
     }
 
     /**
@@ -458,15 +444,8 @@ public class CustomerResource
         CustomerEntity.persist(ce);
 
         // ── Upsert addresses ──────────────────────────────────────────────
-        upsertAddress(ce, AddressTypeEn.PHYSICAL,
-                req.physicalAddressLine1, req.physicalAddressLine2,
-                req.physicalSuburb, req.physicalCity,
-                req.physicalProvince, req.physicalPostalCode);
-
-        upsertAddress(ce, AddressTypeEn.POSTAL,
-                req.postalAddressLine1, req.postalAddressLine2,
-                req.postalSuburb, req.postalCity,
-                req.postalProvince, req.postalPostalCode);
+        customerAddressService.upsertAddress(ce, AddressTypeEn.PHYSICAL, req.physicalAddress);
+        customerAddressService.upsertAddress(ce, AddressTypeEn.POSTAL, req.postalAddress);
 
         // ── Generate token — if this throws, the transaction rolls back ───
         try {
@@ -507,15 +486,8 @@ public class CustomerResource
         ce.persist();
 
         // ── Upsert addresses ──────────────────────────────────────────────
-        upsertAddress(ce, AddressTypeEn.PHYSICAL,
-                req.physicalAddressLine1, req.physicalAddressLine2,
-                req.physicalSuburb, req.physicalCity,
-                req.physicalProvince, req.physicalPostalCode);
-
-        upsertAddress(ce, AddressTypeEn.POSTAL,
-                req.postalAddressLine1, req.postalAddressLine2,
-                req.postalSuburb, req.postalCity,
-                req.postalProvince, req.postalPostalCode);
+        customerAddressService.upsertAddress(ce, AddressTypeEn.PHYSICAL, req.physicalAddress);
+        customerAddressService.upsertAddress(ce, AddressTypeEn.POSTAL, req.postalAddress);
 
         return Response.ok(toProfileDto(ce)).build();
     }
@@ -533,50 +505,6 @@ public class CustomerResource
 
     // ── Private helpers ──────────────────────────────────────────────────────
 
-    /**
-     * Creates or updates a single typed address on the customer.
-     * Skips silently if all address fields are null.
-     */
-    private static void upsertAddress(CustomerEntity ce, AddressTypeEn type,
-                                      String line1, String line2,
-                                      String suburb, String city,
-                                      String province, String postalCode)
-    {
-        if (line1 == null && city == null && province == null && postalCode == null) {
-            return;
-        }
-
-        CustomerAddressEntity addr = ce.getAddresses().stream()
-                .filter(a -> a.getAddressType() == type)
-                .findFirst()
-                .orElseGet(() -> {
-                    CustomerAddressEntity a = new CustomerAddressEntity();
-                    a.setCustomer(ce);
-                    a.setAddressType(type);
-                    ce.getAddresses().add(a);
-                    return a;
-                });
-
-        if (line1 != null) {
-            addr.setAddressLine1(line1);
-        }
-        if (line2 != null) {
-            addr.setAddressLine2(line2);
-        }
-        if (suburb != null) {
-            addr.setSuburb(suburb);
-        }
-        if (city != null) {
-            addr.setCity(city);
-        }
-        if (province != null) {
-            addr.setProvince(province);
-        }
-        if (postalCode != null) {
-            addr.setPostalCode(postalCode);
-        }
-    }
-
     private CustomerLoginResponseDto toLoginResponseDto(CustomerEntity ce)
     {
         CustomerLoginResponseDto dto = new CustomerLoginResponseDto();
@@ -589,7 +517,7 @@ public class CustomerResource
         return dto;
     }
 
-    private static CustomerProfileDto toProfileDto(CustomerEntity ce)
+    private CustomerProfileDto toProfileDto(CustomerEntity ce)
     {
         CustomerProfileDto dto = new CustomerProfileDto();
         dto.setEmail(ce.getUser() != null ? ce.getUser().getEmail() : null);
@@ -597,28 +525,8 @@ public class CustomerResource
         dto.setLastName(ce.getLastName());
         dto.setPhone(ce.getPhone());
 
-        // Flatten addresses back to profile DTO fields
-        Optional<CustomerAddressEntity> physical = ce.getAddresses().stream()
-                .filter(a -> a.getAddressType() == AddressTypeEn.PHYSICAL).findFirst();
-        physical.ifPresent(a -> {
-            dto.setPhysicalAddressLine1(a.getAddressLine1());
-            dto.setPhysicalAddressLine2(a.getAddressLine2());
-            dto.setPhysicalSuburb(a.getSuburb());
-            dto.setPhysicalCity(a.getCity());
-            dto.setPhysicalProvince(a.getProvince());
-            dto.setPhysicalPostalCode(a.getPostalCode());
-        });
-
-        Optional<CustomerAddressEntity> postal = ce.getAddresses().stream()
-                .filter(a -> a.getAddressType() == AddressTypeEn.POSTAL).findFirst();
-        postal.ifPresent(a -> {
-            dto.setPostalAddressLine1(a.getAddressLine1());
-            dto.setPostalAddressLine2(a.getAddressLine2());
-            dto.setPostalSuburb(a.getSuburb());
-            dto.setPostalCity(a.getCity());
-            dto.setPostalProvince(a.getProvince());
-            dto.setPostalPostalCode(a.getPostalCode());
-        });
+        dto.setPhysicalAddress(customerAddressMapper.toAddressDto(ce.getPhysicalAddress()));
+        dto.setPostalAddress(customerAddressMapper.toAddressDto(ce.getPostalAddress()));
 
         if (ce.getShopperType() != null) dto.setShopperType(ce.getShopperType().name());
         if (ce.getStatus() != null) dto.setStatus(ce.getStatus().name());

@@ -135,16 +135,16 @@
             <th>PO required</th>
             <td>{#if app.purchaseOrderRequired}Yes{#else}No{/if}</td>
         </tr>
-        {#if app.physicalAddressLine1}
+        {#if app.physicalAddress.line1}
             <tr>
                 <th>Physical address</th>
-                <td>{app.physicalAddressLine1}{#if app.physicalAddressLine2}, {app.physicalAddressLine2}{/if}{#if app.physicalSuburb}, {app.physicalSuburb}{/if}{#if app.physicalCity}, {app.physicalCity}{/if}{#if app.physicalProvince}, {app.physicalProvince}{/if}{#if app.physicalPostalCode}, {app.physicalPostalCode}{/if}</td>
+                <td>{app.physicalAddress.line1}{#if app.physicalAddress.line2}, {app.physicalAddress.line2}{/if}{#if app.physicalAddress.suburb}, {app.physicalAddress.suburb}{/if}{#if app.physicalAddress.city}, {app.physicalAddress.city}{/if}{#if app.physicalAddress.province}, {app.physicalAddress.province}{/if}{#if app.physicalAddress.postalCode}, {app.physicalAddress.postalCode}{/if}</td>
             </tr>
         {/if}
-        {#if app.postalAddressLine1}
+        {#if app.postalAddress.line1}
             <tr>
                 <th>Postal address</th>
-                <td>{app.postalAddressLine1}{#if app.postalAddressLine2}, {app.postalAddressLine2}{/if}{#if app.postalSuburb}, {app.postalSuburb}{/if}{#if app.postalCity}, {app.postalCity}{/if}{#if app.postalProvince}, {app.postalProvince}{/if}{#if app.postalPostalCode}, {app.postalPostalCode}{/if}</td>
+                <td>{app.postalAddress.line1}{#if app.postalAddress.line2}, {app.postalAddress.line2}{/if}{#if app.postalAddress.suburb}, {app.postalAddress.suburb}{/if}{#if app.postalAddress.city}, {app.postalAddress.city}{/if}{#if app.postalAddress.province}, {app.postalAddress.province}{/if}{#if app.postalAddress.postalCode}, {app.postalAddress.postalCode}{/if}</td>
             </tr>
         {/if}
         {#if app.notes}
