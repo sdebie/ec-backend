@@ -9,7 +9,10 @@ import org.ecommerce.common.dto.AddressDto;
 import org.ecommerce.common.dto.WholesaleApplicationDetailsDto;
 import org.ecommerce.common.dto.WholesaleApplicationListItemDto;
 import org.ecommerce.common.dto.WholesaleCustomerDto;
-import org.ecommerce.common.entity.*;
+import org.ecommerce.common.entity.CustomerEntity;
+import org.ecommerce.common.entity.UserEntity;
+import org.ecommerce.common.entity.WholesaleApplicationEntity;
+import org.ecommerce.common.entity.WholesaleProfileEntity;
 import org.ecommerce.common.enums.*;
 import org.ecommerce.common.query.Filter;
 import org.ecommerce.common.query.FilterRequest;
@@ -23,7 +26,6 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeParseException;
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 
 @ApplicationScoped
@@ -54,8 +56,8 @@ public class WholesaleCustomerService
     {
         WholesaleApplicationStatusEn status = extractStatusFilter(filterRequest);
         SortRequest sort = extractSort(filterRequest);
-        OffsetDateTime from = toInclusiveStart(fromDate, "fromDate");
-        OffsetDateTime toExclusive = toExclusiveEnd(toDate, "toDate");
+        OffsetDateTime from = toInclusiveStart(fromDate);
+        OffsetDateTime toExclusive = toExclusiveEnd(toDate);
 
         return wholesaleApplicationRepository.findForAdmin(status, from, toExclusive, sort, pageRequest)
                 .stream()
@@ -63,12 +65,14 @@ public class WholesaleCustomerService
                 .toList();
     }
 
-    /** @see #getWholesaleApplications(PageRequest, FilterRequest, String, String) */
+    /**
+     * @see #getWholesaleApplications(PageRequest, FilterRequest, String, String)
+     */
     public long wholesaleApplicationCount(FilterRequest filterRequest, String fromDate, String toDate)
     {
         WholesaleApplicationStatusEn status = extractStatusFilter(filterRequest);
-        OffsetDateTime from = toInclusiveStart(fromDate, "fromDate");
-        OffsetDateTime toExclusive = toExclusiveEnd(toDate, "toDate");
+        OffsetDateTime from = toInclusiveStart(fromDate);
+        OffsetDateTime toExclusive = toExclusiveEnd(toDate);
 
         return wholesaleApplicationRepository.countForAdmin(status, from, toExclusive);
     }
@@ -129,7 +133,7 @@ public class WholesaleCustomerService
         application.setFinanceContactName(normalizeText(customerDto.getFinanceContactName()));
         application.setFinanceContactEmail(normalizeText(customerDto.getFinanceContactEmail()));
         application.setFinanceContactPhone(normalizeText(customerDto.getFinanceContactPhone()));
-        application.setPurchaseOrderRequired(customerDto.getPurchaseOrderRequired() != null ? customerDto.getPurchaseOrderRequired() : false);
+        application.setPurchaseOrderRequired(customerDto.getPurchaseOrderRequired() != null && customerDto.getPurchaseOrderRequired());
 
         // Server-controlled status — ignore any client-supplied status on the public create path
         application.setStatus(WholesaleApplicationStatusEn.PENDING);
@@ -293,8 +297,7 @@ public class WholesaleCustomerService
      * Upgrades an existing account to wholesale rather than rejecting the approval.
      * Never touches {@code status} beyond promoting PENDING→ACTIVE — a staff-disabled
      * account must not be silently reactivated by a wholesale approval, mirroring the
-     * same restraint {@link CustomerPasswordResetService#activateCustomerProfile}
-     * applies on password-reset completion.
+     * same restraint applies on password-reset completion.
      */
     private CustomerEntity upgradeExistingAccountToWholesaler(WholesaleApplicationEntity application, UserEntity existingUser)
     {
@@ -392,7 +395,7 @@ public class WholesaleCustomerService
         if (filterRequest == null || filterRequest.getSort() == null || filterRequest.getSort().isEmpty()) {
             return null;
         }
-        return filterRequest.getSort().get(0);
+        return filterRequest.getSort().getFirst();
     }
 
     private LocalDate parseDate(String value, String fieldName)
@@ -413,9 +416,9 @@ public class WholesaleCustomerService
      * {@code .kiro/specs/temporal-type-correctness}, which exists because exactly this kind
      * of implicit-zone comparison has already produced a live defect elsewhere).
      */
-    private OffsetDateTime toInclusiveStart(String date, String fieldName)
+    private OffsetDateTime toInclusiveStart(String date)
     {
-        LocalDate day = parseDate(date, fieldName);
+        LocalDate day = parseDate(date, "fromDate");
         return day == null ? null : day.atStartOfDay(ZoneOffset.UTC).toOffsetDateTime();
     }
 
@@ -423,9 +426,9 @@ public class WholesaleCustomerService
      * The UI sends whole days, so an inclusive "to" is every instant before the following
      * midnight — a plain {@code <=} would drop everything after 00:00 on the "to" day.
      */
-    private OffsetDateTime toExclusiveEnd(String date, String fieldName)
+    private OffsetDateTime toExclusiveEnd(String date)
     {
-        LocalDate day = parseDate(date, fieldName);
+        LocalDate day = parseDate(date, "toDate");
         return day == null ? null : day.plusDays(1).atStartOfDay(ZoneOffset.UTC).toOffsetDateTime();
     }
 
@@ -524,7 +527,6 @@ public class WholesaleCustomerService
         }
         return null;
     }
-
 
 
     private WholesaleDecisionEvent buildDecisionEvent(WholesaleApplicationEntity application, String rejectionReason, boolean newAccountCreated)

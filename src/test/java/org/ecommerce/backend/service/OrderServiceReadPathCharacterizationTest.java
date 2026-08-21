@@ -221,7 +221,6 @@ class OrderServiceReadPathCharacterizationTest
 
         @Test
         @DisplayName("fully populated order — pins all detail fields")
-        @SuppressWarnings("unchecked")
         void fullyPopulatedOrder_pinsAllDetailFields()
         {
             OrderEntity order = buildFullyPopulatedOrder();
@@ -255,7 +254,7 @@ class OrderServiceReadPathCharacterizationTest
             assertEquals(2, detail.getItems().size());
 
             // First item detail
-            OrderItemDetailDto itemDetail1 = detail.getItems().get(0);
+            OrderItemDetailDto itemDetail1 = detail.getItems().getFirst();
             assertEquals("88888888-8888-8888-8888-888888888888", itemDetail1.getId());
             assertEquals(new BigDecimal("250.00"), itemDetail1.getUnitPrice());
             assertEquals(3, itemDetail1.getQuantity());
@@ -270,10 +269,10 @@ class OrderServiceReadPathCharacterizationTest
             // Images on first item
             assertNotNull(itemDetail1.getVariant().getImages());
             assertEquals(2, itemDetail1.getVariant().getImages().size());
-            assertEquals("55555555-5555-5555-5555-555555555555", itemDetail1.getVariant().getImages().get(0).getId());
-            assertEquals("https://cdn.example.com/widget1.jpg", itemDetail1.getVariant().getImages().get(0).getImageUrl());
-            assertEquals(1, itemDetail1.getVariant().getImages().get(0).getSortOrder());
-            assertTrue(itemDetail1.getVariant().getImages().get(0).isFeatured());
+            assertEquals("55555555-5555-5555-5555-555555555555", itemDetail1.getVariant().getImages().getFirst().getId());
+            assertEquals("https://cdn.example.com/widget1.jpg", itemDetail1.getVariant().getImages().getFirst().getImageUrl());
+            assertEquals(1, itemDetail1.getVariant().getImages().getFirst().getSortOrder());
+            assertTrue(itemDetail1.getVariant().getImages().getFirst().isFeatured());
             assertEquals("66666666-6666-6666-6666-666666666666", itemDetail1.getVariant().getImages().get(1).getId());
             assertEquals("https://cdn.example.com/widget2.jpg", itemDetail1.getVariant().getImages().get(1).getImageUrl());
             assertEquals(2, itemDetail1.getVariant().getImages().get(1).getSortOrder());
@@ -294,7 +293,7 @@ class OrderServiceReadPathCharacterizationTest
             assertNotNull(detail.getStatusHistory());
             assertEquals(2, detail.getStatusHistory().size());
 
-            var hist1 = detail.getStatusHistory().get(0);
+            var hist1 = detail.getStatusHistory().getFirst();
             assertEquals(UUID.fromString("aaa11111-1111-1111-1111-111111111111"), hist1.getId());
             assertEquals(OrderStatusEn.PAID, hist1.getStatus());
             assertEquals("Payment confirmed", hist1.getComment());
@@ -317,7 +316,6 @@ class OrderServiceReadPathCharacterizationTest
 
         @Test
         @DisplayName("minimal order (null customer, no items, no history) — pins null handling")
-        @SuppressWarnings("unchecked")
         void minimalOrder_pinsNullHandling()
         {
             OrderEntity order = buildMinimalOrder();
@@ -343,7 +341,6 @@ class OrderServiceReadPathCharacterizationTest
 
         @Test
         @DisplayName("order with null variant item — pins variant null handling in detail")
-        @SuppressWarnings("unchecked")
         void orderWithNullVariant_pinsNullVariantInDetail()
         {
             OrderEntity order = buildOrderWithNullVariant();
@@ -354,7 +351,7 @@ class OrderServiceReadPathCharacterizationTest
 
             assertNotNull(detail);
             assertEquals(1, detail.getItems().size());
-            OrderItemDetailDto itemDetail = detail.getItems().get(0);
+            OrderItemDetailDto itemDetail = detail.getItems().getFirst();
             assertEquals("12345678-1234-1234-1234-123456789abc", itemDetail.getId());
             assertEquals(new BigDecimal("50.00"), itemDetail.getUnitPrice());
             assertEquals(1, itemDetail.getQuantity());
@@ -389,17 +386,17 @@ class OrderServiceReadPathCharacterizationTest
             assertEquals(2, result.size());
 
             // First order
-            assertEquals("11111111-1111-1111-1111-111111111111", result.get(0).getId());
-            assertEquals("PAID", result.get(0).getStatus());
-            assertEquals(new BigDecimal("1250.00"), result.get(0).getTotalAmount());
-            assertEquals(2, result.get(0).getItemCount());
-            assertNotNull(result.get(0).getCustomer());
-            assertEquals("customer@example.com", result.get(0).getCustomer().getEmail());
+            assertEquals("11111111-1111-1111-1111-111111111111", result.getFirst().getId());
+            assertEquals("PAID", result.getFirst().getStatus());
+            assertEquals(new BigDecimal("1250.00"), result.getFirst().getTotalAmount());
+            assertEquals(2, result.getFirst().getItemCount());
+            assertNotNull(result.getFirst().getCustomer());
+            assertEquals("customer@example.com", result.getFirst().getCustomer().getEmail());
 
             // Second order — minimal
-            assertEquals("cccccccc-cccc-cccc-cccc-cccccccccccc", result.get(1).getId());
-            assertEquals("CREATED", result.get(1).getStatus());
-            assertEquals(new BigDecimal("0.00"), result.get(1).getTotalAmount());
+            assertEquals("cccccccc-cccc-cccc-cccc-cccccccccccc", result.getLast().getId());
+            assertEquals("CREATED", result.getLast().getStatus());
+            assertEquals(new BigDecimal("0.00"), result.getLast().getTotalAmount());
             assertEquals(0, result.get(1).getItemCount());
             assertNull(result.get(1).getCustomer());
         }
@@ -428,7 +425,6 @@ class OrderServiceReadPathCharacterizationTest
 
         @Test
         @DisplayName("fully populated order — pins summary DTO fields")
-        @SuppressWarnings("unchecked")
         void fullyPopulatedOrder_pinsSummaryFields()
         {
             OrderEntity order = buildFullyPopulatedOrder();
@@ -439,7 +435,7 @@ class OrderServiceReadPathCharacterizationTest
 
             assertNotNull(result);
             assertEquals(1, result.size());
-            OrderSummaryDto dto = result.get(0);
+            OrderSummaryDto dto = result.getFirst();
             assertEquals("11111111-1111-1111-1111-111111111111", dto.getId());
             assertEquals("2026-07-15T10:30:00", dto.getOrderDate());
             assertEquals("PAID", dto.getStatus());
@@ -449,7 +445,6 @@ class OrderServiceReadPathCharacterizationTest
 
         @Test
         @DisplayName("order with null status — maps status as null")
-        @SuppressWarnings("unchecked")
         void orderWithNullStatus_mapsStatusAsNull()
         {
             OrderEntity order = buildFullyPopulatedOrder();
@@ -459,12 +454,11 @@ class OrderServiceReadPathCharacterizationTest
             List<OrderSummaryDto> result = orderService.getMyOrders(order.getCustomerEntity().getId());
 
             assertEquals(1, result.size());
-            assertNull(result.get(0).getStatus());
+            assertNull(result.getFirst().getStatus());
         }
 
         @Test
         @DisplayName("order with null totalAmount — maps to 0.0")
-        @SuppressWarnings("unchecked")
         void orderWithNullTotalAmount_mapsToZero()
         {
             OrderEntity order = buildFullyPopulatedOrder();
@@ -474,12 +468,11 @@ class OrderServiceReadPathCharacterizationTest
             List<OrderSummaryDto> result = orderService.getMyOrders(order.getCustomerEntity().getId());
 
             assertEquals(1, result.size());
-            assertEquals(0.0, result.get(0).getTotalAmount(), 0.001);
+            assertEquals(0.0, result.getFirst().getTotalAmount(), 0.001);
         }
 
         @Test
         @DisplayName("order with null createdAt — maps orderDate as null")
-        @SuppressWarnings("unchecked")
         void orderWithNullCreatedAt_mapsOrderDateAsNull()
         {
             OrderEntity order = buildFullyPopulatedOrder();
@@ -489,12 +482,11 @@ class OrderServiceReadPathCharacterizationTest
             List<OrderSummaryDto> result = orderService.getMyOrders(order.getCustomerEntity().getId());
 
             assertEquals(1, result.size());
-            assertNull(result.get(0).getOrderDate());
+            assertNull(result.getFirst().getOrderDate());
         }
 
         @Test
         @DisplayName("order with null items — maps itemCount as 0")
-        @SuppressWarnings("unchecked")
         void orderWithNullItems_mapsItemCountAsZero()
         {
             OrderEntity order = buildFullyPopulatedOrder();
@@ -504,12 +496,11 @@ class OrderServiceReadPathCharacterizationTest
             List<OrderSummaryDto> result = orderService.getMyOrders(order.getCustomerEntity().getId());
 
             assertEquals(1, result.size());
-            assertEquals(0, result.get(0).getItemCount());
+            assertEquals(0, result.getFirst().getItemCount());
         }
 
         @Test
         @DisplayName("empty orders — returns empty list")
-        @SuppressWarnings("unchecked")
         void emptyOrders_returnsEmptyList()
         {
             stubMyOrdersFind(Collections.emptyList());

@@ -52,7 +52,6 @@ class WholesaleApplicationMappingCharacterizationTest
     @InjectMock
     WholesaleApplicationRepository wholesaleApplicationRepository;
 
-    @SuppressWarnings("unchecked")
     @BeforeEach
     void setUp()
     {
@@ -76,7 +75,6 @@ class WholesaleApplicationMappingCharacterizationTest
     }
 
     @Test
-    @SuppressWarnings("unchecked")
     void toApplicationDetailsDto_fullyPopulated_pinsAllFields()
     {
         UUID customerId = UUID.randomUUID();
@@ -129,7 +127,6 @@ class WholesaleApplicationMappingCharacterizationTest
     }
 
     @Test
-    @SuppressWarnings("unchecked")
     void toApplicationDetailsDto_nullOptionalFields_pinsNullsCorrectly()
     {
         UUID customerId = UUID.randomUUID();
@@ -250,7 +247,6 @@ class WholesaleApplicationMappingCharacterizationTest
     }
 
     @Test
-    @SuppressWarnings("unchecked")
     void toApplicationDetailsDto_nullCustomerOnApp_customerId_isNull()
     {
         UUID customerId = UUID.randomUUID();

@@ -1,16 +1,15 @@
 package org.ecommerce.backend.service;
 
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.core.Response;
+import org.ecommerce.backend.mapper.CustomerAddressMapper;
 import org.ecommerce.backend.utils.CustomerPasswordHashUtil;
 import org.ecommerce.backend.utils.PasswordStrengthValidator;
 import org.ecommerce.common.dto.AddressDto;
 import org.ecommerce.common.dto.StorefrontCustomerPortalDto;
-import jakarta.inject.Inject;
-import org.ecommerce.backend.mapper.CustomerAddressMapper;
-import org.ecommerce.common.entity.CustomerAddressEntity;
 import org.ecommerce.common.entity.CustomerEntity;
 import org.ecommerce.common.entity.UserEntity;
 import org.ecommerce.common.enums.AddressTypeEn;

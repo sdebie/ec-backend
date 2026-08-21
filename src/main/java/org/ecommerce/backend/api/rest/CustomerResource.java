@@ -410,7 +410,7 @@ public class CustomerResource
 
         String email = req.email.trim();
 
-        // ── 409 guard: reject if account is already claimed by any method ──
+        // ── 409 guards: reject if any method already claims account ──
         UserEntity user = UserEntity.findByEmail(email);
         if (user != null && user.getCustomer() != null) {
             CustomerEntity ec = user.getCustomer();
@@ -421,7 +421,7 @@ public class CustomerResource
             }
         }
 
-        // ── Create or claim the account ───────────────────────────────────
+
         if (user == null) {
             user = new UserEntity();
             user.setEmail(email);
@@ -443,11 +443,9 @@ public class CustomerResource
         ce.setStatus(CustomerStatusEn.ACTIVE);
         CustomerEntity.persist(ce);
 
-        // ── Upsert addresses ──────────────────────────────────────────────
         customerAddressService.upsertAddress(ce, AddressTypeEn.PHYSICAL, req.physicalAddress);
         customerAddressService.upsertAddress(ce, AddressTypeEn.POSTAL, req.postalAddress);
 
-        // ── Generate token — if this throws, the transaction rolls back ───
         try {
             CustomerLoginResponseDto dto = toLoginResponseDto(ce);
             return Response.ok(dto).build();
@@ -485,7 +483,6 @@ public class CustomerResource
         if (req.phone != null) ce.setPhone(req.phone);
         ce.persist();
 
-        // ── Upsert addresses ──────────────────────────────────────────────
         customerAddressService.upsertAddress(ce, AddressTypeEn.PHYSICAL, req.physicalAddress);
         customerAddressService.upsertAddress(ce, AddressTypeEn.POSTAL, req.postalAddress);
 
@@ -502,8 +499,6 @@ public class CustomerResource
         customerPortalService.changePassword(email, request.getCurrentPassword(), request.getNewPassword());
         return Response.ok().build();
     }
-
-    // ── Private helpers ──────────────────────────────────────────────────────
 
     private CustomerLoginResponseDto toLoginResponseDto(CustomerEntity ce)
     {
