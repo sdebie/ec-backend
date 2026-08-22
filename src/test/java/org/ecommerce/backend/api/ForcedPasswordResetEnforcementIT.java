@@ -6,6 +6,7 @@ import io.smallrye.jwt.build.Jwt;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
+import org.ecommerce.backend.security.ForcedPasswordResetIdentityAugmentor;
 import org.ecommerce.common.entity.StaffUserEntity;
 import org.ecommerce.common.enums.StaffRoleEn;
 import org.junit.jupiter.api.AfterEach;
@@ -14,6 +15,7 @@ import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.List;
 
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.empty;
@@ -169,6 +171,25 @@ class ForcedPasswordResetEnforcementIT
                 .then()
                 .statusCode(200)
                 .body("resetPassword", equalTo(true));
+    }
+
+    @Test
+    void flaggedSuperAdmin_adminMeReportsTheSentinelRoleNotTheRawJwtRole()
+    {
+        // The token itself still carries the real SUPER_ADMIN groups claim from
+        // login — /admin/me must report the account's current effective identity
+        // (what every other @RolesAllowed check now sees, i.e. the augmented
+        // SecurityIdentity), not the stale claim baked into the token.
+        seedStaff(FLAGGED_EMAIL, true);
+
+        given()
+                .header("Authorization", "Bearer " + staffJwt(FLAGGED_EMAIL, "SUPER_ADMIN"))
+                .when()
+                .get("/api/admin/me")
+                .then()
+                .statusCode(200)
+                .body("role", equalTo(ForcedPasswordResetIdentityAugmentor.PASSWORD_RESET_REQUIRED_ROLE))
+                .body("authority", equalTo(List.of(ForcedPasswordResetIdentityAugmentor.PASSWORD_RESET_REQUIRED_ROLE)));
     }
 
     @Test

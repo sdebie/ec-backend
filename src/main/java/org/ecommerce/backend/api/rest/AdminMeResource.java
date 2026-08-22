@@ -1,5 +1,6 @@
 package org.ecommerce.backend.api.rest;
 
+import io.quarkus.security.identity.SecurityIdentity;
 import jakarta.annotation.security.RolesAllowed;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.GET;
@@ -25,12 +26,19 @@ public class AdminMeResource {
     @Inject
     JsonWebToken jwt;
 
+    @Inject
+    SecurityIdentity securityIdentity;
+
     @GET
     @Path("/me")
     @RolesAllowed({"SUPER_ADMIN", "CATALOG_MANAGER", "ORDER_MANAGER", "VIEWER",
             ForcedPasswordResetIdentityAugmentor.PASSWORD_RESET_REQUIRED_ROLE})
     public Response me() {
-        Set<String> groups = jwt.getGroups();
+        // Reads the augmented SecurityIdentity, not the raw JWT groups claim: a
+        // flagged/deactivated account's roles are rewritten by
+        // ForcedPasswordResetIdentityAugmentor on every request, while the JWT's own
+        // groups claim stays frozen to whatever was true at login.
+        Set<String> groups = securityIdentity.getRoles();
         String role = groups != null && !groups.isEmpty() ? groups.iterator().next() : "VIEWER";
         String email = jwt.getName();
 

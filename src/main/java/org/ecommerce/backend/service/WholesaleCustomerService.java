@@ -490,20 +490,6 @@ public class WholesaleCustomerService
         return normalized.isEmpty() ? null : normalized;
     }
 
-    private WholesaleApplicationStatusEn resolveApplicationStatus(WholesaleCustomerStatusEn status)
-    {
-        if (status == null) {
-            return WholesaleApplicationStatusEn.PENDING;
-        }
-        return switch (status) {
-            case PENDING -> WholesaleApplicationStatusEn.PENDING;
-            case APPROVED -> WholesaleApplicationStatusEn.APPROVED;
-            case REJECTED -> WholesaleApplicationStatusEn.REJECTED;
-            case CONVERTED -> WholesaleApplicationStatusEn.CONVERTED;
-            default -> throw new IllegalArgumentException("invalid application status: " + status);
-        };
-    }
-
     private CustomerStatusEn resolveStatus(WholesaleCustomerStatusEn statusValue, CustomerStatusEn fallback)
     {
         if (statusValue == null) {
