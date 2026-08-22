@@ -71,19 +71,11 @@ services:
       dockerfile: Dockerfile.jvm
     container_name: ec-frontend
     ports:
-      - "3001:3000"
-    environment:
-      # USE RELATIVE PATHS FOR THE BROWSER (Crucial for production/Docker)
-      #- VITE_API_URL=https://ecapi.sdebiehome.co.za/api/
-      #- REACT_APP_API_URL=https://ecapi.sdebiehome.co.za/api/graphql
-      #- VITE_IMAGE_BASE_URL=https://ecapi.sdebiehome.co.za/static/images/
-      #- VITE_PROXY_TARGET=https://ecapi.sdebiehome.co.za
-      #- VITE_API_BASE_URL=https://ecapi.sdebiehome.co.za/api
-      - VITE_API_URL=/api/
-      - REACT_APP_API_URL=/api/graphql
-      - VITE_IMAGE_BASE_URL=/static/images/
-      - VITE_API_BASE_URL=/api
-      - VITE_PROXY_TARGET=http://ec-backend:8080
+      # nginx (Dockerfile.jvm's production stage) listens on 80 inside the
+      # container; these VITE_*/REACT_APP_* values are build-time-only and
+      # baked into the static bundle from ec-frontend/.env, so they cannot
+      # be set here as container-runtime environment vars.
+      - "3001:80"
     depends_on:
       - backend
 
