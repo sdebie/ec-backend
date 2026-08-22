@@ -2,6 +2,8 @@ package org.ecommerce.backend.api.rest;
 
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
+import jakarta.validation.ConstraintViolation;
+import jakarta.validation.Validator;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
@@ -18,7 +20,9 @@ import org.jboss.logging.Logger;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Path("/api/orders/{orderId}/contact")
 @Produces(MediaType.APPLICATION_JSON)
@@ -45,6 +49,13 @@ public class OrderContactResource
 
     @Inject
     RateLimiterService rateLimiterService;
+
+    // Explicit, not @Valid — matching ContactEnquiryResource's documented reason:
+    // @Valid's default violation response would be 400, inconsistent with every
+    // other content check in this method, which reports 422 (well-formed body,
+    // invalid content).
+    @Inject
+    Validator validator;
 
     @PATCH
     @Transactional
@@ -93,6 +104,25 @@ public class OrderContactResource
                     .build();
         }
 
+        // 1c. Reject a missing or malformed body before any content-specific
+        // check below — mirrors OrderResource.createOrder's own null-body guard.
+        if (request == null) {
+            return Response.status(Response.Status.BAD_REQUEST)
+                    .entity(Map.of("error", "Request body is required"))
+                    .build();
+        }
+
+        // 1d. Bean-validate the shape of whatever the caller DID send (email
+        // format, name length caps). Presence is never required here — that is
+        // the null-guarded persist below's job, not this check's.
+        Set<ConstraintViolation<OrderContactRequestDto>> violations = validator.validate(request);
+        if (!violations.isEmpty()) {
+            String message = violations.stream()
+                    .map(ConstraintViolation::getMessage)
+                    .collect(Collectors.joining("; "));
+            return Response.status(422).entity(Map.of("error", message)).build();
+        }
+
         // 2. Validate shippingMethodId if present → 422 if invalid/inactive
         ShippingMethodEntity shippingMethod = null;
         if (request.getShippingMethodId() != null && !request.getShippingMethodId().isBlank()) {
@@ -135,10 +165,19 @@ public class OrderContactResource
             }
         }
 
-        // 3. Persist contact + address fields
-        order.setContactEmail(request.getEmail());
-        order.setContactFirstName(request.getFirstName());
-        order.setContactLastName(request.getLastName());
+        // 3. Persist contact + address fields. Null-guarded exactly like the
+        // address fields below: a caller that PATCHes only a subset (e.g. just
+        // shippingMethodId) must not wipe contact details an earlier call in the
+        // same checkout already saved.
+        if (request.getEmail() != null) {
+            order.setContactEmail(request.getEmail());
+        }
+        if (request.getFirstName() != null) {
+            order.setContactFirstName(request.getFirstName());
+        }
+        if (request.getLastName() != null) {
+            order.setContactLastName(request.getLastName());
+        }
 
         if (shippingMethod != null) {
             order.setShippingMethod(shippingMethod);
