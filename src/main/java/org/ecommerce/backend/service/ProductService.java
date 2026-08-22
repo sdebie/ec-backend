@@ -177,8 +177,9 @@ public class ProductService
             return null;
         }
 
-        // Active-only read: exclude DISABLED variants so soft-deleted variants are absent
-        return productMapper.mapToProductInformationDto(product, productVariantRepository.findActiveVariantsForProductId(pid));
+        // Admin-edit read: excludes only DISABLED (soft-deleted) variants — a PENDING
+        // variant the admin is still staging remains visible.
+        return productMapper.mapToProductInformationDto(product, productVariantRepository.findNonDisabledVariantsForProductId(pid));
     }
 
     @Transactional(value = TxType.REQUIRED)
@@ -241,8 +242,8 @@ public class ProductService
         List<ProductImageDto> imageManifest = extractImageManifest(input);
         updateProductImages(product.getId(), imageManifest);
 
-        // Return the full aggregate via the active-only read path
-        return productMapper.mapToProductInformationDto(product, productVariantRepository.findActiveVariantsForProductId(product.getId()));
+        // Return the full aggregate via the admin-edit read path (excludes DISABLED only)
+        return productMapper.mapToProductInformationDto(product, productVariantRepository.findNonDisabledVariantsForProductId(product.getId()));
     }
 
     @Transactional(value = TxType.REQUIRED)
@@ -315,8 +316,8 @@ public class ProductService
         List<ProductImageDto> imageManifest = extractImageManifest(input);
         updateProductImages(pid, imageManifest);
 
-        // Active-only read: exclude DISABLED variants from the returned aggregate
-        return productMapper.mapToProductInformationDto(product, productVariantRepository.findActiveVariantsForProductId(pid));
+        // Admin-edit read: excludes only DISABLED variants from the returned aggregate
+        return productMapper.mapToProductInformationDto(product, productVariantRepository.findNonDisabledVariantsForProductId(pid));
     }
 
     /**
@@ -704,7 +705,8 @@ public class ProductService
         if (product == null) {
             return null;
         }
-        // Active-only read: exclude DISABLED variants for storefront detail
+        // Public storefront read: ACTIVE-only — a PENDING (unpublished) or DISABLED
+        // (soft-deleted) variant must never be customer-visible
         return productMapper.mapToProductInformationDto(product, productVariantRepository.findActiveVariantsForProductId(pid));
     }
 }

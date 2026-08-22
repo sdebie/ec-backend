@@ -22,13 +22,15 @@ import static org.hamcrest.Matchers.not;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * End-to-end proof that a staff account flagged for a forced password reset is
- * blocked server-side — not just redirected client-side — from everything except
- * the two endpoints that flow requires: self-service reset and {@code /admin/me}.
+ * End-to-end proof that {@code ForcedPasswordResetIdentityAugmentor} enforces both
+ * staff-account-state gates server-side — not just redirected client-side. A
+ * forced-reset account is blocked from everything except the two endpoints that
+ * flow requires: self-service reset and {@code /admin/me}. A deactivated account is
+ * blocked from those two as well — it has no self-service endpoint left to reach.
  * Uses self-signed JWTs (the established house pattern for staff/admin tests — see
  * AuthorizationIT/OrderAdminResourceAuthIT) against real, seeded StaffUserEntity
- * rows, since ForcedPasswordResetIdentityAugmentor re-checks the database on every
- * request rather than trusting a token claim.
+ * rows, since the augmentor re-checks the database on every request rather than
+ * trusting a token claim.
  */
 @QuarkusTest
 class ForcedPasswordResetEnforcementIT
@@ -40,6 +42,9 @@ class ForcedPasswordResetEnforcementIT
     private static final String NORMAL_EMAIL = "pwreset-normal@test.com";
     private static final String FLIP_EMAIL = "pwreset-flip@test.com";
     private static final String GHOST_EMAIL = "pwreset-ghost@test.com";
+    private static final String DEACTIVATED_EMAIL = "pwreset-deactivated@test.com";
+    private static final String DEACTIVATED_AND_FLAGGED_EMAIL = "pwreset-deactivated-flagged@test.com";
+    private static final String REACTIVATE_EMAIL = "pwreset-reactivate@test.com";
 
     private static final String ADMIN_ORDER_LIST_BODY =
             "{\"query\":\"{ adminOrderList(pageIndex: 0, pageSize: 1) { totalElements } }\"}";
@@ -53,12 +58,18 @@ class ForcedPasswordResetEnforcementIT
     @Transactional
     void seedStaff(String email, boolean resetPassword)
     {
+        seedStaff(email, resetPassword, true);
+    }
+
+    @Transactional
+    void seedStaff(String email, boolean resetPassword, boolean active)
+    {
         StaffUserEntity user = new StaffUserEntity();
         user.setEmail(email);
         user.setPasswordHash(BcryptUtil.bcryptHash("Sup3rSecret!"));
         user.setFullName("Test Staff");
         user.setRole(StaffRoleEn.SUPER_ADMIN);
-        user.setActive(true);
+        user.setActive(active);
         user.setResetPassword(resetPassword);
         user.setCreatedAt(LocalDateTime.now());
         StaffUserEntity.persist(user);
@@ -68,6 +79,12 @@ class ForcedPasswordResetEnforcementIT
     void setResetPassword(String email, boolean resetPassword)
     {
         StaffUserEntity.findByEmail(email).setResetPassword(resetPassword);
+    }
+
+    @Transactional
+    void setActive(String email, boolean active)
+    {
+        StaffUserEntity.findByEmail(email).setActive(active);
     }
 
     @Transactional
@@ -83,6 +100,9 @@ class ForcedPasswordResetEnforcementIT
         deleteByEmail(NORMAL_EMAIL);
         deleteByEmail(FLIP_EMAIL);
         deleteByEmail(GHOST_EMAIL);
+        deleteByEmail(DEACTIVATED_EMAIL);
+        deleteByEmail(DEACTIVATED_AND_FLAGGED_EMAIL);
+        deleteByEmail(REACTIVATE_EMAIL);
     }
 
     @AfterEach
@@ -92,6 +112,9 @@ class ForcedPasswordResetEnforcementIT
         deleteByEmail(NORMAL_EMAIL);
         deleteByEmail(FLIP_EMAIL);
         deleteByEmail(GHOST_EMAIL);
+        deleteByEmail(DEACTIVATED_EMAIL);
+        deleteByEmail(DEACTIVATED_AND_FLAGGED_EMAIL);
+        deleteByEmail(REACTIVATE_EMAIL);
     }
 
     private static String staffJwt(String email, String role)
@@ -246,6 +269,110 @@ class ForcedPasswordResetEnforcementIT
         // the reset through some other channel) — the SAME already-issued token is
         // reused, proving this isn't a claim baked in at login.
         setResetPassword(FLIP_EMAIL, false);
+
+        given()
+                .header("Authorization", "Bearer " + token)
+                .when()
+                .get("/api/admin/testimonials")
+                .then()
+                .statusCode(200);
+    }
+
+    @Test
+    void deactivatedStaff_blockedFromProtectedGraphQLQuery()
+    {
+        seedStaff(DEACTIVATED_EMAIL, false, false);
+
+        given()
+                .header("Authorization", "Bearer " + staffJwt(DEACTIVATED_EMAIL, "SUPER_ADMIN"))
+                .contentType("application/json")
+                .body(ADMIN_ORDER_LIST_BODY)
+                .when()
+                .post("/api/graphql")
+                .then()
+                .statusCode(200)
+                .body("errors", not(empty()))
+                .body("errors[0].extensions.code", equalTo("forbidden"));
+    }
+
+    @Test
+    void deactivatedStaff_blockedFromProtectedRestEndpoint()
+    {
+        seedStaff(DEACTIVATED_EMAIL, false, false);
+
+        given()
+                .header("Authorization", "Bearer " + staffJwt(DEACTIVATED_EMAIL, "SUPER_ADMIN"))
+                .when()
+                .get("/api/admin/testimonials")
+                .then()
+                .statusCode(403);
+    }
+
+    @Test
+    void deactivatedStaff_cannotReachAdminMeEither()
+    {
+        // Unlike a forced reset, a deactivated account has no self-service endpoint
+        // it should still reach — this is the behaviour that actually distinguishes
+        // deactivation from a forced reset, so it gets its own explicit case rather
+        // than being implied by the two above.
+        seedStaff(DEACTIVATED_EMAIL, false, false);
+
+        given()
+                .header("Authorization", "Bearer " + staffJwt(DEACTIVATED_EMAIL, "SUPER_ADMIN"))
+                .when()
+                .get("/api/admin/me")
+                .then()
+                .statusCode(403);
+    }
+
+    @Test
+    void deactivatedStaff_cannotResetOwnPasswordEither()
+    {
+        seedStaff(DEACTIVATED_EMAIL, false, false);
+
+        given()
+                .header("Authorization", "Bearer " + staffJwt(DEACTIVATED_EMAIL, "SUPER_ADMIN"))
+                .contentType("application/json")
+                .body("{\"email\":\"" + DEACTIVATED_EMAIL + "\",\"password\":\"NewPassw0rd!\",\"confirmPassword\":\"NewPassw0rd!\"}")
+                .when()
+                .post("/api/admin/auth/reset-password")
+                .then()
+                .statusCode(403);
+    }
+
+    @Test
+    void deactivatedAndFlaggedForReset_deactivationWinsOutright()
+    {
+        // Both axes true at once: deactivation must take priority over the
+        // reset-required sentinel, not downgrade to it — proven end to end via the
+        // one endpoint a flagged-but-active account would otherwise still reach.
+        seedStaff(DEACTIVATED_AND_FLAGGED_EMAIL, true, false);
+
+        given()
+                .header("Authorization", "Bearer " + staffJwt(DEACTIVATED_AND_FLAGGED_EMAIL, "SUPER_ADMIN"))
+                .when()
+                .get("/api/admin/me")
+                .then()
+                .statusCode(403);
+    }
+
+    @Test
+    void reactivatedMidSession_restoresAccessOnTheNextRequestWithTheSameToken()
+    {
+        seedStaff(REACTIVATE_EMAIL, false, false);
+        String token = staffJwt(REACTIVATE_EMAIL, "SUPER_ADMIN");
+
+        given()
+                .header("Authorization", "Bearer " + token)
+                .when()
+                .get("/api/admin/testimonials")
+                .then()
+                .statusCode(403);
+
+        // Re-activated server-side (e.g. offboarding reversed) — the SAME
+        // already-issued token is reused, proving this is re-checked live rather
+        // than decided once and cached for the token's life.
+        setActive(REACTIVATE_EMAIL, true);
 
         given()
                 .header("Authorization", "Bearer " + token)

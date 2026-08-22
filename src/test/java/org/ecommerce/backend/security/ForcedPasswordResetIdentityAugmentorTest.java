@@ -50,6 +50,13 @@ class ForcedPasswordResetIdentityAugmentorTest
         return user;
     }
 
+    private static StaffUserEntity inactiveStaffRow(boolean resetPassword)
+    {
+        StaffUserEntity user = staffRow(resetPassword);
+        user.setActive(false);
+        return user;
+    }
+
     private SecurityIdentity augment(SecurityIdentity input)
     {
         return augmentor.augment(input, SYNC_CONTEXT).await().indefinitely();
@@ -83,11 +90,9 @@ class ForcedPasswordResetIdentityAugmentorTest
     @Test
     void unknownStaffEmail_passesThroughUnchanged()
     {
-        // Deliberately NOT fail-closed: revoking a deleted/deactivated account's still-valid
-        // token is a separate, unaddressed gap (isActive has the same characteristic — only
-        // checked at login), and this codebase's staff/admin test suite deliberately self-signs
-        // JWTs with no backing DB row for pure role-matrix tests. Failing closed here broke ~20
-        // of those tests for a case outside this fix's actual scope.
+        // Deliberately NOT fail-closed: this codebase's staff/admin test suite self-signs
+        // JWTs with no backing DB row for pure role-matrix tests, and failing closed here
+        // would defeat that convention for every one of them.
         when(StaffUserEntity.findByEmail("ghost@test.com")).thenReturn(null);
 
         SecurityIdentity input = staffIdentity("ghost@test.com", "SUPER_ADMIN");
@@ -95,6 +100,40 @@ class ForcedPasswordResetIdentityAugmentorTest
 
         assertTrue(result.hasRole("SUPER_ADMIN"));
         assertFalse(result.hasRole(ForcedPasswordResetIdentityAugmentor.PASSWORD_RESET_REQUIRED_ROLE));
+    }
+
+    @Test
+    void deactivated_stripsAllRoles()
+    {
+        when(StaffUserEntity.findByEmail("staff@test.com")).thenReturn(inactiveStaffRow(false));
+
+        SecurityIdentity result = augment(staffIdentity("staff@test.com", "SUPER_ADMIN"));
+
+        assertFalse(result.hasRole("SUPER_ADMIN"), "The real role must not survive deactivation");
+        assertFalse(result.hasRole(ForcedPasswordResetIdentityAugmentor.PASSWORD_RESET_REQUIRED_ROLE),
+                "Deactivation gets no sentinel role either — there is no self-service endpoint it should still reach");
+        assertTrue(result.getRoles().isEmpty(), "A deactivated account keeps no roles at all");
+    }
+
+    @Test
+    void deactivatedAndFlaggedForReset_deactivationWinsOverTheSentinel()
+    {
+        when(StaffUserEntity.findByEmail("staff@test.com")).thenReturn(inactiveStaffRow(true));
+
+        SecurityIdentity result = augment(staffIdentity("staff@test.com", "SUPER_ADMIN"));
+
+        assertTrue(result.getRoles().isEmpty(),
+                "Deactivation must win outright, not downgrade to the reset-required sentinel");
+    }
+
+    @Test
+    void preservesPrincipalIdentityWhenDeactivated()
+    {
+        when(StaffUserEntity.findByEmail("staff@test.com")).thenReturn(inactiveStaffRow(false));
+
+        SecurityIdentity result = augment(staffIdentity("staff@test.com", "SUPER_ADMIN"));
+
+        assertEquals("staff@test.com", result.getPrincipal().getName());
     }
 
     @Test
