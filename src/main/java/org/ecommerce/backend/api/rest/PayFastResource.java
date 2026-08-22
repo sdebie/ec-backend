@@ -134,6 +134,19 @@ public class PayFastResource
         // back and resubmitted, so it stays put rather than erroring.
         OrderStatusEn from = quote.getStatus();
         if (from != OrderStatusEn.PENDING_PAYMENT) {
+            // Checked before calling applyTransition, not after: this call site names
+            // its own live status as expectedFrom, so the mismatch check inside
+            // applyTransition can never disagree with itself and canSystemTransitionTo
+            // is the only thing left to say no — and it throws rather than reporting a
+            // lost claim (BACKLOG.md payfast-checkout-terminal-order-500). A terminal
+            // order (DELIVERED, SYSTEM_CANCELED, REFUNDED, COLLECTED, ...) must never
+            // reach that throw from a REST method with nothing to catch it.
+            if (!from.canSystemTransitionTo(OrderStatusEn.PENDING_PAYMENT)) {
+                LOG.warnf("Refused payment start for order %s: %s cannot move to PENDING_PAYMENT", orderUuid, from);
+                return Response.status(Response.Status.CONFLICT)
+                        .entity(Map.of("error", "Order can no longer be paid")).build();
+            }
+
             TransitionOutcome outcome = orderService.applyTransition(quote,
                     StatusTransition.system(from, OrderStatusEn.PENDING_PAYMENT, "Payment started"));
             if (!outcome.claimed()) {
