@@ -645,7 +645,7 @@ public class ProductService
     }
 
     @Transactional(value = TxType.REQUIRED)
-    public void deleteProduct(String id)
+    public ProductDeletionOutcome deleteProduct(String id)
     {
         if (id == null || id.isBlank()) {
             throw new IllegalArgumentException("Product id is required");
@@ -668,12 +668,14 @@ public class ProductService
         // Order history is the ONLY bar to physical deletion: a product whose
         // variants were never ordered may be hard-deleted in any status; one
         // with order references is archived (DISABLED) so orders keep their
-        // variant rows. (Supersedes the old drafts-only hard-delete rule.)
+        // variant rows. (Supersedes the old drafts-only hard-delete rule.) The
+        // caller cannot see which happened from a void return, so it is reported.
         if (!anyOrderReferenced) {
             // CascadeType.ALL + orphanRemoval on ProductEntity.variants handles
             // cascading removal of variants, their prices, and their images.
             product.delete();
             log.info("Hard-deleted product {} — no order references", id);
+            return ProductDeletionOutcome.DELETED;
         } else {
             // Archive: set product status to DISABLED, and disable all ACTIVE child variants
             product.setStatus(ProductStatusEn.DISABLED);
@@ -686,6 +688,7 @@ public class ProductService
                 }
             }
             log.info("Archived product {} — variants are order-referenced", id);
+            return ProductDeletionOutcome.ARCHIVED;
         }
     }
 

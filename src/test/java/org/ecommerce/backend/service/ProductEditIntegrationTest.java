@@ -416,9 +416,11 @@ class ProductEditIntegrationTest
         em.clear();
 
         // Delete the product
-        productService.deleteProduct(productId);
+        ProductDeletionOutcome outcome = productService.deleteProduct(productId);
         em.flush();
         em.clear();
+
+        assertThat(outcome, equalTo(ProductDeletionOutcome.DELETED));
 
         // Product must be physically gone
         ProductEntity deletedProduct = em.find(ProductEntity.class, UUID.fromString(productId));
@@ -444,9 +446,11 @@ class ProductEditIntegrationTest
         em.clear();
 
         // Delete the product
-        productService.deleteProduct(productId);
+        ProductDeletionOutcome outcome = productService.deleteProduct(productId);
         em.flush();
         em.clear();
+
+        assertThat(outcome, equalTo(ProductDeletionOutcome.DELETED));
 
         // Order history is the only bar to physical deletion: an ACTIVE product
         // with no ordered variants is hard-deleted like a draft.
@@ -477,9 +481,11 @@ class ProductEditIntegrationTest
         em.clear();
 
         // Delete the product
-        productService.deleteProduct(productId);
+        ProductDeletionOutcome outcome = productService.deleteProduct(productId);
         em.flush();
         em.clear();
+
+        assertThat(outcome, equalTo(ProductDeletionOutcome.ARCHIVED));
 
         // Product must still exist with DISABLED status (order-referenced prevents hard delete)
         ProductEntity product = em.find(ProductEntity.class, UUID.fromString(productId));

@@ -3,6 +3,7 @@ package org.ecommerce.backend.api.graphql;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
 import io.smallrye.jwt.build.Jwt;
+import org.ecommerce.backend.service.ProductDeletionOutcome;
 import org.ecommerce.backend.service.ProductService;
 import org.ecommerce.common.dto.AdminProductListItemDto;
 import org.ecommerce.common.dto.AdminProductStatsDto;
@@ -21,6 +22,7 @@ import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 
 /**
@@ -418,6 +420,32 @@ class AdminProductGraphQLTest
                     .then()
                     .statusCode(200)
                     .body("errors", nullValue());
+        }
+
+        /**
+         * The whole point of this return type: a caller reading nothing back cannot
+         * tell a hard delete from an archive. Proves the value the service reports
+         * actually reaches the response, not just that the call succeeds.
+         */
+        @Test
+        @DisplayName("surfaces whichever outcome the service reports, not just success")
+        void deleteProduct_reportsArchivedWhenServiceArchivesInsteadOfDeleting()
+        {
+            String token = generateStaffJwt(STAFF_EMAIL, "SUPER_ADMIN");
+            String productId = UUID.randomUUID().toString();
+
+            when(productService.deleteProduct(anyString())).thenReturn(ProductDeletionOutcome.ARCHIVED);
+
+            given()
+                    .header("Authorization", "Bearer " + token)
+                    .contentType("application/json")
+                    .body(graphqlBody(DELETE_MUTATION, Map.of("id", productId)))
+                    .when()
+                    .post("/api/graphql")
+                    .then()
+                    .statusCode(200)
+                    .body("errors", nullValue())
+                    .body("data.deleteProduct", equalTo("ARCHIVED"));
         }
 
         @Test
