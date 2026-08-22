@@ -47,7 +47,7 @@ public class OrderAdminResource
     }
 
     @Query("adminOrder")
-    @Description("Admin order detail: lines, address, money breakdown and status timeline. Staff JWT required.")
+    @Description("Admin order detail: lines, address, money breakdown, status timeline and latest payment. Staff JWT required.")
     @RolesAllowed({"SUPER_ADMIN", "ORDER_MANAGER", "VIEWER"})
     @Transactional(TxType.SUPPORTS)
     public AdminOrderDetailDto adminOrder(@Name("id") String id) throws GraphQLException

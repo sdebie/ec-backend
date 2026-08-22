@@ -13,6 +13,7 @@ import org.ecommerce.backend.service.payfast.PayFastService;
 import org.ecommerce.common.entity.CustomerEntity;
 import org.ecommerce.common.entity.OrderEntity;
 import org.ecommerce.common.entity.OrderStatusHistoryEntity;
+import org.ecommerce.common.entity.PaymentLogEntity;
 import org.ecommerce.common.enums.OrderStatusEn;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -46,11 +47,12 @@ class PayFastResourceTest
     @BeforeEach
     void setUp()
     {
-        // OrderStatusHistoryEntity is mocked alongside OrderEntity because the ITN
-        // handler now records the PAID transition on the status timeline. These
-        // orders exist only as mocks, so a real persist would fail the row's
+        // OrderStatusHistoryEntity and PaymentLogEntity are both mocked alongside
+        // OrderEntity: the ITN handler records the PAID transition on the status
+        // timeline AND a payment-gateway log row, and both reference this order.
+        // These orders exist only as mocks, so a real persist would fail the row's
         // foreign key to a non-existent order and roll the whole request back.
-        PanacheMock.mock(OrderEntity.class, OrderStatusHistoryEntity.class);
+        PanacheMock.mock(OrderEntity.class, OrderStatusHistoryEntity.class, PaymentLogEntity.class);
     }
 
     @Test

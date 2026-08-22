@@ -224,15 +224,14 @@ public class PayFastResource
 
         try {
             // 3. Generic Logging
-            PaymentLogEntity log = new PaymentLogEntity();
-            log.setGatewayName("PAYFAST");
-            log.setInternalReference(params.get("m_payment_id"));
-            log.setExternalReference(params.get("pf_payment_id"));
-            log.setAmountGross(amountGross);
-            log.setStatus(params.get("payment_status"));
-            // Store raw JSON for auditing
-            log.setRawResponse(params.toString());
-            log.persist();
+            PaymentLogEntity.record(
+                    resolveOrderForLog(params.get("m_payment_id")),
+                    "PAYFAST",
+                    params.get("m_payment_id"),
+                    params.get("pf_payment_id"),
+                    amountGross,
+                    params.get("payment_status"),
+                    params.toString()); // raw params for auditing
         } catch (Exception e) {
             LOG.error("Error logging payment: " + e.getMessage());
         }
@@ -348,6 +347,24 @@ public class PayFastResource
         LOG.errorf("PayFast confirmed payment for order %s but it is no longer CREATED (current status: %s) — "
                 + "payment received, stock may not be reserved. Manual review required.", orderId, currentStatus);
         orderNotificationService.sendPaymentAnomalyAlert(current != null ? current : staleOrder, amountGross);
+    }
+
+    /**
+     * Resolves the order a log row belongs to, purely for linking (BACKLOG.md
+     * payment-logs-never-linked-to-their-order) — an unparseable or unmatched
+     * m_payment_id leaves the log unlinked rather than failing the ITN, since the
+     * log write itself is already best-effort (guarded by its own try/catch above).
+     */
+    private OrderEntity resolveOrderForLog(String orderIdStr)
+    {
+        if (orderIdStr == null) {
+            return null;
+        }
+        try {
+            return OrderEntity.findById(UUID.fromString(orderIdStr));
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
     }
 
     /**
