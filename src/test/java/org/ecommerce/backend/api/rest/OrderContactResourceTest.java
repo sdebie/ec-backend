@@ -748,4 +748,128 @@ class OrderContactResourceTest
 
         assertNull(order.getContactLastName());
     }
+
+    @Test
+    void updateContact_streetAddressExceedsMaxLength_returns422AndDoesNotMutate()
+    {
+        UUID orderId = UUID.randomUUID();
+
+        OrderEntity order = new OrderEntity();
+        order.setId(orderId);
+        order.setTotalAmount(new BigDecimal("100.00"));
+        order.setStatus(OrderStatusEn.CREATED);
+
+        when(OrderEntity.findOrderInfoById(orderId)).thenReturn(order);
+
+        String body = """
+                {
+                    "streetAddress": "%s"
+                }
+                """.formatted("1".repeat(201));
+
+        given()
+                .header("X-Order-Token", generateOrderToken(orderId))
+                .contentType(ContentType.JSON)
+                .body(body)
+                .when()
+                .patch("/api/orders/{orderId}/contact", orderId)
+                .then()
+                .statusCode(422);
+
+        assertNull(order.getStreetAddress());
+    }
+
+    @Test
+    void updateContact_cityExceedsMaxLength_returns422AndDoesNotMutate()
+    {
+        UUID orderId = UUID.randomUUID();
+
+        OrderEntity order = new OrderEntity();
+        order.setId(orderId);
+        order.setTotalAmount(new BigDecimal("100.00"));
+        order.setStatus(OrderStatusEn.CREATED);
+
+        when(OrderEntity.findOrderInfoById(orderId)).thenReturn(order);
+
+        String body = """
+                {
+                    "city": "%s"
+                }
+                """.formatted("C".repeat(121));
+
+        given()
+                .header("X-Order-Token", generateOrderToken(orderId))
+                .contentType(ContentType.JSON)
+                .body(body)
+                .when()
+                .patch("/api/orders/{orderId}/contact", orderId)
+                .then()
+                .statusCode(422);
+
+        assertNull(order.getCity());
+    }
+
+    @Test
+    void updateContact_provinceExceedsMaxLength_returns422AndDoesNotMutate()
+    {
+        UUID orderId = UUID.randomUUID();
+
+        OrderEntity order = new OrderEntity();
+        order.setId(orderId);
+        order.setTotalAmount(new BigDecimal("100.00"));
+        order.setStatus(OrderStatusEn.CREATED);
+
+        when(OrderEntity.findOrderInfoById(orderId)).thenReturn(order);
+
+        String body = """
+                {
+                    "province": "%s"
+                }
+                """.formatted("P".repeat(121));
+
+        given()
+                .header("X-Order-Token", generateOrderToken(orderId))
+                .contentType(ContentType.JSON)
+                .body(body)
+                .when()
+                .patch("/api/orders/{orderId}/contact", orderId)
+                .then()
+                .statusCode(422);
+
+        assertNull(order.getProvince());
+    }
+
+    @Test
+    void updateContact_postalCodeExceedsMaxLength_returns422AndDoesNotMutate()
+    {
+        // 20 is deliberately generous, not South-Africa-specific (law 1: no
+        // client-specific code) — long enough for any real country's postal/ZIP
+        // format, so this only catches genuine garbage, never a legitimate one
+        // from a future non-SA client.
+        UUID orderId = UUID.randomUUID();
+
+        OrderEntity order = new OrderEntity();
+        order.setId(orderId);
+        order.setTotalAmount(new BigDecimal("100.00"));
+        order.setStatus(OrderStatusEn.CREATED);
+
+        when(OrderEntity.findOrderInfoById(orderId)).thenReturn(order);
+
+        String body = """
+                {
+                    "postalCode": "%s"
+                }
+                """.formatted("1".repeat(21));
+
+        given()
+                .header("X-Order-Token", generateOrderToken(orderId))
+                .contentType(ContentType.JSON)
+                .body(body)
+                .when()
+                .patch("/api/orders/{orderId}/contact", orderId)
+                .then()
+                .statusCode(422);
+
+        assertNull(order.getPostalCode());
+    }
 }
