@@ -129,15 +129,24 @@ public class RateLimiterService
         return maskedLocal + key.substring(at);
     }
 
+    /**
+     * Resolution order: the limiter's own override, then the shared
+     * {@code ratelimit.default.*} fallback, then the caller's code-provided default.
+     * The shared fallback exists so a new limiter needs no config of its own just to
+     * avoid interfering with unrelated tests — see the comment on that key in
+     * {@code application.properties}.
+     */
     private int resolveMax(String name, int defaultMax)
     {
         return config.getOptionalValue("ratelimit." + name + ".max", Integer.class)
+                .or(() -> config.getOptionalValue("ratelimit.default.max", Integer.class))
                 .orElse(defaultMax);
     }
 
     private long resolveWindowSeconds(String name, long defaultWindowSeconds)
     {
         return config.getOptionalValue("ratelimit." + name + ".window-seconds", Long.class)
+                .or(() -> config.getOptionalValue("ratelimit.default.window-seconds", Long.class))
                 .orElse(defaultWindowSeconds);
     }
 
