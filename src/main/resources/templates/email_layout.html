@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    {!
+      Styles are inline in a <style> block rather than a stylesheet: mail clients do not
+      fetch external CSS, and several strip <style> entirely — so the rules here are the
+      nice-to-have layer and the markup must stay readable without any of them.
+    !}
+    <style>
+        body {
+            font-family: sans-serif;
+            color: #333;
+            line-height: 1.6;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 600px;
+            margin: 0 auto;
+            border: 1px solid #eee;
+            padding: 20px;
+            border-radius: 10px;
+        }
+
+        .header {
+            text-align: center;
+            border-bottom: 2px solid #3b82f6;
+            padding-bottom: 20px;
+        }
+
+        .content {
+            margin: 20px 0;
+        }
+
+        .details-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+
+        .details-table th {
+            text-align: left;
+            padding: 8px 10px;
+            border-bottom: 1px solid #eee;
+            color: #555;
+            width: 150px;
+            vertical-align: top;
+        }
+
+        .details-table td {
+            padding: 8px 10px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .message-section {
+            margin: 20px 0;
+            padding: 15px;
+            background-color: #f9f9f9;
+            border-radius: 6px;
+        }
+
+        .message-section h3 {
+            margin: 0 0 10px 0;
+            font-size: 14px;
+            color: #555;
+        }
+
+        .message-section p {
+            margin: 0;
+            white-space: pre-wrap;
+        }
+
+        .footer {
+            font-size: 12px;
+            color: #777;
+            margin-top: 30px;
+            text-align: center;
+        }
+
+        {#insert extraStyles}{/}
+    </style>
+    <title>{#insert headline}{/}</title>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <h1>{#insert headline}{/}</h1>
+        {#insert subheading}{/}
+    </div>
+
+    {#insert body}{/}
+
+    <div class="footer">
+        {#insert footer}{/}
+    </div>
+</div>
+</body>
+</html>
