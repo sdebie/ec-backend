@@ -5,7 +5,6 @@ import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
 import org.ecommerce.backend.utils.CustomerPasswordHashUtil;
-import org.ecommerce.backend.utils.PasswordHashUtil;
 import org.ecommerce.common.entity.CustomerEntity;
 import org.ecommerce.common.entity.UserEntity;
 import org.ecommerce.common.enums.CustomerStatusEn;
@@ -28,6 +27,12 @@ class CustomerPasswordResetServiceTest
     @Inject
     CustomerPasswordResetService customerPasswordResetService;
 
+    // Real bean, not mocked: the fixture must fingerprint RESET_CODE the same way
+    // production does (HMAC-SHA256, keyed), or every "valid code" fixture below would
+    // silently stop matching the moment the storage scheme changed out from under it.
+    @Inject
+    PasswordResetCodePolicy policy;
+
     @InjectMock
     PasswordResetNotificationService passwordResetNotificationService;
 
@@ -37,12 +42,12 @@ class CustomerPasswordResetServiceTest
         PanacheMock.mock(UserEntity.class);
     }
 
-    private static UserEntity userWithValidResetCode(CustomerEntity customer)
+    private UserEntity userWithValidResetCode(CustomerEntity customer)
     {
         UserEntity user = new UserEntity();
         user.setEmail(EMAIL);
         user.setPasswordHash("");
-        user.setPasswordResetCodeHash(PasswordHashUtil.hash(RESET_CODE));
+        user.setPasswordResetCodeHash(policy.fingerprint(RESET_CODE));
         user.setPasswordResetCodeExpiry(OffsetDateTime.now().plusMinutes(5));
         user.setCustomer(customer);
         if (customer != null) {

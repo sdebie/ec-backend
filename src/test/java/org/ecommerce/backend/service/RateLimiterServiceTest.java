@@ -325,6 +325,75 @@ class RateLimiterServiceTest
         assertTrue(service.check("fast", "ip-cfg-win", 3, 3600).allowed());
     }
 
+    // ── Shared "ratelimit.default.*" fallback ────────────────────────────────
+    // A new limiter should not have to add its own config just to avoid
+    // interfering with unrelated tests — see application.properties' comment on
+    // this key. Resolution order: per-limiter override → shared default → the
+    // caller's own code-provided default.
+
+    @Test
+    void check_shouldUseSharedDefaultMaxWhenNoPerLimiterOverrideExists()
+    {
+        when(config.getOptionalValue("ratelimit.default.max", Integer.class))
+                .thenReturn(Optional.of(2));
+
+        // Code default is 5, no "ratelimit.brand-new-limiter.max" override exists,
+        // but the shared default of 2 applies.
+        assertTrue(service.check("brand-new-limiter", "ip-default", 5, 60).allowed());  // 1
+        assertTrue(service.check("brand-new-limiter", "ip-default", 5, 60).allowed());  // 2
+        assertFalse(service.check("brand-new-limiter", "ip-default", 5, 60).allowed()); // 3 — denied by shared default
+    }
+
+    @Test
+    void check_perLimiterOverrideWinsOverSharedDefault()
+    {
+        when(config.getOptionalValue("ratelimit.specific.max", Integer.class))
+                .thenReturn(Optional.of(4));
+        when(config.getOptionalValue("ratelimit.default.max", Integer.class))
+                .thenReturn(Optional.of(1));
+
+        // If the shared default (1) won, this would already be denied on request 2.
+        assertTrue(service.check("specific", "ip-precedence", 5, 60).allowed());  // 1
+        assertTrue(service.check("specific", "ip-precedence", 5, 60).allowed());  // 2
+        assertTrue(service.check("specific", "ip-precedence", 5, 60).allowed());  // 3
+        assertTrue(service.check("specific", "ip-precedence", 5, 60).allowed());  // 4
+        assertFalse(service.check("specific", "ip-precedence", 5, 60).allowed()); // 5 — denied by the per-limiter override
+    }
+
+    @Test
+    void check_shouldUseSharedDefaultWindowWhenNoPerLimiterOverrideExists()
+    {
+        when(config.getOptionalValue("ratelimit.default.window-seconds", Long.class))
+                .thenReturn(Optional.of(10L));
+
+        // Code default window is 3600, shared default window is 10 seconds.
+        for (int i = 0; i < 3; i++) {
+            service.check("another-new-limiter", "ip-default-win", 3, 3600);
+        }
+        assertFalse(service.check("another-new-limiter", "ip-default-win", 3, 3600).allowed());
+
+        service.advanceTime(11_000);
+        assertTrue(service.check("another-new-limiter", "ip-default-win", 3, 3600).allowed());
+    }
+
+    @Test
+    void check_perLimiterWindowOverrideWinsOverSharedDefaultWindow()
+    {
+        when(config.getOptionalValue("ratelimit.specific-win.window-seconds", Long.class))
+                .thenReturn(Optional.of(3600L));
+        when(config.getOptionalValue("ratelimit.default.window-seconds", Long.class))
+                .thenReturn(Optional.of(10L));
+
+        for (int i = 0; i < 3; i++) {
+            service.check("specific-win", "ip-win-precedence", 3, 60);
+        }
+        assertFalse(service.check("specific-win", "ip-win-precedence", 3, 60).allowed());
+
+        // If the shared default (10s) won, this would already be re-allowed here.
+        service.advanceTime(11_000);
+        assertFalse(service.check("specific-win", "ip-win-precedence", 3, 60).allowed());
+    }
+
     // ── enforce() — Response-returning convenience wrapper ──────────────────
 
     @Test

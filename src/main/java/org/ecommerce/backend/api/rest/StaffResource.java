@@ -1,6 +1,7 @@
 package org.ecommerce.backend.api.rest;
 
 import io.quarkus.security.identity.SecurityIdentity;
+import jakarta.annotation.security.PermitAll;
 import jakarta.annotation.security.RolesAllowed;
 import jakarta.inject.Inject;
 import jakarta.validation.Valid;
@@ -9,9 +10,13 @@ import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import lombok.extern.slf4j.Slf4j;
 import org.eclipse.microprofile.jwt.JsonWebToken;
+import org.ecommerce.backend.exception.InvalidPasswordResetCodeException;
+import org.ecommerce.backend.exception.PasswordResetLockedException;
 import org.ecommerce.backend.security.ForcedPasswordResetIdentityAugmentor;
 import org.ecommerce.backend.service.AdminAuthService;
+import org.ecommerce.backend.service.RateLimitDecision;
 import org.ecommerce.backend.service.RateLimiterService;
+import org.ecommerce.backend.service.StaffPasswordResetService;
 import org.ecommerce.backend.service.StaffService;
 import org.ecommerce.backend.utils.ClientIpUtils;
 import org.ecommerce.common.dto.LoginRequestDto;
@@ -28,11 +33,22 @@ public class StaffResource
     {
     }
 
+    public record InitiatePasswordResetRequest(String email)
+    {
+    }
+
+    public record CompletePasswordResetRequest(String email, String code, String newPassword, String confirmPassword)
+    {
+    }
+
     @Inject
     AdminAuthService authService;
 
     @Inject
     StaffService staffService;
+
+    @Inject
+    StaffPasswordResetService staffPasswordResetService;
 
     @Inject
     RateLimiterService rateLimiterService;
@@ -135,5 +151,88 @@ public class StaffResource
 
         staffService.resetStaffPassword(req.email(), req.password());
         return Response.ok().build();
+    }
+
+    /**
+     * Self-service "I forgot my password and can't log in" flow — distinct from
+     * {@link #resetPassword}, which requires an already-valid staff JWT. Always
+     * returns 202 with an empty body, whatever the outcome (unknown email, inactive
+     * account, an unexpired code already live, or rate-limit denial), so the endpoint
+     * cannot be used to enumerate staff accounts.
+     */
+    @POST
+    @Path("/password-reset/initiate")
+    @PermitAll
+    public Response initiatePasswordReset(
+            InitiatePasswordResetRequest req,
+            @HeaderParam("CF-Connecting-IP") String cfConnectingIp,
+            @HeaderParam("X-Forwarded-For") String xForwardedFor,
+            @HeaderParam("X-Real-IP") String xRealIp)
+    {
+        if (req == null || req.email() == null || req.email().isBlank()) {
+            return Response.status(Response.Status.BAD_REQUEST).entity("email is required").build();
+        }
+
+        String clientIp = ClientIpUtils.resolveClientIp(cfConnectingIp, xForwardedFor, xRealIp);
+
+        RateLimitDecision ipDecision = rateLimiterService.check("staff-password-reset-initiate", clientIp, 5, 3600);
+        if (!ipDecision.allowed()) {
+            return Response.status(Response.Status.ACCEPTED).build();
+        }
+
+        String emailKey = req.email().toLowerCase().trim();
+        RateLimitDecision emailDecision = rateLimiterService.check("staff-password-reset-initiate-email", emailKey, 3, 3600);
+        if (!emailDecision.allowed()) {
+            return Response.status(Response.Status.ACCEPTED).build();
+        }
+
+        staffPasswordResetService.initiateReset(req.email());
+        return Response.status(Response.Status.ACCEPTED).build();
+    }
+
+    @POST
+    @Path("/password-reset/complete")
+    @PermitAll
+    public Response completePasswordReset(
+            CompletePasswordResetRequest req,
+            @HeaderParam("CF-Connecting-IP") String cfConnectingIp,
+            @HeaderParam("X-Forwarded-For") String xForwardedFor,
+            @HeaderParam("X-Real-IP") String xRealIp)
+    {
+        if (req == null || req.email() == null || req.email().isBlank() || req.code() == null || req.code().isBlank()) {
+            return Response.status(Response.Status.BAD_REQUEST).entity("email and code are required").build();
+        }
+        if (req.newPassword() == null || req.newPassword().isBlank()) {
+            return Response.status(Response.Status.BAD_REQUEST).entity("newPassword is required").build();
+        }
+        if (!req.newPassword().equals(req.confirmPassword())) {
+            return Response.status(Response.Status.BAD_REQUEST).entity("Passwords do not match").build();
+        }
+
+        String clientIp = ClientIpUtils.resolveClientIp(cfConnectingIp, xForwardedFor, xRealIp);
+
+        RateLimitDecision ipDecision = rateLimiterService.check("staff-password-reset-complete", clientIp, 10, 3600);
+        if (!ipDecision.allowed()) {
+            return Response.status(Response.Status.TOO_MANY_REQUESTS).entity("Too many attempts. Try again later.").build();
+        }
+
+        String emailKey = req.email().toLowerCase().trim();
+        RateLimitDecision emailDecision = rateLimiterService.check("staff-password-reset-complete-email", emailKey, 5, 3600);
+        if (!emailDecision.allowed()) {
+            return Response.status(Response.Status.TOO_MANY_REQUESTS).entity("Too many attempts. Try again later.").build();
+        }
+
+        try {
+            staffPasswordResetService.completeReset(req.email(), req.code(), req.newPassword(), clientIp);
+            return Response.status(Response.Status.NO_CONTENT).build();
+        } catch (PasswordResetLockedException ex) {
+            return Response.status(Response.Status.TOO_MANY_REQUESTS)
+                    .entity("Too many incorrect attempts. Locked for 15 minutes.")
+                    .build();
+        } catch (InvalidPasswordResetCodeException ex) {
+            return Response.status(Response.Status.BAD_REQUEST).entity("Invalid or expired reset code").build();
+        } catch (IllegalArgumentException ex) {
+            return Response.status(Response.Status.BAD_REQUEST).entity(ex.getMessage()).build();
+        }
     }
 }
