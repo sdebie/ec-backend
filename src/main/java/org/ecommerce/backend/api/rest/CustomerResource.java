@@ -212,16 +212,16 @@ public class CustomerResource
         String clientIp = ClientIpUtils.resolveClientIp(cfConnectingIp, xForwardedFor, xRealIp);
 
         // Chained-check: IP limiter first; if denied, email counter is NOT incremented
-        RateLimitDecision ipDecision = rateLimiterService.check("customer-login", clientIp, 10, 900);
-        if (!ipDecision.allowed()) {
-            return Response.status(429).header("Retry-After", ipDecision.retryAfterSeconds()).build();
+        Response ipLimited = rateLimiterService.enforce("customer-login", clientIp, 10, 900);
+        if (ipLimited != null) {
+            return ipLimited;
         }
 
         // Email limiter second (IP passed)
         String emailKey = req.email.toLowerCase().trim();
-        RateLimitDecision emailDecision = rateLimiterService.check("customer-login-email", emailKey, 5, 900);
-        if (!emailDecision.allowed()) {
-            return Response.status(429).header("Retry-After", emailDecision.retryAfterSeconds()).build();
+        Response emailLimited = rateLimiterService.enforce("customer-login-email", emailKey, 5, 900);
+        if (emailLimited != null) {
+            return emailLimited;
         }
 
         UserEntity user = UserEntity.findByEmail(req.email.trim());
@@ -282,9 +282,9 @@ public class CustomerResource
         String clientIp = ClientIpUtils.resolveClientIp(cfConnectingIp, xForwardedFor, xRealIp);
 
         // Rate limit by IP — no per-email key because email is only known after token verification
-        RateLimitDecision ipDecision = rateLimiterService.check("google-login", clientIp, 10, 900);
-        if (!ipDecision.allowed()) {
-            return Response.status(429).header("Retry-After", ipDecision.retryAfterSeconds()).build();
+        Response limited = rateLimiterService.enforce("google-login", clientIp, 10, 900);
+        if (limited != null) {
+            return limited;
         }
 
         try {
@@ -403,9 +403,9 @@ public class CustomerResource
 
         // Rate limit check — runs after body-shape validation, before the 409 claimed-account guard
         String clientIp = ClientIpUtils.resolveClientIp(cfConnectingIp, xForwardedFor, xRealIp);
-        RateLimitDecision decision = rateLimiterService.check("register", clientIp, 10, 3600);
-        if (!decision.allowed()) {
-            return Response.status(429).header("Retry-After", decision.retryAfterSeconds()).build();
+        Response limited = rateLimiterService.enforce("register", clientIp, 10, 3600);
+        if (limited != null) {
+            return limited;
         }
 
         String email = req.email.trim();

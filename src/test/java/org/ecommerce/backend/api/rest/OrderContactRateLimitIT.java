@@ -5,8 +5,8 @@ import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.http.ContentType;
 import jakarta.inject.Inject;
+import jakarta.ws.rs.core.Response;
 import org.ecommerce.backend.service.OrderCapabilityService;
-import org.ecommerce.backend.service.RateLimitDecision;
 import org.ecommerce.backend.service.RateLimiterService;
 import org.ecommerce.common.entity.OrderEntity;
 import org.ecommerce.common.enums.OrderStatusEn;
@@ -41,8 +41,8 @@ class OrderContactRateLimitIT
     {
         PanacheMock.mock(OrderEntity.class);
         PanacheMock.mock(org.ecommerce.common.entity.ShippingMethodEntity.class);
-        when(rateLimiterService.check(anyString(), anyString(), anyInt(), anyLong()))
-                .thenReturn(new RateLimitDecision(true, 0));
+        when(rateLimiterService.enforce(anyString(), anyString(), anyInt(), anyLong()))
+                .thenReturn(null);
     }
 
     private OrderEntity order(UUID orderId)
@@ -68,8 +68,8 @@ class OrderContactRateLimitIT
         UUID orderId = UUID.randomUUID();
         OrderEntity order = order(orderId);
         when(OrderEntity.findOrderInfoById(orderId)).thenReturn(order);
-        when(rateLimiterService.check(eq("order-contact"), anyString(), anyInt(), anyLong()))
-                .thenReturn(new RateLimitDecision(false, 900));
+        when(rateLimiterService.enforce(eq("order-contact"), anyString(), anyInt(), anyLong()))
+                .thenReturn(Response.status(429).header("Retry-After", 900L).build());
 
         given()
                 .header("X-Order-Token", orderCapability.mint(orderId))
@@ -102,7 +102,7 @@ class OrderContactRateLimitIT
                 .then()
                 .statusCode(200);
 
-        org.mockito.Mockito.verify(rateLimiterService).check(eq("order-contact"), eq("203.0.113.80"), anyInt(), anyLong());
+        org.mockito.Mockito.verify(rateLimiterService).enforce(eq("order-contact"), eq("203.0.113.80"), anyInt(), anyLong());
     }
 
     @Test

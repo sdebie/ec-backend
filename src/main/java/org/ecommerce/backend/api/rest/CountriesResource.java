@@ -8,7 +8,6 @@ import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
-import org.ecommerce.backend.service.RateLimitDecision;
 import org.ecommerce.backend.service.RateLimiterService;
 import org.ecommerce.backend.utils.ClientIpUtils;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -57,9 +56,9 @@ public class CountriesResource {
             @HeaderParam("X-Real-IP") String xRealIp
     ) {
         String clientIp = ClientIpUtils.resolveClientIp(cfConnectingIp, xForwardedFor, xRealIp);
-        RateLimitDecision decision = rateLimiterService.check("countries", clientIp, 20, 3600);
-        if (!decision.allowed()) {
-            return Response.status(429).header("Retry-After", decision.retryAfterSeconds()).build();
+        Response limited = rateLimiterService.enforce("countries", clientIp, 20, 3600);
+        if (limited != null) {
+            return limited;
         }
 
         String resolvedApiKey = apiKey.map(String::trim).orElse("");

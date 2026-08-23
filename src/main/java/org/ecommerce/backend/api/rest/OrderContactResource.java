@@ -9,7 +9,6 @@ import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import org.ecommerce.backend.service.OrderService;
 import org.ecommerce.backend.service.OrderTotals;
-import org.ecommerce.backend.service.RateLimitDecision;
 import org.ecommerce.backend.service.RateLimiterService;
 import org.ecommerce.backend.utils.ClientIpUtils;
 import org.ecommerce.common.dto.OrderContactRequestDto;
@@ -69,10 +68,10 @@ public class OrderContactResource
     )
     {
         String clientIp = ClientIpUtils.resolveClientIp(cfConnectingIp, xForwardedFor, xRealIp);
-        RateLimitDecision decision = rateLimiterService.check(
+        Response limited = rateLimiterService.enforce(
                 "order-contact", clientIp, ORDER_CONTACT_MAX_PER_WINDOW, ORDER_CONTACT_WINDOW_SECONDS);
-        if (!decision.allowed()) {
-            return Response.status(429).header("Retry-After", decision.retryAfterSeconds()).build();
+        if (limited != null) {
+            return limited;
         }
 
         // 1. Find order by ID → 404 if missing

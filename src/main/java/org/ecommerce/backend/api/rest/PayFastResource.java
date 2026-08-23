@@ -9,7 +9,6 @@ import jakarta.ws.rs.core.Response;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.ecommerce.backend.service.OrderNotificationService;
 import org.ecommerce.backend.service.OrderService;
-import org.ecommerce.backend.service.RateLimitDecision;
 import org.ecommerce.backend.service.RateLimiterService;
 import org.ecommerce.backend.service.StatusTransition;
 import org.ecommerce.backend.service.TransitionOutcome;
@@ -77,10 +76,10 @@ public class PayFastResource
         LOG.debug("Checkout received: " + formParams);
 
         String clientIp = ClientIpUtils.resolveClientIp(cfConnectingIp, xForwardedFor, xRealIp);
-        RateLimitDecision decision = rateLimiterService.check(
+        Response limited = rateLimiterService.enforce(
                 "payment-checkout", clientIp, PAYMENT_CHECKOUT_MAX_PER_WINDOW, PAYMENT_CHECKOUT_WINDOW_SECONDS);
-        if (!decision.allowed()) {
-            return Response.status(429).header("Retry-After", decision.retryAfterSeconds()).build();
+        if (limited != null) {
+            return limited;
         }
 
         String orderIdParam = formParams.getFirst("id");

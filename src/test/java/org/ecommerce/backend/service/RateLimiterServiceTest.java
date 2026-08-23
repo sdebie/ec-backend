@@ -1,5 +1,6 @@
 package org.ecommerce.backend.service;
 
+import jakarta.ws.rs.core.Response;
 import org.eclipse.microprofile.config.Config;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -322,6 +323,57 @@ class RateLimiterServiceTest
         // Advance 11 seconds — should reset with the config window of 10s
         service.advanceTime(11_000);
         assertTrue(service.check("fast", "ip-cfg-win", 3, 3600).allowed());
+    }
+
+    // ── enforce() — Response-returning convenience wrapper ──────────────────
+
+    @Test
+    void enforce_shouldReturnNullWhenAllowed()
+    {
+        assertNull(service.enforce("test", "enforce-ip-1", 5, 60));
+    }
+
+    @Test
+    void enforce_shouldReturn429WhenDenied()
+    {
+        for (int i = 0; i < 3; i++) {
+            service.enforce("test", "enforce-ip-2", 3, 60);
+        }
+        Response limited = service.enforce("test", "enforce-ip-2", 3, 60);
+        assertNotNull(limited);
+        assertEquals(429, limited.getStatus());
+    }
+
+    @Test
+    void enforce_shouldSetRetryAfterHeaderFromCheckDecision()
+    {
+        // Window is 60 seconds — same scenario as check_shouldReturnRetryAfterOnDenial,
+        // proving enforce()'s header is derived from the identical calculation.
+        for (int i = 0; i < 3; i++) {
+            service.enforce("test", "enforce-ip-3", 3, 60);
+        }
+
+        // Advance 20 seconds into the window
+        service.advanceTime(20_000);
+
+        Response limited = service.enforce("test", "enforce-ip-3", 3, 60);
+        assertNotNull(limited);
+        // 60 - 20 = 40 seconds remaining
+        assertEquals("40", limited.getHeaderString("Retry-After"));
+    }
+
+    @Test
+    void enforce_shouldComposeNameAndKeyLikeCheck()
+    {
+        // Exhaust "enforce-a" for one key
+        for (int i = 0; i < 2; i++) {
+            service.enforce("enforce-a", "shared-key", 2, 60);
+        }
+        assertNotNull(service.enforce("enforce-a", "shared-key", 2, 60));
+
+        // A different limiter name for the same key is unaffected — proves enforce()
+        // buckets on (name, key) exactly like check(), not a separate scheme.
+        assertNull(service.enforce("enforce-b", "shared-key", 2, 60));
     }
 
     // ── Helpers ─────────────────────────────────────────────────────────────

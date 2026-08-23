@@ -3,8 +3,8 @@ package org.ecommerce.backend.api.rest;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.http.ContentType;
+import jakarta.ws.rs.core.Response;
 import org.ecommerce.backend.service.AdminAuthService;
-import org.ecommerce.backend.service.RateLimitDecision;
 import org.ecommerce.backend.service.RateLimiterService;
 import org.ecommerce.common.dto.LoginRequestDto;
 import org.junit.jupiter.api.BeforeEach;
@@ -37,7 +37,7 @@ class AdminLoginRateLimitIT
     void setUp()
     {
         // Default: allow all requests
-        when(rateLimiterService.check(anyString(), anyString(), anyInt(), anyLong())).thenReturn(new RateLimitDecision(true, 0));
+        when(rateLimiterService.enforce(anyString(), anyString(), anyInt(), anyLong())).thenReturn(null);
         // Default: authentication returns null (invalid credentials)
         when(adminAuthService.authenticate(any(LoginRequestDto.class))).thenReturn(null);
     }
@@ -58,8 +58,8 @@ class AdminLoginRateLimitIT
     @DisplayName("exceeding IP rate limit returns 429 with Retry-After header")
     void ipLimitExceeded_returns429WithRetryAfter()
     {
-        when(rateLimiterService.check(eq("admin-login"), anyString(), anyInt(), anyLong()))
-                .thenReturn(new RateLimitDecision(false, 120));
+        when(rateLimiterService.enforce(eq("admin-login"), anyString(), anyInt(), anyLong()))
+                .thenReturn(Response.status(429).header("Retry-After", 120L).build());
 
         given()
                 .contentType(ContentType.JSON)
@@ -79,8 +79,8 @@ class AdminLoginRateLimitIT
     @DisplayName("IP denial does NOT increment the email limiter counter")
     void ipDenied_emailLimiterNotConsulted()
     {
-        when(rateLimiterService.check(eq("admin-login"), anyString(), anyInt(), anyLong()))
-                .thenReturn(new RateLimitDecision(false, 60));
+        when(rateLimiterService.enforce(eq("admin-login"), anyString(), anyInt(), anyLong()))
+                .thenReturn(Response.status(429).header("Retry-After", 60L).build());
 
         given()
                 .contentType(ContentType.JSON)
@@ -92,7 +92,7 @@ class AdminLoginRateLimitIT
                 .statusCode(429);
 
         // Email limiter should never have been consulted
-        verify(rateLimiterService, never()).check(eq("admin-login-email"), anyString(), anyInt(), anyLong());
+        verify(rateLimiterService, never()).enforce(eq("admin-login-email"), anyString(), anyInt(), anyLong());
     }
 
     // ── Email rate limit exceeded → 429 + Retry-After (Req 4.3, 4.4, 9.2) ──
@@ -102,11 +102,11 @@ class AdminLoginRateLimitIT
     void emailLimitExceeded_returns429WithRetryAfter()
     {
         // IP passes
-        when(rateLimiterService.check(eq("admin-login"), anyString(), anyInt(), anyLong()))
-                .thenReturn(new RateLimitDecision(true, 0));
+        when(rateLimiterService.enforce(eq("admin-login"), anyString(), anyInt(), anyLong()))
+                .thenReturn(null);
         // Email denied
-        when(rateLimiterService.check(eq("admin-login-email"), anyString(), anyInt(), anyLong()))
-                .thenReturn(new RateLimitDecision(false, 45));
+        when(rateLimiterService.enforce(eq("admin-login-email"), anyString(), anyInt(), anyLong()))
+                .thenReturn(Response.status(429).header("Retry-After", 45L).build());
 
         given()
                 .contentType(ContentType.JSON)
@@ -138,7 +138,7 @@ class AdminLoginRateLimitIT
                 .statusCode(401); // normal auth failure (mocked to return null)
 
         // Verify the email limiter was called with normalised key
-        verify(rateLimiterService).check(eq("admin-login-email"), eq("admin@test.com"), anyInt(), anyLong());
+        verify(rateLimiterService).enforce(eq("admin-login-email"), eq("admin@test.com"), anyInt(), anyLong());
     }
 
     // ── Recovery after window (Req 9.2) ─────────────────────────────────────
@@ -148,8 +148,8 @@ class AdminLoginRateLimitIT
     void recoveryAfterWindow_requestSucceeds()
     {
         // First: denied
-        when(rateLimiterService.check(eq("admin-login"), anyString(), anyInt(), anyLong()))
-                .thenReturn(new RateLimitDecision(false, 2));
+        when(rateLimiterService.enforce(eq("admin-login"), anyString(), anyInt(), anyLong()))
+                .thenReturn(Response.status(429).header("Retry-After", 2L).build());
 
         given()
                 .contentType(ContentType.JSON)
@@ -161,10 +161,10 @@ class AdminLoginRateLimitIT
                 .statusCode(429);
 
         // After window: allowed again
-        when(rateLimiterService.check(eq("admin-login"), anyString(), anyInt(), anyLong()))
-                .thenReturn(new RateLimitDecision(true, 0));
-        when(rateLimiterService.check(eq("admin-login-email"), anyString(), anyInt(), anyLong()))
-                .thenReturn(new RateLimitDecision(true, 0));
+        when(rateLimiterService.enforce(eq("admin-login"), anyString(), anyInt(), anyLong()))
+                .thenReturn(null);
+        when(rateLimiterService.enforce(eq("admin-login-email"), anyString(), anyInt(), anyLong()))
+                .thenReturn(null);
 
         given()
                 .contentType(ContentType.JSON)
@@ -191,7 +191,7 @@ class AdminLoginRateLimitIT
                 .then()
                 .statusCode(401);
 
-        verify(rateLimiterService).check(eq("admin-login"), eq("10.0.0.1"), anyInt(), anyLong());
+        verify(rateLimiterService).enforce(eq("admin-login"), eq("10.0.0.1"), anyInt(), anyLong());
     }
 
     @Test
@@ -209,7 +209,7 @@ class AdminLoginRateLimitIT
                     .statusCode(401);
         }
 
-        verify(rateLimiterService, times(3)).check(eq("admin-login"), eq("10.0.0.1"), anyInt(), anyLong());
+        verify(rateLimiterService, times(3)).enforce(eq("admin-login"), eq("10.0.0.1"), anyInt(), anyLong());
     }
 
     @Test
@@ -226,7 +226,7 @@ class AdminLoginRateLimitIT
                 .then()
                 .statusCode(401);
 
-        verify(rateLimiterService).check(eq("admin-login"), eq("203.0.113.7"), anyInt(), anyLong());
+        verify(rateLimiterService).enforce(eq("admin-login"), eq("203.0.113.7"), anyInt(), anyLong());
     }
 
     @Test
@@ -242,7 +242,7 @@ class AdminLoginRateLimitIT
                 .then()
                 .statusCode(401);
 
-        verify(rateLimiterService).check(eq("admin-login"), eq("198.51.100.42"), anyInt(), anyLong());
+        verify(rateLimiterService).enforce(eq("admin-login"), eq("198.51.100.42"), anyInt(), anyLong());
     }
 
     // ── Body validation (400) stays ahead of limiter ────────────────────────
@@ -268,6 +268,6 @@ class AdminLoginRateLimitIT
                 .statusCode(400);
 
         // Rate limiter should not have been consulted for an invalid body
-        verify(rateLimiterService, never()).check(anyString(), anyString(), anyInt(), anyLong());
+        verify(rateLimiterService, never()).enforce(anyString(), anyString(), anyInt(), anyLong());
     }
 }

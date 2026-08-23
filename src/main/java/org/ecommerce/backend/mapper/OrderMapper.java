@@ -18,9 +18,9 @@ import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 import org.mapstruct.MappingTarget;
 
-import java.util.ArrayList;
 import java.util.List;
 
+import static org.ecommerce.backend.utils.CollectionUtils.emptyIfNull;
 import static org.mapstruct.NullValueCheckStrategy.ALWAYS;
 import static org.mapstruct.ReportingPolicy.ERROR;
 import static org.mapstruct.NullValueMappingStrategy.RETURN_NULL;
@@ -99,21 +99,15 @@ public interface OrderMapper
     @AfterMapping
     default void defaultCollectionsToEmpty(@MappingTarget OrderDetailRespDto dto)
     {
-        if (dto.getStatusHistory() == null) {
-            dto.setStatusHistory(new ArrayList<>());
-        }
-        if (dto.getItems() == null) {
-            dto.setItems(new ArrayList<>());
-        }
+        dto.setStatusHistory(emptyIfNull(dto.getStatusHistory()));
+        dto.setItems(emptyIfNull(dto.getItems()));
     }
 
     /** A variant with no images reads as an empty gallery, not a null one. */
     @AfterMapping
     default void defaultImagesToEmpty(@MappingTarget ProductVariantDetailDto dto)
     {
-        if (dto.getImages() == null) {
-            dto.setImages(new ArrayList<>());
-        }
+        dto.setImages(emptyIfNull(dto.getImages()));
     }
 
 

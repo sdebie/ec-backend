@@ -2,6 +2,7 @@ package org.ecommerce.backend.service;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+import jakarta.ws.rs.core.Response;
 import org.eclipse.microprofile.config.Config;
 import org.jboss.logging.Logger;
 
@@ -88,6 +89,25 @@ public class RateLimiterService
             return new RateLimitDecision(false, remainingSeconds);
         }
         return new RateLimitDecision(true, 0);
+    }
+
+    /**
+     * Convenience wrapper around {@link #check} for the common REST call-site shape:
+     * check the limit and, on denial, build the 429 response inline instead of every
+     * caller re-deriving {@code Response.status(429).header("Retry-After", ...)} from a
+     * {@link RateLimitDecision} by hand. Returns {@code null} when the request is
+     * allowed, so callers short-circuit with {@code if (result != null) return result;}.
+     * <p>
+     * An endpoint that must respond differently on denial — e.g. the anti-enumeration
+     * generic 200 on password-reset-request — calls {@link #check} directly instead.
+     */
+    public Response enforce(String name, String key, int defaultMax, long defaultWindowSeconds)
+    {
+        RateLimitDecision decision = check(name, key, defaultMax, defaultWindowSeconds);
+        if (decision.allowed()) {
+            return null;
+        }
+        return Response.status(429).header("Retry-After", decision.retryAfterSeconds()).build();
     }
 
     /**

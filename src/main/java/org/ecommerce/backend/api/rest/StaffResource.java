@@ -11,7 +11,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.eclipse.microprofile.jwt.JsonWebToken;
 import org.ecommerce.backend.security.ForcedPasswordResetIdentityAugmentor;
 import org.ecommerce.backend.service.AdminAuthService;
-import org.ecommerce.backend.service.RateLimitDecision;
 import org.ecommerce.backend.service.RateLimiterService;
 import org.ecommerce.backend.service.StaffService;
 import org.ecommerce.backend.utils.ClientIpUtils;
@@ -60,16 +59,16 @@ public class StaffResource
         // Chained-check semantics: IP limiter first; if denied, return 429 immediately
         // (email counter NOT incremented).
         String clientIp = ClientIpUtils.resolveClientIp(cfConnectingIp, xForwardedFor, xRealIp);
-        RateLimitDecision ipDecision = rateLimiterService.check("admin-login", clientIp, 10, 900);
-        if (!ipDecision.allowed()) {
-            return Response.status(429).header("Retry-After", ipDecision.retryAfterSeconds()).build();
+        Response ipLimited = rateLimiterService.enforce("admin-login", clientIp, 10, 900);
+        if (ipLimited != null) {
+            return ipLimited;
         }
 
         // IP passed — now consult the per-email limiter.
         String emailKey = loginDto.email().toLowerCase().trim();
-        RateLimitDecision emailDecision = rateLimiterService.check("admin-login-email", emailKey, 5, 900);
-        if (!emailDecision.allowed()) {
-            return Response.status(429).header("Retry-After", emailDecision.retryAfterSeconds()).build();
+        Response emailLimited = rateLimiterService.enforce("admin-login-email", emailKey, 5, 900);
+        if (emailLimited != null) {
+            return emailLimited;
         }
 
         // Rate limits passed — evaluate credentials.

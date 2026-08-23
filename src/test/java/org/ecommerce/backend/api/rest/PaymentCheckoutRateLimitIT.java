@@ -5,8 +5,8 @@ import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.http.ContentType;
 import jakarta.inject.Inject;
+import jakarta.ws.rs.core.Response;
 import org.ecommerce.backend.service.OrderCapabilityService;
-import org.ecommerce.backend.service.RateLimitDecision;
 import org.ecommerce.backend.service.RateLimiterService;
 import org.ecommerce.backend.service.payfast.PayFastService;
 import org.ecommerce.common.entity.OrderEntity;
@@ -47,8 +47,8 @@ class PaymentCheckoutRateLimitIT
     void setUp()
     {
         PanacheMock.mock(OrderEntity.class, OrderStatusHistoryEntity.class);
-        when(rateLimiterService.check(anyString(), anyString(), anyInt(), anyLong()))
-                .thenReturn(new RateLimitDecision(true, 0));
+        when(rateLimiterService.enforce(anyString(), anyString(), anyInt(), anyLong()))
+                .thenReturn(null);
         when(payFastService.generateHiddenHTMLForm(any(), anyString())).thenReturn(List.of());
     }
 
@@ -68,8 +68,8 @@ class PaymentCheckoutRateLimitIT
     {
         UUID orderId = UUID.randomUUID();
         when(OrderEntity.findById(orderId)).thenReturn(order(orderId));
-        when(rateLimiterService.check(eq("payment-checkout"), anyString(), anyInt(), anyLong()))
-                .thenReturn(new RateLimitDecision(false, 600));
+        when(rateLimiterService.enforce(eq("payment-checkout"), anyString(), anyInt(), anyLong()))
+                .thenReturn(Response.status(429).header("Retry-After", 600L).build());
 
         given()
                 .header("X-Order-Token", orderCapability.mint(orderId))
@@ -103,7 +103,7 @@ class PaymentCheckoutRateLimitIT
                 .then()
                 .statusCode(202);
 
-        org.mockito.Mockito.verify(rateLimiterService).check(eq("payment-checkout"), eq("203.0.113.90"), anyInt(), anyLong());
+        org.mockito.Mockito.verify(rateLimiterService).enforce(eq("payment-checkout"), eq("203.0.113.90"), anyInt(), anyLong());
     }
 
     @Test

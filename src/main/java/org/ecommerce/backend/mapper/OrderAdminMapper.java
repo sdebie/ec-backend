@@ -17,9 +17,9 @@ import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 import org.mapstruct.MappingTarget;
 
-import java.util.ArrayList;
 import java.util.List;
 
+import static org.ecommerce.backend.utils.CollectionUtils.emptyIfNull;
 import static org.mapstruct.NullValueCheckStrategy.ALWAYS;
 import static org.mapstruct.ReportingPolicy.ERROR;
 import static org.mapstruct.NullValueMappingStrategy.RETURN_NULL;
@@ -101,12 +101,8 @@ public interface OrderAdminMapper
     @AfterMapping
     default void defaultCollectionsToEmpty(@MappingTarget AdminOrderDetailDto dto)
     {
-        if (dto.getStatusHistory() == null) {
-            dto.setStatusHistory(new ArrayList<>());
-        }
-        if (dto.getLineItems() == null) {
-            dto.setLineItems(new ArrayList<>());
-        }
+        dto.setStatusHistory(emptyIfNull(dto.getStatusHistory()));
+        dto.setLineItems(emptyIfNull(dto.getLineItems()));
     }
 
 }

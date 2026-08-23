@@ -4,8 +4,8 @@ import io.quarkus.panache.mock.PanacheMock;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.http.ContentType;
+import jakarta.ws.rs.core.Response;
 import org.ecommerce.backend.service.OrderService;
-import org.ecommerce.backend.service.RateLimitDecision;
 import org.ecommerce.backend.service.RateLimiterService;
 import org.ecommerce.common.dto.OrderCheckoutResponseDto;
 import org.ecommerce.common.entity.CustomerEntity;
@@ -52,8 +52,8 @@ class OrderCheckoutRateLimitIT
     {
         PanacheMock.mock(CustomerEntity.class);
 
-        when(rateLimiterService.check(anyString(), anyString(), anyInt(), anyLong()))
-                .thenReturn(new RateLimitDecision(true, 0));
+        when(rateLimiterService.enforce(anyString(), anyString(), anyInt(), anyLong()))
+                .thenReturn(null);
 
         OrderCheckoutResponseDto response = new OrderCheckoutResponseDto();
         response.setOrderId(UUID.randomUUID().toString());
@@ -87,8 +87,8 @@ class OrderCheckoutRateLimitIT
     @DisplayName("a denied caller gets 429 + Retry-After and no order is created")
     void deniedCaller_returns429AndCreatesNoOrder()
     {
-        when(rateLimiterService.check(eq("checkout"), anyString(), anyInt(), anyLong()))
-                .thenReturn(new RateLimitDecision(false, 1800));
+        when(rateLimiterService.enforce(eq("checkout"), anyString(), anyInt(), anyLong()))
+                .thenReturn(Response.status(429).header("Retry-After", 1800L).build());
 
         given()
                 .contentType(ContentType.JSON)
@@ -121,7 +121,7 @@ class OrderCheckoutRateLimitIT
                 .then()
                 .statusCode(201);
 
-        verify(rateLimiterService).check(eq("checkout"), eq("203.0.113.77"), anyInt(), anyLong());
+        verify(rateLimiterService).enforce(eq("checkout"), eq("203.0.113.77"), anyInt(), anyLong());
     }
 
     @Test
@@ -139,7 +139,7 @@ class OrderCheckoutRateLimitIT
                 .then()
                 .statusCode(201);
 
-        verify(rateLimiterService).check(eq("checkout"), eq("198.51.100.5"), anyInt(), anyLong());
+        verify(rateLimiterService).enforce(eq("checkout"), eq("198.51.100.5"), anyInt(), anyLong());
     }
 
     @Test

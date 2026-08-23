@@ -3,7 +3,7 @@ package org.ecommerce.backend.api.rest;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.http.ContentType;
-import org.ecommerce.backend.service.RateLimitDecision;
+import jakarta.ws.rs.core.Response;
 import org.ecommerce.backend.service.RateLimiterService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -38,8 +38,8 @@ class CustomerLoginRateLimitIT
     void setUp()
     {
         // Default: allow all requests
-        when(rateLimiterService.check(anyString(), anyString(), anyInt(), anyLong()))
-                .thenReturn(new RateLimitDecision(true, 0));
+        when(rateLimiterService.enforce(anyString(), anyString(), anyInt(), anyLong()))
+                .thenReturn(null);
     }
 
     private String loginPayload(String email)
@@ -69,8 +69,8 @@ class CustomerLoginRateLimitIT
     @DisplayName("customer login: exceeding IP rate limit returns 429 with Retry-After header")
     void customerLogin_ipLimitExceeded_returns429WithRetryAfter()
     {
-        when(rateLimiterService.check(eq("customer-login"), anyString(), anyInt(), anyLong()))
-                .thenReturn(new RateLimitDecision(false, 180));
+        when(rateLimiterService.enforce(eq("customer-login"), anyString(), anyInt(), anyLong()))
+                .thenReturn(Response.status(429).header("Retry-After", 180L).build());
 
         given()
                 .contentType(ContentType.JSON)
@@ -87,8 +87,8 @@ class CustomerLoginRateLimitIT
     @DisplayName("customer login: IP denial does NOT increment the email limiter counter")
     void customerLogin_ipDenied_emailLimiterNotConsulted()
     {
-        when(rateLimiterService.check(eq("customer-login"), anyString(), anyInt(), anyLong()))
-                .thenReturn(new RateLimitDecision(false, 90));
+        when(rateLimiterService.enforce(eq("customer-login"), anyString(), anyInt(), anyLong()))
+                .thenReturn(Response.status(429).header("Retry-After", 90L).build());
 
         given()
                 .contentType(ContentType.JSON)
@@ -100,7 +100,7 @@ class CustomerLoginRateLimitIT
                 .statusCode(429);
 
         // Email limiter should never have been consulted (chained-check semantics)
-        verify(rateLimiterService, never()).check(eq("customer-login-email"), anyString(), anyInt(), anyLong());
+        verify(rateLimiterService, never()).enforce(eq("customer-login-email"), anyString(), anyInt(), anyLong());
     }
 
     // ════════════════════════════════════════════════════════════════════════
@@ -112,11 +112,11 @@ class CustomerLoginRateLimitIT
     void customerLogin_emailLimitExceeded_returns429WithRetryAfter()
     {
         // IP passes
-        when(rateLimiterService.check(eq("customer-login"), anyString(), anyInt(), anyLong()))
-                .thenReturn(new RateLimitDecision(true, 0));
+        when(rateLimiterService.enforce(eq("customer-login"), anyString(), anyInt(), anyLong()))
+                .thenReturn(null);
         // Email denied
-        when(rateLimiterService.check(eq("customer-login-email"), anyString(), anyInt(), anyLong()))
-                .thenReturn(new RateLimitDecision(false, 60));
+        when(rateLimiterService.enforce(eq("customer-login-email"), anyString(), anyInt(), anyLong()))
+                .thenReturn(Response.status(429).header("Retry-After", 60L).build());
 
         given()
                 .contentType(ContentType.JSON)
@@ -147,7 +147,7 @@ class CustomerLoginRateLimitIT
                 .statusCode(401); // Normal auth failure (non-existent user)
 
         // Verify email limiter was called with normalised key
-        verify(rateLimiterService).check(eq("customer-login-email"), eq("customer@test.com"), anyInt(), anyLong());
+        verify(rateLimiterService).enforce(eq("customer-login-email"), eq("customer@test.com"), anyInt(), anyLong());
     }
 
     // ════════════════════════════════════════════════════════════════════════
@@ -159,8 +159,8 @@ class CustomerLoginRateLimitIT
     void customerLogin_recoveryAfterWindow()
     {
         // First: denied
-        when(rateLimiterService.check(eq("customer-login"), anyString(), anyInt(), anyLong()))
-                .thenReturn(new RateLimitDecision(false, 2));
+        when(rateLimiterService.enforce(eq("customer-login"), anyString(), anyInt(), anyLong()))
+                .thenReturn(Response.status(429).header("Retry-After", 2L).build());
 
         given()
                 .contentType(ContentType.JSON)
@@ -172,10 +172,10 @@ class CustomerLoginRateLimitIT
                 .statusCode(429);
 
         // After window: allowed again
-        when(rateLimiterService.check(eq("customer-login"), anyString(), anyInt(), anyLong()))
-                .thenReturn(new RateLimitDecision(true, 0));
-        when(rateLimiterService.check(eq("customer-login-email"), anyString(), anyInt(), anyLong()))
-                .thenReturn(new RateLimitDecision(true, 0));
+        when(rateLimiterService.enforce(eq("customer-login"), anyString(), anyInt(), anyLong()))
+                .thenReturn(null);
+        when(rateLimiterService.enforce(eq("customer-login-email"), anyString(), anyInt(), anyLong()))
+                .thenReturn(null);
 
         given()
                 .contentType(ContentType.JSON)
@@ -204,7 +204,7 @@ class CustomerLoginRateLimitIT
                 .then()
                 .statusCode(401);
 
-        verify(rateLimiterService).check(eq("customer-login"), eq("10.0.0.1"), anyInt(), anyLong());
+        verify(rateLimiterService).enforce(eq("customer-login"), eq("10.0.0.1"), anyInt(), anyLong());
     }
 
     @Test
@@ -221,7 +221,7 @@ class CustomerLoginRateLimitIT
                 .then()
                 .statusCode(401);
 
-        verify(rateLimiterService).check(eq("customer-login"), eq("203.0.113.8"), anyInt(), anyLong());
+        verify(rateLimiterService).enforce(eq("customer-login"), eq("203.0.113.8"), anyInt(), anyLong());
     }
 
     @Test
@@ -237,7 +237,7 @@ class CustomerLoginRateLimitIT
                 .then()
                 .statusCode(401);
 
-        verify(rateLimiterService).check(eq("customer-login"), eq("198.51.100.7"), anyInt(), anyLong());
+        verify(rateLimiterService).enforce(eq("customer-login"), eq("198.51.100.7"), anyInt(), anyLong());
     }
 
     // ════════════════════════════════════════════════════════════════════════
@@ -265,7 +265,7 @@ class CustomerLoginRateLimitIT
                 .statusCode(400);
 
         // Rate limiter should NOT have been consulted for an invalid body
-        verify(rateLimiterService, never()).check(anyString(), anyString(), anyInt(), anyLong());
+        verify(rateLimiterService, never()).enforce(anyString(), anyString(), anyInt(), anyLong());
     }
 
     // ════════════════════════════════════════════════════════════════════════
@@ -276,8 +276,8 @@ class CustomerLoginRateLimitIT
     @DisplayName("Google login: exceeding IP rate limit returns 429 with Retry-After header")
     void googleLogin_ipLimitExceeded_returns429WithRetryAfter()
     {
-        when(rateLimiterService.check(eq("google-login"), anyString(), anyInt(), anyLong()))
-                .thenReturn(new RateLimitDecision(false, 300));
+        when(rateLimiterService.enforce(eq("google-login"), anyString(), anyInt(), anyLong()))
+                .thenReturn(Response.status(429).header("Retry-After", 300L).build());
 
         given()
                 .contentType(ContentType.JSON)
@@ -308,7 +308,7 @@ class CustomerLoginRateLimitIT
                 // Will be 500 (Google verification fails with fake token) or 401 — not 429
                 .statusCode(anyOf(is(500), is(401)));
 
-        verify(rateLimiterService).check(eq("google-login"), eq("10.0.0.1"), anyInt(), anyLong());
+        verify(rateLimiterService).enforce(eq("google-login"), eq("10.0.0.1"), anyInt(), anyLong());
     }
 
     @Test
@@ -324,7 +324,7 @@ class CustomerLoginRateLimitIT
                 .then()
                 .statusCode(anyOf(is(500), is(401)));
 
-        verify(rateLimiterService).check(eq("google-login"), eq("198.51.100.99"), anyInt(), anyLong());
+        verify(rateLimiterService).enforce(eq("google-login"), eq("198.51.100.99"), anyInt(), anyLong());
     }
 
     // ════════════════════════════════════════════════════════════════════════
@@ -336,8 +336,8 @@ class CustomerLoginRateLimitIT
     void googleLogin_recoveryAfterWindow()
     {
         // First: denied
-        when(rateLimiterService.check(eq("google-login"), anyString(), anyInt(), anyLong()))
-                .thenReturn(new RateLimitDecision(false, 2));
+        when(rateLimiterService.enforce(eq("google-login"), anyString(), anyInt(), anyLong()))
+                .thenReturn(Response.status(429).header("Retry-After", 2L).build());
 
         given()
                 .contentType(ContentType.JSON)
@@ -349,8 +349,8 @@ class CustomerLoginRateLimitIT
                 .statusCode(429);
 
         // After window: allowed again
-        when(rateLimiterService.check(eq("google-login"), anyString(), anyInt(), anyLong()))
-                .thenReturn(new RateLimitDecision(true, 0));
+        when(rateLimiterService.enforce(eq("google-login"), anyString(), anyInt(), anyLong()))
+                .thenReturn(null);
 
         given()
                 .contentType(ContentType.JSON)
@@ -387,6 +387,6 @@ class CustomerLoginRateLimitIT
                 .statusCode(400);
 
         // Rate limiter should NOT have been consulted for an invalid body
-        verify(rateLimiterService, never()).check(anyString(), anyString(), anyInt(), anyLong());
+        verify(rateLimiterService, never()).enforce(anyString(), anyString(), anyInt(), anyLong());
     }
 }

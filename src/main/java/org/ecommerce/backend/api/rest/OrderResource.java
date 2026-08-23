@@ -12,7 +12,6 @@ import org.ecommerce.backend.exception.IdempotencyConflictException;
 import org.ecommerce.backend.exception.UnavailableVariantsException;
 import org.ecommerce.backend.service.OrderNotificationService;
 import org.ecommerce.backend.service.OrderService;
-import org.ecommerce.backend.service.RateLimitDecision;
 import org.ecommerce.backend.service.RateLimiterService;
 import org.ecommerce.backend.service.StatusTransition;
 import org.ecommerce.backend.service.TransitionOutcome;
@@ -117,10 +116,10 @@ public class OrderResource {
         // against the same bucket as the original submission, deliberately — see
         // design §3.3.
         String clientIp = ClientIpUtils.resolveClientIp(cfConnectingIp, xForwardedFor, xRealIp);
-        RateLimitDecision decision = rateLimiterService.check(
+        Response limited = rateLimiterService.enforce(
                 "checkout", clientIp, CHECKOUT_MAX_PER_WINDOW, CHECKOUT_WINDOW_SECONDS);
-        if (!decision.allowed()) {
-            return Response.status(429).header("Retry-After", decision.retryAfterSeconds()).build();
+        if (limited != null) {
+            return limited;
         }
 
         String fingerprint = OrderService.fingerprint(request.getItems());

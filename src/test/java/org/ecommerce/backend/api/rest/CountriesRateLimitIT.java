@@ -2,7 +2,7 @@ package org.ecommerce.backend.api.rest;
 
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
-import org.ecommerce.backend.service.RateLimitDecision;
+import jakarta.ws.rs.core.Response;
 import org.ecommerce.backend.service.RateLimiterService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -39,8 +39,8 @@ class CountriesRateLimitIT {
 
     @BeforeEach
     void setUp() {
-        when(rateLimiterService.check(anyString(), anyString(), anyInt(), anyLong()))
-                .thenReturn(new RateLimitDecision(false, 900));
+        when(rateLimiterService.enforce(anyString(), anyString(), anyInt(), anyLong()))
+                .thenReturn(Response.status(429).header("Retry-After", 900L).build());
     }
 
     @Test
@@ -65,7 +65,7 @@ class CountriesRateLimitIT {
                 .then()
                 .statusCode(429);
 
-        verify(rateLimiterService).check(eq("countries"), eq("203.0.113.90"), anyInt(), anyLong());
+        verify(rateLimiterService).enforce(eq("countries"), eq("203.0.113.90"), anyInt(), anyLong());
     }
 
     @Test
@@ -79,6 +79,6 @@ class CountriesRateLimitIT {
                 .then()
                 .statusCode(429);
 
-        verify(rateLimiterService).check(eq("countries"), eq("203.0.113.91"), anyInt(), anyLong());
+        verify(rateLimiterService).enforce(eq("countries"), eq("203.0.113.91"), anyInt(), anyLong());
     }
 }
