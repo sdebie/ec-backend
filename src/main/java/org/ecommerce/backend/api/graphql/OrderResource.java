@@ -7,6 +7,7 @@ import jakarta.inject.Inject;
 import org.eclipse.microprofile.graphql.*;
 import org.eclipse.microprofile.jwt.JsonWebToken;
 import org.ecommerce.backend.api.rest.OrderOwnershipGuard;
+import org.ecommerce.backend.exception.RateLimitExceededException;
 import org.ecommerce.backend.mapper.OrderMapper;
 import org.ecommerce.backend.service.OrderService;
 import org.ecommerce.backend.service.OrderTracking;
@@ -34,7 +35,7 @@ public class OrderResource
     private static final Logger LOG = Logger.getLogger(OrderResource.class);
 
     /**
-     * guest-order-authorization Requirement 7.2a — sized off the real polling rate,
+     * Guest-order-authorization Requirement 7.2a — sized off the real polling rate,
      * not off the write-surface limiters above: {@code usePollOrderStatus} fires every
      * 3s for up to 120s, so one ordinary guest checkout is already ~40 requests from
      * one IP before counting {@code getOrderDetail} account-page traffic or a second
@@ -74,12 +75,20 @@ public class OrderResource
      * {@link org.ecommerce.backend.utils.ClientIpUtils}-based REST endpoints do, via
      * the {@link CurrentRequestClientIp} bean (design.md §3.2's established pattern),
      * never a second mechanism.
+     * <p>
+     * Requirement 7.2a. GraphQL has no REST-style raw status code to hand back per
+     * query, so a denial throws a distinct GraphQL error — the shape every other
+     * refusal on this resolver already takes — rather than a literal HTTP 429, which
+     * would mean forcing a non-standard transport-level response through a framework
+     * built around the 200-plus-errors envelope everywhere else in this class.
      */
-    private boolean orderReadRateLimitExceeded()
+    private void enforceOrderReadRateLimit()
     {
         RateLimitDecision decision = rateLimiterService.check(
                 "order-read", currentRequestClientIp.resolve(), ORDER_READ_MAX_PER_WINDOW, ORDER_READ_WINDOW_SECONDS);
-        return !decision.allowed();
+        if (!decision.allowed()) {
+            throw new RateLimitExceededException();
+        }
     }
 
     // NOTE: there is deliberately no createOrder mutation here.
@@ -144,15 +153,7 @@ public class OrderResource
     @Description("Poll one order's status by id — the guest checkout success page")
     public OrderStatusRespDto orderStatus(@Name("orderId") String orderId) throws GraphQLException
     {
-        // Requirement 7.2a. GraphQL has no REST-style raw status code to hand back per
-        // query, so the refusal takes the shape every other refusal on this resolver
-        // already does — a distinct GraphQL error — rather than a literal HTTP 429,
-        // which would mean forcing a non-standard transport-level response through a
-        // framework built around the 200-plus-errors envelope everywhere else in this
-        // class.
-        if (orderReadRateLimitExceeded()) {
-            throw new GraphQLException("Too many requests");
-        }
+        enforceOrderReadRateLimit();
 
         UUID id;
         try {
@@ -198,9 +199,7 @@ public class OrderResource
     @Description("Get order detail by order id")
     public OrderDetailRespDto getOrderDetail(@Name("id") String orderId) throws GraphQLException
     {
-        if (orderReadRateLimitExceeded()) {
-            throw new GraphQLException("Too many requests");
-        }
+        enforceOrderReadRateLimit();
 
         UUID id;
         try {

@@ -1,64 +1,7 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <style>
-        body {
-            font-family: sans-serif;
-            color: #333;
-            line-height: 1.6;
-        }
+{#include email_layout}
+{#headline}Wholesale Application Received{/headline}
 
-        .container {
-            width: 100%;
-            max-width: 600px;
-            margin: 0 auto;
-            border: 1px solid #eee;
-            padding: 20px;
-            border-radius: 10px;
-        }
-
-        .header {
-            text-align: center;
-            border-bottom: 2px solid #3b82f6;
-            padding-bottom: 20px;
-        }
-
-        .details-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin: 20px 0;
-        }
-
-        .details-table th {
-            text-align: left;
-            padding: 8px 10px;
-            border-bottom: 1px solid #eee;
-            color: #555;
-            width: 150px;
-            vertical-align: top;
-        }
-
-        .details-table td {
-            padding: 8px 10px;
-            border-bottom: 1px solid #eee;
-        }
-
-        .footer {
-            font-size: 12px;
-            color: #777;
-            margin-top: 30px;
-            text-align: center;
-        }
-    </style>
-    <title>Wholesale Application Received</title>
-</head>
-<body>
-<div class="container">
-    <div class="header">
-        <h1>Wholesale Application Received</h1>
-    </div>
-
+{#body}
     <p>Hi {app.firstName},</p>
     <p>Thank you for applying for a wholesale account with {storeName}. We've received your
         application and our team will review it shortly. You'll receive another email once a
@@ -154,11 +97,10 @@
             </tr>
         {/if}
     </table>
+{/body}
 
-    <div class="footer">
-        <p>This confirmation was sent by {storeName}. If any of these details are incorrect,
-            please contact us via the website.</p>
-    </div>
-</div>
-</body>
-</html>
+{#footer}
+    <p>This confirmation was sent by {storeName}. If any of these details are incorrect,
+        please contact us via the website.</p>
+{/footer}
+{/include}

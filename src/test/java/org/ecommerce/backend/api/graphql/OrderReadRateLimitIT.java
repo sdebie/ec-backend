@@ -85,7 +85,7 @@ class OrderReadRateLimitIT
                 .then()
                 .statusCode(200)
                 .body("errors", notNullValue())
-                .body("errors[0].message", equalTo("Too many requests"))
+                .body("errors[0].message", equalTo("Too many requests — please try again later."))
                 .body("data.getOrderDetail", org.hamcrest.Matchers.nullValue());
     }
 
@@ -107,7 +107,7 @@ class OrderReadRateLimitIT
                 .then()
                 .statusCode(200)
                 .body("errors", notNullValue())
-                .body("errors[0].message", equalTo("Too many requests"))
+                .body("errors[0].message", equalTo("Too many requests — please try again later."))
                 .body("data.orderStatus", org.hamcrest.Matchers.nullValue());
     }
 
