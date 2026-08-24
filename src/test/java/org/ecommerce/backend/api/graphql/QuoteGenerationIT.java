@@ -123,7 +123,7 @@ class QuoteGenerationIT
     void generateAndSendQuote_realPath()
     {
         String customerEmail = "quote-it-customer-" + UUID.randomUUID().toString().substring(0, 8) + "@example.com";
-        SeededQuote seeded = seedQuote(customerEmail, QuoteRequestStatusEn.NEW);
+        SeededQuote seeded = seedQuote(customerEmail, QuoteRequestStatusEn.IN_PROGRESS);
         String jwt = seedStaffAndGetJwt("SUPER_ADMIN");
 
         String mutation = "{\"query\":\"mutation { generateAndSendQuote(id: \\\"" + seeded.quoteId()
@@ -165,6 +165,108 @@ class QuoteGenerationIT
         assertTrue(html.contains("Gadget Max"), "must list the second item");
         assertTrue(html.contains("45.50"), "must show the computed total");
         assertTrue(html.contains("Valid 14 days"), "must include staff notes");
+    }
+
+    @Test
+    @DisplayName("saves a priced draft — persists but sends nothing")
+    void saveQuoteDraft_realPath()
+    {
+        String customerEmail = "quote-it-draft-" + UUID.randomUUID().toString().substring(0, 8) + "@example.com";
+        SeededQuote seeded = seedQuote(customerEmail, QuoteRequestStatusEn.IN_PROGRESS);
+        String jwt = seedStaffAndGetJwt("SUPER_ADMIN");
+
+        String mutation = "{\"query\":\"mutation { saveQuoteDraft(id: \\\"" + seeded.quoteId()
+                + "\\\", items: " + itemPricesJson(seeded.item1Id(), "10.00", seeded.item2Id(), "25.50")
+                + ", notes: \\\"Draft — still deciding on delivery terms\\\") "
+                + "{ id status quotedAmount quotedNotes quotedByName } }\"}";
+
+        given()
+                .header("Authorization", "Bearer " + jwt)
+                .contentType("application/json")
+                .body(mutation)
+                .when()
+                .post("/api/graphql")
+                .then()
+                .statusCode(200)
+                .body("errors", nullValue())
+                .body("data.saveQuoteDraft.status", equalTo("QUOTE_DRAFTED"))
+                .body("data.saveQuoteDraft.quotedAmount", equalTo(45.50f));
+
+        QuoteRequestEntity reloaded = QuarkusTransaction.requiringNew().call(() -> {
+            QuoteRequestEntity r = QuoteRequestEntity.findById(seeded.quoteId());
+            r.getItems().size();
+            return r;
+        });
+        assertEquals(QuoteRequestStatusEn.QUOTE_DRAFTED, reloaded.getStatus());
+        assertEquals(0, new BigDecimal("45.50").compareTo(reloaded.getQuotedAmount()));
+        assertNotNull(reloaded.getQuotedBy());
+
+        // The whole point of a draft: nothing goes to the customer yet.
+        assertTrue(mailbox.getMailsSentTo(customerEmail).isEmpty(), "saving a draft must not send an email");
+    }
+
+    @Test
+    @DisplayName("a saved draft can be edited (re-saved) and then sent — the full save-then-send path")
+    void saveQuoteDraft_thenSend_succeeds()
+    {
+        String customerEmail = "quote-it-draft-then-send-" + UUID.randomUUID().toString().substring(0, 8) + "@example.com";
+        SeededQuote seeded = seedQuote(customerEmail, QuoteRequestStatusEn.IN_PROGRESS);
+        String jwt = seedStaffAndGetJwt("SUPER_ADMIN");
+
+        String saveMutation = "{\"query\":\"mutation { saveQuoteDraft(id: \\\"" + seeded.quoteId()
+                + "\\\", items: " + itemPricesJson(seeded.item1Id(), "10.00", seeded.item2Id(), "25.50")
+                + ", notes: \\\"First draft\\\") { id status } }\"}";
+
+        given()
+                .header("Authorization", "Bearer " + jwt)
+                .contentType("application/json")
+                .body(saveMutation)
+                .when()
+                .post("/api/graphql")
+                .then()
+                .statusCode(200)
+                .body("errors", nullValue())
+                .body("data.saveQuoteDraft.status", equalTo("QUOTE_DRAFTED"));
+
+        assertTrue(mailbox.getMailsSentTo(customerEmail).isEmpty(), "the save step must not send an email");
+
+        // Edit: re-save the same draft with revised pricing — proves the self-loop works for real.
+        String resaveMutation = "{\"query\":\"mutation { saveQuoteDraft(id: \\\"" + seeded.quoteId()
+                + "\\\", items: " + itemPricesJson(seeded.item1Id(), "12.00", seeded.item2Id(), "25.50")
+                + ", notes: \\\"Revised draft\\\") { id status quotedAmount } }\"}";
+
+        given()
+                .header("Authorization", "Bearer " + jwt)
+                .contentType("application/json")
+                .body(resaveMutation)
+                .when()
+                .post("/api/graphql")
+                .then()
+                .statusCode(200)
+                .body("errors", nullValue())
+                .body("data.saveQuoteDraft.status", equalTo("QUOTE_DRAFTED"))
+                // 2*12.00 + 1*25.50 = 49.50
+                .body("data.saveQuoteDraft.quotedAmount", equalTo(49.50f));
+
+        // Now send it — the real email only fires here, from the drafted state.
+        String sendMutation = "{\"query\":\"mutation { generateAndSendQuote(id: \\\"" + seeded.quoteId()
+                + "\\\", items: " + itemPricesJson(seeded.item1Id(), "12.00", seeded.item2Id(), "25.50")
+                + ", notes: \\\"Revised draft\\\") { id status } }\"}";
+
+        given()
+                .header("Authorization", "Bearer " + jwt)
+                .contentType("application/json")
+                .body(sendMutation)
+                .when()
+                .post("/api/graphql")
+                .then()
+                .statusCode(200)
+                .body("errors", nullValue())
+                .body("data.generateAndSendQuote.status", equalTo("QUOTE_SENT"));
+
+        List<Mail> mails = mailbox.getMailsSentTo(customerEmail);
+        assertEquals(1, mails.size(), "exactly one email should be sent, only once actually sent");
+        assertTrue(mails.get(0).getHtml().contains("49.50"));
     }
 
     @Test
@@ -235,7 +337,7 @@ class QuoteGenerationIT
     void generateAndSendQuote_missingPriceRejected()
     {
         String customerEmail = "quote-it-partial-" + UUID.randomUUID().toString().substring(0, 8) + "@example.com";
-        SeededQuote seeded = seedQuote(customerEmail, QuoteRequestStatusEn.NEW);
+        SeededQuote seeded = seedQuote(customerEmail, QuoteRequestStatusEn.IN_PROGRESS);
         String jwt = seedStaffAndGetJwt("ORDER_MANAGER");
 
         String mutation = "{\"query\":\"mutation { generateAndSendQuote(id: \\\"" + seeded.quoteId()
@@ -253,7 +355,33 @@ class QuoteGenerationIT
                 .body("errors", not(empty()));
 
         QuoteRequestEntity reloaded = QuoteRequestEntity.findById(seeded.quoteId());
-        assertEquals(QuoteRequestStatusEn.NEW, reloaded.getStatus());
+        assertEquals(QuoteRequestStatusEn.IN_PROGRESS, reloaded.getStatus());
+        assertTrue(mailbox.getMailsSentTo(customerEmail).isEmpty());
+    }
+
+    @Test
+    @DisplayName("a NEW request cannot be quoted directly — processing must start first")
+    void generateAndSendQuote_newRequestRejected()
+    {
+        String customerEmail = "quote-it-new-" + UUID.randomUUID().toString().substring(0, 8) + "@example.com";
+        SeededQuote seeded = seedQuote(customerEmail, QuoteRequestStatusEn.NEW);
+        String jwt = seedStaffAndGetJwt("SUPER_ADMIN");
+
+        String mutation = "{\"query\":\"mutation { generateAndSendQuote(id: \\\"" + seeded.quoteId()
+                + "\\\", items: " + itemPricesJson(seeded.item1Id(), "10.00", seeded.item2Id(), "25.50")
+                + ", notes: null) { id status } }\"}";
+
+        given()
+                .header("Authorization", "Bearer " + jwt)
+                .contentType("application/json")
+                .body(mutation)
+                .when()
+                .post("/api/graphql")
+                .then()
+                .statusCode(200)
+                .body("errors", not(empty()))
+                .body("errors[0].message", containsString("Invalid status transition"));
+
         assertTrue(mailbox.getMailsSentTo(customerEmail).isEmpty());
     }
 

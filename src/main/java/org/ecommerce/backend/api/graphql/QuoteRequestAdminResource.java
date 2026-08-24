@@ -98,6 +98,17 @@ public class QuoteRequestAdminResource
         }
     }
 
+    @Mutation("saveQuoteDraft")
+    @RolesAllowed({"SUPER_ADMIN", "ORDER_MANAGER"})
+    public QuoteRequestDetailsDto saveQuoteDraft(@Name("id") UUID id, @Name("items") List<QuoteItemPriceInput> items, @Name("notes") String notes)
+    {
+        try {
+            return quoteRequestService.saveQuoteDraft(id, items, notes, resolveStaffUser());
+        } catch (RuntimeException ex) {
+            throw toGraphQlException(ex);
+        }
+    }
+
     @Mutation("generateAndSendQuote")
     @RolesAllowed({"SUPER_ADMIN", "ORDER_MANAGER"})
     public QuoteRequestDetailsDto generateAndSendQuote(@Name("id") UUID id, @Name("items") List<QuoteItemPriceInput> items, @Name("notes") String notes)

@@ -95,9 +95,9 @@ class QuoteRequestAdminResourceIT
         inProgressDto.setStatusChangedAt(Instant.parse("2026-07-21T12:00:00Z"));
         when(quoteRequestService.updateStatus(any(UUID.class), eq(QuoteRequestStatusEn.IN_PROGRESS))).thenReturn(inProgressDto);
 
-        QuoteRequestDetailsDto closedDto = createTestDetailsDto(testRequestId, QuoteRequestStatusEn.CLOSED);
-        closedDto.setStatusChangedAt(Instant.parse("2026-07-21T13:00:00Z"));
-        when(quoteRequestService.updateStatus(any(UUID.class), eq(QuoteRequestStatusEn.CLOSED))).thenReturn(closedDto);
+        QuoteRequestDetailsDto canceledDto = createTestDetailsDto(testRequestId, QuoteRequestStatusEn.CANCELED);
+        canceledDto.setStatusChangedAt(Instant.parse("2026-07-21T13:00:00Z"));
+        when(quoteRequestService.updateStatus(any(UUID.class), eq(QuoteRequestStatusEn.CANCELED))).thenReturn(canceledDto);
 
         // Invalid transition
         when(quoteRequestService.updateStatus(any(UUID.class), eq(QuoteRequestStatusEn.NEW))).thenThrow(new InvalidQuoteStatusTransitionException(QuoteRequestStatusEn.IN_PROGRESS, QuoteRequestStatusEn.NEW));
@@ -527,19 +527,38 @@ class QuoteRequestAdminResourceIT
     }
 
     @Test
-    @DisplayName("Transition NEW → CLOSED (skip) succeeds")
-    void transition_newToClosed_succeeds()
+    @DisplayName("Transition NEW → CANCELED succeeds")
+    void transition_newToCanceled_succeeds()
     {
         given()
                 .header("Authorization", "Bearer " + generateStaffJwt("SUPER_ADMIN"))
                 .contentType("application/json")
-                .body(updateStatusBody(testRequestId, "CLOSED"))
+                .body(updateStatusBody(testRequestId, "CANCELED"))
                 .when()
                 .post("/api/graphql")
                 .then()
                 .statusCode(200)
                 .body("errors", nullValue())
-                .body("data.updateQuoteRequestStatus.status", equalTo("CLOSED"));
+                .body("data.updateQuoteRequestStatus.status", equalTo("CANCELED"));
+    }
+
+    @Test
+    @DisplayName("QUOTE_DRAFTED as a target via updateQuoteRequestStatus returns error — must go through saveQuoteDraft")
+    void transition_toQuoteDrafted_returnsError()
+    {
+        when(quoteRequestService.updateStatus(any(UUID.class), eq(QuoteRequestStatusEn.QUOTE_DRAFTED)))
+                .thenThrow(new IllegalArgumentException("Use saveQuoteDraft to move a request to QUOTE_DRAFTED"));
+
+        given()
+                .header("Authorization", "Bearer " + generateStaffJwt("SUPER_ADMIN"))
+                .contentType("application/json")
+                .body(updateStatusBody(testRequestId, "QUOTE_DRAFTED"))
+                .when()
+                .post("/api/graphql")
+                .then()
+                .statusCode(200)
+                .body("errors", not(empty()))
+                .body("errors[0].message", containsString("saveQuoteDraft"));
     }
 
     @Test

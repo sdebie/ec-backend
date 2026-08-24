@@ -88,9 +88,10 @@ public class QuoteRequestService
 
     /**
      * Updates the status of a quote request using a forward-only transition map.
-     * QUOTE_SENT is rejected here even when the graph would otherwise allow it — it is only
-     * ever reachable through {@link #generateAndSendQuote}, since without pricing data it
-     * would be a QUOTE_SENT request with no quote.
+     * QUOTE_DRAFTED and QUOTE_SENT are both rejected here even when the graph would otherwise
+     * allow them — they are only ever reachable through {@link #saveQuoteDraft} and
+     * {@link #generateAndSendQuote} respectively, since without pricing data they would be a
+     * priced-looking request with no actual quote.
      * <p>
      * Maps to the DTO here, before returning, rather than leaving that to the caller: the
      * mapper reads the lazy {@code items} collection, and this method's own
@@ -103,6 +104,9 @@ public class QuoteRequestService
     {
         if (newStatus == null) {
             throw new IllegalArgumentException("newStatus is required");
+        }
+        if (newStatus == QuoteRequestStatusEn.QUOTE_DRAFTED) {
+            throw new IllegalArgumentException("Use saveQuoteDraft to move a request to QUOTE_DRAFTED");
         }
         if (newStatus == QuoteRequestStatusEn.QUOTE_SENT) {
             throw new IllegalArgumentException("Use generateAndSendQuote to move a request to QUOTE_SENT");
@@ -121,9 +125,49 @@ public class QuoteRequestService
     }
 
     /**
+     * Prices every requested item and persists the quote WITHOUT sending it — moves the
+     * request to QUOTE_DRAFTED (or leaves it there, if this is a re-save of an already-drafted
+     * quote; see {@link #validateTransition}'s deliberate self-loop exception). Runs the
+     * identical full-coverage price validation {@link #generateAndSendQuote} does: a draft is
+     * "priced but not sent yet," never "partially priced," so there is exactly one pricing
+     * rule for both. No email fires — that only ever happens from
+     * {@link #generateAndSendQuote}.
+     */
+    @Transactional
+    public QuoteRequestDetailsDto saveQuoteDraft(UUID id, List<QuoteItemPriceInput> itemPrices, String notes, StaffUserEntity quotedBy)
+    {
+        if (quotedBy == null) {
+            throw new IllegalArgumentException("quotedBy is required");
+        }
+        validateNotes(notes);
+
+        QuoteRequestEntity request = requireExisting(id);
+        validateTransition(request.getStatus(), QuoteRequestStatusEn.QUOTE_DRAFTED);
+
+        Map<UUID, BigDecimal> priceByItemId = resolvePriceMap(request, itemPrices);
+        BigDecimal total = BigDecimal.ZERO;
+        for (QuoteRequestItemEntity item : request.getItems()) {
+            BigDecimal price = priceByItemId.get(item.getId());
+            item.setUnitPrice(price);
+            total = total.add(price.multiply(BigDecimal.valueOf(item.getQuantity())));
+        }
+
+        request.setQuotedAmount(total);
+        request.setQuotedNotes(notes);
+        request.setQuotedBy(quotedBy);
+        request.setStatus(QuoteRequestStatusEn.QUOTE_DRAFTED);
+        request.setStatusChangedAt(Instant.now());
+
+        LOG.infof("[QuoteRequest] draft saved id=%s, total=%s, quotedBy=%s", id, total, quotedBy.getEmail());
+
+        return quoteRequestMapper.mapEntityToDetailsDto(request);
+    }
+
+    /**
      * Prices every requested item, computes the total, persists the quote, and moves the
-     * request to QUOTE_SENT — the only path that may reach that status. Every item must be
-     * priced; a partial itemPrices list is rejected rather than silently quoting a partial
+     * request to QUOTE_SENT — the only path that may reach that status, whether coming
+     * directly from IN_PROGRESS or from an already-saved QUOTE_DRAFTED draft. Every item must
+     * be priced; a partial itemPrices list is rejected rather than silently quoting a partial
      * total. Fires a post-commit event observed by {@link QuoteRequestMailer}.
      */
     @Transactional
@@ -231,20 +275,34 @@ public class QuoteRequestService
     }
 
     /**
-     * Validates that the transition from current to target is allowed:
-     * NEW→IN_PROGRESS, NEW→CLOSED, NEW→QUOTE_SENT, IN_PROGRESS→CLOSED, IN_PROGRESS→QUOTE_SENT,
-     * QUOTE_SENT→CLOSED. CLOSED is terminal; QUOTE_SENT's only forward move is to CLOSED.
+     * Validates that the transition from current to target is allowed.
+     * <p>
+     * The happy path is linear, with no skips: NEW→IN_PROGRESS→QUOTE_SENT→CLOSED. Saving a
+     * draft (QUOTE_DRAFTED) is an optional detour off that line — reachable from IN_PROGRESS,
+     * and from itself (re-saving an edited draft is the one deliberate exception to "no
+     * same-state transition" enforced everywhere else in this map) — that rejoins it at
+     * QUOTE_SENT, which IN_PROGRESS and QUOTE_DRAFTED can both reach directly. A request may
+     * not be closed until a quote has actually been generated for it (QUOTE_SENT is the only
+     * status CLOSED is reachable from).
+     * <p>
+     * CANCELED is reachable from anywhere before a quote has been sent (NEW, IN_PROGRESS,
+     * QUOTE_DRAFTED) and from nowhere else — once a quote has actually gone out the only way
+     * to end the request is CLOSED, never CANCELED. CLOSED and CANCELED are both terminal:
+     * the two final states a quote request can end in.
      */
     private void validateTransition(QuoteRequestStatusEn current, QuoteRequestStatusEn target)
     {
         boolean valid = switch (current) {
             case NEW -> target == QuoteRequestStatusEn.IN_PROGRESS
-                    || target == QuoteRequestStatusEn.CLOSED
-                    || target == QuoteRequestStatusEn.QUOTE_SENT;
-            case IN_PROGRESS -> target == QuoteRequestStatusEn.CLOSED
-                    || target == QuoteRequestStatusEn.QUOTE_SENT;
+                    || target == QuoteRequestStatusEn.CANCELED;
+            case IN_PROGRESS -> target == QuoteRequestStatusEn.QUOTE_DRAFTED
+                    || target == QuoteRequestStatusEn.QUOTE_SENT
+                    || target == QuoteRequestStatusEn.CANCELED;
+            case QUOTE_DRAFTED -> target == QuoteRequestStatusEn.QUOTE_DRAFTED
+                    || target == QuoteRequestStatusEn.QUOTE_SENT
+                    || target == QuoteRequestStatusEn.CANCELED;
             case QUOTE_SENT -> target == QuoteRequestStatusEn.CLOSED;
-            case CLOSED -> false;
+            case CLOSED, CANCELED -> false;
         };
 
         if (!valid) {

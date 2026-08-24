@@ -128,31 +128,98 @@ class QuoteRequestServiceTest
         }
 
         @Test
-        @DisplayName("NEW → CLOSED succeeds (skip allowed)")
-        void newToClosed()
+        @DisplayName("NEW → CLOSED throws (a quote must be generated before a request can be closed)")
+        void newToClosedRejected()
         {
             UUID id = UUID.randomUUID();
             QuoteRequestEntity entity = buildExistingRequest(id, QuoteRequestStatusEn.NEW);
             when(QuoteRequestEntity.findById(id)).thenReturn(entity);
 
-            QuoteRequestDetailsDto result = quoteRequestService.updateStatus(id, QuoteRequestStatusEn.CLOSED);
-
-            assertEquals(QuoteRequestStatusEn.CLOSED, result.getStatus());
-            assertNotNull(result.getStatusChangedAt());
+            assertThrows(InvalidQuoteStatusTransitionException.class, () -> quoteRequestService.updateStatus(id, QuoteRequestStatusEn.CLOSED));
         }
 
         @Test
-        @DisplayName("IN_PROGRESS → CLOSED succeeds")
-        void inProgressToClosed()
+        @DisplayName("IN_PROGRESS → CLOSED throws (a quote must be generated before a request can be closed)")
+        void inProgressToClosedRejected()
         {
             UUID id = UUID.randomUUID();
             QuoteRequestEntity entity = buildExistingRequest(id, QuoteRequestStatusEn.IN_PROGRESS);
             when(QuoteRequestEntity.findById(id)).thenReturn(entity);
 
-            QuoteRequestDetailsDto result = quoteRequestService.updateStatus(id, QuoteRequestStatusEn.CLOSED);
+            assertThrows(InvalidQuoteStatusTransitionException.class, () -> quoteRequestService.updateStatus(id, QuoteRequestStatusEn.CLOSED));
+        }
 
-            assertEquals(QuoteRequestStatusEn.CLOSED, result.getStatus());
+        @Test
+        @DisplayName("NEW → CANCELED succeeds")
+        void newToCanceled()
+        {
+            UUID id = UUID.randomUUID();
+            QuoteRequestEntity entity = buildExistingRequest(id, QuoteRequestStatusEn.NEW);
+            when(QuoteRequestEntity.findById(id)).thenReturn(entity);
+
+            QuoteRequestDetailsDto result = quoteRequestService.updateStatus(id, QuoteRequestStatusEn.CANCELED);
+
+            assertEquals(QuoteRequestStatusEn.CANCELED, result.getStatus());
             assertNotNull(result.getStatusChangedAt());
+        }
+
+        @Test
+        @DisplayName("IN_PROGRESS → CANCELED succeeds")
+        void inProgressToCanceled()
+        {
+            UUID id = UUID.randomUUID();
+            QuoteRequestEntity entity = buildExistingRequest(id, QuoteRequestStatusEn.IN_PROGRESS);
+            when(QuoteRequestEntity.findById(id)).thenReturn(entity);
+
+            QuoteRequestDetailsDto result = quoteRequestService.updateStatus(id, QuoteRequestStatusEn.CANCELED);
+
+            assertEquals(QuoteRequestStatusEn.CANCELED, result.getStatus());
+        }
+
+        @Test
+        @DisplayName("QUOTE_DRAFTED → CANCELED succeeds")
+        void quoteDraftedToCanceled()
+        {
+            UUID id = UUID.randomUUID();
+            QuoteRequestEntity entity = buildExistingRequest(id, QuoteRequestStatusEn.QUOTE_DRAFTED);
+            when(QuoteRequestEntity.findById(id)).thenReturn(entity);
+
+            QuoteRequestDetailsDto result = quoteRequestService.updateStatus(id, QuoteRequestStatusEn.CANCELED);
+
+            assertEquals(QuoteRequestStatusEn.CANCELED, result.getStatus());
+        }
+
+        @Test
+        @DisplayName("QUOTE_SENT → CANCELED throws (cancellation only exists before a quote is sent)")
+        void quoteSentToCanceledRejected()
+        {
+            UUID id = UUID.randomUUID();
+            QuoteRequestEntity entity = buildExistingRequest(id, QuoteRequestStatusEn.QUOTE_SENT);
+            when(QuoteRequestEntity.findById(id)).thenReturn(entity);
+
+            assertThrows(InvalidQuoteStatusTransitionException.class, () -> quoteRequestService.updateStatus(id, QuoteRequestStatusEn.CANCELED));
+        }
+
+        @Test
+        @DisplayName("CLOSED → CANCELED throws (CLOSED stays terminal)")
+        void closedToCanceledRejected()
+        {
+            UUID id = UUID.randomUUID();
+            QuoteRequestEntity entity = buildExistingRequest(id, QuoteRequestStatusEn.CLOSED);
+            when(QuoteRequestEntity.findById(id)).thenReturn(entity);
+
+            assertThrows(InvalidQuoteStatusTransitionException.class, () -> quoteRequestService.updateStatus(id, QuoteRequestStatusEn.CANCELED));
+        }
+
+        @Test
+        @DisplayName("CANCELED → IN_PROGRESS throws (CANCELED stays terminal)")
+        void canceledToInProgressRejected()
+        {
+            UUID id = UUID.randomUUID();
+            QuoteRequestEntity entity = buildExistingRequest(id, QuoteRequestStatusEn.CANCELED);
+            when(QuoteRequestEntity.findById(id)).thenReturn(entity);
+
+            assertThrows(InvalidQuoteStatusTransitionException.class, () -> quoteRequestService.updateStatus(id, QuoteRequestStatusEn.IN_PROGRESS));
         }
 
         @Test
@@ -244,6 +311,36 @@ class QuoteRequestServiceTest
         }
 
         @Test
+        @DisplayName("IN_PROGRESS → QUOTE_DRAFTED via updateStatus is rejected — must go through saveQuoteDraft")
+        void inProgressToQuoteDraftedRejected()
+        {
+            UUID id = UUID.randomUUID();
+            when(QuoteRequestEntity.findById(id)).thenReturn(buildExistingRequest(id, QuoteRequestStatusEn.IN_PROGRESS));
+
+            assertThrows(IllegalArgumentException.class, () -> quoteRequestService.updateStatus(id, QuoteRequestStatusEn.QUOTE_DRAFTED));
+        }
+
+        @Test
+        @DisplayName("QUOTE_DRAFTED → CLOSED throws (a quote must actually be sent before it can be closed)")
+        void quoteDraftedToClosedRejected()
+        {
+            UUID id = UUID.randomUUID();
+            when(QuoteRequestEntity.findById(id)).thenReturn(buildExistingRequest(id, QuoteRequestStatusEn.QUOTE_DRAFTED));
+
+            assertThrows(InvalidQuoteStatusTransitionException.class, () -> quoteRequestService.updateStatus(id, QuoteRequestStatusEn.CLOSED));
+        }
+
+        @Test
+        @DisplayName("QUOTE_DRAFTED → IN_PROGRESS throws (no backward move)")
+        void quoteDraftedToInProgressRejected()
+        {
+            UUID id = UUID.randomUUID();
+            when(QuoteRequestEntity.findById(id)).thenReturn(buildExistingRequest(id, QuoteRequestStatusEn.QUOTE_DRAFTED));
+
+            assertThrows(InvalidQuoteStatusTransitionException.class, () -> quoteRequestService.updateStatus(id, QuoteRequestStatusEn.IN_PROGRESS));
+        }
+
+        @Test
         @DisplayName("QUOTE_SENT → CLOSED succeeds")
         void quoteSentToClosed()
         {
@@ -279,6 +376,155 @@ class QuoteRequestServiceTest
         }
     }
 
+    // ── saveQuoteDraft ───────────────────────────────────────────────────────
+
+    @Nested
+    @DisplayName("saveQuoteDraft")
+    class SaveQuoteDraftTests
+    {
+        @Test
+        @DisplayName("prices every item, computes the total, and moves to QUOTE_DRAFTED — not QUOTE_SENT")
+        void happyPath()
+        {
+            UUID id = UUID.randomUUID();
+            QuoteRequestEntity request = buildExistingRequest(id, QuoteRequestStatusEn.IN_PROGRESS);
+            QuoteRequestItemEntity item1 = buildItem(request, "Widget", 2);
+            QuoteRequestItemEntity item2 = buildItem(request, "Gadget", 3);
+            request.getItems().addAll(List.of(item1, item2));
+            when(QuoteRequestEntity.findById(id)).thenReturn(request);
+
+            List<QuoteItemPriceInput> prices = List.of(
+                    new QuoteItemPriceInput(item1.getId(), new BigDecimal("10.00")),
+                    new QuoteItemPriceInput(item2.getId(), new BigDecimal("5.00"))
+            );
+
+            QuoteRequestDetailsDto result = quoteRequestService.saveQuoteDraft(id, prices, "Draft notes", buildStaff());
+
+            // 2*10.00 + 3*5.00 = 35.00
+            assertEquals(0, new BigDecimal("35.00").compareTo(result.getQuotedAmount()));
+            assertEquals(QuoteRequestStatusEn.QUOTE_DRAFTED, result.getStatus());
+            assertEquals("Draft notes", result.getQuotedNotes());
+            assertEquals("Staff Member", result.getQuotedByName());
+        }
+
+        @Test
+        @DisplayName("re-saving an already-drafted quote succeeds (the one deliberate same-state exception)")
+        void reSaveFromDraftedSucceeds()
+        {
+            UUID id = UUID.randomUUID();
+            QuoteRequestEntity request = buildExistingRequest(id, QuoteRequestStatusEn.QUOTE_DRAFTED);
+            QuoteRequestItemEntity item1 = buildItem(request, "Widget", 1);
+            request.getItems().add(item1);
+            when(QuoteRequestEntity.findById(id)).thenReturn(request);
+
+            List<QuoteItemPriceInput> prices = List.of(new QuoteItemPriceInput(item1.getId(), new BigDecimal("20.00")));
+
+            QuoteRequestDetailsDto result = quoteRequestService.saveQuoteDraft(id, prices, "Revised notes", buildStaff());
+
+            assertEquals(QuoteRequestStatusEn.QUOTE_DRAFTED, result.getStatus());
+            assertEquals(0, new BigDecimal("20.00").compareTo(result.getQuotedAmount()));
+            assertEquals("Revised notes", result.getQuotedNotes());
+        }
+
+        @Test
+        @DisplayName("a NEW request cannot be drafted directly — processing must start first")
+        void newRequestCannotBeDraftedDirectly()
+        {
+            UUID id = UUID.randomUUID();
+            QuoteRequestEntity request = buildExistingRequest(id, QuoteRequestStatusEn.NEW);
+            QuoteRequestItemEntity item1 = buildItem(request, "Widget", 1);
+            request.getItems().add(item1);
+            when(QuoteRequestEntity.findById(id)).thenReturn(request);
+
+            List<QuoteItemPriceInput> prices = List.of(new QuoteItemPriceInput(item1.getId(), BigDecimal.TEN));
+
+            assertThrows(InvalidQuoteStatusTransitionException.class,
+                    () -> quoteRequestService.saveQuoteDraft(id, prices, null, buildStaff()));
+        }
+
+        @Test
+        @DisplayName("missing a price for one of the request's items is rejected")
+        void missingItemPriceRejected()
+        {
+            UUID id = UUID.randomUUID();
+            QuoteRequestEntity request = buildExistingRequest(id, QuoteRequestStatusEn.IN_PROGRESS);
+            QuoteRequestItemEntity item1 = buildItem(request, "Widget", 1);
+            QuoteRequestItemEntity item2 = buildItem(request, "Gadget", 1);
+            request.getItems().addAll(List.of(item1, item2));
+            when(QuoteRequestEntity.findById(id)).thenReturn(request);
+
+            List<QuoteItemPriceInput> prices = List.of(new QuoteItemPriceInput(item1.getId(), BigDecimal.TEN));
+
+            assertThrows(IllegalArgumentException.class,
+                    () -> quoteRequestService.saveQuoteDraft(id, prices, null, buildStaff()));
+        }
+
+        @Test
+        @DisplayName("CLOSED request cannot be drafted")
+        void closedRequestRejected()
+        {
+            UUID id = UUID.randomUUID();
+            QuoteRequestEntity request = buildExistingRequest(id, QuoteRequestStatusEn.CLOSED);
+            QuoteRequestItemEntity item1 = buildItem(request, "Widget", 1);
+            request.getItems().add(item1);
+            when(QuoteRequestEntity.findById(id)).thenReturn(request);
+
+            List<QuoteItemPriceInput> prices = List.of(new QuoteItemPriceInput(item1.getId(), BigDecimal.TEN));
+
+            assertThrows(InvalidQuoteStatusTransitionException.class,
+                    () -> quoteRequestService.saveQuoteDraft(id, prices, null, buildStaff()));
+        }
+
+        @Test
+        @DisplayName("CANCELED request cannot be drafted")
+        void canceledRequestRejected()
+        {
+            UUID id = UUID.randomUUID();
+            QuoteRequestEntity request = buildExistingRequest(id, QuoteRequestStatusEn.CANCELED);
+            QuoteRequestItemEntity item1 = buildItem(request, "Widget", 1);
+            request.getItems().add(item1);
+            when(QuoteRequestEntity.findById(id)).thenReturn(request);
+
+            List<QuoteItemPriceInput> prices = List.of(new QuoteItemPriceInput(item1.getId(), BigDecimal.TEN));
+
+            assertThrows(InvalidQuoteStatusTransitionException.class,
+                    () -> quoteRequestService.saveQuoteDraft(id, prices, null, buildStaff()));
+        }
+
+        @Test
+        @DisplayName("null quotedBy → IllegalArgumentException")
+        void nullQuotedByRejected()
+        {
+            UUID id = UUID.randomUUID();
+            QuoteRequestEntity request = buildExistingRequest(id, QuoteRequestStatusEn.IN_PROGRESS);
+            QuoteRequestItemEntity item1 = buildItem(request, "Widget", 1);
+            request.getItems().add(item1);
+            when(QuoteRequestEntity.findById(id)).thenReturn(request);
+
+            List<QuoteItemPriceInput> prices = List.of(new QuoteItemPriceInput(item1.getId(), BigDecimal.TEN));
+
+            assertThrows(IllegalArgumentException.class,
+                    () -> quoteRequestService.saveQuoteDraft(id, prices, null, null));
+        }
+
+        @Test
+        @DisplayName("notes over the length limit are rejected")
+        void notesTooLongRejected()
+        {
+            UUID id = UUID.randomUUID();
+            QuoteRequestEntity request = buildExistingRequest(id, QuoteRequestStatusEn.IN_PROGRESS);
+            QuoteRequestItemEntity item1 = buildItem(request, "Widget", 1);
+            request.getItems().add(item1);
+            when(QuoteRequestEntity.findById(id)).thenReturn(request);
+
+            List<QuoteItemPriceInput> prices = List.of(new QuoteItemPriceInput(item1.getId(), BigDecimal.TEN));
+            String tooLong = "x".repeat(2001);
+
+            assertThrows(IllegalArgumentException.class,
+                    () -> quoteRequestService.saveQuoteDraft(id, prices, tooLong, buildStaff()));
+        }
+    }
+
     // ── generateAndSendQuote ─────────────────────────────────────────────────
 
     @Nested
@@ -286,11 +532,61 @@ class QuoteRequestServiceTest
     class GenerateAndSendQuoteTests
     {
         @Test
+        @DisplayName("sending directly from an already-saved draft succeeds")
+        void sendFromDraftedSucceeds()
+        {
+            UUID id = UUID.randomUUID();
+            QuoteRequestEntity request = buildExistingRequest(id, QuoteRequestStatusEn.QUOTE_DRAFTED);
+            QuoteRequestItemEntity item1 = buildItem(request, "Widget", 2);
+            request.getItems().add(item1);
+            when(QuoteRequestEntity.findById(id)).thenReturn(request);
+
+            List<QuoteItemPriceInput> prices = List.of(new QuoteItemPriceInput(item1.getId(), new BigDecimal("12.00")));
+
+            QuoteRequestDetailsDto result = quoteRequestService.generateAndSendQuote(id, prices, "Final notes", buildStaff());
+
+            assertEquals(QuoteRequestStatusEn.QUOTE_SENT, result.getStatus());
+            assertEquals(0, new BigDecimal("24.00").compareTo(result.getQuotedAmount()));
+        }
+
+        @Test
+        @DisplayName("CANCELED request cannot be quoted")
+        void canceledRequestRejected()
+        {
+            UUID id = UUID.randomUUID();
+            QuoteRequestEntity request = buildExistingRequest(id, QuoteRequestStatusEn.CANCELED);
+            QuoteRequestItemEntity item1 = buildItem(request, "Widget", 1);
+            request.getItems().add(item1);
+            when(QuoteRequestEntity.findById(id)).thenReturn(request);
+
+            List<QuoteItemPriceInput> prices = List.of(new QuoteItemPriceInput(item1.getId(), BigDecimal.TEN));
+
+            assertThrows(InvalidQuoteStatusTransitionException.class,
+                    () -> quoteRequestService.generateAndSendQuote(id, prices, null, buildStaff()));
+        }
+
+        @Test
+        @DisplayName("a NEW request cannot be quoted directly — processing must start first")
+        void newRequestCannotBeQuotedDirectly()
+        {
+            UUID id = UUID.randomUUID();
+            QuoteRequestEntity request = buildExistingRequest(id, QuoteRequestStatusEn.NEW);
+            QuoteRequestItemEntity item1 = buildItem(request, "Widget", 1);
+            request.getItems().add(item1);
+            when(QuoteRequestEntity.findById(id)).thenReturn(request);
+
+            List<QuoteItemPriceInput> prices = List.of(new QuoteItemPriceInput(item1.getId(), BigDecimal.TEN));
+
+            assertThrows(InvalidQuoteStatusTransitionException.class,
+                    () -> quoteRequestService.generateAndSendQuote(id, prices, null, buildStaff()));
+        }
+
+        @Test
         @DisplayName("prices every item, computes the total, and moves to QUOTE_SENT")
         void happyPath()
         {
             UUID id = UUID.randomUUID();
-            QuoteRequestEntity request = buildExistingRequest(id, QuoteRequestStatusEn.NEW);
+            QuoteRequestEntity request = buildExistingRequest(id, QuoteRequestStatusEn.IN_PROGRESS);
             QuoteRequestItemEntity item1 = buildItem(request, "Widget", 2);
             QuoteRequestItemEntity item2 = buildItem(request, "Gadget", 3);
             request.getItems().addAll(List.of(item1, item2));
@@ -316,7 +612,7 @@ class QuoteRequestServiceTest
         void missingItemPriceRejected()
         {
             UUID id = UUID.randomUUID();
-            QuoteRequestEntity request = buildExistingRequest(id, QuoteRequestStatusEn.NEW);
+            QuoteRequestEntity request = buildExistingRequest(id, QuoteRequestStatusEn.IN_PROGRESS);
             QuoteRequestItemEntity item1 = buildItem(request, "Widget", 1);
             QuoteRequestItemEntity item2 = buildItem(request, "Gadget", 1);
             request.getItems().addAll(List.of(item1, item2));
@@ -333,7 +629,7 @@ class QuoteRequestServiceTest
         void unknownItemPriceRejected()
         {
             UUID id = UUID.randomUUID();
-            QuoteRequestEntity request = buildExistingRequest(id, QuoteRequestStatusEn.NEW);
+            QuoteRequestEntity request = buildExistingRequest(id, QuoteRequestStatusEn.IN_PROGRESS);
             QuoteRequestItemEntity item1 = buildItem(request, "Widget", 1);
             request.getItems().add(item1);
             when(QuoteRequestEntity.findById(id)).thenReturn(request);
