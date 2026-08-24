@@ -31,6 +31,7 @@ import static org.mapstruct.NullValuePropertyMappingStrategy.SET_TO_NULL;
         nullValueCheckStrategy = ALWAYS)
 public interface QuoteRequestMapper
 {
+    @Mapping(target = "quotedByName", expression = "java(entity.getQuotedBy() == null ? null : entity.getQuotedBy().getFullName())")
     QuoteRequestDetailsDto mapEntityToDetailsDto(QuoteRequestEntity entity);
 
     @Mapping(target = "itemCount", expression = "java(entity.getItems() == null ? 0 : entity.getItems().size())")
@@ -39,6 +40,7 @@ public interface QuoteRequestMapper
     List<QuoteRequestListItemDto> mapEntityToListItemDto(List<QuoteRequestEntity> entities);
 
     @Mapping(target = "variantId", source = "variant.id")
+    @Mapping(target = "lineTotal", expression = "java(item.getUnitPrice() == null ? null : item.getUnitPrice().multiply(java.math.BigDecimal.valueOf(item.getQuantity())))")
     QuoteRequestItemDto mapItemEntityToDto(QuoteRequestItemEntity item);
 
     /**

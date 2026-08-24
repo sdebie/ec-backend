@@ -5,6 +5,7 @@ import io.quarkus.test.junit.QuarkusTest;
 import io.smallrye.jwt.build.Jwt;
 import org.ecommerce.backend.exception.InvalidQuoteStatusTransitionException;
 import org.ecommerce.backend.service.QuoteRequestService;
+import org.ecommerce.common.dto.QuoteRequestDetailsDto;
 import org.ecommerce.common.entity.ProductVariantEntity;
 import org.ecommerce.common.entity.QuoteRequestEntity;
 import org.ecommerce.common.entity.QuoteRequestItemEntity;
@@ -87,14 +88,16 @@ class QuoteRequestAdminResourceIT
         when(quoteRequestRepository.count(any())).thenReturn(1L);
         when(quoteRequestRepository.findById(any(UUID.class))).thenReturn(testEntity);
 
-        // Service mocks for valid transitions
-        QuoteRequestEntity inProgressEntity = createTestEntity(testRequestId, QuoteRequestStatusEn.IN_PROGRESS);
-        inProgressEntity.setStatusChangedAt(Instant.parse("2026-07-21T12:00:00Z"));
-        when(quoteRequestService.updateStatus(any(UUID.class), eq(QuoteRequestStatusEn.IN_PROGRESS))).thenReturn(inProgressEntity);
+        // Service mocks for valid transitions — updateStatus returns the DTO directly (it maps
+        // inside its own @Transactional scope; see QuoteRequestService.updateStatus's javadoc),
+        // so these mocks return QuoteRequestDetailsDto, not the entity.
+        QuoteRequestDetailsDto inProgressDto = createTestDetailsDto(testRequestId, QuoteRequestStatusEn.IN_PROGRESS);
+        inProgressDto.setStatusChangedAt(Instant.parse("2026-07-21T12:00:00Z"));
+        when(quoteRequestService.updateStatus(any(UUID.class), eq(QuoteRequestStatusEn.IN_PROGRESS))).thenReturn(inProgressDto);
 
-        QuoteRequestEntity closedEntity = createTestEntity(testRequestId, QuoteRequestStatusEn.CLOSED);
-        closedEntity.setStatusChangedAt(Instant.parse("2026-07-21T13:00:00Z"));
-        when(quoteRequestService.updateStatus(any(UUID.class), eq(QuoteRequestStatusEn.CLOSED))).thenReturn(closedEntity);
+        QuoteRequestDetailsDto closedDto = createTestDetailsDto(testRequestId, QuoteRequestStatusEn.CLOSED);
+        closedDto.setStatusChangedAt(Instant.parse("2026-07-21T13:00:00Z"));
+        when(quoteRequestService.updateStatus(any(UUID.class), eq(QuoteRequestStatusEn.CLOSED))).thenReturn(closedDto);
 
         // Invalid transition
         when(quoteRequestService.updateStatus(any(UUID.class), eq(QuoteRequestStatusEn.NEW))).thenThrow(new InvalidQuoteStatusTransitionException(QuoteRequestStatusEn.IN_PROGRESS, QuoteRequestStatusEn.NEW));
@@ -138,6 +141,22 @@ class QuoteRequestAdminResourceIT
         ProductVariantEntity variant = new ProductVariantEntity();
         variant.setId(UUID.randomUUID());
         return variant;
+    }
+
+    /** Mirrors createTestEntity's shape — the mocked return value of updateStatus, now a DTO. */
+    private QuoteRequestDetailsDto createTestDetailsDto(UUID id, QuoteRequestStatusEn status)
+    {
+        QuoteRequestDetailsDto dto = new QuoteRequestDetailsDto();
+        dto.setId(id);
+        dto.setName("John Doe");
+        dto.setEmail("john@example.com");
+        dto.setPhone("+27123456789");
+        dto.setCompany("Acme Corp");
+        dto.setMessage("Need bulk pricing");
+        dto.setStatus(status);
+        dto.setCreatedAt(Instant.parse("2026-07-21T10:00:00Z"));
+        dto.setItems(new ArrayList<>());
+        return dto;
     }
 
     // ═══════════════════════════════════════════════════════════════════════════

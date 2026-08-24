@@ -6,11 +6,15 @@ import org.eclipse.microprofile.graphql.GraphQLApi;
 import org.eclipse.microprofile.graphql.Mutation;
 import org.eclipse.microprofile.graphql.Name;
 import org.eclipse.microprofile.graphql.Query;
+import org.eclipse.microprofile.jwt.JsonWebToken;
 import org.ecommerce.backend.mapper.QuoteRequestMapper;
+import org.ecommerce.backend.service.QuoteRequestMailer;
 import org.ecommerce.backend.service.QuoteRequestService;
+import org.ecommerce.common.dto.QuoteItemPriceInput;
 import org.ecommerce.common.dto.QuoteRequestDetailsDto;
 import org.ecommerce.common.dto.QuoteRequestListItemDto;
 import org.ecommerce.common.entity.QuoteRequestEntity;
+import org.ecommerce.common.entity.StaffUserEntity;
 import org.ecommerce.common.enums.QuoteRequestStatusEn;
 import org.ecommerce.common.query.FilterRequest;
 import org.ecommerce.common.query.PageRequest;
@@ -30,6 +34,12 @@ public class QuoteRequestAdminResource
 
     @Inject
     QuoteRequestRepository quoteRequestRepository;
+
+    @Inject
+    QuoteRequestMailer quoteRequestMailer;
+
+    @Inject
+    JsonWebToken jwt;
 
     @Query("allQuoteRequests")
     @RolesAllowed({"SUPER_ADMIN", "ORDER_MANAGER", "VIEWER"})
@@ -82,11 +92,48 @@ public class QuoteRequestAdminResource
     {
         try {
             QuoteRequestStatusEn statusEnum = parseStatus(status);
-            QuoteRequestEntity updated = quoteRequestService.updateStatus(id, statusEnum);
-            return quoteRequestMapper.mapEntityToDetailsDto(updated);
+            return quoteRequestService.updateStatus(id, statusEnum);
         } catch (RuntimeException ex) {
             throw toGraphQlException(ex);
         }
+    }
+
+    @Mutation("generateAndSendQuote")
+    @RolesAllowed({"SUPER_ADMIN", "ORDER_MANAGER"})
+    public QuoteRequestDetailsDto generateAndSendQuote(@Name("id") UUID id, @Name("items") List<QuoteItemPriceInput> items, @Name("notes") String notes)
+    {
+        try {
+            return quoteRequestService.generateAndSendQuote(id, items, notes, resolveStaffUser());
+        } catch (RuntimeException ex) {
+            throw toGraphQlException(ex);
+        }
+    }
+
+    /**
+     * Renders the exact HTML the quote email would contain, without sending it or persisting
+     * anything — lets staff check a quote before committing to generateAndSendQuote. A read,
+     * not a write: no side effects, so this is a @Query despite taking a complex input.
+     */
+    @Query("previewQuoteEmail")
+    @RolesAllowed({"SUPER_ADMIN", "ORDER_MANAGER"})
+    public String previewQuoteEmail(@Name("id") UUID id, @Name("items") List<QuoteItemPriceInput> items, @Name("notes") String notes)
+    {
+        try {
+            QuoteRequestDetailsDto preview = quoteRequestService.previewQuote(id, items, notes, resolveStaffUser());
+            return quoteRequestMailer.renderQuotePreview(preview);
+        } catch (RuntimeException ex) {
+            throw toGraphQlException(ex);
+        }
+    }
+
+    /** Who to credit as having generated the quote. The staff JWT carries their email as the subject. */
+    private StaffUserEntity resolveStaffUser()
+    {
+        StaffUserEntity staff = jwt == null ? null : StaffUserEntity.findByEmail(jwt.getName());
+        if (staff == null) {
+            throw new IllegalArgumentException("Unable to resolve the staff account for this request");
+        }
+        return staff;
     }
 
     private QuoteRequestStatusEn parseStatus(String status)

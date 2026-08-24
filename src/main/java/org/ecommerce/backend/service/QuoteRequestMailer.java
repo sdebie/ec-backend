@@ -27,7 +27,13 @@ public class QuoteRequestMailer
     MailTemplate quote_request;
 
     @Inject
+    MailTemplate quote_ready;
+
+    @Inject
     EnquiryRecipientResolver enquiryRecipientResolver;
+
+    @Inject
+    StoreEmailDetailsResolver storeEmailDetailsResolver;
 
     @ConfigProperty(name = "quarkus.mailer.from")
     String mailerFrom;
@@ -74,6 +80,63 @@ public class QuoteRequestMailer
         } catch (Exception e) {
             LOG.errorf(e, "[QuoteRequest] failed to compose notification for request %s", event.requestId());
         }
+    }
+
+    /**
+     * Fires after generateAndSendQuote's transaction commits successfully and emails the
+     * customer their priced quote. Same fire-and-log delivery pattern as {@link #onSubmitted}.
+     */
+    public void onQuoteSent(@Observes(during = TransactionPhase.AFTER_SUCCESS) QuoteGeneratedEvent event)
+    {
+        QuoteRequestDetailsDto request = event.request();
+        StoreEmailDetails store = storeEmailDetailsResolver.resolve();
+
+        if (request.getEmail() == null || request.getEmail().isBlank()) {
+            LOG.warnf("[QuoteRequest] no recipient email on request %s — quote email skipped", event.requestId());
+            return;
+        }
+
+        try {
+            var mail = quoteInstance(quote_ready, request, store)
+                    .to(request.getEmail())
+                    .from(mailerFrom)
+                    .subject("Your Quote" + (store.name() != null ? " from " + store.name() : ""));
+
+            if (store.enquiryEmail() != null && !store.enquiryEmail().isBlank()) {
+                mail = mail.replyTo(store.enquiryEmail());
+            }
+
+            mail.send()
+                    .subscribe().with(
+                            success -> LOG.infof("[QuoteRequest] quote email delivered for request %s to %s",
+                                    event.requestId(), request.getEmail()),
+                            failure -> LOG.errorf(failure, "[QuoteRequest] quote email delivery failed for request %s to %s",
+                                    event.requestId(), request.getEmail())
+                    );
+        } catch (Exception e) {
+            LOG.errorf(e, "[QuoteRequest] failed to compose quote email for request %s", event.requestId());
+        }
+    }
+
+    /**
+     * Renders the quote email exactly as {@link #onQuoteSent} would send it, without sending
+     * it — same template, same data-building code, so a preview can never drift from what
+     * generateAndSendQuote actually delivers.
+     */
+    public String renderQuotePreview(QuoteRequestDetailsDto request)
+    {
+        StoreEmailDetails store = storeEmailDetailsResolver.resolve();
+        return quoteInstance(quote_ready, request, store).templateInstance().render();
+    }
+
+    private MailTemplate.MailTemplateInstance quoteInstance(MailTemplate template, QuoteRequestDetailsDto request, StoreEmailDetails store)
+    {
+        return template.instance()
+                .data("name", request.getName())
+                .data("items", request.getItems())
+                .data("quotedAmount", request.getQuotedAmount())
+                .data("quotedNotes", request.getQuotedNotes())
+                .data("store", store);
     }
 
 }
