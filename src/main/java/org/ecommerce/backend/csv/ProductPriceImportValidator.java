@@ -2,7 +2,7 @@ package org.ecommerce.backend.csv;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
-import org.ecommerce.common.entity.ProductPriceUploadStagedEntity;
+import org.ecommerce.common.entity.ProductPriceImportStagedEntity;
 import org.ecommerce.common.entity.ProductVariantEntity;
 import org.ecommerce.common.entity.VariantPricesEntity;
 import org.ecommerce.common.enums.PriceTypeEn;
@@ -88,7 +88,7 @@ public class ProductPriceImportValidator
      * @param staged           the staged entity to update
      * @param validationErrors the accumulated errors
      */
-    public void applyValidationResults(ProductPriceUploadStagedEntity staged, List<String> validationErrors)
+    public void applyValidationResults(ProductPriceImportStagedEntity staged, List<String> validationErrors)
     {
         staged.setValidationStatus(validationErrors.isEmpty() ? ProductImportValidationStatusEn.VALID : ProductImportValidationStatusEn.INVALID);
         staged.setValidationErrors(validationErrors.isEmpty() ? null : String.join("; ", validationErrors));

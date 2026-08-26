@@ -1,8 +1,8 @@
 package org.ecommerce.backend.mapper;
 
-import org.ecommerce.common.dto.ProductUploadBatchDto;
-import org.ecommerce.common.entity.ProductPriceUploadBatchEntity;
-import org.ecommerce.common.entity.ProductUploadBatchEntity;
+import org.ecommerce.common.dto.ProductImportBatchDto;
+import org.ecommerce.common.entity.ProductPriceImportBatchEntity;
+import org.ecommerce.common.entity.ProductImportBatchEntity;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 
@@ -12,7 +12,7 @@ import static org.mapstruct.NullValueMappingStrategy.RETURN_NULL;
 import static org.mapstruct.NullValuePropertyMappingStrategy.SET_TO_NULL;
 
 /**
- * Maps both upload-batch entities to the one batch DTO the admin upload screens read.
+ * Maps both import-batch entities to the one batch DTO the admin import screens read.
  * <p>
  * The two entities carry an identical progress block but share no supertype, so each needs
  * its own method. A product batch has no completion timestamp and no approver, so those two
@@ -21,16 +21,18 @@ import static org.mapstruct.NullValuePropertyMappingStrategy.SET_TO_NULL;
 @Mapper(componentModel = "jakarta-cdi", unmappedTargetPolicy = ERROR, nullValueMappingStrategy = RETURN_NULL,
         nullValuePropertyMappingStrategy = SET_TO_NULL,
         nullValueCheckStrategy = ALWAYS)
-public interface UploadBatchDtoMapper
+public interface ImportBatchDtoMapper
 {
     @Mapping(target = "status", source = "productUploadStatusEn")
+    @Mapping(target = "importSourceType", source = "importSourceTypeEn")
     @Mapping(target = "uploadedByUsername", source = "uploadedBy.email")
     @Mapping(target = "completedAt", ignore = true)
     @Mapping(target = "approvedByUsername", ignore = true)
-    ProductUploadBatchDto fromProductBatch(ProductUploadBatchEntity batch);
+    ProductImportBatchDto fromProductBatch(ProductImportBatchEntity batch);
 
     @Mapping(target = "status", source = "productUploadStatusEn")
+    @Mapping(target = "importSourceType", source = "importSourceTypeEn")
     @Mapping(target = "uploadedByUsername", source = "uploadedBy.email")
     @Mapping(target = "approvedByUsername", source = "approvedBy.email")
-    ProductUploadBatchDto fromProductPriceBatch(ProductPriceUploadBatchEntity batch);
+    ProductImportBatchDto fromProductPriceBatch(ProductPriceImportBatchEntity batch);
 }

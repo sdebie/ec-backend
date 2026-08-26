@@ -60,7 +60,7 @@ public class ProductImportValidator
      * @param attributesJson   the attributes JSON string from the CSV row
      */
     public void validateAndDiff(
-            ProductUploadStagedEntity staged,
+            ProductImportStagedEntity staged,
             List<String> validationErrors,
             Integer stock,
             String brandSlug,
@@ -122,7 +122,7 @@ public class ProductImportValidator
      * @param staged           the staged entity (imageErrors field is set if missing images found)
      * @param validationErrors mutable list to which validation errors are appended
      */
-    public void validateImages(ProductUploadStagedEntity staged, List<String> validationErrors)
+    public void validateImages(ProductImportStagedEntity staged, List<String> validationErrors)
     {
         if (isBlank(staged.getImages())) {
             return;
@@ -152,7 +152,7 @@ public class ProductImportValidator
      * @param staged           the staged entity to update
      * @param validationErrors the list of accumulated validation errors
      */
-    public void applyValidationResults(ProductUploadStagedEntity staged, List<String> validationErrors)
+    public void applyValidationResults(ProductImportStagedEntity staged, List<String> validationErrors)
     {
         staged.setValidationStatus(validationErrors.isEmpty() ? ProductImportValidationStatusEn.VALID : ProductImportValidationStatusEn.INVALID);
         staged.setValidationErrors(validationErrors.isEmpty() ? null : String.join("; ", validationErrors));
@@ -222,7 +222,7 @@ public class ProductImportValidator
     }
 
     private boolean determineHasChanges(
-            ProductUploadStagedEntity staged,
+            ProductImportStagedEntity staged,
             ProductEntity existingProduct,
             ProductVariantEntity existingVariant,
             Integer stock,

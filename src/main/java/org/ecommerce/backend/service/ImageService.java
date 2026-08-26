@@ -457,7 +457,7 @@ public class ImageService
      * JSON/text blob rather than owning a dedicated column, so those are checked by
      * substring match — safe because uploaded filenames are UUID-based, making an
      * accidental collision between two different files unrealistic.
-     * ProductUploadStagedEntity is deliberately NOT checked: it holds transient CSV
+     * ProductImportStagedEntity is deliberately NOT checked: it holds transient CSV
      * import staging data cleared per batch, not a live reference — blocking a delete on
      * stale staging data would be confusing, not protective.
      */

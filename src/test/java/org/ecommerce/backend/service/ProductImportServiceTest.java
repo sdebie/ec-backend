@@ -37,7 +37,7 @@ import static org.mockito.Mockito.when;
  *       current thread's transaction context, but {@code requiringNew()} creates an independent
  *       context where those mocks are not propagated. The
  *       {@code handleCsvUploadForBatch_shouldLoadExistingBatchByIdAndUpdateItsStatus} test relies
- *       on {@code ProductUploadBatchEntity.findById(batchId)} being mocked — this would fail at
+ *       on {@code ProductImportBatchEntity.findById(batchId)} being mocked — this would fail at
  *       runtime because the mock is invisible inside the new transaction.</li>
  *   <li><b>validateAndDiff tests target the validator directly:</b> Tests like
  *       {@code validateAndDiff_shouldAddValidationErrorsWhenRequiredFieldsAreMissing} exercise
@@ -65,8 +65,8 @@ class ProductImportServiceTest
     @BeforeEach
     void setUp()
     {
-        PanacheMock.mock(ProductUploadBatchEntity.class);
-        PanacheMock.mock(ProductUploadStagedEntity.class);
+        PanacheMock.mock(ProductImportBatchEntity.class);
+        PanacheMock.mock(ProductImportStagedEntity.class);
         PanacheMock.mock(ProductEntity.class);
         PanacheMock.mock(ProductVariantEntity.class);
         PanacheMock.mock(CategoryEntity.class);
@@ -105,7 +105,7 @@ class ProductImportServiceTest
     @Test
     void validateAndDiff_shouldAddValidationErrorsWhenRequiredFieldsAreMissing() throws Exception
     {
-        ProductUploadStagedEntity staged = new ProductUploadStagedEntity();
+        ProductImportStagedEntity staged = new ProductImportStagedEntity();
         staged.setSku("TSHIRT-ERR-1");
         staged.setName(null);
         staged.setCategorySlug(null);
@@ -123,7 +123,7 @@ class ProductImportServiceTest
     @Test
     void validateAndDiff_shouldAddValidationErrorsWhenCategoryOrBrandDoNotExist() throws Exception
     {
-        ProductUploadStagedEntity staged = new ProductUploadStagedEntity();
+        ProductImportStagedEntity staged = new ProductImportStagedEntity();
         staged.setSku("TSHIRT-NEW-1");
         staged.setName("Blue Cotton Tee");
         staged.setCategorySlug("apparel");
@@ -141,7 +141,7 @@ class ProductImportServiceTest
     @Test
     void validateAndDiff_shouldAddValidationErrorWhenSkuBelongsToAnotherProduct() throws Exception
     {
-        ProductUploadStagedEntity staged = new ProductUploadStagedEntity();
+        ProductImportStagedEntity staged = new ProductImportStagedEntity();
         staged.setSku("TSHIRT-CONFLICT");
         staged.setName("Blue Cotton Tee");
         staged.setCategorySlug("apparel");
@@ -194,7 +194,7 @@ class ProductImportServiceTest
     @Test
     void validateAndDiff_shouldNotMutateExistingVariantDuringValidation() throws Exception
     {
-        ProductUploadStagedEntity staged = new ProductUploadStagedEntity();
+        ProductImportStagedEntity staged = new ProductImportStagedEntity();
         staged.setSku("TSHIRT-EXISTING");
         staged.setName("Blue Cotton Tee");
         staged.setCategorySlug("apparel");
@@ -255,11 +255,11 @@ class ProductImportServiceTest
                 """;
 
         UUID batchId = UUID.randomUUID();
-        ProductUploadBatchEntity batch = new ProductUploadBatchEntity();
+        ProductImportBatchEntity batch = new ProductImportBatchEntity();
         batch.setId(batchId);
         batch.setProductUploadStatusEn(ProductUploadStatusEn.IMPORTING);
 
-        when(ProductUploadBatchEntity.findById(batchId)).thenReturn(batch);
+        when(ProductImportBatchEntity.findById(batchId)).thenReturn(batch);
 
         InputStream inputStream = new ByteArrayInputStream(csv.getBytes(StandardCharsets.UTF_8));
 
@@ -273,7 +273,7 @@ class ProductImportServiceTest
     @Test
     void applyValidationResults_shouldStoreValidationStatusAndMessage() throws Exception
     {
-        ProductUploadStagedEntity staged = new ProductUploadStagedEntity();
+        ProductImportStagedEntity staged = new ProductImportStagedEntity();
         ArrayList<String> validationErrors = new ArrayList<>();
         validationErrors.add("Unknown category: apparel");
         validationErrors.add("Unknown brand: nike");
@@ -285,7 +285,7 @@ class ProductImportServiceTest
     }
 
     private void invokeValidateAndDiff(
-            ProductUploadStagedEntity staged,
+            ProductImportStagedEntity staged,
             ArrayList<String> validationErrors,
             Integer stock,
             String brandSlug,

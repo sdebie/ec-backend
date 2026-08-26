@@ -386,7 +386,7 @@ class ProductImportErrorAccumulationEquivalenceTest
 
         List<ValidationResult> results = new ArrayList<>();
         for (StagedProductCsvRow row : parsedRows) {
-            ProductUploadStagedEntity staged = new ProductUploadStagedEntity();
+            ProductImportStagedEntity staged = new ProductImportStagedEntity();
             staged.setProductSlug(row.productSlug());
             staged.setSku(row.sku());
             staged.setName(row.name());

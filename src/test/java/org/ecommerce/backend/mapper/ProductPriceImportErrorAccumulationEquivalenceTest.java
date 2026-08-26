@@ -9,7 +9,7 @@ import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
 import org.ecommerce.backend.csv.ProductPriceImportParser.ParsedPriceRow;
-import org.ecommerce.common.entity.ProductPriceUploadStagedEntity;
+import org.ecommerce.common.entity.ProductPriceImportStagedEntity;
 import org.ecommerce.common.entity.ProductVariantEntity;
 import org.ecommerce.common.entity.VariantPricesEntity;
 import org.ecommerce.common.enums.PriceTypeEn;
@@ -397,7 +397,7 @@ class ProductPriceImportErrorAccumulationEquivalenceTest
                     validator.validateAndDiff(row.sku(), row.retailPrice(), row.wholesalePrice(), row.validationErrors());
 
             // Apply results to a staged entity (sets status + joins errors)
-            ProductPriceUploadStagedEntity staged = new ProductPriceUploadStagedEntity();
+            ProductPriceImportStagedEntity staged = new ProductPriceImportStagedEntity();
             staged.setSku(row.sku());
             staged.setRetailPrice(row.retailPrice());
             staged.setWholesalePrice(row.wholesalePrice());

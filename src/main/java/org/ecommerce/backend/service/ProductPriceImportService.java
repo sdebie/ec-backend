@@ -9,16 +9,16 @@ import org.ecommerce.backend.csv.ProductPriceImportParser;
 import org.ecommerce.backend.csv.ProductPriceImportParser.ParsedPriceRow;
 import org.ecommerce.backend.csv.ProductPriceImportValidator;
 import org.ecommerce.backend.csv.ProductPriceImportValidator.ValidationResult;
-import org.ecommerce.backend.mapper.UploadBatchDtoMapper;
+import org.ecommerce.backend.mapper.ImportBatchDtoMapper;
 import org.ecommerce.common.dto.ProductPriceComparisonDto;
-import org.ecommerce.common.dto.ProductUploadBatchDto;
-import org.ecommerce.common.dto.UploadBatchProcessStatusDto;
+import org.ecommerce.common.dto.ProductImportBatchDto;
+import org.ecommerce.common.dto.ImportBatchProcessStatusDto;
 import org.ecommerce.common.entity.*;
 import org.ecommerce.common.enums.PriceTypeEn;
 import org.ecommerce.common.enums.ProductImportValidationStatusEn;
 import org.ecommerce.common.enums.ProductUploadStatusEn;
-import org.ecommerce.common.repository.ProductPriceUploadBatchRepository;
-import org.ecommerce.common.repository.ProductPriceUploadStagedRepository;
+import org.ecommerce.common.repository.ProductPriceImportBatchRepository;
+import org.ecommerce.common.repository.ProductPriceImportStagedRepository;
 import org.ecommerce.common.repository.ProductVariantRepository;
 import org.ecommerce.common.repository.VariantPricesRepository;
 import org.jboss.logging.Logger;
@@ -35,19 +35,19 @@ import java.util.stream.Collectors;
 import static java.time.LocalDateTime.now;
 
 @ApplicationScoped
-public class ProductPriceImportService implements ImportBatchService<ProductPriceComparisonDto, UploadBatchProcessStatusDto, ProductPriceUploadBatchEntity>, AsyncImportOperations
+public class ProductPriceImportService implements ImportBatchService<ProductPriceComparisonDto, ImportBatchProcessStatusDto, ProductPriceImportBatchEntity>, AsyncImportOperations
 {
     @Inject
-    ProductPriceUploadBatchRepository productPriceUploadBatchRepository;
+    ProductPriceImportBatchRepository productPriceImportBatchRepository;
 
     @Inject
-    ProductPriceUploadStagedRepository productPriceUploadStagedRepository;
+    ProductPriceImportStagedRepository productPriceImportStagedRepository;
 
     @Inject
     org.ecommerce.backend.mapper.ProductPriceComparisonMapper productPriceComparisonMapper;
 
     @Inject
-    UploadBatchDtoMapper uploadBatchDtoMapper;
+    ImportBatchDtoMapper importBatchDtoMapper;
 
     @Inject
     ProductVariantRepository productVariantRepository;
@@ -66,20 +66,20 @@ public class ProductPriceImportService implements ImportBatchService<ProductPric
 
     private static final Logger LOG = Logger.getLogger(ProductPriceImportService.class);
 
-    private final ChunkedImportStateMachine.ChunkImportStrategy<ParsedPriceRow, ProductPriceUploadStagedEntity, ProductPriceUploadBatchEntity> strategy =
+    private final ChunkedImportStateMachine.ChunkImportStrategy<ParsedPriceRow, ProductPriceImportStagedEntity, ProductPriceImportBatchEntity> strategy =
             new ChunkedImportStateMachine.ChunkImportStrategy<>()
             {
 
                 @Override
-                public ProductPriceUploadBatchEntity loadBatch(UUID batchId)
+                public ProductPriceImportBatchEntity loadBatch(UUID batchId)
                 {
                     return getRequiredProductPriceBatch(batchId);
                 }
 
                 @Override
-                public int stageRow(ProductPriceUploadBatchEntity batch, ParsedPriceRow row)
+                public int stageRow(ProductPriceImportBatchEntity batch, ParsedPriceRow row)
                 {
-                    ProductPriceUploadStagedEntity staged = new ProductPriceUploadStagedEntity();
+                    ProductPriceImportStagedEntity staged = new ProductPriceImportStagedEntity();
                     staged.setBatch(batch);
                     staged.setSku(row.sku());
                     staged.setRetailPrice(row.retailPrice());
@@ -96,30 +96,30 @@ public class ProductPriceImportService implements ImportBatchService<ProductPric
                         LOG.warnf("CSV import validation failed at row %d (sku=%s): %s", row.recordNumber(), staged.getSku(), staged.getValidationErrors());
                     }
 
-                    productPriceUploadStagedRepository.persist(staged);
+                    productPriceImportStagedRepository.persist(staged);
                     return result.validationErrors().size();
                 }
 
                 @Override
-                public List<ProductPriceUploadStagedEntity> fetchNextUnprocessedChunk(UUID batchId, int limit)
+                public List<ProductPriceImportStagedEntity> fetchNextUnprocessedChunk(UUID batchId, int limit)
                 {
-                    return productPriceUploadStagedRepository.findNextUnprocessedByBatchId(batchId, limit);
+                    return productPriceImportStagedRepository.findNextUnprocessedByBatchId(batchId, limit);
                 }
 
                 @Override
-                public boolean isValid(ProductPriceUploadStagedEntity staged)
+                public boolean isValid(ProductPriceImportStagedEntity staged)
                 {
                     return staged.getValidationStatus() == ProductImportValidationStatusEn.VALID;
                 }
 
                 @Override
-                public void applyRow(ProductPriceUploadStagedEntity staged)
+                public void applyRow(ProductPriceImportStagedEntity staged)
                 {
                     applyValidProductPriceStagedRow(staged);
                 }
 
                 @Override
-                public void markProcessed(ProductPriceUploadStagedEntity staged)
+                public void markProcessed(ProductPriceImportStagedEntity staged)
                 {
                     staged.setProcessed(true);
                 }
@@ -127,72 +127,72 @@ public class ProductPriceImportService implements ImportBatchService<ProductPric
                 @Override
                 public long countByBatchId(UUID batchId)
                 {
-                    return productPriceUploadStagedRepository.countByBatchId(batchId);
+                    return productPriceImportStagedRepository.countByBatchId(batchId);
                 }
 
                 @Override
                 public long countProcessedValidByBatchId(UUID batchId)
                 {
-                    return productPriceUploadStagedRepository.countProcessedValidByBatchId(batchId);
+                    return productPriceImportStagedRepository.countProcessedValidByBatchId(batchId);
                 }
 
                 @Override
                 public long countProcessedInvalidByBatchId(UUID batchId)
                 {
-                    return productPriceUploadStagedRepository.countProcessedInvalidByBatchId(batchId);
+                    return productPriceImportStagedRepository.countProcessedInvalidByBatchId(batchId);
                 }
 
                 @Override
-                public Integer getTotalRows(ProductPriceUploadBatchEntity batch)
+                public Integer getTotalRows(ProductPriceImportBatchEntity batch)
                 {
                     return batch.getTotalRows();
                 }
 
                 @Override
-                public void setTotalRows(ProductPriceUploadBatchEntity batch, Integer value)
+                public void setTotalRows(ProductPriceImportBatchEntity batch, Integer value)
                 {
                     batch.setTotalRows(value);
                 }
 
                 @Override
-                public Integer getProcessedRows(ProductPriceUploadBatchEntity batch)
+                public Integer getProcessedRows(ProductPriceImportBatchEntity batch)
                 {
                     return batch.getProcessedRows();
                 }
 
                 @Override
-                public void setProcessedRows(ProductPriceUploadBatchEntity batch, Integer value)
+                public void setProcessedRows(ProductPriceImportBatchEntity batch, Integer value)
                 {
                     batch.setProcessedRows(value);
                 }
 
                 @Override
-                public Integer getSkippedRows(ProductPriceUploadBatchEntity batch)
+                public Integer getSkippedRows(ProductPriceImportBatchEntity batch)
                 {
                     return batch.getSkippedRows();
                 }
 
                 @Override
-                public void setSkippedRows(ProductPriceUploadBatchEntity batch, Integer value)
+                public void setSkippedRows(ProductPriceImportBatchEntity batch, Integer value)
                 {
                     batch.setSkippedRows(value);
                 }
 
                 @Override
-                public Integer getValidationErrorCount(ProductPriceUploadBatchEntity batch)
+                public Integer getValidationErrorCount(ProductPriceImportBatchEntity batch)
                 {
                     return batch.getValidationErrorCount();
                 }
 
                 @Override
-                public void setValidationErrorCount(ProductPriceUploadBatchEntity batch, Integer value)
+                public void setValidationErrorCount(ProductPriceImportBatchEntity batch, Integer value)
                 {
                     batch.setValidationErrorCount(value);
                 }
             };
 
     @Override
-    public ProductPriceUploadBatchEntity createImportPendingBatch(String filename, StaffUserEntity admin)
+    public ProductPriceImportBatchEntity createImportPendingBatch(String filename, StaffUserEntity admin)
     {
         return createProductPriceImportPendingBatch(filename, admin);
     }
@@ -216,7 +216,7 @@ public class ProductPriceImportService implements ImportBatchService<ProductPric
     }
 
     @Override
-    public UploadBatchProcessStatusDto getImportBatchProcessStatus(UUID batchId)
+    public ImportBatchProcessStatusDto getImportBatchProcessStatus(UUID batchId)
     {
         return getProductPriceImportBatchProcessStatus(batchId);
     }
@@ -228,9 +228,9 @@ public class ProductPriceImportService implements ImportBatchService<ProductPric
     }
 
     @Override
-    public List<ProductUploadBatchDto> getUploadBatches()
+    public List<ProductImportBatchDto> getImportBatches()
     {
-        return getProductPriceUploadBatches();
+        return getProductPriceImportBatches();
     }
 
     @Override
@@ -300,7 +300,7 @@ public class ProductPriceImportService implements ImportBatchService<ProductPric
     @Transactional
     public void markProductPriceImportBatchAsProcessing(UUID batchId, StaffUserEntity approvedBy)
     {
-        ProductPriceUploadBatchEntity batch = productPriceUploadBatchRepository.findById(batchId);
+        ProductPriceImportBatchEntity batch = productPriceImportBatchRepository.findById(batchId);
         if (batch == null) {
             throw new NotFoundException("Price Batch not found: " + batchId);
         }
@@ -308,7 +308,7 @@ public class ProductPriceImportService implements ImportBatchService<ProductPric
             throw new IllegalStateException("Price Batch is already processing");
         }
 
-        long totalRows = productPriceUploadStagedRepository.countByBatchId(batchId);
+        long totalRows = productPriceImportStagedRepository.countByBatchId(batchId);
         batch.setProductUploadStatusEn(ProductUploadStatusEn.PROCESSING);
         batch.setTotalRows((int) totalRows);
         batch.setProcessedRows(0);
@@ -317,9 +317,9 @@ public class ProductPriceImportService implements ImportBatchService<ProductPric
     }
 
     @Transactional
-    public ProductPriceUploadBatchEntity createProductPriceImportPendingBatch(String filename, StaffUserEntity admin)
+    public ProductPriceImportBatchEntity createProductPriceImportPendingBatch(String filename, StaffUserEntity admin)
     {
-        ProductPriceUploadBatchEntity batch = new ProductPriceUploadBatchEntity();
+        ProductPriceImportBatchEntity batch = new ProductPriceImportBatchEntity();
         batch.setFilename(filename);
         batch.setProductUploadStatusEn(ProductUploadStatusEn.IMPORTING);
         batch.setUploadedBy(admin);
@@ -327,14 +327,14 @@ public class ProductPriceImportService implements ImportBatchService<ProductPric
         batch.setProcessedRows(0);
         batch.setSkippedRows(0);
         batch.setValidationErrorCount(0);
-        productPriceUploadBatchRepository.persist(batch);
+        productPriceImportBatchRepository.persist(batch);
         return batch;
     }
 
     @Transactional
     public void markProductPriceBatchAsFailed(UUID batchId)
     {
-        ProductPriceUploadBatchEntity batch = productPriceUploadBatchRepository.findById(batchId);
+        ProductPriceImportBatchEntity batch = productPriceImportBatchRepository.findById(batchId);
         if (batch == null) {
             throw new NotFoundException("Price Batch not found: " + batchId);
         }
@@ -345,7 +345,7 @@ public class ProductPriceImportService implements ImportBatchService<ProductPric
     @Transactional
     public void markProductPriceBatchAsProcessed(UUID batchId)
     {
-        ProductPriceUploadBatchEntity batch = productPriceUploadBatchRepository.findById(batchId);
+        ProductPriceImportBatchEntity batch = productPriceImportBatchRepository.findById(batchId);
         if (batch == null) {
             throw new NotFoundException("Price Batch not found: " + batchId);
         }
@@ -354,18 +354,18 @@ public class ProductPriceImportService implements ImportBatchService<ProductPric
     }
 
     @Transactional(value = Transactional.TxType.SUPPORTS)
-    public UploadBatchProcessStatusDto getProductPriceImportBatchProcessStatus(UUID batchId)
+    public ImportBatchProcessStatusDto getProductPriceImportBatchProcessStatus(UUID batchId)
     {
-        ProductPriceUploadBatchEntity batch = productPriceUploadBatchRepository.findById(batchId);
+        ProductPriceImportBatchEntity batch = productPriceImportBatchRepository.findById(batchId);
         if (batch == null) {
             throw new NotFoundException("Price Batch not found: " + batchId);
         }
 
-        UploadBatchProcessStatusDto status = new UploadBatchProcessStatusDto();
+        ImportBatchProcessStatusDto status = new ImportBatchProcessStatusDto();
         status.setBatchId(batch.getId());
         status.setStatus(batch.getProductUploadStatusEn() != null ? batch.getProductUploadStatusEn().name() : null);
         status.setTotalRows(batch.getTotalRows());
-        status.setStagedRows(productPriceUploadStagedRepository.countByBatchId(batchId));
+        status.setStagedRows(productPriceImportStagedRepository.countByBatchId(batchId));
         status.setProcessedRows(batch.getProcessedRows() != null ? (long) batch.getProcessedRows() : 0L);
         status.setSkippedRows(batch.getSkippedRows() != null ? (long) batch.getSkippedRows() : 0L);
         status.setValidationErrorCount(batch.getValidationErrorCount());
@@ -376,23 +376,23 @@ public class ProductPriceImportService implements ImportBatchService<ProductPric
     private void completeProductPriceCsvUpload(UUID batchId, int totalRows, int validationErrorCount)
     {
         QuarkusTransaction.requiringNew().run(() -> {
-            ProductPriceUploadBatchEntity batch = getRequiredProductPriceBatch(batchId);
+            ProductPriceImportBatchEntity batch = getRequiredProductPriceBatch(batchId);
             batch.setTotalRows(totalRows);
             batch.setValidationErrorCount(validationErrorCount);
             batch.setProductUploadStatusEn(ProductUploadStatusEn.PENDING);
         });
     }
 
-    private ProductPriceUploadBatchEntity getRequiredProductPriceBatch(UUID batchId)
+    private ProductPriceImportBatchEntity getRequiredProductPriceBatch(UUID batchId)
     {
-        ProductPriceUploadBatchEntity batch = productPriceUploadBatchRepository.findById(batchId);
+        ProductPriceImportBatchEntity batch = productPriceImportBatchRepository.findById(batchId);
         if (batch == null) {
             throw new NotFoundException("Price Batch not found: " + batchId);
         }
         return batch;
     }
 
-    private void applyValidProductPriceStagedRow(ProductPriceUploadStagedEntity staged)
+    private void applyValidProductPriceStagedRow(ProductPriceImportStagedEntity staged)
     {
 
         ProductVariantEntity variant = productVariantRepository.findBySku(staged.getSku());
@@ -435,13 +435,13 @@ public class ProductPriceImportService implements ImportBatchService<ProductPric
 
     public List<ProductPriceComparisonDto> getProductPriceImportRows(UUID batchId)
     {
-        return productPriceComparisonMapper.toDtos(productPriceUploadStagedRepository.findByBatchId(batchId));
+        return productPriceComparisonMapper.toDtos(productPriceImportStagedRepository.findByBatchId(batchId));
     }
 
-    public List<ProductUploadBatchDto> getProductPriceUploadBatches()
+    public List<ProductImportBatchDto> getProductPriceImportBatches()
     {
-        List<ProductPriceUploadBatchEntity> batches = productPriceUploadBatchRepository.listAll();
-        return batches.stream().map(uploadBatchDtoMapper::fromProductPriceBatch).collect(Collectors.toList());
+        List<ProductPriceImportBatchEntity> batches = productPriceImportBatchRepository.listAll();
+        return batches.stream().map(importBatchDtoMapper::fromProductPriceBatch).collect(Collectors.toList());
     }
 
 }

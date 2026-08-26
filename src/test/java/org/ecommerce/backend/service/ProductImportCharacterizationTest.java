@@ -48,8 +48,8 @@ class ProductImportCharacterizationTest
     private ProductImportService service;
     private ProductImportParser parser;
     private ProductImportValidator validator;
-    private ProductUploadBatchRepository batchRepository;
-    private ProductUploadStagedRepository stagedRepository;
+    private ProductImportBatchRepository batchRepository;
+    private ProductImportStagedRepository stagedRepository;
     private CategoryRepository categoryRepository;
     private BrandRepository brandRepository;
     private ProductRepository productRepository;
@@ -64,8 +64,8 @@ class ProductImportCharacterizationTest
         parser = new ProductImportParser();
         validator = new ProductImportValidator();
 
-        batchRepository = mock(ProductUploadBatchRepository.class);
-        stagedRepository = mock(ProductUploadStagedRepository.class);
+        batchRepository = mock(ProductImportBatchRepository.class);
+        stagedRepository = mock(ProductImportStagedRepository.class);
         categoryRepository = mock(CategoryRepository.class);
         brandRepository = mock(BrandRepository.class);
         productRepository = mock(ProductRepository.class);
@@ -74,8 +74,8 @@ class ProductImportCharacterizationTest
         imageService = mock(ImageService.class);
 
         // Wire up the service
-        setField(service, "productUploadBatchRepository", batchRepository);
-        setField(service, "productUploadStagedRepository", stagedRepository);
+        setField(service, "productImportBatchRepository", batchRepository);
+        setField(service, "productImportStagedRepository", stagedRepository);
         setField(service, "categoryRepository", categoryRepository);
         setField(service, "brandRepository", brandRepository);
         setField(service, "productRepository", productRepository);
@@ -189,7 +189,7 @@ class ProductImportCharacterizationTest
         when(productRepository.findBySlugIgnoreCase("blue-tee")).thenReturn(null);
         when(productRepository.findByNameIgnoreCase("Blue Tee")).thenReturn(null);
 
-        ProductUploadStagedEntity staged = new ProductUploadStagedEntity();
+        ProductImportStagedEntity staged = new ProductImportStagedEntity();
         staged.setProductSlug("blue-tee");
         staged.setSku("SKU-001");
         staged.setName("Blue Tee");
@@ -253,7 +253,7 @@ class ProductImportCharacterizationTest
         when(productRepository.findBySlugIgnoreCase("test-prod")).thenReturn(null);
         when(productRepository.findByNameIgnoreCase("Test Prod")).thenReturn(null);
 
-        ProductUploadStagedEntity staged = new ProductUploadStagedEntity();
+        ProductImportStagedEntity staged = new ProductImportStagedEntity();
         staged.setProductSlug("test-prod");
         staged.setSku("SKU-002");
         staged.setName("Test Prod");
@@ -277,7 +277,7 @@ class ProductImportCharacterizationTest
         when(productRepository.findBySlugIgnoreCase("test-prod")).thenReturn(null);
         when(productRepository.findByNameIgnoreCase("Test Prod")).thenReturn(null);
 
-        ProductUploadStagedEntity staged = new ProductUploadStagedEntity();
+        ProductImportStagedEntity staged = new ProductImportStagedEntity();
         staged.setProductSlug("test-prod");
         staged.setSku("SKU-003");
         staged.setName("Test Prod");
@@ -305,7 +305,7 @@ class ProductImportCharacterizationTest
         when(productRepository.findBySlugIgnoreCase("test-prod")).thenReturn(null);
         when(productRepository.findByNameIgnoreCase("Test Prod")).thenReturn(null);
 
-        ProductUploadStagedEntity staged = new ProductUploadStagedEntity();
+        ProductImportStagedEntity staged = new ProductImportStagedEntity();
         staged.setProductSlug("test-prod");
         staged.setSku(null);
         staged.setName("Test Prod");
@@ -331,7 +331,7 @@ class ProductImportCharacterizationTest
         when(productRepository.findBySlugIgnoreCase("test-prod")).thenReturn(null);
         when(productRepository.findByNameIgnoreCase("Test Prod")).thenReturn(null);
 
-        ProductUploadStagedEntity staged = new ProductUploadStagedEntity();
+        ProductImportStagedEntity staged = new ProductImportStagedEntity();
         staged.setProductSlug("test-prod");
         staged.setSku("SKU-004");
         staged.setName("Test Prod");
@@ -358,7 +358,7 @@ class ProductImportCharacterizationTest
         when(productRepository.findBySlugIgnoreCase("test-prod")).thenReturn(null);
         when(productRepository.findByNameIgnoreCase("Test Prod")).thenReturn(null);
 
-        ProductUploadStagedEntity staged = new ProductUploadStagedEntity();
+        ProductImportStagedEntity staged = new ProductImportStagedEntity();
         staged.setProductSlug("test-prod");
         staged.setSku("SKU-005");
         staged.setName("Test Prod");
@@ -405,7 +405,7 @@ class ProductImportCharacterizationTest
 
         when(imageRepository.findByVariantId(existingVariant.getId())).thenReturn(List.of());
 
-        ProductUploadStagedEntity staged = new ProductUploadStagedEntity();
+        ProductImportStagedEntity staged = new ProductImportStagedEntity();
         staged.setProductSlug("csv-product");
         staged.setSku("SKU-CONFLICT");
         staged.setName("CSV Product");
@@ -446,7 +446,7 @@ class ProductImportCharacterizationTest
         when(productRepository.findByNameIgnoreCase("New Product")).thenReturn(null);
         when(imageRepository.findByVariantId(existingVariant.getId())).thenReturn(List.of());
 
-        ProductUploadStagedEntity staged = new ProductUploadStagedEntity();
+        ProductImportStagedEntity staged = new ProductImportStagedEntity();
         staged.setProductSlug("new-product");
         staged.setSku("SKU-EXISTS");
         staged.setName("New Product");
@@ -471,7 +471,7 @@ class ProductImportCharacterizationTest
         when(productRepository.findBySlugIgnoreCase("test-prod")).thenReturn(null);
         when(productRepository.findByNameIgnoreCase("Test")).thenReturn(null);
 
-        ProductUploadStagedEntity staged = new ProductUploadStagedEntity();
+        ProductImportStagedEntity staged = new ProductImportStagedEntity();
         staged.setProductSlug("test-prod");
         staged.setSku("SKU-MULTI");
         staged.setName("Test");
@@ -495,7 +495,7 @@ class ProductImportCharacterizationTest
         when(productRepository.findBySlugIgnoreCase("test-prod")).thenReturn(null);
         when(productRepository.findByNameIgnoreCase("Test")).thenReturn(null);
 
-        ProductUploadStagedEntity staged = new ProductUploadStagedEntity();
+        ProductImportStagedEntity staged = new ProductImportStagedEntity();
         staged.setProductSlug("test-prod");
         staged.setSku("SKU-006");
         staged.setName("Test");
@@ -520,7 +520,7 @@ class ProductImportCharacterizationTest
     @DisplayName("applyValidationResults: no errors sets VALID status and null message")
     void applyValidationResults_noErrors_setsValid() throws Exception
     {
-        ProductUploadStagedEntity staged = new ProductUploadStagedEntity();
+        ProductImportStagedEntity staged = new ProductImportStagedEntity();
         List<String> errors = new ArrayList<>();
 
         validator.applyValidationResults(staged, errors);
@@ -533,7 +533,7 @@ class ProductImportCharacterizationTest
     @DisplayName("applyValidationResults: single error sets INVALID and stores message")
     void applyValidationResults_singleError_setsInvalid() throws Exception
     {
-        ProductUploadStagedEntity staged = new ProductUploadStagedEntity();
+        ProductImportStagedEntity staged = new ProductImportStagedEntity();
         List<String> errors = new ArrayList<>();
         errors.add("Unknown category: apparel");
 
@@ -547,7 +547,7 @@ class ProductImportCharacterizationTest
     @DisplayName("applyValidationResults: multiple errors joined with semicolon-space separator")
     void applyValidationResults_multipleErrors_joinedWithSemicolonSpace() throws Exception
     {
-        ProductUploadStagedEntity staged = new ProductUploadStagedEntity();
+        ProductImportStagedEntity staged = new ProductImportStagedEntity();
         List<String> errors = new ArrayList<>();
         errors.add("category is required");
         errors.add("brand is required");
@@ -569,7 +569,7 @@ class ProductImportCharacterizationTest
     void stageChunk_allValidRows_allValid() throws Exception
     {
         UUID batchId = UUID.randomUUID();
-        ProductUploadBatchEntity batch = createBatch(batchId);
+        ProductImportBatchEntity batch = createBatch(batchId);
         when(batchRepository.findById(batchId)).thenReturn(batch);
 
         CategoryEntity category = new CategoryEntity();
@@ -589,16 +589,16 @@ class ProductImportCharacterizationTest
         List<StagedProductCsvRow> parsedRows = parseAllRows(csv);
 
         // Capture persisted staged entities
-        List<ProductUploadStagedEntity> persisted = new ArrayList<>();
+        List<ProductImportStagedEntity> persisted = new ArrayList<>();
         doAnswer(inv -> {
             persisted.add(inv.getArgument(0));
             return null;
-        }).when(stagedRepository).persist(any(ProductUploadStagedEntity.class));
+        }).when(stagedRepository).persist(any(ProductImportStagedEntity.class));
 
         invokeStageChunkInTransaction(batchId, parsedRows);
 
         assertEquals(2, persisted.size());
-        for (ProductUploadStagedEntity staged : persisted) {
+        for (ProductImportStagedEntity staged : persisted) {
             assertEquals(ProductImportValidationStatusEn.VALID, staged.getValidationStatus());
             assertNull(staged.getValidationErrors());
         }
@@ -611,7 +611,7 @@ class ProductImportCharacterizationTest
     void stageChunk_someInvalidRows_pinsErrorsPerRow() throws Exception
     {
         UUID batchId = UUID.randomUUID();
-        ProductUploadBatchEntity batch = createBatch(batchId);
+        ProductImportBatchEntity batch = createBatch(batchId);
         when(batchRepository.findById(batchId)).thenReturn(batch);
 
         CategoryEntity category = new CategoryEntity();
@@ -634,11 +634,11 @@ class ProductImportCharacterizationTest
 
         List<StagedProductCsvRow> parsedRows = parseAllRows(csv);
 
-        List<ProductUploadStagedEntity> persisted = new ArrayList<>();
+        List<ProductImportStagedEntity> persisted = new ArrayList<>();
         doAnswer(inv -> {
             persisted.add(inv.getArgument(0));
             return null;
-        }).when(stagedRepository).persist(any(ProductUploadStagedEntity.class));
+        }).when(stagedRepository).persist(any(ProductImportStagedEntity.class));
 
         invokeStageChunkInTransaction(batchId, parsedRows);
 
@@ -665,7 +665,7 @@ class ProductImportCharacterizationTest
     void stageChunk_malformedStock_pinsParseErrorCarriedThrough() throws Exception
     {
         UUID batchId = UUID.randomUUID();
-        ProductUploadBatchEntity batch = createBatch(batchId);
+        ProductImportBatchEntity batch = createBatch(batchId);
         when(batchRepository.findById(batchId)).thenReturn(batch);
 
         CategoryEntity category = new CategoryEntity();
@@ -684,16 +684,16 @@ class ProductImportCharacterizationTest
 
         List<StagedProductCsvRow> parsedRows = parseAllRows(csv);
 
-        List<ProductUploadStagedEntity> persisted = new ArrayList<>();
+        List<ProductImportStagedEntity> persisted = new ArrayList<>();
         doAnswer(inv -> {
             persisted.add(inv.getArgument(0));
             return null;
-        }).when(stagedRepository).persist(any(ProductUploadStagedEntity.class));
+        }).when(stagedRepository).persist(any(ProductImportStagedEntity.class));
 
         invokeStageChunkInTransaction(batchId, parsedRows);
 
         assertEquals(1, persisted.size());
-        ProductUploadStagedEntity staged = persisted.get(0);
+        ProductImportStagedEntity staged = persisted.get(0);
 
         // The parse error from parseProductCsvRow is carried through to the final error
         assertEquals(ProductImportValidationStatusEn.INVALID, staged.getValidationStatus());
@@ -707,7 +707,7 @@ class ProductImportCharacterizationTest
     void stageChunk_unknownSkuRow_pinsConflictError() throws Exception
     {
         UUID batchId = UUID.randomUUID();
-        ProductUploadBatchEntity batch = createBatch(batchId);
+        ProductImportBatchEntity batch = createBatch(batchId);
         when(batchRepository.findById(batchId)).thenReturn(batch);
 
         CategoryEntity category = new CategoryEntity();
@@ -740,16 +740,16 @@ class ProductImportCharacterizationTest
 
         List<StagedProductCsvRow> parsedRows = parseAllRows(csv);
 
-        List<ProductUploadStagedEntity> persisted = new ArrayList<>();
+        List<ProductImportStagedEntity> persisted = new ArrayList<>();
         doAnswer(inv -> {
             persisted.add(inv.getArgument(0));
             return null;
-        }).when(stagedRepository).persist(any(ProductUploadStagedEntity.class));
+        }).when(stagedRepository).persist(any(ProductImportStagedEntity.class));
 
         invokeStageChunkInTransaction(batchId, parsedRows);
 
         assertEquals(1, persisted.size());
-        ProductUploadStagedEntity staged = persisted.get(0);
+        ProductImportStagedEntity staged = persisted.get(0);
         assertEquals(ProductImportValidationStatusEn.INVALID, staged.getValidationStatus());
         assertEquals("SKU SKU-CONFLICT already belongs to another product",
                 staged.getValidationErrors());
@@ -760,7 +760,7 @@ class ProductImportCharacterizationTest
     void stageChunk_emptyFile_noStagedEntities() throws Exception
     {
         UUID batchId = UUID.randomUUID();
-        ProductUploadBatchEntity batch = createBatch(batchId);
+        ProductImportBatchEntity batch = createBatch(batchId);
         when(batchRepository.findById(batchId)).thenReturn(batch);
 
         // CSV with header only, no data rows
@@ -780,7 +780,7 @@ class ProductImportCharacterizationTest
     void stageChunk_multipleCategorySlugs_validatedIndependently() throws Exception
     {
         UUID batchId = UUID.randomUUID();
-        ProductUploadBatchEntity batch = createBatch(batchId);
+        ProductImportBatchEntity batch = createBatch(batchId);
         when(batchRepository.findById(batchId)).thenReturn(batch);
 
         CategoryEntity cat1 = new CategoryEntity();
@@ -800,16 +800,16 @@ class ProductImportCharacterizationTest
 
         List<StagedProductCsvRow> parsedRows = parseAllRows(csv);
 
-        List<ProductUploadStagedEntity> persisted = new ArrayList<>();
+        List<ProductImportStagedEntity> persisted = new ArrayList<>();
         doAnswer(inv -> {
             persisted.add(inv.getArgument(0));
             return null;
-        }).when(stagedRepository).persist(any(ProductUploadStagedEntity.class));
+        }).when(stagedRepository).persist(any(ProductImportStagedEntity.class));
 
         invokeStageChunkInTransaction(batchId, parsedRows);
 
         assertEquals(1, persisted.size());
-        ProductUploadStagedEntity staged = persisted.get(0);
+        ProductImportStagedEntity staged = persisted.get(0);
         assertEquals(ProductImportValidationStatusEn.INVALID, staged.getValidationStatus());
         assertEquals("Unknown category: unknown", staged.getValidationErrors());
     }
@@ -819,7 +819,7 @@ class ProductImportCharacterizationTest
     void stageChunk_parseAndValidationErrors_bothAppearInFinalErrors() throws Exception
     {
         UUID batchId = UUID.randomUUID();
-        ProductUploadBatchEntity batch = createBatch(batchId);
+        ProductImportBatchEntity batch = createBatch(batchId);
         when(batchRepository.findById(batchId)).thenReturn(batch);
 
         // Category not found, brand not found, stock malformed
@@ -834,16 +834,16 @@ class ProductImportCharacterizationTest
 
         List<StagedProductCsvRow> parsedRows = parseAllRows(csv);
 
-        List<ProductUploadStagedEntity> persisted = new ArrayList<>();
+        List<ProductImportStagedEntity> persisted = new ArrayList<>();
         doAnswer(inv -> {
             persisted.add(inv.getArgument(0));
             return null;
-        }).when(stagedRepository).persist(any(ProductUploadStagedEntity.class));
+        }).when(stagedRepository).persist(any(ProductImportStagedEntity.class));
 
         invokeStageChunkInTransaction(batchId, parsedRows);
 
         assertEquals(1, persisted.size());
-        ProductUploadStagedEntity staged = persisted.get(0);
+        ProductImportStagedEntity staged = persisted.get(0);
         assertEquals(ProductImportValidationStatusEn.INVALID, staged.getValidationStatus());
 
         // Pin the full error string: parse error (stock) + validation errors (category, brand)
@@ -904,10 +904,10 @@ class ProductImportCharacterizationTest
         Method createStrategyMethod = ProductImportService.class.getDeclaredMethod("createStrategy");
         createStrategyMethod.setAccessible(true);
         @SuppressWarnings("unchecked")
-        ChunkedImportStateMachine.ChunkImportStrategy<StagedProductCsvRow, ProductUploadStagedEntity, ProductUploadBatchEntity> strategy =
-                (ChunkedImportStateMachine.ChunkImportStrategy<StagedProductCsvRow, ProductUploadStagedEntity, ProductUploadBatchEntity>) createStrategyMethod.invoke(service);
+        ChunkedImportStateMachine.ChunkImportStrategy<StagedProductCsvRow, ProductImportStagedEntity, ProductImportBatchEntity> strategy =
+                (ChunkedImportStateMachine.ChunkImportStrategy<StagedProductCsvRow, ProductImportStagedEntity, ProductImportBatchEntity>) createStrategyMethod.invoke(service);
 
-        ProductUploadBatchEntity batch = strategy.loadBatch(batchId);
+        ProductImportBatchEntity batch = strategy.loadBatch(batchId);
         int validationErrorCount = 0;
         for (StagedProductCsvRow row : rows) {
             validationErrorCount += strategy.stageRow(batch, row);
@@ -919,9 +919,9 @@ class ProductImportCharacterizationTest
         strategy.setValidationErrorCount(batch, (currentErrors != null ? currentErrors : 0) + validationErrorCount);
     }
 
-    private ProductUploadBatchEntity createBatch(UUID batchId)
+    private ProductImportBatchEntity createBatch(UUID batchId)
     {
-        ProductUploadBatchEntity batch = new ProductUploadBatchEntity();
+        ProductImportBatchEntity batch = new ProductImportBatchEntity();
         batch.setId(batchId);
         batch.setProductUploadStatusEn(ProductUploadStatusEn.IMPORTING);
         batch.setTotalRows(0);

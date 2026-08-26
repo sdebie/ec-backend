@@ -8,7 +8,7 @@ import org.ecommerce.backend.service.ProductImportService;
 import org.ecommerce.backend.service.ProductPriceImportService;
 import org.ecommerce.common.dto.ProductComparisonDto;
 import org.ecommerce.common.dto.ProductPriceComparisonDto;
-import org.ecommerce.common.dto.ProductUploadBatchDto;
+import org.ecommerce.common.dto.ProductImportBatchDto;
 
 import jakarta.transaction.Transactional;
 import jakarta.transaction.Transactional.TxType;
@@ -18,7 +18,7 @@ import java.util.UUID;
 
 @ApplicationScoped
 @GraphQLApi
-public class ProductUploadGraphQLResource {
+public class ProductImportGraphQLResource {
 
     @Inject
     ProductImportService importService;
@@ -35,12 +35,12 @@ public class ProductUploadGraphQLResource {
         return importService.getProductImportRows(batchId);
     }
 
-    @Query("productUploadBatches")
+    @Query("productImportBatches")
     @Description("Returns the list of all product upload batches")
     @Transactional(value = TxType.SUPPORTS)
     @RolesAllowed({"SUPER_ADMIN", "CATALOG_MANAGER"})
-    public List<ProductUploadBatchDto> getProductUploadBatches() {
-        return importService.getProductUploadBatches();
+    public List<ProductImportBatchDto> getProductImportBatches() {
+        return importService.getProductImportBatches();
     }
 
 
@@ -53,12 +53,12 @@ public class ProductUploadGraphQLResource {
         return productPriceImportService.getProductPriceImportRows(batchId);
     }
 
-    @Query("productPriceUploadBatches")
+    @Query("productPriceImportBatches")
     @Description("Returns the list of all product price upload batches")
     @Transactional(value = TxType.SUPPORTS)
     @RolesAllowed({"SUPER_ADMIN", "CATALOG_MANAGER"})
-    public List<ProductUploadBatchDto> getProductPriceUploadBatches() {
-        return productPriceImportService.getProductPriceUploadBatches();
+    public List<ProductImportBatchDto> getProductPriceImportBatches() {
+        return productPriceImportService.getProductPriceImportBatches();
     }
 
 

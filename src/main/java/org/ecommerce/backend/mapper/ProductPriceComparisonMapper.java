@@ -1,7 +1,7 @@
 package org.ecommerce.backend.mapper;
 
 import org.ecommerce.common.dto.ProductPriceComparisonDto;
-import org.ecommerce.common.entity.ProductPriceUploadStagedEntity;
+import org.ecommerce.common.entity.ProductPriceImportStagedEntity;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 
@@ -26,7 +26,7 @@ public interface ProductPriceComparisonMapper
     @Mapping(target = "stagedId", source = "id")
     @Mapping(target = "proposedRetailPrice", source = "retailPrice")
     @Mapping(target = "proposedWholesalePrice", source = "wholesalePrice")
-    ProductPriceComparisonDto toDto(ProductPriceUploadStagedEntity staged);
+    ProductPriceComparisonDto toDto(ProductPriceImportStagedEntity staged);
 
-    List<ProductPriceComparisonDto> toDtos(List<ProductPriceUploadStagedEntity> staged);
+    List<ProductPriceComparisonDto> toDtos(List<ProductPriceImportStagedEntity> staged);
 }

@@ -1,7 +1,7 @@
 package org.ecommerce.backend.mapper;
 
 import org.ecommerce.common.dto.ProductComparisonDto;
-import org.ecommerce.common.entity.ProductUploadStagedEntity;
+import org.ecommerce.common.entity.ProductImportStagedEntity;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 
@@ -34,7 +34,7 @@ public interface ProductComparisonMapper
     @Mapping(target = "validBrand", source = "isValidBrand")
     @Mapping(target = "newProduct", source = "isNewProduct")
     @Mapping(target = "newVariant", source = "isNewVariant")
-    ProductComparisonDto toDto(ProductUploadStagedEntity staged);
+    ProductComparisonDto toDto(ProductImportStagedEntity staged);
 
-    List<ProductComparisonDto> toDtos(List<ProductUploadStagedEntity> staged);
+    List<ProductComparisonDto> toDtos(List<ProductImportStagedEntity> staged);
 }

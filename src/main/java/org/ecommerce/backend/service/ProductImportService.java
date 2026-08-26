@@ -9,10 +9,10 @@ import jakarta.ws.rs.NotFoundException;
 import org.ecommerce.backend.csv.ProductImportParser;
 import org.ecommerce.backend.csv.ProductImportParser.StagedProductCsvRow;
 import org.ecommerce.backend.csv.ProductImportValidator;
-import org.ecommerce.backend.mapper.UploadBatchDtoMapper;
+import org.ecommerce.backend.mapper.ImportBatchDtoMapper;
 import org.ecommerce.common.dto.ProductComparisonDto;
-import org.ecommerce.common.dto.ProductUploadBatchDto;
-import org.ecommerce.common.dto.UploadBatchProcessStatusDto;
+import org.ecommerce.common.dto.ProductImportBatchDto;
+import org.ecommerce.common.dto.ImportBatchProcessStatusDto;
 import org.ecommerce.common.entity.*;
 import org.ecommerce.common.enums.ProductImportValidationStatusEn;
 import org.ecommerce.common.enums.ProductStatusEn;
@@ -31,19 +31,19 @@ import java.util.stream.Collectors;
 import static org.ecommerce.common.util.CsvImportUtils.*;
 
 @ApplicationScoped
-public class ProductImportService implements ImportBatchService<ProductComparisonDto, UploadBatchProcessStatusDto, ProductUploadBatchEntity>, AsyncImportOperations
+public class ProductImportService implements ImportBatchService<ProductComparisonDto, ImportBatchProcessStatusDto, ProductImportBatchEntity>, AsyncImportOperations
 {
     @Inject
-    ProductUploadBatchRepository productUploadBatchRepository;
+    ProductImportBatchRepository productImportBatchRepository;
 
     @Inject
-    ProductUploadStagedRepository productUploadStagedRepository;
+    ProductImportStagedRepository productImportStagedRepository;
 
     @Inject
     org.ecommerce.backend.mapper.ProductComparisonMapper productComparisonMapper;
 
     @Inject
-    UploadBatchDtoMapper uploadBatchDtoMapper;
+    ImportBatchDtoMapper importBatchDtoMapper;
 
     @Inject
     CategoryRepository categoryRepository;
@@ -75,7 +75,7 @@ public class ProductImportService implements ImportBatchService<ProductCompariso
     private static final Logger LOG = Logger.getLogger(ProductImportService.class);
 
     @Override
-    public ProductUploadBatchEntity createImportPendingBatch(String filename, StaffUserEntity admin)
+    public ProductImportBatchEntity createImportPendingBatch(String filename, StaffUserEntity admin)
     {
         return createProductImportPendingBatch(filename, admin);
     }
@@ -99,7 +99,7 @@ public class ProductImportService implements ImportBatchService<ProductCompariso
     }
 
     @Override
-    public UploadBatchProcessStatusDto getImportBatchProcessStatus(UUID batchId)
+    public ImportBatchProcessStatusDto getImportBatchProcessStatus(UUID batchId)
     {
         return getProductImportBatchProcessStatus(batchId);
     }
@@ -111,9 +111,9 @@ public class ProductImportService implements ImportBatchService<ProductCompariso
     }
 
     @Override
-    public List<ProductUploadBatchDto> getUploadBatches()
+    public List<ProductImportBatchDto> getImportBatches()
     {
-        return getProductUploadBatches();
+        return getProductImportBatches();
     }
 
     @Override
@@ -139,9 +139,9 @@ public class ProductImportService implements ImportBatchService<ProductCompariso
      * caller can return a batch ID to the client without waiting for CSV parsing.
      */
     @Transactional
-    public ProductUploadBatchEntity createProductImportPendingBatch(String filename, StaffUserEntity admin)
+    public ProductImportBatchEntity createProductImportPendingBatch(String filename, StaffUserEntity admin)
     {
-        ProductUploadBatchEntity batch = new ProductUploadBatchEntity();
+        ProductImportBatchEntity batch = new ProductImportBatchEntity();
         batch.setFilename(filename);
         batch.setProductUploadStatusEn(ProductUploadStatusEn.IMPORTING);
         batch.setUploadedBy(admin);
@@ -149,7 +149,7 @@ public class ProductImportService implements ImportBatchService<ProductCompariso
         batch.setProcessedRows(0);
         batch.setSkippedRows(0);
         batch.setValidationErrorCount(0);
-        productUploadBatchRepository.persist(batch);
+        productImportBatchRepository.persist(batch);
         return batch;
     }
 
@@ -162,7 +162,7 @@ public class ProductImportService implements ImportBatchService<ProductCompariso
     {
         List<StagedProductCsvRow> chunk = new ArrayList<>(ChunkedImportStateMachine.STAGING_CHUNK_SIZE);
         int[] counts = new int[2];
-        ChunkedImportStateMachine.ChunkImportStrategy<StagedProductCsvRow, ProductUploadStagedEntity, ProductUploadBatchEntity> strategy = createStrategy();
+        ChunkedImportStateMachine.ChunkImportStrategy<StagedProductCsvRow, ProductImportStagedEntity, ProductImportBatchEntity> strategy = createStrategy();
 
         productImportParser.forEachRow(is, row -> {
             chunk.add(row);
@@ -186,7 +186,7 @@ public class ProductImportService implements ImportBatchService<ProductCompariso
     @Transactional
     public void markProductImportBatchAsProcessing(UUID batchId)
     {
-        ProductUploadBatchEntity batch = productUploadBatchRepository.findById(batchId);
+        ProductImportBatchEntity batch = productImportBatchRepository.findById(batchId);
         if (batch == null) {
             throw new NotFoundException("Batch not found: " + batchId);
         }
@@ -194,7 +194,7 @@ public class ProductImportService implements ImportBatchService<ProductCompariso
             throw new IllegalStateException("Batch is already processing");
         }
 
-        long totalRows = productUploadStagedRepository.countByBatchId(batchId);
+        long totalRows = productImportStagedRepository.countByBatchId(batchId);
         batch.setProductUploadStatusEn(ProductUploadStatusEn.PROCESSING);
         batch.setTotalRows((int) totalRows);
         batch.setProcessedRows(0);
@@ -204,7 +204,7 @@ public class ProductImportService implements ImportBatchService<ProductCompariso
     @Transactional
     public void markProductBatchAsProcessed(UUID batchId)
     {
-        ProductUploadBatchEntity batch = productUploadBatchRepository.findById(batchId);
+        ProductImportBatchEntity batch = productImportBatchRepository.findById(batchId);
         if (batch == null) {
             throw new NotFoundException("Batch not found: " + batchId);
         }
@@ -214,7 +214,7 @@ public class ProductImportService implements ImportBatchService<ProductCompariso
     @Transactional
     public void markProductImportBatchAsFailed(UUID batchId)
     {
-        ProductUploadBatchEntity batch = productUploadBatchRepository.findById(batchId);
+        ProductImportBatchEntity batch = productImportBatchRepository.findById(batchId);
         if (batch == null) {
             throw new NotFoundException("Batch not found: " + batchId);
         }
@@ -224,7 +224,7 @@ public class ProductImportService implements ImportBatchService<ProductCompariso
     public void processProductStagedRowsForBatch(UUID batchId)
     {
         LOG.debug("DEBUG:: Processing Batch: " + batchId);
-        ChunkedImportStateMachine.ChunkImportStrategy<StagedProductCsvRow, ProductUploadStagedEntity, ProductUploadBatchEntity> strategy = createStrategy();
+        ChunkedImportStateMachine.ChunkImportStrategy<StagedProductCsvRow, ProductImportStagedEntity, ProductImportBatchEntity> strategy = createStrategy();
 
         while (true) {
             int handledRows = stateMachine.processNextStagedChunk(batchId, strategy);
@@ -239,23 +239,23 @@ public class ProductImportService implements ImportBatchService<ProductCompariso
     private void completeProductCsvUpload(UUID batchId, int totalRows, int validationErrorCount)
     {
         QuarkusTransaction.requiringNew().run(() -> {
-            ProductUploadBatchEntity batch = getRequiredProductBatch(batchId);
+            ProductImportBatchEntity batch = getRequiredProductBatch(batchId);
             batch.setTotalRows(totalRows);
             batch.setValidationErrorCount(validationErrorCount);
             batch.setProductUploadStatusEn(ProductUploadStatusEn.PENDING);
         });
     }
 
-    private ProductUploadBatchEntity getRequiredProductBatch(UUID batchId)
+    private ProductImportBatchEntity getRequiredProductBatch(UUID batchId)
     {
-        ProductUploadBatchEntity batch = productUploadBatchRepository.findById(batchId);
+        ProductImportBatchEntity batch = productImportBatchRepository.findById(batchId);
         if (batch == null) {
             throw new NotFoundException("Batch not found: " + batchId);
         }
         return batch;
     }
 
-    private void applyValidProductStagedRow(ProductUploadStagedEntity staged)
+    private void applyValidProductStagedRow(ProductImportStagedEntity staged)
     {
         List<CategoryEntity> categories = new ArrayList<>();
         BrandEntity brand = null;
@@ -342,18 +342,18 @@ public class ProductImportService implements ImportBatchService<ProductCompariso
     }
 
     @Transactional(value = TxType.SUPPORTS)
-    public UploadBatchProcessStatusDto getProductImportBatchProcessStatus(UUID batchId)
+    public ImportBatchProcessStatusDto getProductImportBatchProcessStatus(UUID batchId)
     {
-        ProductUploadBatchEntity batch = productUploadBatchRepository.findById(batchId);
+        ProductImportBatchEntity batch = productImportBatchRepository.findById(batchId);
         if (batch == null) {
             throw new NotFoundException("Batch not found: " + batchId);
         }
 
-        UploadBatchProcessStatusDto status = new UploadBatchProcessStatusDto();
+        ImportBatchProcessStatusDto status = new ImportBatchProcessStatusDto();
         status.setBatchId(batch.getId());
         status.setStatus(batch.getProductUploadStatusEn() != null ? batch.getProductUploadStatusEn().name() : null);
         status.setTotalRows(batch.getTotalRows());
-        status.setStagedRows(productUploadStagedRepository.countByBatchId(batchId));
+        status.setStagedRows(productImportStagedRepository.countByBatchId(batchId));
         status.setProcessedRows(batch.getProcessedRows() != null ? (long) batch.getProcessedRows() : 0L);
         status.setSkippedRows(batch.getSkippedRows() != null ? (long) batch.getSkippedRows() : 0L);
         status.setValidationErrorCount(batch.getValidationErrorCount());
@@ -363,29 +363,29 @@ public class ProductImportService implements ImportBatchService<ProductCompariso
 
     public List<ProductComparisonDto> getProductImportRows(UUID batchId)
     {
-        return productComparisonMapper.toDtos(productUploadStagedRepository.findByBatchId(batchId));
+        return productComparisonMapper.toDtos(productImportStagedRepository.findByBatchId(batchId));
     }
 
-    public List<ProductUploadBatchDto> getProductUploadBatches()
+    public List<ProductImportBatchDto> getProductImportBatches()
     {
-        List<ProductUploadBatchEntity> batches = productUploadBatchRepository.listAllOrderByCreatedAtDesc();
-        return batches.stream().map(uploadBatchDtoMapper::fromProductBatch).collect(Collectors.toList());
+        List<ProductImportBatchEntity> batches = productImportBatchRepository.listAllOrderByCreatedAtDesc();
+        return batches.stream().map(importBatchDtoMapper::fromProductBatch).collect(Collectors.toList());
     }
 
-    private ChunkedImportStateMachine.ChunkImportStrategy<StagedProductCsvRow, ProductUploadStagedEntity, ProductUploadBatchEntity> createStrategy()
+    private ChunkedImportStateMachine.ChunkImportStrategy<StagedProductCsvRow, ProductImportStagedEntity, ProductImportBatchEntity> createStrategy()
     {
         return new ChunkedImportStateMachine.ChunkImportStrategy<>()
         {
             @Override
-            public ProductUploadBatchEntity loadBatch(UUID batchId)
+            public ProductImportBatchEntity loadBatch(UUID batchId)
             {
                 return getRequiredProductBatch(batchId);
             }
 
             @Override
-            public int stageRow(ProductUploadBatchEntity batch, StagedProductCsvRow row)
+            public int stageRow(ProductImportBatchEntity batch, StagedProductCsvRow row)
             {
-                ProductUploadStagedEntity staged = new ProductUploadStagedEntity();
+                ProductImportStagedEntity staged = new ProductImportStagedEntity();
                 staged.setBatch(batch);
                 staged.setProductSlug(row.productSlug());
                 staged.setSku(row.sku());
@@ -410,30 +410,30 @@ public class ProductImportService implements ImportBatchService<ProductCompariso
                     LOG.warnf("CSV import validation failed at row %d (sku=%s): %s", row.recordNumber(), staged.getSku(), staged.getValidationErrors());
                 }
 
-                productUploadStagedRepository.persist(staged);
+                productImportStagedRepository.persist(staged);
                 return validationErrors.size();
             }
 
             @Override
-            public List<ProductUploadStagedEntity> fetchNextUnprocessedChunk(UUID batchId, int limit)
+            public List<ProductImportStagedEntity> fetchNextUnprocessedChunk(UUID batchId, int limit)
             {
-                return productUploadStagedRepository.findNextUnprocessedByBatchId(batchId, limit);
+                return productImportStagedRepository.findNextUnprocessedByBatchId(batchId, limit);
             }
 
             @Override
-            public boolean isValid(ProductUploadStagedEntity staged)
+            public boolean isValid(ProductImportStagedEntity staged)
             {
                 return staged.getValidationStatus() == ProductImportValidationStatusEn.VALID;
             }
 
             @Override
-            public void applyRow(ProductUploadStagedEntity staged)
+            public void applyRow(ProductImportStagedEntity staged)
             {
                 applyValidProductStagedRow(staged);
             }
 
             @Override
-            public void markProcessed(ProductUploadStagedEntity staged)
+            public void markProcessed(ProductImportStagedEntity staged)
             {
                 staged.setProcessed(true);
             }
@@ -441,65 +441,65 @@ public class ProductImportService implements ImportBatchService<ProductCompariso
             @Override
             public long countByBatchId(UUID batchId)
             {
-                return productUploadStagedRepository.countByBatchId(batchId);
+                return productImportStagedRepository.countByBatchId(batchId);
             }
 
             @Override
             public long countProcessedValidByBatchId(UUID batchId)
             {
-                return productUploadStagedRepository.countProcessedValidByBatchId(batchId);
+                return productImportStagedRepository.countProcessedValidByBatchId(batchId);
             }
 
             @Override
             public long countProcessedInvalidByBatchId(UUID batchId)
             {
-                return productUploadStagedRepository.countProcessedInvalidByBatchId(batchId);
+                return productImportStagedRepository.countProcessedInvalidByBatchId(batchId);
             }
 
             @Override
-            public Integer getTotalRows(ProductUploadBatchEntity batch)
+            public Integer getTotalRows(ProductImportBatchEntity batch)
             {
                 return batch.getTotalRows();
             }
 
             @Override
-            public void setTotalRows(ProductUploadBatchEntity batch, Integer value)
+            public void setTotalRows(ProductImportBatchEntity batch, Integer value)
             {
                 batch.setTotalRows(value);
             }
 
             @Override
-            public Integer getProcessedRows(ProductUploadBatchEntity batch)
+            public Integer getProcessedRows(ProductImportBatchEntity batch)
             {
                 return batch.getProcessedRows();
             }
 
             @Override
-            public void setProcessedRows(ProductUploadBatchEntity batch, Integer value)
+            public void setProcessedRows(ProductImportBatchEntity batch, Integer value)
             {
                 batch.setProcessedRows(value);
             }
 
             @Override
-            public Integer getSkippedRows(ProductUploadBatchEntity batch)
+            public Integer getSkippedRows(ProductImportBatchEntity batch)
             {
                 return batch.getSkippedRows();
             }
 
             @Override
-            public void setSkippedRows(ProductUploadBatchEntity batch, Integer value)
+            public void setSkippedRows(ProductImportBatchEntity batch, Integer value)
             {
                 batch.setSkippedRows(value);
             }
 
             @Override
-            public Integer getValidationErrorCount(ProductUploadBatchEntity batch)
+            public Integer getValidationErrorCount(ProductImportBatchEntity batch)
             {
                 return batch.getValidationErrorCount();
             }
 
             @Override
-            public void setValidationErrorCount(ProductUploadBatchEntity batch, Integer value)
+            public void setValidationErrorCount(ProductImportBatchEntity batch, Integer value)
             {
                 batch.setValidationErrorCount(value);
             }
