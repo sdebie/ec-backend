@@ -121,6 +121,11 @@ jobs:
                 "id": "github-common",
                 "username": "${{ github.actor }}",
                 "password": "${{ secrets.GITHUB_TOKEN }}"
+              },
+              {
+                "id": "github-infra",
+                "username": "${{ github.actor }}",
+                "password": "${{ secrets.GITHUB_TOKEN }}"
               }
             ]
 
