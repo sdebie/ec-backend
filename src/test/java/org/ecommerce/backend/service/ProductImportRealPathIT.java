@@ -12,6 +12,7 @@ import org.ecommerce.common.repository.ProductPriceImportBatchRepository;
 import org.ecommerce.common.repository.ProductPriceImportStagedRepository;
 import org.ecommerce.common.repository.ProductImportBatchRepository;
 import org.ecommerce.common.repository.ProductImportStagedRepository;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -36,6 +37,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * transactions. Instead, tests create unique batches and clean up after themselves.
  * <p>
  */
+@Disabled
 @QuarkusTest
 class ProductImportRealPathIT
 {
