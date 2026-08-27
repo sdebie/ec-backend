@@ -10,19 +10,10 @@ import org.eclipse.microprofile.config.Config;
 import org.jboss.logging.Logger;
 
 /**
- * Shared, config-driven, Redis-backed fixed-window rate limiter.
- * <p>
- * Buckets are keyed by {@code "<limiterName>:<key>"} so each (name, key) pair gets
- * its own independent counter, stored as a single Redis integer. {@code INCR} is
- * atomic across every caller touching that key — including every backend replica
- * sharing this Redis, which is what makes this safe to run behind more than one
- * instance, unlike the in-memory implementation this replaces. The key's own TTL,
- * set once by whichever request first creates it, is the window: nothing later
- * re-reads or recomputes a window boundary, Redis just stops counting once the key
- * expires and the next request starts a fresh one. Limits are resolved per limiter
- * name from MicroProfile Config ({@code ratelimit.<name>.max} /
- * {@code ratelimit.<name>.window-seconds}), falling back to code defaults passed
- * by the caller.
+ * Shared, config-driven, Redis-backed fixed-window rate limiter. Buckets are keyed
+ * by {@code "<limiterName>:<key>"}, stored as a Redis integer whose TTL is the
+ * window — {@code INCR} is atomic across every replica sharing this Redis, which is
+ * what makes this safe with more than one backend instance.
  */
 @ApplicationScoped
 public class RateLimiterService
@@ -54,10 +45,7 @@ public class RateLimiterService
         ValueCommands<String, Long> counters = redisDataSource.value(Long.class);
         long count = counters.incr(compositeKey);
         if (count == 1) {
-            // Only the request that just created the key sets its expiry — every
-            // later request in the same window increments without touching the
-            // TTL, or a steady stream of traffic would keep pushing the window
-            // out forever and it would never be "fixed".
+            // Only the creating request sets expiry, or the window would never end.
             redisDataSource.key(String.class).expire(compositeKey, windowSeconds);
         }
 
@@ -92,12 +80,7 @@ public class RateLimiterService
         return Response.status(429).header("Retry-After", decision.retryAfterSeconds()).build();
     }
 
-    /**
-     * Redis's own TTL is the source of truth for how long a window has left. A key
-     * that expires in the instant between the increment above and this read is
-     * vanishingly rare and self-corrects on the next request; treat it as "wait out
-     * a full window" rather than propagate the exception.
-     */
+    /** Falls back to a full window on the vanishingly rare expiry-mid-read race. */
     private long remainingTtlSeconds(String compositeKey, long windowSeconds)
     {
         try {
@@ -107,10 +90,7 @@ public class RateLimiterService
         }
     }
 
-    /**
-     * Redis's TTL truncates to whole seconds, so a key a few milliseconds from
-     * expiry reports 0 — never tell a caller to retry in zero seconds.
-     */
+    /** Redis's TTL can report 0 a moment before expiry — never retry-after-zero. */
     static long clampRetryAfter(long ttlSeconds)
     {
         return Math.max(1, ttlSeconds);

@@ -358,9 +358,6 @@ class StockRecoveryJobTest
     }
 
     // ── Cross-instance coordination ─────────────────────────────────────────
-    // Proves the actual point of Tier B2: a genuinely eligible order is left
-    // completely alone when another instance already holds the sweep lock — not
-    // partially processed, not queued, just skipped outright for this tick.
 
     @Test
     @DisplayName("the sweep is skipped entirely while another instance holds the lock")
@@ -395,16 +392,12 @@ class StockRecoveryJobTest
         UUID variantId = newVariant(marker, 5);
         UUID orderId = newOrder(OrderStatusEn.CREATED, variantId, 3, FAR_PAST);
 
-        // No pre-acquired lock this time — the job must acquire it itself and release
-        // it on the way out, exactly like every other test in this class relies on
-        // implicitly by calling releaseAbandonedOrders() more than once per run.
         job.releaseAbandonedOrders();
 
         assertEquals(OrderStatusEn.SYSTEM_CANCELED, statusOf(orderId));
         assertEquals(8, stockOf(variantId));
 
-        // And the lock the job just used is free again for the next tick — proves
-        // releaseAbandonedOrders() releases on its own, not just when a test does it.
+        // The lock is free again — proves the job releases on its own.
         Optional<String> nextTickToken =
                 lockService.tryAcquire(StockRecoveryJob.LOCK_NAME, Duration.ofSeconds(30));
         assertTrue(nextTickToken.isPresent(), "the job must release its own lock when the sweep completes");

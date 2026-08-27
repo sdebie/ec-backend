@@ -88,8 +88,7 @@ class DistributedLockServiceTest
         Optional<String> staleToken = lockService.tryAcquire("test-lock", Duration.ofMillis(300));
         assertTrue(staleToken.isPresent());
 
-        // Let the first lease expire, then simulate a different instance winning
-        // the now-free lock before the original (stale) holder calls release.
+        // Simulate a different instance winning the lock before the stale holder releases.
         Thread.sleep(500);
         Optional<String> currentToken = lockService.tryAcquire("test-lock", Duration.ofSeconds(30));
         assertTrue(currentToken.isPresent(), "the lock must be free again once the first lease expired");

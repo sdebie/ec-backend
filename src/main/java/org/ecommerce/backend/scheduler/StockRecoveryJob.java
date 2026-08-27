@@ -72,15 +72,9 @@ import java.util.UUID;
  * also why {@code SKIP} and the lock are both about cost, not safety.
  *
  * <h2>Cross-instance coordination</h2>
- * {@code concurrentExecution = SKIP} only stops a second run on the same JVM — it
- * has no idea another backend replica exists. Run more than one instance and every
- * one of them fires this schedule independently, each querying and attempting to
- * release the same abandoned orders. Still not a correctness problem (same atomic
- * claim, same single winner per order), but wasted DB work multiplied by replica
- * count, on every tick, forever. {@link #lockService} closes that gap with a
- * cluster-wide lock in the same Redis {@link org.ecommerce.backend.service.RateLimiterService}
- * uses: whichever instance acquires it runs the sweep, every other instance skips
- * this tick outright and tries again next time.
+ * {@code SKIP} only stops a second run on the same JVM. {@link #lockService} adds a
+ * cluster-wide lock so only one replica runs a given tick; every other replica skips
+ * it and tries again next time.
  */
 @ApplicationScoped
 public class StockRecoveryJob
@@ -109,12 +103,9 @@ public class StockRecoveryJob
     EntityManager em;
 
     /**
-     * SKIP rather than the default PROCEED: a sweep that outruns its interval
-     * would otherwise have a second sweep started alongside it, and each extra
-     * runner makes the next one likelier. Overlap is never a correctness
-     * problem — the atomic claim admits one winner — so this exists purely to
-     * stop the job competing with itself for the database. The lock below is the
-     * same idea one level up, across replicas rather than within one JVM.
+     * SKIP rather than PROCEED: overlap is never a correctness problem (the atomic
+     * claim admits one winner), so this exists purely to stop the job competing
+     * with itself. The lock below is the same idea across replicas.
      */
     @Scheduled(every = "5m", concurrentExecution = Scheduled.ConcurrentExecution.SKIP)
     public void releaseAbandonedOrders()

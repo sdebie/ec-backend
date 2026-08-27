@@ -15,14 +15,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Concurrency load tests for {@link RateLimiterService}, now proving the property
- * that actually matters for the Redis-backed version: real concurrent callers, real
- * network round trips to a real Redis, and the atomicity of {@code INCR} is what has
- * to hold — not just a Java {@code ConcurrentHashMap}'s. This is still one JVM's
- * threads against one Redis rather than literally two backend instances, but Redis's
- * own per-command atomicity is exactly the mechanism a second instance would also
- * rely on, so this is the meaningful proof available short of standing up a second
- * real instance.
+ * Concurrency load tests for {@link RateLimiterService} against real Redis — proves
+ * {@code INCR}'s atomicity holds under real concurrent callers, the same guarantee a
+ * second backend replica would also rely on.
  * <p>
  * Note on the concurrent bound: the counter increments atomically and the admission
  * read is monotonic, so concurrent racing can only <em>under</em>-admit (a thread
@@ -54,13 +49,7 @@ class RateLimiterServiceLoadTest
         }
     }
 
-    /**
-     * Pins a limiter name's max/window via system properties so the per-limiter
-     * override (highest precedence) governs regardless of what the real
-     * {@code %test.ratelimit.default.max=100000} / {@code .window-seconds=2}
-     * (application.properties) resolves to — see RateLimiterServiceTest for why
-     * there is no way to make a real Config resolve a key to "absent".
-     */
+    /** See RateLimiterServiceTest for why this pins rather than relies on absence. */
     private void pinLimit(String name, int max, long windowSeconds)
     {
         System.setProperty("ratelimit." + name + ".max", String.valueOf(max));
@@ -164,9 +153,8 @@ class RateLimiterServiceLoadTest
     void concurrentMixedNamesAndKeys_invariantsHoldAtVolume() throws Exception
     {
         final int threads = 8;
-        final int requestsPerThread = 500;   // 4000 total checks — real network round trips,
-                                              // not in-memory ops, so kept well below the old
-                                              // 80k in-memory figure to stay fast and reliable.
+        final int requestsPerThread = 500;   // 4000 total — real network round trips, kept
+                                              // below the old 80k in-memory figure for speed.
         final int distinctKeys = 50;
         final int max = 30;
         final List<String> names = List.of("load-a", "load-b", "load-c");

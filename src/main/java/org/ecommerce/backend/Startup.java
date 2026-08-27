@@ -45,9 +45,13 @@ public class Startup
             LOG.info("Storage folder created (" + created + "): " + folder);
         }
 
+        // Filenames are UUIDs and never overwritten, so content at a URL never
+        // changes — safe to cache for a year (setCachingEnabled(false) was sending
+        // no Cache-Control at all).
         router.route("/static/images/*")
                 .handler(StaticHandler.create(FileSystemAccess.ROOT, storagePath)
-                        .setCachingEnabled(false));
+                        .setCachingEnabled(true)
+                        .setMaxAgeSeconds(java.time.Duration.ofDays(365).toSeconds()));
 
         LOG.info("Image server active for: " + storagePath);
 

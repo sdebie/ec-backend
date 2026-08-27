@@ -14,30 +14,12 @@ import java.util.Set;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Tests {@link RateLimiterService} against a real (Dev Services) Redis and the real
- * MicroProfile {@code Config}. {@code Config} turned out not to be mockable via
- * {@code @InjectMock} here — Quarkus rejects it: the bean is {@code @Dependent}-scoped,
- * not a CDI normal scope, which {@code @InjectMock}'s proxy-swap requires.
- * <p>
- * Per-test config control instead uses JVM system properties, the mechanism this
- * codebase already established outranks {@code %test.*}
- * ({@code SysPropConfigSource} ordinal 400 beats {@code PropertiesConfigSource} 250).
- * That precedence cuts both ways here: {@code %test.ratelimit.default.max=100000} /
- * {@code .window-seconds=2} (application.properties) are real and active for every
- * limiter name that has no override of its own — there is no way to make a real
- * {@code Config} resolve a key to "absent" once any source defines it, only to
- * override it to something else. So every test below pins its OWN limiter name's
- * {@code ratelimit.<name>.max}/{@code .window-seconds} explicitly to the exact
- * values it means to exercise via {@link #pinLimit}, rather than relying on no
- * shared default existing. The two tests about the shared-default mechanism itself
- * are the exception: they deliberately set {@code ratelimit.default.*} instead, using
- * a limiter name nothing else in this class ever touches.
- * <p>
- * Redis is flushed before every test for the same isolation the old fresh-map-per-test
- * setup gave for free. Covers: allowance under the limit, denial over the limit,
- * window rollover restoring allowance, per-(name, key) isolation, retry-after
- * calculation, expiry set once per window (not per request), and "unknown" key still
- * limited.
+ * Tests {@link RateLimiterService} against real Redis and real {@code Config}.
+ * {@code Config} isn't {@code @InjectMock}-able here ({@code @Dependent}-scoped, not
+ * a normal CDI scope), so per-test config uses system properties instead — which
+ * outrank {@code %test.*} but can't make a key resolve to "absent," so every test
+ * pins its own limiter name's max/window via {@link #pinLimit} rather than relying
+ * on no shared default existing. Redis is flushed before every test for isolation.
  */
 @QuarkusTest
 class RateLimiterServiceTest
@@ -143,9 +125,7 @@ class RateLimiterServiceTest
     }
 
     // ── Window rollover restoring allowance ─────────────────────────────────
-    // Redis owns the clock now (its own TTL, not a Java-side timestamp we can
-    // fake-advance) — these use short real windows and a short real sleep
-    // instead of the old instant time-travel.
+    // Redis owns the clock now, so these use a short real window and sleep.
 
     @Test
     void check_shouldReAllowAfterWindowExpires() throws InterruptedException
@@ -244,8 +224,7 @@ class RateLimiterServiceTest
 
         RateLimitDecision decision = service.check("test", "ip1", 3, 3);
         assertFalse(decision.allowed());
-        // Roughly 2 seconds remain of the 3-second window; assert a tolerant
-        // range rather than an exact figure, since real elapsed time jitters.
+        // Tolerant range, not an exact figure — real elapsed time jitters.
         assertTrue(decision.retryAfterSeconds() >= 1 && decision.retryAfterSeconds() <= 3,
                 "expected 1-3 seconds remaining, was: " + decision.retryAfterSeconds());
     }
@@ -253,8 +232,7 @@ class RateLimiterServiceTest
     @Test
     void clampRetryAfter_shouldReturnMinimumOneSecond()
     {
-        // Redis's TTL truncates to whole seconds, so a key a heartbeat from expiry
-        // reports 0 — decoupled here from any real timing so it's exact and instant.
+        // Decoupled from real timing so it's exact and instant.
         assertEquals(1, RateLimiterService.clampRetryAfter(0));
         assertEquals(1, RateLimiterService.clampRetryAfter(1));
         assertEquals(5, RateLimiterService.clampRetryAfter(5));
@@ -284,8 +262,7 @@ class RateLimiterServiceTest
 
         service.check("test", "10.0.0.9", 10, 60);
         long ttlAfterSecond = redisDataSource.key(String.class).ttl("test:10.0.0.9");
-        // A second request in the same window must not push the expiry back out —
-        // it should have counted down, not reset to a fresh ~60.
+        // Must count down, not reset to a fresh ~60.
         assertTrue(ttlAfterSecond <= ttlAfterFirst,
                 "second request in the same window must not extend its TTL: first="
                         + ttlAfterFirst + " second=" + ttlAfterSecond);
@@ -348,8 +325,7 @@ class RateLimiterServiceTest
     @Test
     void check_shouldUseConfigOverrideForWindow() throws InterruptedException
     {
-        // Max is pinned too — otherwise the real %test shared default (100000)
-        // would win over the code default of 3 and this could never deny.
+        // Max pinned too, or the real %test shared default (100000) wins instead.
         pinLimit("fast", 3, 3600);
         System.setProperty("ratelimit.fast.window-seconds", "1");
 
@@ -364,13 +340,9 @@ class RateLimiterServiceTest
     }
 
     // ── Shared "ratelimit.default.*" fallback ────────────────────────────────
-    // A new limiter should not have to add its own config just to avoid
-    // interfering with unrelated tests — see application.properties' comment on
-    // this key. Resolution order: per-limiter override → shared default → the
-    // caller's own code-provided default. Both tests use a limiter name nothing
-    // else in this class touches, and pin BOTH shared-default axes explicitly —
-    // the real %test.ratelimit.default.* values are still live otherwise, and
-    // would defeat whichever axis this test isn't deliberately setting.
+    // Resolution order: per-limiter override → shared default → code default.
+    // Both pin a limiter name nothing else touches, and pin both axes — the
+    // real %test.ratelimit.default.* values are otherwise still live.
 
     @Test
     void check_shouldUseSharedDefaultMaxWhenNoPerLimiterOverrideExists()
@@ -455,8 +427,7 @@ class RateLimiterServiceTest
     void enforce_shouldSetRetryAfterHeaderFromCheckDecision() throws InterruptedException
     {
         pinLimit("test", 3, 3);
-        // Same tolerant-range reasoning as check_shouldReturnRetryAfterOnDenial —
-        // proving enforce()'s header is derived from the identical calculation.
+        // Same tolerant-range reasoning as check_shouldReturnRetryAfterOnDenial.
         for (int i = 0; i < 3; i++) {
             service.enforce("test", "enforce-ip-3", 3, 3);
         }

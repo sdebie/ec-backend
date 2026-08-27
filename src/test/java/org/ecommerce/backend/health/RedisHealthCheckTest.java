@@ -13,10 +13,8 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 /**
- * Plain unit tests for {@link RedisHealthCheck}'s decision logic — no {@code @QuarkusTest}
- * needed, so both branches (including a genuinely unreachable Redis) are instant and
- * deterministic rather than depending on actually breaking a real connection.
- * {@link HealthEndpointIT} covers the real HTTP surface separately.
+ * Unit tests for {@link RedisHealthCheck}'s decision logic — no Quarkus boot needed.
+ * {@link HealthEndpointIT} covers the real HTTP surface.
  */
 class RedisHealthCheckTest
 {
