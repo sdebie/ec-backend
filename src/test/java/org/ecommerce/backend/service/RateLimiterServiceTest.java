@@ -1,43 +1,89 @@
 package org.ecommerce.backend.service;
 
+import io.quarkus.redis.datasource.RedisDataSource;
+import io.quarkus.test.junit.QuarkusTest;
+import jakarta.inject.Inject;
 import jakarta.ws.rs.core.Response;
-import org.eclipse.microprofile.config.Config;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.lang.reflect.Field;
-import java.util.Optional;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.HashSet;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
 
 /**
- * Unit tests for {@link RateLimiterService}.
+ * Tests {@link RateLimiterService} against a real (Dev Services) Redis and the real
+ * MicroProfile {@code Config}. {@code Config} turned out not to be mockable via
+ * {@code @InjectMock} here — Quarkus rejects it: the bean is {@code @Dependent}-scoped,
+ * not a CDI normal scope, which {@code @InjectMock}'s proxy-swap requires.
  * <p>
- * Covers: allowance under the limit, denial over the limit, window rollover restoring
- * allowance, per-(name, key) isolation, retry-after calculation, the expired-bucket sweep,
- * and "unknown" key still limited.
- *
+ * Per-test config control instead uses JVM system properties, the mechanism this
+ * codebase already established outranks {@code %test.*}
+ * ({@code SysPropConfigSource} ordinal 400 beats {@code PropertiesConfigSource} 250).
+ * That precedence cuts both ways here: {@code %test.ratelimit.default.max=100000} /
+ * {@code .window-seconds=2} (application.properties) are real and active for every
+ * limiter name that has no override of its own — there is no way to make a real
+ * {@code Config} resolve a key to "absent" once any source defines it, only to
+ * override it to something else. So every test below pins its OWN limiter name's
+ * {@code ratelimit.<name>.max}/{@code .window-seconds} explicitly to the exact
+ * values it means to exercise via {@link #pinLimit}, rather than relying on no
+ * shared default existing. The two tests about the shared-default mechanism itself
+ * are the exception: they deliberately set {@code ratelimit.default.*} instead, using
+ * a limiter name nothing else in this class ever touches.
+ * <p>
+ * Redis is flushed before every test for the same isolation the old fresh-map-per-test
+ * setup gave for free. Covers: allowance under the limit, denial over the limit,
+ * window rollover restoring allowance, per-(name, key) isolation, retry-after
+ * calculation, expiry set once per window (not per request), and "unknown" key still
+ * limited.
  */
+@QuarkusTest
 class RateLimiterServiceTest
 {
-    private TestableRateLimiterService service;
-    private Config config;
+    @Inject
+    RateLimiterService service;
+
+    @Inject
+    RedisDataSource redisDataSource;
+
+    private final Set<String> pinnedPropertyKeys = new HashSet<>();
 
     @BeforeEach
-    void setUp() throws Exception
+    void setUp()
     {
-        config = mock(Config.class);
-        // Default: no config overrides — fall back to code defaults
-        when(config.getOptionalValue(anyString(), any())).thenReturn(Optional.empty());
+        redisDataSource.flushall();
+    }
 
-        service = new TestableRateLimiterService();
-        // Inject mock config via reflection (CDI field injection)
-        Field configField = RateLimiterService.class.getDeclaredField("config");
-        configField.setAccessible(true);
-        configField.set(service, config);
+    @AfterEach
+    void tearDown()
+    {
+        pinnedPropertyKeys.forEach(System::clearProperty);
+        pinnedPropertyKeys.clear();
+    }
+
+    /**
+     * Pins a limiter name's max/window via system properties, so the per-limiter
+     * override (highest precedence) governs regardless of what
+     * {@code ratelimit.default.*} happens to resolve to in this environment.
+     */
+    private void pinLimit(String name, int max, long windowSeconds)
+    {
+        String maxKey = "ratelimit." + name + ".max";
+        String windowKey = "ratelimit." + name + ".window-seconds";
+        System.setProperty(maxKey, String.valueOf(max));
+        System.setProperty(windowKey, String.valueOf(windowSeconds));
+        pinnedPropertyKeys.add(maxKey);
+        pinnedPropertyKeys.add(windowKey);
+    }
+
+    private void pinSharedDefault(int max, long windowSeconds)
+    {
+        System.setProperty("ratelimit.default.max", String.valueOf(max));
+        System.setProperty("ratelimit.default.window-seconds", String.valueOf(windowSeconds));
+        pinnedPropertyKeys.add("ratelimit.default.max");
+        pinnedPropertyKeys.add("ratelimit.default.window-seconds");
     }
 
     // ── Allowance under the limit ───────────────────────────────────────────
@@ -45,6 +91,7 @@ class RateLimiterServiceTest
     @Test
     void check_shouldAllowFirstRequest()
     {
+        pinLimit("test", 5, 3600);
         RateLimitDecision decision = service.check("test", "192.168.1.1", 5, 3600);
         assertTrue(decision.allowed());
         assertEquals(0, decision.retryAfterSeconds());
@@ -53,6 +100,7 @@ class RateLimiterServiceTest
     @Test
     void check_shouldAllowRequestsUpToLimit()
     {
+        pinLimit("test", 5, 3600);
         for (int i = 0; i < 5; i++) {
             RateLimitDecision decision = service.check("test", "10.0.0.1", 5, 3600);
             assertTrue(decision.allowed(),
@@ -63,6 +111,7 @@ class RateLimiterServiceTest
     @Test
     void check_shouldAllowExactlyMaxRequests()
     {
+        pinLimit("test", 3, 60);
         for (int i = 0; i < 3; i++) {
             assertTrue(service.check("test", "10.0.0.2", 3, 60).allowed());
         }
@@ -73,6 +122,7 @@ class RateLimiterServiceTest
     @Test
     void check_shouldDenyWhenLimitExceeded()
     {
+        pinLimit("test", 3, 60);
         for (int i = 0; i < 3; i++) {
             service.check("test", "10.0.0.3", 3, 60);
         }
@@ -83,6 +133,7 @@ class RateLimiterServiceTest
     @Test
     void check_shouldKeepDenyingAfterLimitExceeded()
     {
+        pinLimit("test", 2, 60);
         for (int i = 0; i < 2; i++) {
             service.check("test", "10.0.0.4", 2, 60);
         }
@@ -92,36 +143,37 @@ class RateLimiterServiceTest
     }
 
     // ── Window rollover restoring allowance ─────────────────────────────────
+    // Redis owns the clock now (its own TTL, not a Java-side timestamp we can
+    // fake-advance) — these use short real windows and a short real sleep
+    // instead of the old instant time-travel.
 
     @Test
-    void check_shouldReAllowAfterWindowExpires()
+    void check_shouldReAllowAfterWindowExpires() throws InterruptedException
     {
-        // Exhaust the limit
-        for (int i = 0; i < 3; i++) {
-            service.check("test", "10.0.0.5", 3, 60);
+        pinLimit("test", 2, 1);
+        for (int i = 0; i < 2; i++) {
+            service.check("test", "10.0.0.5", 2, 1);
         }
-        assertFalse(service.check("test", "10.0.0.5", 3, 60).allowed());
+        assertFalse(service.check("test", "10.0.0.5", 2, 1).allowed());
 
-        // Advance time past the window
-        service.advanceTime(61_000);
+        Thread.sleep(1100);
 
-        // Should be allowed again
-        RateLimitDecision decision = service.check("test", "10.0.0.5", 3, 60);
-        assertTrue(decision.allowed());
+        assertTrue(service.check("test", "10.0.0.5", 2, 1).allowed());
     }
 
     @Test
-    void check_shouldNotResetBeforeWindowExpires()
+    void check_shouldNotResetBeforeWindowExpires() throws InterruptedException
     {
+        pinLimit("test", 2, 5);
         for (int i = 0; i < 2; i++) {
-            service.check("test", "10.0.0.6", 2, 60);
+            service.check("test", "10.0.0.6", 2, 5);
         }
-        assertFalse(service.check("test", "10.0.0.6", 2, 60).allowed());
+        assertFalse(service.check("test", "10.0.0.6", 2, 5).allowed());
 
-        // Only 30 seconds pass — still within the 60s window
-        service.advanceTime(30_000);
+        // Well short of the 5-second window
+        Thread.sleep(300);
 
-        assertFalse(service.check("test", "10.0.0.6", 2, 60).allowed());
+        assertFalse(service.check("test", "10.0.0.6", 2, 5).allowed());
     }
 
     // ── Per-(name, key) isolation ───────────────────────────────────────────
@@ -129,16 +181,15 @@ class RateLimiterServiceTest
     @Test
     void check_shouldIsolateDifferentKeys()
     {
+        pinLimit("login", 2, 60);
         String key1 = "192.168.1.100";
         String key2 = "192.168.1.200";
 
-        // Exhaust key1
         for (int i = 0; i < 2; i++) {
             service.check("login", key1, 2, 60);
         }
         assertFalse(service.check("login", key1, 2, 60).allowed());
 
-        // key2 is unaffected
         assertTrue(service.check("login", key2, 2, 60).allowed());
         assertTrue(service.check("login", key2, 2, 60).allowed());
     }
@@ -146,15 +197,15 @@ class RateLimiterServiceTest
     @Test
     void check_shouldIsolateDifferentNames()
     {
+        pinLimit("enquiry", 2, 60);
+        pinLimit("login", 2, 60);
         String key = "10.0.0.1";
 
-        // Exhaust "enquiry" limit
         for (int i = 0; i < 2; i++) {
             service.check("enquiry", key, 2, 60);
         }
         assertFalse(service.check("enquiry", key, 2, 60).allowed());
 
-        // "login" limiter for the same key is unaffected
         assertTrue(service.check("login", key, 2, 60).allowed());
         assertTrue(service.check("login", key, 2, 60).allowed());
     }
@@ -162,97 +213,82 @@ class RateLimiterServiceTest
     @Test
     void check_shouldNotCrossContaminateBetweenNamesAndKeys()
     {
-        // Use 2 of enquiry/ipA budget
+        pinLimit("enquiry", 3, 60);
+        pinLimit("login", 2, 60);
+
         assertTrue(service.check("enquiry", "ipA", 3, 60).allowed());
         assertTrue(service.check("enquiry", "ipA", 3, 60).allowed());
 
-        // Exhaust login/ipB
         for (int i = 0; i < 2; i++) {
             service.check("login", "ipB", 2, 60);
         }
         assertFalse(service.check("login", "ipB", 2, 60).allowed());
 
-        // enquiry/ipA still has 1 left
         assertTrue(service.check("enquiry", "ipA", 3, 60).allowed());
         assertFalse(service.check("enquiry", "ipA", 3, 60).allowed());
 
-        // login/ipA is fresh
         assertTrue(service.check("login", "ipA", 2, 60).allowed());
     }
 
     // ── Retry-after calculation ─────────────────────────────────────────────
 
     @Test
-    void check_shouldReturnRetryAfterOnDenial()
+    void check_shouldReturnRetryAfterOnDenial() throws InterruptedException
     {
-        // Window is 60 seconds
+        pinLimit("test", 3, 3);
         for (int i = 0; i < 3; i++) {
-            service.check("test", "ip1", 3, 60);
+            service.check("test", "ip1", 3, 3);
         }
 
-        // Advance 20 seconds into the window
-        service.advanceTime(20_000);
+        Thread.sleep(1000);
 
-        RateLimitDecision decision = service.check("test", "ip1", 3, 60);
+        RateLimitDecision decision = service.check("test", "ip1", 3, 3);
         assertFalse(decision.allowed());
-        // 60 - 20 = 40 seconds remaining
-        assertEquals(40, decision.retryAfterSeconds());
+        // Roughly 2 seconds remain of the 3-second window; assert a tolerant
+        // range rather than an exact figure, since real elapsed time jitters.
+        assertTrue(decision.retryAfterSeconds() >= 1 && decision.retryAfterSeconds() <= 3,
+                "expected 1-3 seconds remaining, was: " + decision.retryAfterSeconds());
     }
 
     @Test
-    void check_shouldReturnMinimumOneSecondRetryAfter()
+    void clampRetryAfter_shouldReturnMinimumOneSecond()
     {
-        // Window is 2 seconds
-        for (int i = 0; i < 2; i++) {
-            service.check("test", "ip2", 2, 2);
-        }
-
-        // Advance to nearly the end of the window (1900ms)
-        service.advanceTime(1_900);
-
-        RateLimitDecision decision = service.check("test", "ip2", 2, 2);
-        assertFalse(decision.allowed());
-        // 2 - 1 (1900ms / 1000 = 1) = 1 second remaining
-        assertTrue(decision.retryAfterSeconds() >= 1,
-                "retryAfterSeconds should be at least 1, was: " + decision.retryAfterSeconds());
+        // Redis's TTL truncates to whole seconds, so a key a heartbeat from expiry
+        // reports 0 — decoupled here from any real timing so it's exact and instant.
+        assertEquals(1, RateLimiterService.clampRetryAfter(0));
+        assertEquals(1, RateLimiterService.clampRetryAfter(1));
+        assertEquals(5, RateLimiterService.clampRetryAfter(5));
     }
 
     @Test
     void check_shouldReturnZeroRetryAfterWhenAllowed()
     {
+        pinLimit("test", 5, 60);
         RateLimitDecision decision = service.check("test", "ip3", 5, 60);
         assertTrue(decision.allowed());
         assertEquals(0, decision.retryAfterSeconds());
     }
 
-    // ── Expired-bucket sweep ────────────────────────────────────────────────
+    // ── Expiry set once per window, not per request ─────────────────────────
 
     @Test
-    void check_shouldSweepExpiredBucketsWhenThresholdExceeded() throws Exception
+    void check_setsExpiryOnlyOnFirstRequestInWindow() throws InterruptedException
     {
-        // Fill the map beyond CLEANUP_THRESHOLD with expired buckets
-        injectExpiredBuckets();
+        pinLimit("test", 10, 60);
+        service.check("test", "10.0.0.9", 10, 60);
+        long ttlAfterFirst = redisDataSource.key(String.class).ttl("test:10.0.0.9");
+        assertTrue(ttlAfterFirst > 0 && ttlAfterFirst <= 60,
+                "expected a fresh TTL in (0, 60], was: " + ttlAfterFirst);
 
-        // Next check triggers the sweep
-        service.check("test", "sweep-trigger", 5, 60);
+        Thread.sleep(1100);
 
-        // Expired buckets should have been removed; only the new one remains
-        assertTrue(service.bucketCount() <= 2,
-                "Expected most expired buckets to be swept, but bucketCount=" + service.bucketCount());
-    }
-
-    @Test
-    void check_shouldNotSweepActiveBuckets() throws Exception
-    {
-        // Fill with active buckets (recent windowStart, long window)
-        injectActiveBuckets();
-
-        // Next check triggers sweep logic but active buckets should survive
-        service.check("test", "sweep-active-trigger", 5, 3600);
-
-        // Active buckets + the new one should all remain
-        assertTrue(service.bucketCount() > RateLimiterService.CLEANUP_THRESHOLD,
-                "Active buckets should not be swept, but bucketCount=" + service.bucketCount());
+        service.check("test", "10.0.0.9", 10, 60);
+        long ttlAfterSecond = redisDataSource.key(String.class).ttl("test:10.0.0.9");
+        // A second request in the same window must not push the expiry back out —
+        // it should have counted down, not reset to a fresh ~60.
+        assertTrue(ttlAfterSecond <= ttlAfterFirst,
+                "second request in the same window must not extend its TTL: first="
+                        + ttlAfterFirst + " second=" + ttlAfterSecond);
     }
 
     // ── "unknown" key still limited ─────────────────────────────────────────
@@ -260,6 +296,7 @@ class RateLimiterServiceTest
     @Test
     void check_shouldLimitUnknownKey()
     {
+        pinLimit("login", 3, 60);
         for (int i = 0; i < 3; i++) {
             assertTrue(service.check("login", "unknown", 3, 60).allowed());
         }
@@ -299,8 +336,8 @@ class RateLimiterServiceTest
     @Test
     void check_shouldUseConfigOverrideForMax()
     {
-        when(config.getOptionalValue("ratelimit.enquiry.max", Integer.class))
-                .thenReturn(Optional.of(2));
+        System.setProperty("ratelimit.enquiry.max", "2");
+        pinnedPropertyKeys.add("ratelimit.enquiry.max");
 
         // Code default is 5, but config says 2
         assertTrue(service.check("enquiry", "ip-cfg", 5, 60).allowed());   // 1
@@ -309,19 +346,20 @@ class RateLimiterServiceTest
     }
 
     @Test
-    void check_shouldUseConfigOverrideForWindow()
+    void check_shouldUseConfigOverrideForWindow() throws InterruptedException
     {
-        when(config.getOptionalValue("ratelimit.fast.window-seconds", Long.class))
-                .thenReturn(Optional.of(10L));
+        // Max is pinned too — otherwise the real %test shared default (100000)
+        // would win over the code default of 3 and this could never deny.
+        pinLimit("fast", 3, 3600);
+        System.setProperty("ratelimit.fast.window-seconds", "1");
 
-        // Code default window is 3600, config override is 10 seconds
+        // Code default window is 3600, config override is 1 second
         for (int i = 0; i < 3; i++) {
             service.check("fast", "ip-cfg-win", 3, 3600);
         }
         assertFalse(service.check("fast", "ip-cfg-win", 3, 3600).allowed());
 
-        // Advance 11 seconds — should reset with the config window of 10s
-        service.advanceTime(11_000);
+        Thread.sleep(1100);
         assertTrue(service.check("fast", "ip-cfg-win", 3, 3600).allowed());
     }
 
@@ -329,13 +367,15 @@ class RateLimiterServiceTest
     // A new limiter should not have to add its own config just to avoid
     // interfering with unrelated tests — see application.properties' comment on
     // this key. Resolution order: per-limiter override → shared default → the
-    // caller's own code-provided default.
+    // caller's own code-provided default. Both tests use a limiter name nothing
+    // else in this class touches, and pin BOTH shared-default axes explicitly —
+    // the real %test.ratelimit.default.* values are still live otherwise, and
+    // would defeat whichever axis this test isn't deliberately setting.
 
     @Test
     void check_shouldUseSharedDefaultMaxWhenNoPerLimiterOverrideExists()
     {
-        when(config.getOptionalValue("ratelimit.default.max", Integer.class))
-                .thenReturn(Optional.of(2));
+        pinSharedDefault(2, 60);
 
         // Code default is 5, no "ratelimit.brand-new-limiter.max" override exists,
         // but the shared default of 2 applies.
@@ -347,10 +387,9 @@ class RateLimiterServiceTest
     @Test
     void check_perLimiterOverrideWinsOverSharedDefault()
     {
-        when(config.getOptionalValue("ratelimit.specific.max", Integer.class))
-                .thenReturn(Optional.of(4));
-        when(config.getOptionalValue("ratelimit.default.max", Integer.class))
-                .thenReturn(Optional.of(1));
+        System.setProperty("ratelimit.specific.max", "4");
+        pinnedPropertyKeys.add("ratelimit.specific.max");
+        pinSharedDefault(1, 60);
 
         // If the shared default (1) won, this would already be denied on request 2.
         assertTrue(service.check("specific", "ip-precedence", 5, 60).allowed());  // 1
@@ -361,36 +400,33 @@ class RateLimiterServiceTest
     }
 
     @Test
-    void check_shouldUseSharedDefaultWindowWhenNoPerLimiterOverrideExists()
+    void check_shouldUseSharedDefaultWindowWhenNoPerLimiterOverrideExists() throws InterruptedException
     {
-        when(config.getOptionalValue("ratelimit.default.window-seconds", Long.class))
-                .thenReturn(Optional.of(10L));
+        pinSharedDefault(3, 1);
 
-        // Code default window is 3600, shared default window is 10 seconds.
+        // Code default window is 3600, shared default window is 1 second.
         for (int i = 0; i < 3; i++) {
             service.check("another-new-limiter", "ip-default-win", 3, 3600);
         }
         assertFalse(service.check("another-new-limiter", "ip-default-win", 3, 3600).allowed());
 
-        service.advanceTime(11_000);
+        Thread.sleep(1100);
         assertTrue(service.check("another-new-limiter", "ip-default-win", 3, 3600).allowed());
     }
 
     @Test
-    void check_perLimiterWindowOverrideWinsOverSharedDefaultWindow()
+    void check_perLimiterWindowOverrideWinsOverSharedDefaultWindow() throws InterruptedException
     {
-        when(config.getOptionalValue("ratelimit.specific-win.window-seconds", Long.class))
-                .thenReturn(Optional.of(3600L));
-        when(config.getOptionalValue("ratelimit.default.window-seconds", Long.class))
-                .thenReturn(Optional.of(10L));
+        pinLimit("specific-win", 3, 3600);
+        pinSharedDefault(3, 1);
 
         for (int i = 0; i < 3; i++) {
             service.check("specific-win", "ip-win-precedence", 3, 60);
         }
         assertFalse(service.check("specific-win", "ip-win-precedence", 3, 60).allowed());
 
-        // If the shared default (10s) won, this would already be re-allowed here.
-        service.advanceTime(11_000);
+        // If the shared 1-second default had won, this would already be re-allowed here.
+        Thread.sleep(1100);
         assertFalse(service.check("specific-win", "ip-win-precedence", 3, 60).allowed());
     }
 
@@ -399,12 +435,14 @@ class RateLimiterServiceTest
     @Test
     void enforce_shouldReturnNullWhenAllowed()
     {
+        pinLimit("test", 5, 60);
         assertNull(service.enforce("test", "enforce-ip-1", 5, 60));
     }
 
     @Test
     void enforce_shouldReturn429WhenDenied()
     {
+        pinLimit("test", 3, 60);
         for (int i = 0; i < 3; i++) {
             service.enforce("test", "enforce-ip-2", 3, 60);
         }
@@ -414,27 +452,30 @@ class RateLimiterServiceTest
     }
 
     @Test
-    void enforce_shouldSetRetryAfterHeaderFromCheckDecision()
+    void enforce_shouldSetRetryAfterHeaderFromCheckDecision() throws InterruptedException
     {
-        // Window is 60 seconds — same scenario as check_shouldReturnRetryAfterOnDenial,
+        pinLimit("test", 3, 3);
+        // Same tolerant-range reasoning as check_shouldReturnRetryAfterOnDenial —
         // proving enforce()'s header is derived from the identical calculation.
         for (int i = 0; i < 3; i++) {
-            service.enforce("test", "enforce-ip-3", 3, 60);
+            service.enforce("test", "enforce-ip-3", 3, 3);
         }
 
-        // Advance 20 seconds into the window
-        service.advanceTime(20_000);
+        Thread.sleep(1000);
 
-        Response limited = service.enforce("test", "enforce-ip-3", 3, 60);
+        Response limited = service.enforce("test", "enforce-ip-3", 3, 3);
         assertNotNull(limited);
-        // 60 - 20 = 40 seconds remaining
-        assertEquals("40", limited.getHeaderString("Retry-After"));
+        int retryAfter = Integer.parseInt(limited.getHeaderString("Retry-After"));
+        assertTrue(retryAfter >= 1 && retryAfter <= 3,
+                "expected 1-3 seconds remaining, was: " + retryAfter);
     }
 
     @Test
     void enforce_shouldComposeNameAndKeyLikeCheck()
     {
-        // Exhaust "enforce-a" for one key
+        pinLimit("enforce-a", 2, 60);
+        pinLimit("enforce-b", 2, 60);
+
         for (int i = 0; i < 2; i++) {
             service.enforce("enforce-a", "shared-key", 2, 60);
         }
@@ -443,62 +484,5 @@ class RateLimiterServiceTest
         // A different limiter name for the same key is unaffected — proves enforce()
         // buckets on (name, key) exactly like check(), not a separate scheme.
         assertNull(service.enforce("enforce-b", "shared-key", 2, 60));
-    }
-
-    // ── Helpers ─────────────────────────────────────────────────────────────
-
-    /**
-     * Injects expired buckets directly into the map via reflection.
-     */
-    @SuppressWarnings("unchecked")
-    private void injectExpiredBuckets() throws Exception
-    {
-        Field bucketsField = RateLimiterService.class.getDeclaredField("buckets");
-        bucketsField.setAccessible(true);
-        ConcurrentHashMap<String, RateLimiterService.WindowBucket> map =
-                (ConcurrentHashMap<String, RateLimiterService.WindowBucket>) bucketsField.get(service);
-
-        long expiredStart = service.currentTimeMillis() - ((long) 60 * 1000 + 1000); // 1s past expiry
-        for (int i = 0; i < 10001; i++) {
-            map.put("expired:" + i, new RateLimiterService.WindowBucket(
-                    expiredStart, new AtomicInteger(1), 60));
-        }
-    }
-
-    /**
-     * Injects active (non-expired) buckets directly into the map via reflection.
-     */
-    @SuppressWarnings("unchecked")
-    private void injectActiveBuckets() throws Exception
-    {
-        Field bucketsField = RateLimiterService.class.getDeclaredField("buckets");
-        bucketsField.setAccessible(true);
-        ConcurrentHashMap<String, RateLimiterService.WindowBucket> map =
-                (ConcurrentHashMap<String, RateLimiterService.WindowBucket>) bucketsField.get(service);
-
-        long recentStart = service.currentTimeMillis() - 1000; // 1 second ago — well within any window
-        for (int i = 0; i < 10001; i++) {
-            map.put("active:" + i, new RateLimiterService.WindowBucket(
-                    recentStart, new AtomicInteger(1), 3600));
-        }
-    }
-
-    /**
-     * Testable subclass that lets us control time without Thread.sleep.
-     */
-    private static class TestableRateLimiterService extends RateLimiterService
-    {
-        private long timeOffset = 0;
-
-        @Override
-        long currentTimeMillis()
-        {
-            return System.currentTimeMillis() + timeOffset;
-        }
-
-        void advanceTime(long millis)
-        {
-            timeOffset += millis;
-        }
     }
 }

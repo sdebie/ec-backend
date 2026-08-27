@@ -1,52 +1,70 @@
 package org.ecommerce.backend.service;
 
-import org.eclipse.microprofile.config.Config;
+import io.quarkus.redis.datasource.RedisDataSource;
+import io.quarkus.test.junit.QuarkusTest;
+import jakarta.inject.Inject;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.lang.reflect.Field;
 import java.util.List;
-import java.util.Optional;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 /**
- * Concurrency load tests for {@link RateLimiterService}.
+ * Concurrency load tests for {@link RateLimiterService}, now proving the property
+ * that actually matters for the Redis-backed version: real concurrent callers, real
+ * network round trips to a real Redis, and the atomicity of {@code INCR} is what has
+ * to hold — not just a Java {@code ConcurrentHashMap}'s. This is still one JVM's
+ * threads against one Redis rather than literally two backend instances, but Redis's
+ * own per-command atomicity is exactly the mechanism a second instance would also
+ * rely on, so this is the meaningful proof available short of standing up a second
+ * real instance.
  * <p>
- * The endpoint integration suites mock the limiter to test denial handling; the unit
- * suite proves the algorithm single-threaded. This suite proves the safety property
- * that matters under real load: <strong>a (name, key) pair never admits more than max
- * requests per window, no matter how many threads hammer it simultaneously.</strong>
- * <p>
- * Note on the concurrent bound: the fixed-window counter increments atomically and the
- * admission read is monotonic, so concurrent racing can only <em>under</em>-admit
- * (a thread whose own increment was within limit may observe a higher count and be
- * denied), never over-admit. The assertions encode exactly that: {@code allowed <= max}
+ * Note on the concurrent bound: the counter increments atomically and the admission
+ * read is monotonic, so concurrent racing can only <em>under</em>-admit (a thread
+ * whose own increment was within limit may observe a higher count and be denied),
+ * never over-admit. The assertions encode exactly that: {@code allowed <= max}
  * always; {@code allowed == max} is only guaranteed for sequential traffic.
- *
- * <strong>Validates: Requirement 1.1 (Property 1 — bounded acceptance) under concurrency</strong>
  */
+@QuarkusTest
 class RateLimiterServiceLoadTest
 {
-    private RateLimiterService service;
+    @Inject
+    RateLimiterService service;
+
+    @Inject
+    RedisDataSource redisDataSource;
 
     @BeforeEach
-    void setUp() throws Exception
+    void setUp()
     {
-        Config config = mock(Config.class);
-        when(config.getOptionalValue(anyString(), any())).thenReturn(Optional.empty());
+        redisDataSource.flushall();
+    }
 
-        service = new RateLimiterService();
-        Field configField = RateLimiterService.class.getDeclaredField("config");
-        configField.setAccessible(true);
-        configField.set(service, config);
+    @AfterEach
+    void tearDown()
+    {
+        for (String name : List.of("load-single", "load-isolated", "load-a", "load-b", "load-c")) {
+            System.clearProperty("ratelimit." + name + ".max");
+            System.clearProperty("ratelimit." + name + ".window-seconds");
+        }
+    }
+
+    /**
+     * Pins a limiter name's max/window via system properties so the per-limiter
+     * override (highest precedence) governs regardless of what the real
+     * {@code %test.ratelimit.default.max=100000} / {@code .window-seconds=2}
+     * (application.properties) resolves to — see RateLimiterServiceTest for why
+     * there is no way to make a real Config resolve a key to "absent".
+     */
+    private void pinLimit(String name, int max, long windowSeconds)
+    {
+        System.setProperty("ratelimit." + name + ".max", String.valueOf(max));
+        System.setProperty("ratelimit." + name + ".window-seconds", String.valueOf(windowSeconds));
     }
 
     // ── Bounded acceptance under concurrent load ────────────────────────────
@@ -57,6 +75,7 @@ class RateLimiterServiceLoadTest
         final int threads = 20;
         final int requestsPerThread = 50;   // 1000 total requests
         final int max = 25;
+        pinLimit("load-single", max, 3600);
 
         AtomicInteger allowed = new AtomicInteger();
         AtomicInteger denied = new AtomicInteger();
@@ -102,6 +121,7 @@ class RateLimiterServiceLoadTest
         final int keys = 16;
         final int requestsPerKey = 10;      // sequential per key → deterministic
         final int max = 5;
+        pinLimit("load-isolated", max, 3600);
 
         int[] allowedPerKey = new int[keys];
         CountDownLatch start = new CountDownLatch(1);
@@ -144,10 +164,13 @@ class RateLimiterServiceLoadTest
     void concurrentMixedNamesAndKeys_invariantsHoldAtVolume() throws Exception
     {
         final int threads = 8;
-        final int requestsPerThread = 10_000;   // 80k total checks
-        final int distinctKeys = 200;
+        final int requestsPerThread = 500;   // 4000 total checks — real network round trips,
+                                              // not in-memory ops, so kept well below the old
+                                              // 80k in-memory figure to stay fast and reliable.
+        final int distinctKeys = 50;
         final int max = 30;
         final List<String> names = List.of("load-a", "load-b", "load-c");
+        names.forEach(name -> pinLimit(name, max, 3600));
 
         AtomicInteger decisions = new AtomicInteger();
         CountDownLatch start = new CountDownLatch(1);
@@ -183,28 +206,18 @@ class RateLimiterServiceLoadTest
 
         assertEquals(threads * requestsPerThread, decisions.get(), "every check must return a decision");
 
-        // Per-bucket admission never exceeds max: read the real buckets and verify each
-        // count that was admitted stayed within bounds (counts beyond max are denied
-        // requests still recorded in the window bucket — admission itself is what is bounded,
-        // proven by the single-key test; here we prove no bucket corruption at volume).
-        ConcurrentHashMap<String, RateLimiterService.WindowBucket> buckets = bucketsOf(service);
-        long bucketEntries = buckets.keySet().stream()
-                .filter(k -> k.startsWith("load-a:") || k.startsWith("load-b:") || k.startsWith("load-c:"))
-                .count();
+        // Per-bucket admission never exceeds max is proven by the single-key test;
+        // here we prove no bucket corruption at volume — each (name, key) pair maps
+        // to exactly one Redis key, none duplicated or lost.
+        long bucketEntries = 0;
+        for (String name : names) {
+            bucketEntries += redisDataSource.key(String.class).keys(name + ":*").size();
+        }
         assertEquals(names.size() * distinctKeys, bucketEntries,
-                "each (name, key) pair must map to exactly one bucket — no duplicate or lost buckets");
+                "each (name, key) pair must map to exactly one Redis key — no duplicate or lost buckets");
 
-        System.out.printf("RateLimiterService volume run: %d checks across %d buckets in %d ms (%.0f checks/sec)%n",
+        System.out.printf("RateLimiterService volume run: %d checks across %d Redis keys in %d ms (%.0f checks/sec)%n",
                 decisions.get(), bucketEntries, elapsedMillis,
                 decisions.get() / Math.max(0.001, elapsedMillis / 1000.0));
-    }
-
-    @SuppressWarnings("unchecked")
-    private static ConcurrentHashMap<String, RateLimiterService.WindowBucket> bucketsOf(RateLimiterService service)
-            throws Exception
-    {
-        Field bucketsField = RateLimiterService.class.getDeclaredField("buckets");
-        bucketsField.setAccessible(true);
-        return (ConcurrentHashMap<String, RateLimiterService.WindowBucket>) bucketsField.get(service);
     }
 }
