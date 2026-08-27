@@ -6,6 +6,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.ecommerce.backend.service.DistributedLockService;
 import org.ecommerce.backend.service.OrderService;
 import org.ecommerce.backend.service.StatusTransition;
 import org.ecommerce.backend.service.TransitionOutcome;
@@ -13,9 +14,11 @@ import org.ecommerce.common.entity.OrderEntity;
 import org.ecommerce.common.enums.OrderStatusEn;
 import org.jboss.logging.Logger;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -65,13 +68,27 @@ import java.util.UUID;
  * drains over successive ticks instead of in one oversized pass.
  * <p>
  * Correctness under all of this rests on the atomic conditional claim in
- * {@link #releaseOrder}, not on transaction scope — which is also why
- * {@code SKIP} below is about cost, not safety.
+ * {@link #releaseOrder}, not on transaction scope or on the lock below — which is
+ * also why {@code SKIP} and the lock are both about cost, not safety.
+ *
+ * <h2>Cross-instance coordination</h2>
+ * {@code concurrentExecution = SKIP} only stops a second run on the same JVM — it
+ * has no idea another backend replica exists. Run more than one instance and every
+ * one of them fires this schedule independently, each querying and attempting to
+ * release the same abandoned orders. Still not a correctness problem (same atomic
+ * claim, same single winner per order), but wasted DB work multiplied by replica
+ * count, on every tick, forever. {@link #lockService} closes that gap with a
+ * cluster-wide lock in the same Redis {@link org.ecommerce.backend.service.RateLimiterService}
+ * uses: whichever instance acquires it runs the sweep, every other instance skips
+ * this tick outright and tries again next time.
  */
 @ApplicationScoped
 public class StockRecoveryJob
 {
     private static final Logger LOG = Logger.getLogger(StockRecoveryJob.class);
+
+    /** Package-visible so the test can simulate another instance already holding it. */
+    static final String LOCK_NAME = "stock-recovery-sweep";
 
     @ConfigProperty(name = "order.abandoned.hold-minutes", defaultValue = "30")
     int holdMinutes;
@@ -79,8 +96,14 @@ public class StockRecoveryJob
     @ConfigProperty(name = "order.abandoned.batch-size", defaultValue = "200")
     int batchSize;
 
+    @ConfigProperty(name = "order.abandoned.lock-lease-seconds", defaultValue = "240")
+    long lockLeaseSeconds;
+
     @Inject
     OrderService orderService;
+
+    @Inject
+    DistributedLockService lockService;
 
     @Inject
     EntityManager em;
@@ -90,10 +113,26 @@ public class StockRecoveryJob
      * would otherwise have a second sweep started alongside it, and each extra
      * runner makes the next one likelier. Overlap is never a correctness
      * problem — the atomic claim admits one winner — so this exists purely to
-     * stop the job competing with itself for the database.
+     * stop the job competing with itself for the database. The lock below is the
+     * same idea one level up, across replicas rather than within one JVM.
      */
     @Scheduled(every = "5m", concurrentExecution = Scheduled.ConcurrentExecution.SKIP)
     public void releaseAbandonedOrders()
+    {
+        Optional<String> lockToken = lockService.tryAcquire(LOCK_NAME, Duration.ofSeconds(lockLeaseSeconds));
+        if (lockToken.isEmpty()) {
+            LOG.debugf("Stock recovery sweep skipped: another instance already holds the lock");
+            return;
+        }
+
+        try {
+            sweep();
+        } finally {
+            lockService.release(LOCK_NAME, lockToken.get());
+        }
+    }
+
+    private void sweep()
     {
         LocalDateTime cutoff = LocalDateTime.now().minusMinutes(holdMinutes);
         List<UUID> candidateIds = QuarkusTransaction.requiringNew().call(() -> findAbandonedIds(cutoff));

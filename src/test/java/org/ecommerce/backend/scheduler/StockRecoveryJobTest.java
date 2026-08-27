@@ -5,6 +5,7 @@ import io.quarkus.test.junit.mockito.InjectSpy;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
+import org.ecommerce.backend.service.DistributedLockService;
 import org.ecommerce.backend.service.OrderService;
 import org.ecommerce.common.entity.OrderEntity;
 import org.ecommerce.common.entity.OrderItemEntity;
@@ -21,9 +22,11 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -71,6 +74,9 @@ class StockRecoveryJobTest
      */
     @InjectSpy
     OrderService orderService;
+
+    @Inject
+    DistributedLockService lockService;
 
     private final List<UUID> orderIds = new ArrayList<>();
     private final List<UUID> variantIds = new ArrayList<>();
@@ -349,5 +355,59 @@ class StockRecoveryJobTest
                 "the failed order rolls back whole — status included — so the next tick retries it");
         assertEquals(0, stockOf(poisonVariant));
         assertEquals(0L, historyCountFor(poisonOrder), "a rolled-back release must leave no timeline entry");
+    }
+
+    // ── Cross-instance coordination ─────────────────────────────────────────
+    // Proves the actual point of Tier B2: a genuinely eligible order is left
+    // completely alone when another instance already holds the sweep lock — not
+    // partially processed, not queued, just skipped outright for this tick.
+
+    @Test
+    @DisplayName("the sweep is skipped entirely while another instance holds the lock")
+    void sweepIsSkipped_whileAnotherInstanceHoldsTheLock() throws InterruptedException
+    {
+        String marker = "ZZSRJ-LOCKED-" + UUID.randomUUID().toString().substring(0, 8);
+        UUID variantId = newVariant(marker, 5);
+        UUID orderId = newOrder(OrderStatusEn.CREATED, variantId, 3, FAR_PAST);
+
+        // Simulates a different backend replica already running this tick's sweep.
+        Optional<String> otherInstanceToken =
+                lockService.tryAcquire(StockRecoveryJob.LOCK_NAME, Duration.ofSeconds(30));
+        assertTrue(otherInstanceToken.isPresent(), "test setup: the lock must start free");
+
+        try {
+            job.releaseAbandonedOrders();
+
+            assertEquals(OrderStatusEn.CREATED, statusOf(orderId),
+                    "a genuinely eligible order must be left untouched when the lock is held elsewhere");
+            assertEquals(5, stockOf(variantId));
+            assertEquals(0L, historyCountFor(orderId), "a skipped sweep must not even attempt the order");
+        } finally {
+            lockService.release(StockRecoveryJob.LOCK_NAME, otherInstanceToken.get());
+        }
+    }
+
+    @Test
+    @DisplayName("the sweep proceeds normally once the lock is free again")
+    void sweepProceeds_onceTheLockIsFreeAgain()
+    {
+        String marker = "ZZSRJ-UNLOCKED-" + UUID.randomUUID().toString().substring(0, 8);
+        UUID variantId = newVariant(marker, 5);
+        UUID orderId = newOrder(OrderStatusEn.CREATED, variantId, 3, FAR_PAST);
+
+        // No pre-acquired lock this time — the job must acquire it itself and release
+        // it on the way out, exactly like every other test in this class relies on
+        // implicitly by calling releaseAbandonedOrders() more than once per run.
+        job.releaseAbandonedOrders();
+
+        assertEquals(OrderStatusEn.SYSTEM_CANCELED, statusOf(orderId));
+        assertEquals(8, stockOf(variantId));
+
+        // And the lock the job just used is free again for the next tick — proves
+        // releaseAbandonedOrders() releases on its own, not just when a test does it.
+        Optional<String> nextTickToken =
+                lockService.tryAcquire(StockRecoveryJob.LOCK_NAME, Duration.ofSeconds(30));
+        assertTrue(nextTickToken.isPresent(), "the job must release its own lock when the sweep completes");
+        lockService.release(StockRecoveryJob.LOCK_NAME, nextTickToken.get());
     }
 }
