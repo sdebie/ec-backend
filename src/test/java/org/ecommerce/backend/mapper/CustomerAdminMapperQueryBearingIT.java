@@ -18,8 +18,6 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 /**
  * Output-preservation test for {@code CustomerAdminMapper.toListItemDto(customer, application)}.
@@ -68,7 +66,6 @@ class CustomerAdminMapperQueryBearingIT
     // ══════════════════════════════════════════════════════════════════════════
 
     @Test
-    @SuppressWarnings("unchecked")
     void toListItemDto_queryBearing_customerWithWholesaleApp_matchesBaseline()
     {
         UUID customerId = UUID.randomUUID();
@@ -83,7 +80,6 @@ class CustomerAdminMapperQueryBearingIT
     }
 
     @Test
-    @SuppressWarnings("unchecked")
     void toListItemDto_queryBearing_customerWithoutWholesaleApp_matchesBaseline()
     {
         UUID customerId = UUID.randomUUID();
@@ -97,7 +93,6 @@ class CustomerAdminMapperQueryBearingIT
     }
 
     @Test
-    @SuppressWarnings("unchecked")
     void toListItemDto_queryBearing_nullUser_emailAndRegisteredAtNull()
     {
         UUID customerId = UUID.randomUUID();
@@ -114,7 +109,6 @@ class CustomerAdminMapperQueryBearingIT
     }
 
     @Test
-    @SuppressWarnings("unchecked")
     void toListItemDto_queryBearing_nullStatusAndShopperType_mapsToNull()
     {
         UUID customerId = UUID.randomUUID();
@@ -132,7 +126,6 @@ class CustomerAdminMapperQueryBearingIT
     }
 
     @Test
-    @SuppressWarnings("unchecked")
     void toListItemDto_queryBearing_pendingWholesaleApp_statusMapped()
     {
         UUID customerId = UUID.randomUUID();
@@ -148,7 +141,6 @@ class CustomerAdminMapperQueryBearingIT
     }
 
     @Test
-    @SuppressWarnings("unchecked")
     void toListItemDto_queryBearing_appWithNullStatus_wholesaleStatusIsNull()
     {
         UUID customerId = UUID.randomUUID();

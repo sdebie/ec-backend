@@ -55,14 +55,13 @@ class CustomerTokenContractIT
     CustomerPortalService customerPortalService;
 
     private CustomerEntity customer;
-    private UUID customerId;
 
     @BeforeEach
     void setUp()
     {
         PanacheMock.mock(CustomerEntity.class);
 
-        customerId = UUID.randomUUID();
+        UUID customerId = UUID.randomUUID();
 
         UserEntity user = new UserEntity();
         user.setId(UUID.randomUUID());

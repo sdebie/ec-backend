@@ -83,8 +83,11 @@ public class ProductImportValidator
             //New Product
             if (staged.getIsNewProduct()) {
                 validationErrors.add("SKU " + staged.getSku() + " already exists for product " + safeProductName(existingVariant));
-            } else if (existingVariant.getProduct() != null && !Objects.equals(existingVariant.getProduct().getId(), existingProduct.getId())) {
-                validationErrors.add("SKU " + staged.getSku() + " already belongs to another product");
+            } else {
+                assert existingVariant != null;
+                if (existingVariant.getProduct() != null && !Objects.equals(existingVariant.getProduct().getId(), existingProduct.getId())) {
+                    validationErrors.add("SKU " + staged.getSku() + " already belongs to another product");
+                }
             }
         }
 

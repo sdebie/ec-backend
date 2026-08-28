@@ -60,7 +60,7 @@ public class ProductService
     {
         CatalogueSortEn effectiveSort = sortBy != null ? sortBy : CatalogueSortEn.NAME_ASC;
         PriceBasisEn effectiveBasis = priceBasis != null ? priceBasis : PriceBasisEn.RETAIL;
-        FilterRequest effectiveFilterRequest = applyActiveProductStatusFilter(filterRequest, false);
+        FilterRequest effectiveFilterRequest = applyActiveProductStatusFilter(filterRequest);
         LocalDateTime now = LocalDateTime.now();
         return productListItemAssembler.buildShoppingListItems(productRepository.findShoppingProductEntities(pageRequest, effectiveFilterRequest, onSale, effectiveSort, effectiveBasis, inStockOnly), now, false);
     }
@@ -109,20 +109,20 @@ public class ProductService
     @Transactional(value = TxType.SUPPORTS)
     public long productCount(FilterRequest filterRequest)
     {
-        return productRepository.count(applyActiveProductStatusFilter(filterRequest, false));
+        return productRepository.count(applyActiveProductStatusFilter(filterRequest));
     }
 
     @Transactional(value = TxType.SUPPORTS)
     public long countShoppingProducts(FilterRequest filterRequest, boolean onSale, Boolean inStockOnly)
     {
-        FilterRequest effectiveFilterRequest = applyActiveProductStatusFilter(filterRequest, false);
+        FilterRequest effectiveFilterRequest = applyActiveProductStatusFilter(filterRequest);
         return productRepository.countShoppingProducts(effectiveFilterRequest, onSale, inStockOnly);
     }
 
-    private FilterRequest applyActiveProductStatusFilter(FilterRequest filterRequest, boolean ignoreStatus)
+    private FilterRequest applyActiveProductStatusFilter(FilterRequest filterRequest)
     {
         FilterRequest effectiveFilterRequest = copyFilterRequest(filterRequest);
-        if (ignoreStatus) {
+        if (false) {
             return effectiveFilterRequest;
         }
 
@@ -330,7 +330,7 @@ public class ProductService
         if (input.getVariants() == null || input.getVariants().isEmpty()) {
             return List.of();
         }
-        ProductVariantDto firstVariant = input.getVariants().get(0);
+        ProductVariantDto firstVariant = input.getVariants().getFirst();
         if (firstVariant.getImages() == null || firstVariant.getImages().isEmpty()) {
             return List.of();
         }

@@ -192,8 +192,8 @@ class StockRecoveryJobTest
                 .setParameter("id", orderId)
                 .getResultList();
         assertEquals(1, history.size());
-        assertEquals(OrderStatusEn.SYSTEM_CANCELED, history.get(0).getStatus());
-        assertEquals("SYSTEM", history.get(0).getChangedBy());
+        assertEquals(OrderStatusEn.SYSTEM_CANCELED, history.getFirst().getStatus());
+        assertEquals("SYSTEM", history.getFirst().getChangedBy());
     }
 
     /**
@@ -359,7 +359,7 @@ class StockRecoveryJobTest
 
     @Test
     @DisplayName("the sweep is skipped entirely while another instance holds the lock")
-    void sweepIsSkipped_whileAnotherInstanceHoldsTheLock() throws InterruptedException
+    void sweepIsSkipped_whileAnotherInstanceHoldsTheLock()
     {
         String marker = "ZZSRJ-LOCKED-" + UUID.randomUUID().toString().substring(0, 8);
         UUID variantId = newVariant(marker, 5);

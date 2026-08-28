@@ -116,11 +116,11 @@ class IgnoreStatusAuthIT
 
     // ─── JWT Helper ─────────────────────────────────────────────────────────
 
-    private String generateStaffJwt(String role)
+    private String generateStaffJwt()
     {
         return Jwt.subject("ignorestat-test@staff.com")
                 .issuer("http://localhost:8080")
-                .groups(role)
+                .groups("SUPER_ADMIN")
                 .sign();
     }
 
@@ -180,7 +180,7 @@ class IgnoreStatusAuthIT
     @DisplayName("Staff saleProductList(ignoreStatus: true) → succeeds, includes tracked PENDING product")
     void staffSaleProductListWithIgnoreStatus_succeedsAndIncludesTrackedProduct()
     {
-        String staffToken = generateStaffJwt("SUPER_ADMIN");
+        String staffToken = generateStaffJwt();
 
         given()
                 .header("Authorization", "Bearer " + staffToken)

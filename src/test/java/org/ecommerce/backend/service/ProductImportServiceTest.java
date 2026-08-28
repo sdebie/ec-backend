@@ -263,7 +263,7 @@ class ProductImportServiceTest
     }
 
     @Test
-    void applyValidationResults_shouldStoreValidationStatusAndMessage() throws Exception
+    void applyValidationResults_shouldStoreValidationStatusAndMessage()
     {
         ProductImportStagedEntity staged = new ProductImportStagedEntity();
         ArrayList<String> validationErrors = new ArrayList<>();
@@ -283,7 +283,7 @@ class ProductImportServiceTest
             String brandSlug,
             String imagesValue,
             String attributesJson
-    ) throws Exception
+    )
     {
         productImportValidator.validateAndDiff(staged, validationErrors, stock, brandSlug, imagesValue, attributesJson);
     }
