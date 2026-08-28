@@ -31,9 +31,9 @@ import static org.mockito.Mockito.when;
  * Producer→consumer contract test for the customer JWT.
  * <p>
  * Every other IT mints its own token with Jwt.subject(...), which lets the real
- * issuer drift from what the consumers expect — exactly the defect shipped on
- * 2026-07-19, where CustomerAuthService set only upn while every endpoint read
- * jwt.getSubject(). This test uses the REAL production issuer
+ * issuer drift from what the consumers expect — exactly the shape of defect this
+ * guards against: {@code CustomerAuthService} setting only {@code upn} while every
+ * endpoint reads {@code jwt.getSubject()}. This test uses the REAL production issuer
  * (CustomerAuthService.generateToken) and asserts the token is accepted by the
  * real consumer endpoints.
  */

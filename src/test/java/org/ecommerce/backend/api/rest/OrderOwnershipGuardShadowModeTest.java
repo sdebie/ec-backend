@@ -26,10 +26,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.when;
 
 /**
- * tasks.md task 2.5 — corrected 2026-08-19 after shipping ticked `[x]` with no test
- * artifact behind it: a repo-wide grep for {@code shadow} matched only
- * {@link OrderOwnershipGuard} itself, so the {@code legacyMayAccess} fallback under
- * {@code order.capability.enforce=false} had never been exercised.
+ * tasks.md task 2.5: a repo-wide grep for {@code shadow} matches only
+ * {@link OrderOwnershipGuard} itself — the {@code legacyMayAccess} fallback under
+ * {@code order.capability.enforce=false} has no other test exercising it.
  * <p>
  * {@link OrderOwnershipGuardTest} cannot reach that branch: it runs under the
  * project-wide default (no {@code %test} override for {@code order.capability.enforce},

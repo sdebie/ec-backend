@@ -17,24 +17,18 @@ import static org.ecommerce.common.util.CsvImportUtils.getValue;
 import static org.ecommerce.common.util.CsvImportUtils.parseBigDecimal;
 
 /**
- * Parses price-import CSV files into typed {@link ParsedPriceRow} objects.
- * <p>
- * Extracted from {@code ProductPriceImportService} — the parsing logic is
- * identical to the pre-extraction behavior (blank → ZERO, invalid → error, same header aliases).
+ * Parses price-import CSV files into typed {@link ParsedPriceRow} objects: a blank price
+ * cell maps to {@code ZERO}, an unparseable one to {@code null} plus a validation error.
  */
 @ApplicationScoped
 public class ProductPriceImportParser
 {
 
     /**
-     * Parses a single {@link CSVRecord} into a typed {@link ParsedPriceRow}.
-     * <p>
-     * Behavior matches the original {@code ProductPriceImportService.parseProductPriceCsvRow}:
-     * <ul>
-     *   <li>{@code sku} is extracted via headers "sku" or "SKU"</li>
-     *   <li>{@code retail_price} / "Retail Price" — blank→BigDecimal.ZERO, invalid→null + error</li>
-     *   <li>{@code wholesale_price} / "Wholesale Price" — blank→BigDecimal.ZERO, invalid→null + error</li>
-     * </ul>
+     * Parses a single {@link CSVRecord} into a typed {@link ParsedPriceRow}. Reads
+     * {@code sku} from either "sku" or "SKU"; reads {@code retail_price}/"Retail Price" and
+     * {@code wholesale_price}/"Wholesale Price" the same way, each blank cell mapping to
+     * {@code BigDecimal.ZERO} and each unparseable one to {@code null} plus a validation error.
      */
     public ParsedPriceRow parsePriceCsvRow(CSVRecord record)
     {
@@ -48,10 +42,8 @@ public class ProductPriceImportParser
     }
 
     /**
-     * Parses all rows from an input stream of CSV data into a list of {@link ParsedPriceRow} objects.
-     * <p>
-     * Uses the same CSV format configuration as the original service:
-     * header row present, skip header record, ignore header case, trim values.
+     * Parses all rows from an input stream of CSV data into a list of {@link ParsedPriceRow}
+     * objects, using a case-insensitive header row and trimmed values.
      */
     public List<ParsedPriceRow> parseAll(InputStream is) throws IOException
     {

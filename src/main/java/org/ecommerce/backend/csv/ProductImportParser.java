@@ -18,9 +18,8 @@ import static org.ecommerce.common.util.CsvImportUtils.getValue;
 import static org.ecommerce.common.util.CsvImportUtils.isBlank;
 
 /**
- * Parses product import CSV files into typed row objects.
- * Extracted from {@code ProductImportService} to separate parsing concerns
- * from validation and orchestration.
+ * Parses product import CSV files into typed row objects. Validation and orchestration
+ * live in {@code ProductImportService}; this class handles parsing only.
  */
 @ApplicationScoped
 public class ProductImportParser {

@@ -25,9 +25,6 @@ import java.util.stream.Collectors;
  * coordinates page-level repository preloads — it does not open queries itself,
  * and it is not a pure mapper. Repositories own the queries; services orchestrate
  * repository → assembler. Pure field copying lives here.
- * <p>
- * Replaces the former query-bearing {@code ProductListItemMapper} and the DTO
- * assembly that briefly lived inside {@code ProductRepository}.
  */
 @ApplicationScoped
 public class ProductListItemAssembler

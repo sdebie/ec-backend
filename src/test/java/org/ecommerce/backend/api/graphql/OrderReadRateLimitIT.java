@@ -25,8 +25,8 @@ import static org.mockito.Mockito.when;
 /**
  * Rate limiting on the GraphQL read surfaces S1 ({@code getOrderDetail}) and S2′
  * ({@code orderStatus}) — guest-order-authorization Requirement 7.2a, sized off
- * {@code usePollOrderStatus}'s real polling rate (every 3s for up to 120s — up to 40
- * requests from one ordinary checkout).
+ * {@code usePollOrderStatus}'s real polling rate, so an ordinary guest checkout already
+ * accounts for a meaningful share of the window on its own.
  * <p>
  * GraphQL has no per-query HTTP status code, so a denial here is a distinct GraphQL
  * error (200 + {@code errors}) rather than a raw 429 — the same shape every other

@@ -39,22 +39,20 @@ import static org.mockito.Mockito.doThrow;
 
 /**
  * DB-backed tests for {@link StockRecoveryJob#releaseAbandonedOrders()}.
- *
- * <h2>Why these commit instead of using {@code @TestTransaction}</h2>
- * The job releases each order in its own {@code QuarkusTransaction.requiringNew()}.
- * A {@code @TestTransaction} wrapper would be worse than merely unhelpful here: the
- * job's transactions could not see the test's uncommitted fixtures at all, so every
- * sweep would find nothing and the tests would pass by vacuum. These follow the
- * codebase's tracked-id + {@code @AfterEach} cleanup pattern instead.
- *
- * <h2>Why every fixture is backdated to 2001</h2>
- * Committing changes what an invoked sweep can damage. With the former
- * {@code hold-minutes=0}, a sweep would have been eligible to cancel real CREATED
- * orders in the shared database and return their stock — permanently, since no
- * rollback covers it any more. {@code %test.order.abandoned.hold-minutes} is a full
- * year, so only these far-past fixtures are ever candidates. That also makes the
- * batch test deterministic: ordering is oldest-first, so 2001 fixtures always sort
- * ahead of anything real.
+ * <p>
+ * These commit rather than using {@code @TestTransaction}: the job releases each order in
+ * its own {@code QuarkusTransaction.requiringNew()}, and that wrapper would be worse than
+ * merely unhelpful here — the job's transactions could not see the test's uncommitted
+ * fixtures at all, so every sweep would find nothing and the tests would pass by vacuum.
+ * These follow the codebase's tracked-id + {@code @AfterEach} cleanup pattern instead.
+ * <p>
+ * Every fixture is backdated to 2001 because committing changes what an invoked sweep can
+ * damage: too short a hold window would leave a sweep eligible to cancel real CREATED
+ * orders in the shared database and return their stock — permanently, since no rollback
+ * covers it any more. {@code %test.order.abandoned.hold-minutes} is a full year, so only
+ * these far-past fixtures are ever candidates. That also makes the batch test
+ * deterministic: ordering is oldest-first, so 2001 fixtures always sort ahead of anything
+ * real.
  */
 @QuarkusTest
 class StockRecoveryJobTest

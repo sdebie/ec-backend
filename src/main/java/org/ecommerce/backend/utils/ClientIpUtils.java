@@ -4,16 +4,13 @@ package org.ecommerce.backend.utils;
  * Shared utility for resolving the real client IP from proxy headers.
  * The platform runs behind Cloudflare (quarkus.http.proxy.* configured).
  * <p>
- * Resolution order and rationale (docs/KNOWN-LIMITATIONS.md §2, §3):
- * <ol>
- *   <li>{@code CF-Connecting-IP} — Cloudflare always sets this from the true TCP
- *       connection; clients cannot forge it through the edge.</li>
- *   <li>The <b>last</b> {@code X-Forwarded-For} entry — the one appended by the
- *       trusted proxy. The FIRST entry is client-controlled (Cloudflare appends the
- *       real IP to any client-supplied XFF), so it must never be used for
- *       rate-limit keying.</li>
- *   <li>{@code X-Real-IP}, then {@code "unknown"}.</li>
- * </ol>
+ * Resolution order (docs/KNOWN-LIMITATIONS.md §2, §3): {@code CF-Connecting-IP} first,
+ * since Cloudflare always sets it from the true TCP connection and clients cannot forge
+ * it through the edge; then the <b>last</b> {@code X-Forwarded-For} entry, the one
+ * appended by the trusted proxy — the FIRST entry is client-controlled (Cloudflare
+ * appends the real IP to any client-supplied XFF), so it must never be used for
+ * rate-limit keying; then {@code X-Real-IP}, then {@code "unknown"}.
+ * <p>
  * Behind a self-managed (non-Cloudflare) proxy, the proxy must append or overwrite
  * X-Forwarded-For with the socket peer — see KNOWN-LIMITATIONS §3.
  */

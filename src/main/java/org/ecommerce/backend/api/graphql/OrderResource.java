@@ -35,12 +35,13 @@ public class OrderResource
     private static final Logger LOG = Logger.getLogger(OrderResource.class);
 
     /**
-     * Guest-order-authorization Requirement 7.2a — sized off the real polling rate,
-     * not off the write-surface limiters above: {@code usePollOrderStatus} fires every
-     * 3s for up to 120s, so one ordinary guest checkout is already ~40 requests from
-     * one IP before counting {@code getOrderDetail} account-page traffic or a second
-     * concurrent checkout attempt. This is the one limit in the spec a legitimate
-     * shopper can plausibly reach, so it is sized generously above that baseline.
+     * Guest-order-authorization Requirement 7.2a — sized off the real polling rate, not
+     * off the write-surface limiters above: {@code usePollOrderStatus} polls this endpoint
+     * repeatedly over the life of a guest checkout, so one ordinary checkout already
+     * accounts for a meaningful share of the window before counting {@code getOrderDetail}
+     * account-page traffic or a second concurrent checkout attempt. This is the one limit
+     * in the spec a legitimate shopper can plausibly reach, so it is sized generously
+     * above that baseline.
      */
     private static final int ORDER_READ_MAX_PER_WINDOW = 150;
     private static final long ORDER_READ_WINDOW_SECONDS = 3600;

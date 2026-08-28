@@ -245,8 +245,6 @@ class IgnoreStatusAuthIT
 
     // ═══════════════════════════════════════════════════════════════════════════
     // (e) AUTHENTICATED but NON-STAFF caller (customer role) is forbidden
-    //     (added by audit 2026-07-30 — the ForbiddenException branch was untested;
-    //     only anonymous and SUPER_ADMIN were covered)
     // ═══════════════════════════════════════════════════════════════════════════
 
     @Test

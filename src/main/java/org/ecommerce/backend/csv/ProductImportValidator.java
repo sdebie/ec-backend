@@ -16,10 +16,8 @@ import static org.ecommerce.common.util.CsvImportUtils.isBlank;
 
 /**
  * Validates product import staged rows against business rules and detects
- * changes (diff) relative to existing data.
- * <p>
- * Extracted from {@code ProductImportService} to separate validation concerns
- * from parsing and orchestration.
+ * changes (diff) relative to existing data. Parsing and orchestration live in
+ * {@code ProductImportService}; this class handles validation only.
  */
 @ApplicationScoped
 public class ProductImportValidator

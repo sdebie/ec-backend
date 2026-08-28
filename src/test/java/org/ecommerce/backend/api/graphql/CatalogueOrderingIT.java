@@ -766,8 +766,7 @@ class CatalogueOrderingIT
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // Task 4.4: Null-basis ordering (added by audit 2026-07-30 — the task was
-    // checked but the test did not exist)
+    // Task 4.4: Null-basis ordering
     //
     // A product with no active price row in the requested basis has a NULL sort
     // key and must sort LAST in BOTH directions. Postgres defaults DESC to
@@ -819,7 +818,6 @@ class CatalogueOrderingIT
 
     // ═══════════════════════════════════════════════════════════════════════════
     // Requirement 5.8: multi-category product appears exactly once, no DISTINCT
-    // (added by audit 2026-07-30 — the fixture mandated by tasks 2.2/2.5 was absent)
     //
     // A product linked to TWO categories that BOTH match the category.id IN filter
     // is the exact row-multiplication case the old join + DISTINCT compensated for.
@@ -885,8 +883,6 @@ class CatalogueOrderingIT
 
     // ═══════════════════════════════════════════════════════════════════════════
     // Task 4.3 (repeated-price case): tie-break totality under LIMIT/OFFSET
-    // (added by audit 2026-07-30 — the existing pagination test seeds distinct
-    // prices, so the load-bearing p.name/p.id tie-break was unexercised)
     //
     // With IDENTICAL prices, only the deterministic tie-break stops products
     // being duplicated or skipped across page boundaries. Walk every page twice:

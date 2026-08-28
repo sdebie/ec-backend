@@ -114,9 +114,8 @@ public class PayFastResource
                     .entity(Map.of("error", "Order not found")).build();
         }
 
-        // Requirement 8: the payer email comes from the order — contactEmail, then the
-        // linked customer's account email — never from a caller-supplied parameter,
-        // which used to take priority over both and let anyone redirect the receipt.
+        // Requirement 8: the payer email comes from the order — see resolveEmail's own
+        // Javadoc for why it is never a caller-supplied parameter.
         String email = resolveEmail(quote);
 
         if (email == null || email.isBlank()) {

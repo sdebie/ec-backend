@@ -18,10 +18,6 @@ import static org.ecommerce.common.util.CsvImportUtils.isBlank;
 /**
  * Validates price-import staged rows: SKU existence, variant lookup,
  * price diff/comparison, and error accumulation.
- * <p>
- * Extracted from {@code ProductPriceImportService} — the validation logic is
- * identical to the pre-extraction behaviour (same error messages, same ordering,
- * same diff semantics).
  */
 @ApplicationScoped
 public class ProductPriceImportValidator
@@ -46,16 +42,9 @@ public class ProductPriceImportValidator
     }
 
     /**
-     * Validates a parsed price row and computes the diff against current prices.
-     * <p>
-     * Behaviour matches the original {@code ProductPriceImportService.stageProductPriceRowsChunkInTransaction}:
-     * <ul>
-     *   <li>Accumulates any parse errors from the parser</li>
-     *   <li>Checks SKU is not blank — adds "sku is required" if blank</li>
-     *   <li>Looks up variant by SKU — adds "variant with sku 'X' not found" if missing</li>
-     *   <li>Compares proposed retail/wholesale prices with current latest prices</li>
-     *   <li>Determines hasChanges flag based on price comparison</li>
-     * </ul>
+     * Validates a parsed price row and computes the diff against current retail/wholesale
+     * prices. Accumulates any parse errors alongside its own SKU-required / variant-not-found
+     * failures.
      *
      * @param sku            the SKU from the parsed row
      * @param retailPrice    the proposed retail price
@@ -82,8 +71,6 @@ public class ProductPriceImportValidator
     /**
      * Applies validation results to the staged entity: sets the validation status
      * and joins error messages.
-     * <p>
-     * Behaviour matches the original {@code ProductPriceImportService.applyValidationResults}.
      *
      * @param staged           the staged entity to update
      * @param validationErrors the accumulated errors

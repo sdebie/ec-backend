@@ -343,13 +343,8 @@ public class ProductService
      * The manifest is a single ordered list of images that the product editor carries on
      * payload variant index 0 (transport convention only). After all variant upserts, this
      * method determines the "owner variant" — the ACTIVE variant with the lowest UUID
-     * (sorted by UUID.toString()) — and persists the manifest on it.
-     * <p>
-     * Steps:
-     * 1. Determine the owner variant (active, lowest UUID).
-     * 2. Load all existing ProductImageEntity rows for this product (across all variants).
-     * 3. Reconcile: add new images, remove images not in the manifest, update sortOrder/isFeatured.
-     * 4. Normalise: move any existing images on a non-owner variant to the owner variant.
+     * (sorted by UUID.toString()) — and persists the manifest on it, moving any images that
+     * had landed on a non-owner variant back onto it.
      */
     private void updateProductImages(UUID productId, List<ProductImageDto> manifest)
     {
@@ -494,17 +489,14 @@ public class ProductService
     }
 
     /**
-     * Shared validate-and-persist helper for variants and their price rows.
-     * Used by both addProductInformation (create) and updateProductVariants (update).
+     * Shared validate-and-persist helper for variants and their price rows, used by both
+     * addProductInformation (create) and updateProductVariants (update). Each variant DTO is
+     * matched to an existing row by id (verified to belong to this product) or, failing
+     * that, by SKU; an unmatched DTO creates a new variant. Prices are upserted per type so
+     * a variant never accumulates duplicate price rows.
      * <p>
-     * For each variant DTO:
-     * - If it carries an id, look it up and verify it belongs to this product (cross-product guard).
-     * - If it carries no id, try to match by SKU against existing variants for this product.
-     * - Create or update the variant entity accordingly.
-     * - Persist each price via upsert, preventing duplicate price rows for the same type.
-     * <p>
-     * Assumptions: the ProductWriteValidator has already validated the aggregate
-     * (non-blank SKUs, request-unique SKUs, exactly one positive RETAIL_PRICE, ownership).
+     * Assumes {@code ProductWriteValidator} has already validated the aggregate (non-blank
+     * SKUs, request-unique SKUs, exactly one positive RETAIL_PRICE, ownership).
      */
     private void persistVariantsWithPrices(ProductEntity product, List<ProductVariantDto> variantDtos)
     {
@@ -572,12 +564,10 @@ public class ProductService
     }
 
     /**
-     * Upserts price rows for a variant. For each price DTO:
-     * - If a price id is supplied, update that specific row (already ownership-validated).
-     * - Otherwise find existing row by (variant, priceType) and update it — no duplicate.
-     * - If no existing row exists, create one.
-     * <p>
-     * This prevents duplicate price rows for the same price type on a variant.
+     * Upserts price rows for a variant: updates the row a supplied price id names (already
+     * ownership-validated), or the existing row for that (variant, priceType) pair when no
+     * id is given, creating one only if neither is found — so a variant never accumulates
+     * duplicate rows for the same price type.
      */
     private void persistVariantPrices(ProductVariantEntity variant, List<VariantPriceDto> priceDtos)
     {
