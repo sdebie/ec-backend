@@ -842,10 +842,9 @@ class OrderContactResourceTest
     @Test
     void updateContact_postalCodeExceedsMaxLength_returns422AndDoesNotMutate()
     {
-        // 20 is deliberately generous, not South-Africa-specific (law 1: no
-        // client-specific code) — long enough for any real country's postal/ZIP
-        // format, so this only catches genuine garbage, never a legitimate one
-        // from a future non-SA client.
+        // 20 is deliberately generous, not South-Africa-specific — long enough for
+        // any real country's postal/ZIP format, so this only catches genuine
+        // garbage, never a legitimate one from a future non-SA client.
         UUID orderId = UUID.randomUUID();
 
         OrderEntity order = new OrderEntity();

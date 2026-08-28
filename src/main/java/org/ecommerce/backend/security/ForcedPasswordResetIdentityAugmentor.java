@@ -13,37 +13,29 @@ import org.ecommerce.common.enums.StaffRoleEn;
 import java.util.Set;
 
 /**
- * Server-side mirror of two staff-account-state gates. A staff JWT otherwise carries
- * the account's real role for its full 8-hour life regardless of what happens to the
- * account afterward — both {@code staff_users.reset_password} and {@code .is_active}
- * were previously only ever reported in a response body (AdminMeResource,
- * StaffResource#login), never enforced, so neither a flagged nor a deactivated
- * account's token was actually stopped by anything.
+ * Server-side mirror of two staff-account-state gates: {@code staff_users.reset_password}
+ * and {@code .is_active}. Neither is otherwise enforced — a staff JWT carries the
+ * account's real role for its full 8-hour life regardless of what happens to the
+ * account afterward, so a flagged or deactivated account's token was not actually
+ * stopped by anything.
  * <p>
- * This augmentor re-reads the same {@code StaffUserEntity} row on every authenticated
- * staff request and applies whichever of two outcomes the row calls for, deactivation
- * taking priority when both are true:
+ * Re-reads the same {@code StaffUserEntity} row on every authenticated staff request,
+ * deactivation taking priority when both are true:
  * <ul>
- *   <li><b>Deactivated</b> ({@code !isActive()}) — the identity is stripped to zero
- *       roles. No sentinel, unlike a forced reset: a deactivated account has no
- *       self-service endpoint it should still reach, including {@code /admin/me}.</li>
- *   <li><b>Reset required</b> ({@code isResetPassword()}) — the identity's roles are
- *       replaced with a single sentinel role. Every other {@code @RolesAllowed} check
- *       in the admin surface — REST and GraphQL alike, since both rely on the same
- *       mechanism — then fails automatically with no per-endpoint change needed. The
- *       two endpoints a flagged account must still reach (self-service reset,
- *       {@code /admin/me}) opt back in by naming {@link #PASSWORD_RESET_REQUIRED_ROLE}
- *       in their own {@code @RolesAllowed}.</li>
+ *   <li><b>Deactivated</b> — identity stripped to zero roles. No sentinel, unlike a
+ *       forced reset: a deactivated account has no self-service endpoint left to
+ *       reach, including {@code /admin/me}.</li>
+ *   <li><b>Reset required</b> — roles replaced with a single sentinel role, so every
+ *       other {@code @RolesAllowed} check across REST and GraphQL fails automatically.
+ *       The two endpoints a flagged account must still reach opt back in by naming
+ *       {@link #PASSWORD_RESET_REQUIRED_ROLE} in their own {@code @RolesAllowed}.</li>
  * </ul>
- * Re-checked on every request rather than baked into the JWT at login: a state change
- * made mid-session (an admin forces a reset, or deactivates the account, while it's
- * already logged in) must take effect immediately, not after the existing token's
- * remaining lifetime.
+ * Re-checked on every request, not baked into the JWT: a state change made mid-session
+ * must take effect immediately, not after the token's remaining lifetime.
  * <p>
- * A staff email with no matching row is passed through unchanged rather than failing
- * closed — this codebase's staff/admin test suite self-signs JWTs with no backing DB
- * row for pure role-matrix tests, and failing closed here would defeat that
- * convention for every one of them.
+ * A staff email with no matching row passes through unchanged rather than failing
+ * closed — the staff/admin test suite self-signs JWTs with no backing DB row for pure
+ * role-matrix tests, and failing closed here would defeat that convention.
  */
 @ApplicationScoped
 public class ForcedPasswordResetIdentityAugmentor implements SecurityIdentityAugmentor

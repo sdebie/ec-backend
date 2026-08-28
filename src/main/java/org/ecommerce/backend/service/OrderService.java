@@ -626,7 +626,7 @@ public class OrderService
      * mix in {@code Instant}/{@code OffsetDateTime}.
      * <p>
      * A domain rule with a config value behind it, so it lives here rather
-     * than inline in the resource (law 13c).
+     * than inline in the resource.
      */
     public boolean isWithinReplayWindow(OrderEntity order)
     {

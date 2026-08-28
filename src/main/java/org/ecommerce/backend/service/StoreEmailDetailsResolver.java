@@ -12,13 +12,9 @@ import java.util.Currency;
 import java.util.Locale;
 
 /**
- * Assembles the store's own details for a customer email, from seed configuration.
- * <p>
- * These used to be literals in the order confirmation template — a store name, a street
- * address and a support address that belonged to nobody, shipped to every client of the
- * platform. Law 1 says a client is configured through seed data, and an email footer is
- * no exception: the wrong shop's address on a shopper's receipt is exactly the failure
- * that law exists to prevent.
+ * Assembles the store's own details for a customer email, from seed configuration,
+ * never literals — the wrong shop's address on a shopper's receipt is exactly
+ * the failure that would cause.
  * <p>
  * Reads the customer-facing half of {@code storefront.contact};
  * {@link EnquiryRecipientResolver} owns the staff mailbox field in the same key and is

@@ -30,8 +30,7 @@ import static org.hamcrest.Matchers.*;
  * <p>
  * Reintroducing any of them would restore that cost for no consumer, so this test
  * exists to make the removal stick. If a future admin surface genuinely needs a
- * product list, build it on {@code adminProductList} (law 4: reuse, don't duplicate)
- * rather than reviving these.
+ * product list, build it on {@code adminProductList} rather than reviving these.
  *
  * @see OrderMutationAbsenceIT the same guard pattern, applied to order creation
  */
