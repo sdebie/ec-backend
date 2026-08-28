@@ -10,7 +10,7 @@ import org.eclipse.microprofile.config.Config;
 import org.jboss.logging.Logger;
 
 /**
- * Shared, config-driven, Redis-backed fixed-window rate limiter. Buckets are keyed
+ * Config-driven, Redis-backed fixed-window rate limiter. Buckets are keyed
  * by {@code "<limiterName>:<key>"}, stored as a Redis integer whose TTL is the
  * window — {@code INCR} is atomic across every replica sharing this Redis, which is
  * what makes this safe with more than one backend instance.
@@ -29,12 +29,11 @@ public class RateLimiterService
     /**
      * Check whether a request identified by (name, key) is within the rate limit.
      *
-     * @param name                 logical limiter name (e.g. "enquiry", "customer-login")
-     * @param key                  per-caller discriminator (typically client IP or normalised email)
-     * @param defaultMax           maximum requests per window (used when no config override exists)
-     * @param defaultWindowSeconds window length in seconds (used when no config override exists)
-     * @return a {@link RateLimitDecision} indicating whether the request is allowed and,
-     * if denied, how many seconds remain in the current window
+     * @param name                 limiter name (e.g. "enquiry")
+     * @param key                  per-caller key (IP or email)
+     * @param defaultMax           max requests per window if unconfigured
+     * @param defaultWindowSeconds window length if unconfigured
+     * @return allowed/denied, plus retry-after seconds when denied
      */
     public RateLimitDecision check(String name, String key, int defaultMax, long defaultWindowSeconds)
     {
