@@ -1,6 +1,5 @@
 package org.ecommerce.backend.api.rest;
 
-import io.quarkus.panache.mock.PanacheMock;
 import io.quarkus.security.identity.SecurityIdentity;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
@@ -10,6 +9,7 @@ import jakarta.inject.Inject;
 import org.eclipse.microprofile.jwt.JsonWebToken;
 import org.ecommerce.common.entity.CustomerEntity;
 import org.ecommerce.common.entity.OrderEntity;
+import org.ecommerce.common.repository.CustomerRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -82,6 +82,9 @@ class OrderOwnershipGuardShadowModeTest
     @InjectMock
     JsonWebToken jwt;
 
+    @InjectMock
+    CustomerRepository customerRepository;
+
     private UUID orderId;
     private OrderEntity guestOrder;
     private OrderEntity customerOrder;
@@ -89,8 +92,6 @@ class OrderOwnershipGuardShadowModeTest
     @BeforeEach
     void setUp()
     {
-        PanacheMock.mock(CustomerEntity.class);
-
         orderId = UUID.randomUUID();
 
         guestOrder = new OrderEntity();
@@ -113,7 +114,7 @@ class OrderOwnershipGuardShadowModeTest
         when(jwt.getSubject()).thenReturn(email);
         CustomerEntity stranger = new CustomerEntity();
         stranger.setId(UUID.randomUUID());
-        when(CustomerEntity.findByEmail(email)).thenReturn(stranger);
+        when(customerRepository.findByEmail(email)).thenReturn(stranger);
     }
 
     private String readLogFile() throws IOException

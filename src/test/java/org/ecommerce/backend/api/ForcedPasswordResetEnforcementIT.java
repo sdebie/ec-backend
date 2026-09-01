@@ -9,6 +9,7 @@ import jakarta.transaction.Transactional;
 import org.ecommerce.backend.security.ForcedPasswordResetIdentityAugmentor;
 import org.ecommerce.common.entity.StaffUserEntity;
 import org.ecommerce.common.enums.StaffRoleEn;
+import org.ecommerce.common.repository.StaffRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -39,6 +40,9 @@ class ForcedPasswordResetEnforcementIT
 {
     @Inject
     EntityManager em;
+
+    @Inject
+    StaffRepository staffRepository;
 
     private static final String FLAGGED_EMAIL = "pwreset-flagged@test.com";
     private static final String NORMAL_EMAIL = "pwreset-normal@test.com";
@@ -80,19 +84,19 @@ class ForcedPasswordResetEnforcementIT
     @Transactional
     void setResetPassword(String email, boolean resetPassword)
     {
-        StaffUserEntity.findByEmail(email).setResetPassword(resetPassword);
+        staffRepository.findByEmail(email).setResetPassword(resetPassword);
     }
 
     @Transactional
     void setActive(String email, boolean active)
     {
-        StaffUserEntity.findByEmail(email).setActive(active);
+        staffRepository.findByEmail(email).setActive(active);
     }
 
     @Transactional
     String queryPasswordHash(String email)
     {
-        return StaffUserEntity.findByEmail(email).getPasswordHash();
+        return staffRepository.findByEmail(email).getPasswordHash();
     }
 
     @BeforeEach

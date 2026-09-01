@@ -1,6 +1,5 @@
 package org.ecommerce.backend.service;
 
-import io.quarkus.panache.mock.PanacheMock;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
@@ -9,7 +8,7 @@ import org.ecommerce.backend.exception.PasswordResetLockedException;
 import org.ecommerce.backend.utils.CustomerPasswordHashUtil;
 import org.ecommerce.common.entity.StaffUserEntity;
 import org.ecommerce.common.enums.StaffRoleEn;
-import org.junit.jupiter.api.BeforeEach;
+import org.ecommerce.common.repository.StaffRepository;
 import org.junit.jupiter.api.Test;
 
 import java.time.OffsetDateTime;
@@ -37,11 +36,8 @@ class StaffPasswordResetServiceTest
     @InjectMock
     PasswordResetNotificationService passwordResetNotificationService;
 
-    @BeforeEach
-    void setUp()
-    {
-        PanacheMock.mock(StaffUserEntity.class);
-    }
+    @InjectMock
+    StaffRepository staffRepository;
 
     private static StaffUserEntity activeStaff()
     {
@@ -69,7 +65,7 @@ class StaffPasswordResetServiceTest
     void initiateReset_activeStaff_sendsCodeAndStoresFingerprint()
     {
         StaffUserEntity user = activeStaff();
-        when(StaffUserEntity.findByEmail(EMAIL)).thenReturn(user);
+        when(staffRepository.findByEmail(EMAIL)).thenReturn(user);
 
         staffPasswordResetService.initiateReset(EMAIL);
 
@@ -83,7 +79,7 @@ class StaffPasswordResetServiceTest
     @Test
     void initiateReset_unknownEmail_isSilentNoOp()
     {
-        when(StaffUserEntity.findByEmail(EMAIL)).thenReturn(null);
+        when(staffRepository.findByEmail(EMAIL)).thenReturn(null);
 
         assertDoesNotThrow(() -> staffPasswordResetService.initiateReset(EMAIL));
 
@@ -95,7 +91,7 @@ class StaffPasswordResetServiceTest
     {
         StaffUserEntity user = activeStaff();
         user.setActive(false);
-        when(StaffUserEntity.findByEmail(EMAIL)).thenReturn(user);
+        when(staffRepository.findByEmail(EMAIL)).thenReturn(user);
 
         staffPasswordResetService.initiateReset(EMAIL);
 
@@ -108,7 +104,7 @@ class StaffPasswordResetServiceTest
     {
         StaffUserEntity user = staffWithValidResetCode();
         String originalHash = user.getPasswordResetCodeHash();
-        when(StaffUserEntity.findByEmail(EMAIL)).thenReturn(user);
+        when(staffRepository.findByEmail(EMAIL)).thenReturn(user);
 
         staffPasswordResetService.initiateReset(EMAIL);
 
@@ -123,7 +119,7 @@ class StaffPasswordResetServiceTest
         String staleHash = policy.fingerprint("111111");
         user.setPasswordResetCodeHash(staleHash);
         user.setPasswordResetCodeExpiry(OffsetDateTime.now().minusMinutes(1));
-        when(StaffUserEntity.findByEmail(EMAIL)).thenReturn(user);
+        when(staffRepository.findByEmail(EMAIL)).thenReturn(user);
 
         staffPasswordResetService.initiateReset(EMAIL);
 
@@ -145,7 +141,7 @@ class StaffPasswordResetServiceTest
     {
         StaffUserEntity user = staffWithValidResetCode();
         user.setResetPassword(true);
-        when(StaffUserEntity.findByEmail(EMAIL)).thenReturn(user);
+        when(staffRepository.findByEmail(EMAIL)).thenReturn(user);
 
         staffPasswordResetService.completeReset(EMAIL, RESET_CODE, "newPassword1!", CLIENT_IP);
 
@@ -162,7 +158,7 @@ class StaffPasswordResetServiceTest
     void completeReset_wrongCode_throwsAndDoesNotChangePassword()
     {
         StaffUserEntity user = staffWithValidResetCode();
-        when(StaffUserEntity.findByEmail(EMAIL)).thenReturn(user);
+        when(staffRepository.findByEmail(EMAIL)).thenReturn(user);
         String originalHash = user.getPasswordHash();
 
         assertThrows(InvalidPasswordResetCodeException.class,
@@ -178,7 +174,7 @@ class StaffPasswordResetServiceTest
         StaffUserEntity user = activeStaff();
         user.setPasswordResetCodeHash(policy.fingerprint(RESET_CODE));
         user.setPasswordResetCodeExpiry(OffsetDateTime.now().minusSeconds(1));
-        when(StaffUserEntity.findByEmail(EMAIL)).thenReturn(user);
+        when(staffRepository.findByEmail(EMAIL)).thenReturn(user);
         String originalHash = user.getPasswordHash();
 
         assertThrows(InvalidPasswordResetCodeException.class,
@@ -192,7 +188,7 @@ class StaffPasswordResetServiceTest
     {
         StaffUserEntity user = staffWithValidResetCode();
         user.setPasswordResetCodeAttempts(2);
-        when(StaffUserEntity.findByEmail(EMAIL)).thenReturn(user);
+        when(staffRepository.findByEmail(EMAIL)).thenReturn(user);
 
         // The triggering attempt reports the lockout itself, not a generic invalid-code
         // error — mirrors CustomerPasswordResetService's registerFailure exactly.
@@ -209,7 +205,7 @@ class StaffPasswordResetServiceTest
     {
         StaffUserEntity user = staffWithValidResetCode();
         user.setPasswordResetCodeLockedUntil(OffsetDateTime.now().plusMinutes(10));
-        when(StaffUserEntity.findByEmail(EMAIL)).thenReturn(user);
+        when(staffRepository.findByEmail(EMAIL)).thenReturn(user);
         String originalHash = user.getPasswordHash();
         int attemptsBefore = user.getPasswordResetCodeAttempts();
 
@@ -223,7 +219,7 @@ class StaffPasswordResetServiceTest
     @Test
     void completeReset_unknownEmail_throwsSameExceptionAsWrongCode()
     {
-        when(StaffUserEntity.findByEmail(EMAIL)).thenReturn(null);
+        when(staffRepository.findByEmail(EMAIL)).thenReturn(null);
 
         assertThrows(InvalidPasswordResetCodeException.class,
                 () -> staffPasswordResetService.completeReset(EMAIL, RESET_CODE, "newPassword1!", CLIENT_IP));
@@ -233,7 +229,7 @@ class StaffPasswordResetServiceTest
     void completeReset_weakPassword_throwsAndDoesNotConsumeCode()
     {
         StaffUserEntity user = staffWithValidResetCode();
-        when(StaffUserEntity.findByEmail(EMAIL)).thenReturn(user);
+        when(staffRepository.findByEmail(EMAIL)).thenReturn(user);
         String storedHash = user.getPasswordResetCodeHash();
 
         assertThrows(IllegalArgumentException.class,

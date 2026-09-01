@@ -22,6 +22,7 @@ import org.ecommerce.backend.utils.ClientIpUtils;
 import org.ecommerce.common.dto.LoginRequestDto;
 import org.ecommerce.common.dto.TokenResponseDto;
 import org.ecommerce.common.entity.StaffUserEntity;
+import org.ecommerce.common.repository.StaffRepository;
 
 @Path("/api/admin/auth")
 @Slf4j
@@ -46,6 +47,9 @@ public class StaffResource
 
     @Inject
     StaffService staffService;
+
+    @Inject
+    StaffRepository staffRepository;
 
     @Inject
     StaffPasswordResetService staffPasswordResetService;
@@ -92,11 +96,11 @@ public class StaffResource
 
         if (token != null) {
             // Retrieve user again to send extra info to frontend if needed
-            StaffUserEntity user = StaffUserEntity.findByEmail(loginDto.email());
+            StaffUserEntity user = staffRepository.findByEmail(loginDto.email());
             return Response.ok(new TokenResponseDto(token, user.getEmail(), user.getRole().name(), user.isResetPassword())).build();
         }
 
-        StaffUserEntity user = StaffUserEntity.findByEmail(loginDto.email());
+        StaffUserEntity user = staffRepository.findByEmail(loginDto.email());
         if (user != null && !user.isActive()) {
             return Response.status(Response.Status.FORBIDDEN)
                     .entity("Access denied")

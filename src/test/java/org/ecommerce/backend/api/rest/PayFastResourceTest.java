@@ -12,9 +12,10 @@ import org.ecommerce.backend.service.payfast.HtmlFormField;
 import org.ecommerce.backend.service.payfast.PayFastService;
 import org.ecommerce.common.entity.CustomerEntity;
 import org.ecommerce.common.entity.OrderEntity;
-import org.ecommerce.common.entity.OrderStatusHistoryEntity;
 import org.ecommerce.common.entity.PaymentLogEntity;
 import org.ecommerce.common.enums.OrderStatusEn;
+import org.ecommerce.common.repository.OrderStatusHistoryRepository;
+import org.ecommerce.common.repository.PaymentLogRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -41,18 +42,25 @@ class PayFastResourceTest
     @InjectMock
     OrderNotificationService orderNotificationService;
 
+    @InjectMock
+    OrderStatusHistoryRepository orderStatusHistoryRepository;
+
+    @InjectMock
+    PaymentLogRepository paymentLogRepository;
+
     @Inject
     OrderCapabilityService orderCapability;
 
     @BeforeEach
     void setUp()
     {
-        // OrderStatusHistoryEntity and PaymentLogEntity are both mocked alongside
-        // OrderEntity: the ITN handler records the PAID transition on the status
-        // timeline AND a payment-gateway log row, and both reference this order.
-        // These orders exist only as mocks, so a real persist would fail the row's
-        // foreign key to a non-existent order and roll the whole request back.
-        PanacheMock.mock(OrderEntity.class, OrderStatusHistoryEntity.class, PaymentLogEntity.class);
+        // PaymentLogEntity is mocked alongside OrderEntity: the ITN handler records
+        // the PAID transition on the status timeline (via the injected
+        // OrderStatusHistoryRepository mock) AND a payment-gateway log row, and both
+        // reference this order. These orders exist only as mocks, so a real persist
+        // would fail the row's foreign key to a non-existent order and roll the whole
+        // request back.
+        PanacheMock.mock(OrderEntity.class, PaymentLogEntity.class);
     }
 
     @Test
@@ -314,7 +322,7 @@ class PayFastResourceTest
 
         assertEquals(OrderStatusEn.PAID, order.getStatus());
         verify(orderNotificationService).sendStatusNotification(order, OrderStatusEn.PAID);
-        PanacheMock.verify(OrderStatusHistoryEntity.class)
+        verify(orderStatusHistoryRepository)
                 .record(order, OrderStatusEn.PAID, "Payment confirmed by PayFast", OrderService.SYSTEM_ACTOR);
     }
 

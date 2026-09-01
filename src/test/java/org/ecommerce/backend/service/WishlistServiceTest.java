@@ -1,11 +1,13 @@
 package org.ecommerce.backend.service;
 
 import io.quarkus.panache.mock.PanacheMock;
+import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
 import org.ecommerce.common.entity.CustomerEntity;
 import org.ecommerce.common.entity.ProductVariantEntity;
 import org.ecommerce.common.entity.WishlistItemEntity;
+import org.ecommerce.common.repository.WishlistItemRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -15,6 +17,7 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -28,10 +31,12 @@ class WishlistServiceTest
     @Inject
     WishlistService wishlistService;
 
+    @InjectMock
+    WishlistItemRepository wishlistItemRepository;
+
     @BeforeEach
     void setUp()
     {
-        PanacheMock.mock(WishlistItemEntity.class);
         PanacheMock.mock(ProductVariantEntity.class);
         PanacheMock.mock(CustomerEntity.class);
     }
@@ -61,7 +66,7 @@ class WishlistServiceTest
 
         WishlistItemEntity existingItem = new WishlistItemEntity();
         existingItem.setId(UUID.randomUUID());
-        when(WishlistItemEntity.findByCustomerAndVariant(customerId, variantId)).thenReturn(existingItem);
+        when(wishlistItemRepository.findByCustomerAndVariant(customerId, variantId)).thenReturn(existingItem);
 
         WishlistService.AddResult result = wishlistService.addToWishlist(customerId, variantId);
 
@@ -87,7 +92,7 @@ class WishlistServiceTest
         variant.setId(variantId);
         when(ProductVariantEntity.findById(variantId)).thenReturn(variant);
 
-        when(WishlistItemEntity.findByCustomerAndVariant(customerId, variantId)).thenReturn(null);
+        when(wishlistItemRepository.findByCustomerAndVariant(customerId, variantId)).thenReturn(null);
 
         CustomerEntity customer = new CustomerEntity();
         customer.setId(customerId);
@@ -106,13 +111,12 @@ class WishlistServiceTest
         UUID customerId = UUID.randomUUID();
         UUID variantId = UUID.randomUUID();
 
-        when(WishlistItemEntity.deleteByCustomerAndVariant(customerId, variantId)).thenReturn(1L);
+        when(wishlistItemRepository.deleteByCustomerAndVariant(customerId, variantId)).thenReturn(1L);
 
         wishlistService.removeFromWishlist(customerId, variantId);
 
         // Verify the static mock was called
-        PanacheMock.verify(WishlistItemEntity.class, times(1));
-        WishlistItemEntity.deleteByCustomerAndVariant(customerId, variantId);
+        verify(wishlistItemRepository, times(1)).deleteByCustomerAndVariant(customerId, variantId);
     }
 
     @Test
@@ -121,7 +125,7 @@ class WishlistServiceTest
         UUID customerId = UUID.randomUUID();
         UUID variantId = UUID.randomUUID();
 
-        when(WishlistItemEntity.deleteByCustomerAndVariant(customerId, variantId)).thenReturn(0L);
+        when(wishlistItemRepository.deleteByCustomerAndVariant(customerId, variantId)).thenReturn(0L);
 
         // Should not throw — idempotent behavior
         assertDoesNotThrow(() -> wishlistService.removeFromWishlist(customerId, variantId));
@@ -132,7 +136,7 @@ class WishlistServiceTest
     {
         UUID customerId = UUID.randomUUID();
 
-        when(WishlistItemEntity.findByCustomerId(customerId)).thenReturn(Collections.emptyList());
+        when(wishlistItemRepository.findByCustomerId(customerId)).thenReturn(Collections.emptyList());
 
         List<UUID> result = wishlistService.getWishlistVariantIds(customerId);
 
@@ -162,7 +166,7 @@ class WishlistServiceTest
         WishlistItemEntity item3 = new WishlistItemEntity();
         item3.setVariant(variant3);
 
-        when(WishlistItemEntity.findByCustomerId(customerId)).thenReturn(List.of(item1, item2, item3));
+        when(wishlistItemRepository.findByCustomerId(customerId)).thenReturn(List.of(item1, item2, item3));
 
         List<UUID> result = wishlistService.getWishlistVariantIds(customerId);
 

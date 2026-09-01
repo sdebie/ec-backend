@@ -10,6 +10,7 @@ import org.ecommerce.backend.service.OrderCapabilityService;
 import org.ecommerce.backend.service.RateLimiterService;
 import org.ecommerce.common.entity.OrderEntity;
 import org.ecommerce.common.enums.OrderStatusEn;
+import org.ecommerce.common.repository.OrderRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -33,13 +34,15 @@ class OrderContactRateLimitIT
     @InjectMock
     RateLimiterService rateLimiterService;
 
+    @InjectMock
+    OrderRepository orderRepository;
+
     @Inject
     OrderCapabilityService orderCapability;
 
     @BeforeEach
     void setUp()
     {
-        PanacheMock.mock(OrderEntity.class);
         PanacheMock.mock(org.ecommerce.common.entity.ShippingMethodEntity.class);
         when(rateLimiterService.enforce(anyString(), anyString(), anyInt(), anyLong()))
                 .thenReturn(null);
@@ -67,7 +70,7 @@ class OrderContactRateLimitIT
     {
         UUID orderId = UUID.randomUUID();
         OrderEntity order = order(orderId);
-        when(OrderEntity.findOrderInfoById(orderId)).thenReturn(order);
+        when(orderRepository.findOrderInfoById(orderId)).thenReturn(order);
         when(rateLimiterService.enforce(eq("order-contact"), anyString(), anyInt(), anyLong()))
                 .thenReturn(Response.status(429).header("Retry-After", 900L).build());
 
@@ -90,7 +93,7 @@ class OrderContactRateLimitIT
     void limiterIsKeyedOnResolvedClientIp()
     {
         UUID orderId = UUID.randomUUID();
-        when(OrderEntity.findOrderInfoById(orderId)).thenReturn(order(orderId));
+        when(orderRepository.findOrderInfoById(orderId)).thenReturn(order(orderId));
 
         given()
                 .header("X-Order-Token", orderCapability.mint(orderId))
@@ -110,7 +113,7 @@ class OrderContactRateLimitIT
     void allowedCaller_updatesNormally()
     {
         UUID orderId = UUID.randomUUID();
-        when(OrderEntity.findOrderInfoById(orderId)).thenReturn(order(orderId));
+        when(orderRepository.findOrderInfoById(orderId)).thenReturn(order(orderId));
 
         given()
                 .header("X-Order-Token", orderCapability.mint(orderId))

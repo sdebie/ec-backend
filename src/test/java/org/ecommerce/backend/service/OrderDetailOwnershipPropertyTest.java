@@ -2,7 +2,6 @@ package org.ecommerce.backend.service;
 
 // Feature: guest-order-authorization, Property 4 (repointed): mayAct ownership enforcement
 
-import io.quarkus.panache.mock.PanacheMock;
 import io.quarkus.security.identity.SecurityIdentity;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
@@ -12,7 +11,7 @@ import org.eclipse.microprofile.jwt.JsonWebToken;
 import org.ecommerce.backend.api.rest.OrderOwnershipGuard;
 import org.ecommerce.common.entity.CustomerEntity;
 import org.ecommerce.common.entity.OrderEntity;
-import org.junit.jupiter.api.BeforeEach;
+import org.ecommerce.common.repository.CustomerRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -53,11 +52,8 @@ class OrderDetailOwnershipPropertyTest
     @InjectMock
     JsonWebToken jwt;
 
-    @BeforeEach
-    void setUp()
-    {
-        PanacheMock.mock(CustomerEntity.class);
-    }
+    @InjectMock
+    CustomerRepository customerRepository;
 
     /** Mirrors design.md §3.1 without depending on OrderCapabilityService, which does not exist until wave 1. */
     private String generateOrderToken(UUID orderId)
@@ -75,7 +71,7 @@ class OrderDetailOwnershipPropertyTest
         when(jwt.getSubject()).thenReturn(email);
         CustomerEntity customer = new CustomerEntity();
         customer.setId(customerId);
-        when(CustomerEntity.findByEmail(email)).thenReturn(customer);
+        when(customerRepository.findByEmail(email)).thenReturn(customer);
     }
 
     private void authenticateAsNobody()

@@ -1,6 +1,5 @@
 package org.ecommerce.backend.service;
 
-import io.quarkus.panache.mock.PanacheMock;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
@@ -9,7 +8,7 @@ import org.ecommerce.common.entity.CustomerEntity;
 import org.ecommerce.common.entity.UserEntity;
 import org.ecommerce.common.enums.CustomerStatusEn;
 import org.ecommerce.common.enums.CustomerTypeEn;
-import org.junit.jupiter.api.BeforeEach;
+import org.ecommerce.common.repository.UserRepository;
 import org.junit.jupiter.api.Test;
 
 import java.time.OffsetDateTime;
@@ -36,11 +35,8 @@ class CustomerPasswordResetServiceTest
     @InjectMock
     PasswordResetNotificationService passwordResetNotificationService;
 
-    @BeforeEach
-    void setUp()
-    {
-        PanacheMock.mock(UserEntity.class);
-    }
+    @InjectMock
+    UserRepository userRepository;
 
     private UserEntity userWithValidResetCode(CustomerEntity customer)
     {
@@ -71,7 +67,7 @@ class CustomerPasswordResetServiceTest
     {
         CustomerEntity customer = customerOf(CustomerTypeEn.GUEST, CustomerStatusEn.PENDING);
         UserEntity user = userWithValidResetCode(customer);
-        when(UserEntity.findByEmail(EMAIL)).thenReturn(user);
+        when(userRepository.findByEmail(EMAIL)).thenReturn(user);
 
         customerPasswordResetService.completePasswordResetWithCode(EMAIL, RESET_CODE, "newPassword1!", CLIENT_IP);
 
@@ -86,7 +82,7 @@ class CustomerPasswordResetServiceTest
     {
         CustomerEntity customer = customerOf(null, CustomerStatusEn.PENDING);
         UserEntity user = userWithValidResetCode(customer);
-        when(UserEntity.findByEmail(EMAIL)).thenReturn(user);
+        when(userRepository.findByEmail(EMAIL)).thenReturn(user);
 
         customerPasswordResetService.completePasswordResetWithCode(EMAIL, RESET_CODE, "newPassword1!", CLIENT_IP);
 
@@ -98,7 +94,7 @@ class CustomerPasswordResetServiceTest
     {
         CustomerEntity customer = customerOf(CustomerTypeEn.WHOLESALER, CustomerStatusEn.ACTIVE);
         UserEntity user = userWithValidResetCode(customer);
-        when(UserEntity.findByEmail(EMAIL)).thenReturn(user);
+        when(userRepository.findByEmail(EMAIL)).thenReturn(user);
 
         customerPasswordResetService.completePasswordResetWithCode(EMAIL, RESET_CODE, "newPassword1!", CLIENT_IP);
 
@@ -111,7 +107,7 @@ class CustomerPasswordResetServiceTest
     {
         CustomerEntity customer = customerOf(CustomerTypeEn.RETAILER, CustomerStatusEn.ACTIVE);
         UserEntity user = userWithValidResetCode(customer);
-        when(UserEntity.findByEmail(EMAIL)).thenReturn(user);
+        when(userRepository.findByEmail(EMAIL)).thenReturn(user);
 
         customerPasswordResetService.completePasswordResetWithCode(EMAIL, RESET_CODE, "newPassword1!", CLIENT_IP);
 
@@ -122,7 +118,7 @@ class CustomerPasswordResetServiceTest
     void completeWithCode_userWithoutCustomer_doesNotThrow()
     {
         UserEntity user = userWithValidResetCode(null);
-        when(UserEntity.findByEmail(EMAIL)).thenReturn(user);
+        when(userRepository.findByEmail(EMAIL)).thenReturn(user);
 
         assertDoesNotThrow(() -> customerPasswordResetService.completePasswordResetWithCode(EMAIL, RESET_CODE, "newPassword1!", CLIENT_IP));
         assertTrue(user.getPasswordHash().startsWith("$2"), "Password reset must write a BCrypt hash, not the legacy SHA-256 format");
@@ -134,7 +130,7 @@ class CustomerPasswordResetServiceTest
     {
         CustomerEntity customer = customerOf(CustomerTypeEn.GUEST, CustomerStatusEn.PENDING);
         UserEntity user = userWithValidResetCode(customer);
-        when(UserEntity.findByEmail(EMAIL)).thenReturn(user);
+        when(userRepository.findByEmail(EMAIL)).thenReturn(user);
 
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
                 () -> customerPasswordResetService.completePasswordResetWithCode(EMAIL, RESET_CODE, "short", CLIENT_IP));

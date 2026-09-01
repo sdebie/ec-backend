@@ -9,6 +9,7 @@ import org.ecommerce.backend.exception.InvalidPasswordResetCodeException;
 import org.ecommerce.backend.exception.PasswordResetLockedException;
 import org.ecommerce.backend.utils.PasswordStrengthValidator;
 import org.ecommerce.common.entity.StaffUserEntity;
+import org.ecommerce.common.repository.StaffRepository;
 
 import java.time.OffsetDateTime;
 
@@ -34,6 +35,9 @@ public class StaffPasswordResetService
     @Inject
     PasswordResetNotificationService passwordResetNotificationService;
 
+    @Inject
+    StaffRepository staffRepository;
+
     @Transactional
     public void initiateReset(String email)
     {
@@ -42,7 +46,7 @@ public class StaffPasswordResetService
         }
 
         String normalizedEmail = email.trim();
-        StaffUserEntity user = StaffUserEntity.findByEmail(normalizedEmail);
+        StaffUserEntity user = staffRepository.findByEmail(normalizedEmail);
         if (user == null || !user.isActive()) {
             return;
         }
@@ -80,7 +84,7 @@ public class StaffPasswordResetService
         PasswordStrengthValidator.validate(newPassword);
 
         String normalizedEmail = email == null ? "" : email.trim();
-        StaffUserEntity user = StaffUserEntity.findByEmail(normalizedEmail);
+        StaffUserEntity user = staffRepository.findByEmail(normalizedEmail);
         if (user == null) {
             log.warn("Staff password reset attempted for unknown email={}, ip={}",
                     RateLimiterService.maskKey(normalizedEmail), clientIp);

@@ -1,6 +1,5 @@
 package org.ecommerce.backend.service;
 
-import io.quarkus.panache.mock.PanacheMock;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
@@ -15,6 +14,7 @@ import org.ecommerce.common.enums.ProductUploadStatusEn;
 import org.ecommerce.common.repository.ProductPriceImportBatchRepository;
 import org.ecommerce.common.repository.ProductPriceImportStagedRepository;
 import org.ecommerce.common.repository.ProductVariantRepository;
+import org.ecommerce.common.repository.VariantPricesRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -60,6 +60,9 @@ class ProductPriceImportCharacterizationTest
     @InjectMock
     ProductVariantRepository productVariantRepository;
 
+    @InjectMock
+    VariantPricesRepository variantPricesRepository;
+
     private UUID batchId;
     private ProductPriceImportBatchEntity batch;
     private List<ProductPriceImportStagedEntity> capturedStagedRows;
@@ -67,8 +70,6 @@ class ProductPriceImportCharacterizationTest
     @BeforeEach
     void setUp()
     {
-        PanacheMock.mock(VariantPricesEntity.class);
-
         batchId = UUID.randomUUID();
         batch = new ProductPriceImportBatchEntity();
         batch.setId(batchId);
@@ -104,13 +105,13 @@ class ProductPriceImportCharacterizationTest
         // variant1 has existing retail=100.00, wholesale=80.00
         VariantPricesEntity existingRetail1 = buildPrice(variant1, PriceTypeEn.RETAIL_PRICE, new BigDecimal("100.00"));
         VariantPricesEntity existingWholesale1 = buildPrice(variant1, PriceTypeEn.WHOLESALE_PRICE, new BigDecimal("80.00"));
-        when(VariantPricesEntity.findLatestByVariantAndType(variant1.getId(), PriceTypeEn.RETAIL_PRICE)).thenReturn(existingRetail1);
-        when(VariantPricesEntity.findLatestByVariantAndType(variant1.getId(), PriceTypeEn.WHOLESALE_PRICE)).thenReturn(existingWholesale1);
+        when(variantPricesRepository.findLatestByVariantAndType(variant1.getId(), PriceTypeEn.RETAIL_PRICE)).thenReturn(existingRetail1);
+        when(variantPricesRepository.findLatestByVariantAndType(variant1.getId(), PriceTypeEn.WHOLESALE_PRICE)).thenReturn(existingWholesale1);
 
         // variant2 has existing retail=200.00, no wholesale
         VariantPricesEntity existingRetail2 = buildPrice(variant2, PriceTypeEn.RETAIL_PRICE, new BigDecimal("200.00"));
-        when(VariantPricesEntity.findLatestByVariantAndType(variant2.getId(), PriceTypeEn.RETAIL_PRICE)).thenReturn(existingRetail2);
-        when(VariantPricesEntity.findLatestByVariantAndType(variant2.getId(), PriceTypeEn.WHOLESALE_PRICE)).thenReturn(null);
+        when(variantPricesRepository.findLatestByVariantAndType(variant2.getId(), PriceTypeEn.RETAIL_PRICE)).thenReturn(existingRetail2);
+        when(variantPricesRepository.findLatestByVariantAndType(variant2.getId(), PriceTypeEn.WHOLESALE_PRICE)).thenReturn(null);
 
         String csv = """
                 sku,retail_price,wholesale_price
@@ -161,8 +162,8 @@ class ProductPriceImportCharacterizationTest
 
         VariantPricesEntity existingRetail = buildPrice(variant, PriceTypeEn.RETAIL_PRICE, new BigDecimal("100.00"));
         VariantPricesEntity existingWholesale = buildPrice(variant, PriceTypeEn.WHOLESALE_PRICE, new BigDecimal("80.00"));
-        when(VariantPricesEntity.findLatestByVariantAndType(variant.getId(), PriceTypeEn.RETAIL_PRICE)).thenReturn(existingRetail);
-        when(VariantPricesEntity.findLatestByVariantAndType(variant.getId(), PriceTypeEn.WHOLESALE_PRICE)).thenReturn(existingWholesale);
+        when(variantPricesRepository.findLatestByVariantAndType(variant.getId(), PriceTypeEn.RETAIL_PRICE)).thenReturn(existingRetail);
+        when(variantPricesRepository.findLatestByVariantAndType(variant.getId(), PriceTypeEn.WHOLESALE_PRICE)).thenReturn(existingWholesale);
 
         String csv = """
                 sku,retail_price,wholesale_price
@@ -190,8 +191,8 @@ class ProductPriceImportCharacterizationTest
         when(productVariantRepository.findBySku("SKU-UNKNOWN")).thenReturn(null);
 
         VariantPricesEntity existingRetail = buildPrice(knownVariant, PriceTypeEn.RETAIL_PRICE, new BigDecimal("50.00"));
-        when(VariantPricesEntity.findLatestByVariantAndType(knownVariant.getId(), PriceTypeEn.RETAIL_PRICE)).thenReturn(existingRetail);
-        when(VariantPricesEntity.findLatestByVariantAndType(knownVariant.getId(), PriceTypeEn.WHOLESALE_PRICE)).thenReturn(null);
+        when(variantPricesRepository.findLatestByVariantAndType(knownVariant.getId(), PriceTypeEn.RETAIL_PRICE)).thenReturn(existingRetail);
+        when(variantPricesRepository.findLatestByVariantAndType(knownVariant.getId(), PriceTypeEn.WHOLESALE_PRICE)).thenReturn(null);
 
         String csv = """
                 sku,retail_price,wholesale_price
@@ -253,8 +254,8 @@ class ProductPriceImportCharacterizationTest
     {
         ProductVariantEntity variant = buildVariant("SKU-VALID");
         when(productVariantRepository.findBySku("SKU-VALID")).thenReturn(variant);
-        when(VariantPricesEntity.findLatestByVariantAndType(variant.getId(), PriceTypeEn.RETAIL_PRICE)).thenReturn(null);
-        when(VariantPricesEntity.findLatestByVariantAndType(variant.getId(), PriceTypeEn.WHOLESALE_PRICE)).thenReturn(null);
+        when(variantPricesRepository.findLatestByVariantAndType(variant.getId(), PriceTypeEn.RETAIL_PRICE)).thenReturn(null);
+        when(variantPricesRepository.findLatestByVariantAndType(variant.getId(), PriceTypeEn.WHOLESALE_PRICE)).thenReturn(null);
 
         String csv = """
                 sku,retail_price,wholesale_price
@@ -282,8 +283,8 @@ class ProductPriceImportCharacterizationTest
     {
         ProductVariantEntity variant = buildVariant("SKU-PARTIAL");
         when(productVariantRepository.findBySku("SKU-PARTIAL")).thenReturn(variant);
-        when(VariantPricesEntity.findLatestByVariantAndType(variant.getId(), PriceTypeEn.RETAIL_PRICE)).thenReturn(null);
-        when(VariantPricesEntity.findLatestByVariantAndType(variant.getId(), PriceTypeEn.WHOLESALE_PRICE)).thenReturn(null);
+        when(variantPricesRepository.findLatestByVariantAndType(variant.getId(), PriceTypeEn.RETAIL_PRICE)).thenReturn(null);
+        when(variantPricesRepository.findLatestByVariantAndType(variant.getId(), PriceTypeEn.WHOLESALE_PRICE)).thenReturn(null);
 
         // retail_price valid, wholesale_price malformed
         String csv = """
@@ -411,8 +412,8 @@ class ProductPriceImportCharacterizationTest
         when(productVariantRepository.findBySku("BAD-SKU")).thenReturn(null);
         when(productVariantRepository.findBySku("")).thenReturn(null);
 
-        when(VariantPricesEntity.findLatestByVariantAndType(variant1.getId(), PriceTypeEn.RETAIL_PRICE)).thenReturn(null);
-        when(VariantPricesEntity.findLatestByVariantAndType(variant1.getId(), PriceTypeEn.WHOLESALE_PRICE)).thenReturn(null);
+        when(variantPricesRepository.findLatestByVariantAndType(variant1.getId(), PriceTypeEn.RETAIL_PRICE)).thenReturn(null);
+        when(variantPricesRepository.findLatestByVariantAndType(variant1.getId(), PriceTypeEn.WHOLESALE_PRICE)).thenReturn(null);
 
         String csv = """
                 sku,retail_price,wholesale_price
@@ -461,8 +462,8 @@ class ProductPriceImportCharacterizationTest
         when(productVariantRepository.findBySku("SKU-BLANK")).thenReturn(variant);
 
         VariantPricesEntity existingRetail = buildPrice(variant, PriceTypeEn.RETAIL_PRICE, new BigDecimal("50.00"));
-        when(VariantPricesEntity.findLatestByVariantAndType(variant.getId(), PriceTypeEn.RETAIL_PRICE)).thenReturn(existingRetail);
-        when(VariantPricesEntity.findLatestByVariantAndType(variant.getId(), PriceTypeEn.WHOLESALE_PRICE)).thenReturn(null);
+        when(variantPricesRepository.findLatestByVariantAndType(variant.getId(), PriceTypeEn.RETAIL_PRICE)).thenReturn(existingRetail);
+        when(variantPricesRepository.findLatestByVariantAndType(variant.getId(), PriceTypeEn.WHOLESALE_PRICE)).thenReturn(null);
 
         String csv = """
                 sku,retail_price,wholesale_price

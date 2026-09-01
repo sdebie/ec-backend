@@ -7,8 +7,10 @@ import io.quarkus.security.identity.SecurityIdentityAugmentor;
 import io.quarkus.security.runtime.QuarkusSecurityIdentity;
 import io.smallrye.mutiny.Uni;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
 import org.ecommerce.common.entity.StaffUserEntity;
 import org.ecommerce.common.enums.StaffRoleEn;
+import org.ecommerce.common.repository.StaffRepository;
 
 import java.util.Set;
 
@@ -44,6 +46,9 @@ public class ForcedPasswordResetIdentityAugmentor implements SecurityIdentityAug
 
     private static final Set<String> STAFF_ROLES = StaffRoleEn.names();
 
+    @Inject
+    StaffRepository staffRepository;
+
     @Override
     public Uni<SecurityIdentity> augment(SecurityIdentity identity, AuthenticationRequestContext context)
     {
@@ -59,7 +64,7 @@ public class ForcedPasswordResetIdentityAugmentor implements SecurityIdentityAug
         // CDI request scope, so the Panache read needs its own explicit transaction —
         // the same requiringNew() pattern StockRecoveryJob uses for the same reason.
         StaffUserEntity user = QuarkusTransaction.requiringNew().call(() ->
-                StaffUserEntity.findByEmail(identity.getPrincipal().getName()));
+                staffRepository.findByEmail(identity.getPrincipal().getName()));
 
         if (user == null) {
             return identity;

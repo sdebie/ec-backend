@@ -12,6 +12,7 @@ import org.ecommerce.backend.service.ProductPriceUploadAsyncService;
 import org.ecommerce.backend.service.ProductUploadAsyncService;
 import org.ecommerce.common.dto.ProductUploadFormDto;
 import org.ecommerce.common.entity.StaffUserEntity;
+import org.ecommerce.common.repository.StaffRepository;
 import org.jboss.logging.Logger;
 
 import java.io.InputStream;
@@ -40,13 +41,16 @@ public class ProductUploadResource {
     @Inject
     ProductPriceUploadAsyncService processProductPriceImportRowsAsync;
 
+    @Inject
+    StaffRepository staffRepository;
+
     @POST
     @Path("/upload-csv")
     @RolesAllowed({"SUPER_ADMIN", "CATALOG_MANAGER"})
     public Response productUploadCsv(ProductUploadFormDto form) {
         try {
             // 1. Resolve the admin user from the security context
-            StaffUserEntity admin = StaffUserEntity.findByEmail(jwt.getName());
+            StaffUserEntity admin = staffRepository.findByEmail(jwt.getName());
 
             if (admin == null) {
                 return Response.status(Response.Status.UNAUTHORIZED).build();
@@ -102,7 +106,7 @@ public class ProductUploadResource {
     public Response productPriceUploadCsv(ProductUploadFormDto form) {
         try {
             // 1. Resolve the admin user from the security context
-            StaffUserEntity admin = StaffUserEntity.findByEmail(jwt.getName());
+            StaffUserEntity admin = staffRepository.findByEmail(jwt.getName());
 
             if (admin == null) {
                 return Response.status(Response.Status.UNAUTHORIZED).build();
@@ -129,7 +133,7 @@ public class ProductUploadResource {
     @Consumes(MediaType.APPLICATION_JSON)
     @RolesAllowed({"SUPER_ADMIN", "CATALOG_MANAGER"})
     public Response startProcessProductPriceImportBatch(@PathParam("batchId") UUID batchId) {
-        StaffUserEntity approvedBy = StaffUserEntity.findByEmail(jwt.getName());
+        StaffUserEntity approvedBy = staffRepository.findByEmail(jwt.getName());
         if (approvedBy == null) {
             return Response.status(Response.Status.UNAUTHORIZED).build();
         }

@@ -18,6 +18,8 @@ import org.ecommerce.common.enums.StockEffect;
 import org.ecommerce.common.query.FilterRequest;
 import org.ecommerce.common.query.PageRequest;
 import org.ecommerce.common.repository.OrderRepository;
+import org.ecommerce.common.repository.OrderStatusHistoryRepository;
+import org.ecommerce.common.repository.ProductVariantRepository;
 import org.hibernate.exception.ConstraintViolationException;
 import org.jboss.logging.Logger;
 
@@ -37,6 +39,12 @@ public class OrderService
 
     @Inject
     OrderRepository orderRepository;
+
+    @Inject
+    OrderStatusHistoryRepository orderStatusHistoryRepository;
+
+    @Inject
+    ProductVariantRepository productVariantRepository;
 
     @Inject
     OrderMapper orderMapper;
@@ -123,7 +131,7 @@ public class OrderService
                 continue;
             }
 
-            ProductVariantEntity variant = ProductVariantEntity.findByIdWithProduct(variantUuid);
+            ProductVariantEntity variant = productVariantRepository.findByIdWithProduct(variantUuid);
             if (variant == null || variant.getStatus() != ProductStatusEn.ACTIVE) {
                 unavailableVariantIds.add(item.getVariantId());
                 continue;
@@ -233,7 +241,7 @@ public class OrderService
             // the real one; the caller re-resolves against it.
             throw new IdempotencyConflictException(idempotencyKey);
         }
-        OrderStatusHistoryEntity.record(order, OrderStatusEn.CREATED, "Order placed", SYSTEM_ACTOR);
+        orderStatusHistoryRepository.record(order, OrderStatusEn.CREATED, "Order placed", SYSTEM_ACTOR);
 
         // 7. Build and return response
         OrderCheckoutResponseDto response = new OrderCheckoutResponseDto();
@@ -422,7 +430,7 @@ public class OrderService
             restoreStock(order);
         }
 
-        OrderStatusHistoryEntity.record(order, to,
+        orderStatusHistoryRepository.record(order, to,
                 transitionComment(from, transition), transition.changedBy());
 
         // Last, and only once the claim is won: the shopper is never told about a

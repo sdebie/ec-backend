@@ -154,7 +154,7 @@ public class ProductWriteValidator
         // Collect owned price ids (all prices across all owned variants)
         Map<UUID, UUID> priceOwnerVariantIds = new HashMap<>();
         for (ProductVariantEntity v : existingVariants) {
-            List<VariantPricesEntity> prices = VariantPricesEntity.findByVariantId(v.getId());
+            List<VariantPricesEntity> prices = variantPricesRepository.findByVariantId(v.getId());
             for (VariantPricesEntity p : prices) {
                 priceOwnerVariantIds.put(p.getId(), v.getId());
             }

@@ -8,6 +8,7 @@ import org.eclipse.microprofile.jwt.JsonWebToken;
 import org.ecommerce.backend.service.OrderCapabilityService;
 import org.ecommerce.common.entity.CustomerEntity;
 import org.ecommerce.common.entity.OrderEntity;
+import org.ecommerce.common.repository.CustomerRepository;
 import org.jboss.logging.Logger;
 
 /**
@@ -36,6 +37,9 @@ public class OrderOwnershipGuard
 
     @Inject
     OrderCapabilityService orderCapability;
+
+    @Inject
+    CustomerRepository customerRepository;
 
     @ConfigProperty(name = "order.capability.enforce")
     boolean enforce;
@@ -74,7 +78,7 @@ public class OrderOwnershipGuard
             return false;
         }
 
-        CustomerEntity customer = CustomerEntity.findByEmail(jwt.getSubject());
+        CustomerEntity customer = customerRepository.findByEmail(jwt.getSubject());
         return customer != null && order.getCustomerEntity().getId().equals(customer.getId());
     }
 
@@ -94,7 +98,7 @@ public class OrderOwnershipGuard
             return true;
         }
 
-        CustomerEntity customer = CustomerEntity.findByEmail(jwt.getSubject());
+        CustomerEntity customer = customerRepository.findByEmail(jwt.getSubject());
         return customer != null
                 && order.getCustomerEntity() != null
                 && order.getCustomerEntity().getId().equals(customer.getId());
@@ -125,7 +129,7 @@ public class OrderOwnershipGuard
             return false;
         }
 
-        CustomerEntity customer = CustomerEntity.findByEmail(jwt.getSubject());
+        CustomerEntity customer = customerRepository.findByEmail(jwt.getSubject());
         return customer != null
                 && order.getCustomerEntity().getId().equals(customer.getId());
     }

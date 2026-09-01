@@ -28,6 +28,7 @@ import org.ecommerce.common.entity.UserEntity;
 import org.ecommerce.common.enums.AddressTypeEn;
 import org.ecommerce.common.enums.CustomerStatusEn;
 import org.ecommerce.common.enums.CustomerTypeEn;
+import org.ecommerce.common.repository.UserRepository;
 import org.jboss.logging.Logger;
 
 import java.time.OffsetDateTime;
@@ -58,6 +59,9 @@ public class CustomerResource
 
     @Inject
     RateLimiterService rateLimiterService;
+
+    @Inject
+    UserRepository userRepository;
 
     @Inject
     JsonWebToken jwt;
@@ -224,7 +228,7 @@ public class CustomerResource
             return emailLimited;
         }
 
-        UserEntity user = UserEntity.findByEmail(req.email.trim());
+        UserEntity user = userRepository.findByEmail(req.email.trim());
         if (user == null || user.getPasswordHash() == null) {
             return Response.status(Response.Status.UNAUTHORIZED).entity("Invalid credentials").build();
         }
@@ -309,7 +313,7 @@ public class CustomerResource
             String firstName = (String) payload.get("given_name");
             String lastName = (String) payload.get("family_name");
 
-            UserEntity user = UserEntity.findByEmail(email);
+            UserEntity user = userRepository.findByEmail(email);
             if (user == null) {
                 user = new UserEntity();
                 user.setEmail(email);
@@ -411,7 +415,7 @@ public class CustomerResource
         String email = req.email.trim();
 
         // ── 409 guards: reject if any method already claims account ──
-        UserEntity user = UserEntity.findByEmail(email);
+        UserEntity user = userRepository.findByEmail(email);
         if (user != null && user.getCustomer() != null) {
             CustomerEntity ec = user.getCustomer();
             boolean hasPassword = user.getPasswordHash() != null && !user.getPasswordHash().isBlank();
@@ -471,7 +475,7 @@ public class CustomerResource
         }
 
         String email = jwt.getSubject();
-        UserEntity user = UserEntity.findByEmail(email);
+        UserEntity user = userRepository.findByEmail(email);
         if (user == null || user.getCustomer() == null) {
             return Response.status(Response.Status.NOT_FOUND).entity("Customer not found").build();
         }

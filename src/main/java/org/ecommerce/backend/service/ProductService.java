@@ -386,6 +386,18 @@ public class ProductService
         // 3. Reconcile: track which existing image ids are still in the manifest
         Set<UUID> manifestImageIds = new LinkedHashSet<>();
 
+        // "Featured" is a single product-wide invariant, not each row's own isFeatured flag
+        // taken at face value — a manifest with more than one entry marked featured no longer
+        // produces more than one featured row; the last such entry wins. Every row this method
+        // touches is already a managed entity by the time we know the winner (both branches
+        // below persist() their entity before we can know if it is the winner, since a new
+        // row's id doesn't exist until persist() assigns it), so the flag is set directly on
+        // each managed entity — not via a bulk UPDATE, which wouldn't be reflected back on
+        // these same in-memory entities for the rest of this transaction (including this
+        // request's own response and any caller reading them back before commit).
+        List<ProductImageEntity> processedImages = new ArrayList<>(manifest.size());
+        int featuredIndex = -1;
+
         for (int i = 0; i < manifest.size(); i++) {
             ProductImageDto imgDto = manifest.get(i);
 
@@ -397,13 +409,16 @@ public class ProductService
                 ProductImageEntity existing = existingById.get(imageId);
                 if (existing != null) {
                     existing.setSortOrder(i);
-                    existing.setIsFeatured(imgDto.isFeatured());
                     existing.setAltText(imgDto.getAltText());
                     // Normalise: move to owner variant if not already there
                     if (!ownerVariant.getId().equals(existing.getProductVariant().getId())) {
                         existing.setProductVariant(ownerVariant);
                     }
                     existing.persist();
+                    processedImages.add(existing);
+                    if (imgDto.isFeatured()) {
+                        featuredIndex = processedImages.size() - 1;
+                    }
                 }
             } else {
                 // New image — create entity on the owner variant
@@ -411,11 +426,18 @@ public class ProductService
                 newImage.setProductVariant(ownerVariant);
                 newImage.setImageUrl(imgDto.getImageUrl());
                 newImage.setSortOrder(i);
-                newImage.setIsFeatured(imgDto.isFeatured());
                 newImage.setAltText(imgDto.getAltText());
                 newImage.persist();
                 log.info("Created new image association for product {}: {}", productId, imgDto.getImageUrl());
+                processedImages.add(newImage);
+                if (imgDto.isFeatured()) {
+                    featuredIndex = processedImages.size() - 1;
+                }
             }
+        }
+
+        for (int i = 0; i < processedImages.size(); i++) {
+            processedImages.get(i).setIsFeatured(i == featuredIndex);
         }
 
         // 4. Remove images not in the manifest

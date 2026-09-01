@@ -15,6 +15,8 @@ import org.ecommerce.common.dto.OrderContactRequestDto;
 import org.ecommerce.common.entity.OrderEntity;
 import org.ecommerce.common.entity.ShippingMethodEntity;
 import org.ecommerce.common.enums.OrderStatusEn;
+import org.ecommerce.common.repository.OrderRepository;
+import org.ecommerce.common.repository.ShippingMethodRepository;
 import org.jboss.logging.Logger;
 
 import java.util.LinkedHashMap;
@@ -49,6 +51,12 @@ public class OrderContactResource
     @Inject
     RateLimiterService rateLimiterService;
 
+    @Inject
+    OrderRepository orderRepository;
+
+    @Inject
+    ShippingMethodRepository shippingMethodRepository;
+
     // Explicit, not @Valid — matching ContactEnquiryResource's documented reason:
     // @Valid's default violation response would be 400, inconsistent with every
     // other content check in this method, which reports 422 (well-formed body,
@@ -75,7 +83,7 @@ public class OrderContactResource
         }
 
         // 1. Find order by ID → 404 if missing
-        OrderEntity order = OrderEntity.findOrderInfoById(orderId);
+        OrderEntity order = orderRepository.findOrderInfoById(orderId);
         if (order == null) {
             LOG.debugf("Order not found: %s", orderId);
             return Response.status(Response.Status.NOT_FOUND)
@@ -134,7 +142,7 @@ public class OrderContactResource
                         .build();
             }
 
-            shippingMethod = ShippingMethodEntity.findById(shippingMethodUuid);
+            shippingMethod = shippingMethodRepository.findById(shippingMethodUuid);
             if (shippingMethod == null || !shippingMethod.isActive()) {
                 LOG.debugf("Invalid or inactive shipping method: %s", request.getShippingMethodId());
                 return Response.status(422)

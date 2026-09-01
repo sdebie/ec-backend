@@ -1,13 +1,14 @@
 package org.ecommerce.backend.security;
 
-import io.quarkus.panache.mock.PanacheMock;
 import io.quarkus.security.identity.AuthenticationRequestContext;
 import io.quarkus.security.identity.SecurityIdentity;
 import io.quarkus.security.runtime.QuarkusSecurityIdentity;
+import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
 import io.smallrye.mutiny.Uni;
+import jakarta.inject.Inject;
 import org.ecommerce.common.entity.StaffUserEntity;
-import org.junit.jupiter.api.BeforeEach;
+import org.ecommerce.common.repository.StaffRepository;
 import org.junit.jupiter.api.Test;
 
 import java.security.Principal;
@@ -27,13 +28,13 @@ class ForcedPasswordResetIdentityAugmentorTest
 {
     private static final AuthenticationRequestContext SYNC_CONTEXT = supplier -> Uni.createFrom().item(supplier.get());
 
-    private final ForcedPasswordResetIdentityAugmentor augmentor = new ForcedPasswordResetIdentityAugmentor();
+    // Must come from CDI, not `new` — augment() reads an @Inject-ed StaffRepository field,
+    // which only a container-managed instance has populated.
+    @Inject
+    ForcedPasswordResetIdentityAugmentor augmentor;
 
-    @BeforeEach
-    void setUp()
-    {
-        PanacheMock.mock(StaffUserEntity.class);
-    }
+    @InjectMock
+    StaffRepository staffRepository;
 
     private static SecurityIdentity staffIdentity(String email, String role)
     {
@@ -65,7 +66,7 @@ class ForcedPasswordResetIdentityAugmentorTest
     @Test
     void notFlagged_returnsIdentityUnchanged()
     {
-        when(StaffUserEntity.findByEmail("staff@test.com")).thenReturn(staffRow(false));
+        when(staffRepository.findByEmail("staff@test.com")).thenReturn(staffRow(false));
 
         SecurityIdentity input = staffIdentity("staff@test.com", "SUPER_ADMIN");
         SecurityIdentity result = augment(input);
@@ -78,7 +79,7 @@ class ForcedPasswordResetIdentityAugmentorTest
     @Test
     void flagged_stripsRealRoleAndAddsSentinelOnly()
     {
-        when(StaffUserEntity.findByEmail("staff@test.com")).thenReturn(staffRow(true));
+        when(staffRepository.findByEmail("staff@test.com")).thenReturn(staffRow(true));
 
         SecurityIdentity result = augment(staffIdentity("staff@test.com", "SUPER_ADMIN"));
 
@@ -93,7 +94,7 @@ class ForcedPasswordResetIdentityAugmentorTest
         // Deliberately NOT fail-closed: this codebase's staff/admin test suite self-signs
         // JWTs with no backing DB row for pure role-matrix tests, and failing closed here
         // would defeat that convention for every one of them.
-        when(StaffUserEntity.findByEmail("ghost@test.com")).thenReturn(null);
+        when(staffRepository.findByEmail("ghost@test.com")).thenReturn(null);
 
         SecurityIdentity input = staffIdentity("ghost@test.com", "SUPER_ADMIN");
         SecurityIdentity result = augment(input);
@@ -105,7 +106,7 @@ class ForcedPasswordResetIdentityAugmentorTest
     @Test
     void deactivated_stripsAllRoles()
     {
-        when(StaffUserEntity.findByEmail("staff@test.com")).thenReturn(inactiveStaffRow(false));
+        when(staffRepository.findByEmail("staff@test.com")).thenReturn(inactiveStaffRow(false));
 
         SecurityIdentity result = augment(staffIdentity("staff@test.com", "SUPER_ADMIN"));
 
@@ -118,7 +119,7 @@ class ForcedPasswordResetIdentityAugmentorTest
     @Test
     void deactivatedAndFlaggedForReset_deactivationWinsOverTheSentinel()
     {
-        when(StaffUserEntity.findByEmail("staff@test.com")).thenReturn(inactiveStaffRow(true));
+        when(staffRepository.findByEmail("staff@test.com")).thenReturn(inactiveStaffRow(true));
 
         SecurityIdentity result = augment(staffIdentity("staff@test.com", "SUPER_ADMIN"));
 
@@ -129,7 +130,7 @@ class ForcedPasswordResetIdentityAugmentorTest
     @Test
     void preservesPrincipalIdentityWhenDeactivated()
     {
-        when(StaffUserEntity.findByEmail("staff@test.com")).thenReturn(inactiveStaffRow(false));
+        when(staffRepository.findByEmail("staff@test.com")).thenReturn(inactiveStaffRow(false));
 
         SecurityIdentity result = augment(staffIdentity("staff@test.com", "SUPER_ADMIN"));
 
@@ -139,7 +140,7 @@ class ForcedPasswordResetIdentityAugmentorTest
     @Test
     void preservesPrincipalIdentityWhenFlagged()
     {
-        when(StaffUserEntity.findByEmail("staff@test.com")).thenReturn(staffRow(true));
+        when(staffRepository.findByEmail("staff@test.com")).thenReturn(staffRow(true));
 
         SecurityIdentity result = augment(staffIdentity("staff@test.com", "SUPER_ADMIN"));
 
@@ -155,7 +156,7 @@ class ForcedPasswordResetIdentityAugmentorTest
         SecurityIdentity result = augment(customerIdentity);
 
         assertSame(customerIdentity, result);
-        PanacheMock.verify(StaffUserEntity.class, never()).findByEmail(anyString());
+        verify(staffRepository, never()).findByEmail(anyString());
     }
 
     @Test
@@ -166,14 +167,14 @@ class ForcedPasswordResetIdentityAugmentorTest
         SecurityIdentity result = augment(anonymous);
 
         assertSame(anonymous, result);
-        PanacheMock.verify(StaffUserEntity.class, never()).findByEmail(anyString());
+        verify(staffRepository, never()).findByEmail(anyString());
     }
 
     @Test
     void everyStaffRole_isRecognisedAsStaffForTheLookup()
     {
         for (String role : new String[]{"SUPER_ADMIN", "CATALOG_MANAGER", "ORDER_MANAGER", "VIEWER"}) {
-            when(StaffUserEntity.findByEmail(role + "@test.com")).thenReturn(staffRow(true));
+            when(staffRepository.findByEmail(role + "@test.com")).thenReturn(staffRow(true));
 
             SecurityIdentity result = augment(staffIdentity(role + "@test.com", role));
 

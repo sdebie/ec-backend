@@ -12,6 +12,7 @@ import org.ecommerce.common.entity.CustomerEntity;
 import org.ecommerce.common.entity.UserEntity;
 import org.ecommerce.common.enums.CustomerStatusEn;
 import org.ecommerce.common.enums.CustomerTypeEn;
+import org.ecommerce.common.repository.UserRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -47,6 +48,9 @@ class CustomerPasswordResetLockoutIT
     @Inject
     PasswordResetCodePolicy policy;
 
+    @Inject
+    UserRepository userRepository;
+
     @InjectMock
     PasswordResetNotificationService passwordResetNotificationService;
 
@@ -66,7 +70,7 @@ class CustomerPasswordResetLockoutIT
     @Transactional
     void deleteByEmail(String email)
     {
-        UserEntity existing = UserEntity.findByEmail(email);
+        UserEntity existing = userRepository.findByEmail(email);
         if (existing != null) {
             CustomerEntity customer = existing.getCustomer();
             if (customer != null) {
@@ -97,13 +101,13 @@ class CustomerPasswordResetLockoutIT
     @Transactional
     int queryAttempts()
     {
-        return UserEntity.findByEmail(EMAIL).getPasswordResetCodeAttempts();
+        return userRepository.findByEmail(EMAIL).getPasswordResetCodeAttempts();
     }
 
     @Transactional
     OffsetDateTime queryLockedUntil()
     {
-        return UserEntity.findByEmail(EMAIL).getPasswordResetCodeLockedUntil();
+        return userRepository.findByEmail(EMAIL).getPasswordResetCodeLockedUntil();
     }
 
     @Test

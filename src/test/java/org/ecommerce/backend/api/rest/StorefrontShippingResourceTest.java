@@ -1,9 +1,9 @@
 package org.ecommerce.backend.api.rest;
 
-import io.quarkus.panache.mock.PanacheMock;
+import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
 import org.ecommerce.common.entity.ShippingMethodEntity;
-import org.junit.jupiter.api.BeforeEach;
+import org.ecommerce.common.repository.ShippingMethodRepository;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -18,11 +18,8 @@ import static org.mockito.Mockito.when;
 @QuarkusTest
 class StorefrontShippingResourceTest
 {
-    @BeforeEach
-    void setUp()
-    {
-        PanacheMock.mock(ShippingMethodEntity.class);
-    }
+    @InjectMock
+    ShippingMethodRepository shippingMethodRepository;
 
     @Test
     void getActiveShippingMethods_returnsOnlyActiveMethods()
@@ -41,7 +38,7 @@ class StorefrontShippingResourceTest
         collection.setBaseFee(BigDecimal.ZERO);
         collection.setEstimatedDays(null);
 
-        when(ShippingMethodEntity.<ShippingMethodEntity>list("isActive", true)).thenReturn(List.of(delivery, collection));
+        when(shippingMethodRepository.findAllActive()).thenReturn(List.of(delivery, collection));
 
         given()
                 .when()
@@ -64,7 +61,7 @@ class StorefrontShippingResourceTest
     @Test
     void getActiveShippingMethods_returnsEmptyWhenNoneActive()
     {
-        when(ShippingMethodEntity.<ShippingMethodEntity>list("isActive", true))
+        when(shippingMethodRepository.findAllActive())
                 .thenReturn(Collections.emptyList());
 
         given()

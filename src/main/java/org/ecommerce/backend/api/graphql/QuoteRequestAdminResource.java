@@ -19,6 +19,7 @@ import org.ecommerce.common.enums.QuoteRequestStatusEn;
 import org.ecommerce.common.query.FilterRequest;
 import org.ecommerce.common.query.PageRequest;
 import org.ecommerce.common.repository.QuoteRequestRepository;
+import org.ecommerce.common.repository.StaffRepository;
 
 import java.util.List;
 import java.util.UUID;
@@ -34,6 +35,9 @@ public class QuoteRequestAdminResource
 
     @Inject
     QuoteRequestRepository quoteRequestRepository;
+
+    @Inject
+    StaffRepository staffRepository;
 
     @Inject
     QuoteRequestMailer quoteRequestMailer;
@@ -140,7 +144,7 @@ public class QuoteRequestAdminResource
     /** Who to credit as having generated the quote. The staff JWT carries their email as the subject. */
     private StaffUserEntity resolveStaffUser()
     {
-        StaffUserEntity staff = jwt == null ? null : StaffUserEntity.findByEmail(jwt.getName());
+        StaffUserEntity staff = jwt == null ? null : staffRepository.findByEmail(jwt.getName());
         if (staff == null) {
             throw new IllegalArgumentException("Unable to resolve the staff account for this request");
         }

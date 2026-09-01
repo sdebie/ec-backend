@@ -382,9 +382,22 @@ public class ImageService
         productImage.setProductVariant(productVariant);
         productImage.setImageUrl(imageUrl);
         productImage.setSortOrder(maxSortOrder + 1);
-        productImage.setIsFeatured(maxSortOrder == 0); // First image is featured by default
+        productImage.setIsFeatured(false);
 
         productImage.persist();
+
+        // "Featured" is a product-wide invariant (see ProductImageRepository.setFeaturedImage /
+        // findFeaturedByProductId) spanning every variant of the product, not just this one —
+        // so the check is "does the product have a featured image yet at all", not "is this
+        // variant's own image list empty". (MaxSortOrder is scoped to this variant only.)
+        UUID ownerProductId = productVariant.getProduct().getId();
+        if (productImageRepository.findFeaturedByProductId(ownerProductId) == null) {
+            // setFeaturedImage is a bulk UPDATE, which JPA does not guarantee synchronises
+            // with the persist() above in this same transaction — flush explicitly so it
+            // always sees this row.
+            productImageRepository.getEntityManager().flush();
+            productImageRepository.setFeaturedImage(ownerProductId, productImage.getId());
+        }
     }
 
     /**

@@ -18,6 +18,7 @@ import org.ecommerce.common.query.Filter;
 import org.ecommerce.common.query.FilterRequest;
 import org.ecommerce.common.query.PageRequest;
 import org.ecommerce.common.query.SortRequest;
+import org.ecommerce.common.repository.UserRepository;
 import org.ecommerce.common.repository.WholesaleApplicationRepository;
 import org.jboss.logging.Logger;
 
@@ -33,6 +34,9 @@ public class WholesaleCustomerService
 {
     @Inject
     WholesaleApplicationRepository wholesaleApplicationRepository;
+
+    @Inject
+    UserRepository userRepository;
 
     @Inject
     WholesaleMapper wholesaleMapper;
@@ -189,7 +193,7 @@ public class WholesaleCustomerService
             if (email == null) {
                 throw new IllegalArgumentException("email cannot be blank");
             }
-            UserEntity existing = UserEntity.findByEmail(email);
+            UserEntity existing = userRepository.findByEmail(email);
             if (existing != null && !existing.getId().equals(customerEntity.getUser().getId())) {
                 throw new IllegalArgumentException("customer already exists with email: " + email);
             }
@@ -237,7 +241,7 @@ public class WholesaleCustomerService
         boolean newAccountCreated = false;
 
         if (application.getCustomer() == null) {
-            UserEntity existingUser = UserEntity.findByEmail(email);
+            UserEntity existingUser = userRepository.findByEmail(email);
             CustomerEntity customerEntity;
             if (existingUser != null) {
                 customerEntity = upgradeExistingAccountToWholesaler(application, existingUser);

@@ -23,6 +23,7 @@ import org.ecommerce.common.entity.CustomerEntity;
 import org.ecommerce.common.entity.OrderEntity;
 import org.ecommerce.common.query.FilterRequest;
 import org.ecommerce.common.query.PageRequest;
+import org.ecommerce.common.repository.CustomerRepository;
 import org.jboss.logging.Logger;
 
 import java.util.List;
@@ -69,6 +70,9 @@ public class OrderResource
 
     @Inject
     OrderMapper orderMapper;
+
+    @Inject
+    CustomerRepository customerRepository;
 
     /**
      * Shared by {@link #orderStatus} and {@link #getOrderDetail} — GraphQL resolvers
@@ -235,7 +239,7 @@ public class OrderResource
         }
 
         String email = jwt.getSubject();
-        CustomerEntity customer = CustomerEntity.findByEmail(email);
+        CustomerEntity customer = customerRepository.findByEmail(email);
         if (customer == null) {
             LOG.warnf("myOrders: customer not found for email: %s", email);
             throw new GraphQLException("Unauthorized");

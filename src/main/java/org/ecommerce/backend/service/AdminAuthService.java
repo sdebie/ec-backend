@@ -3,9 +3,11 @@ package org.ecommerce.backend.service;
 import io.quarkus.elytron.security.common.BcryptUtil;
 import io.smallrye.jwt.build.Jwt;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.ecommerce.common.dto.LoginRequestDto;
 import org.ecommerce.common.entity.StaffUserEntity;
+import org.ecommerce.common.repository.StaffRepository;
 
 import java.time.Duration;
 import java.util.HashSet;
@@ -17,10 +19,13 @@ public class AdminAuthService
     @ConfigProperty(name = "mp.jwt.verify.issuer")
     String issuer;
 
+    @Inject
+    StaffRepository staffRepository;
+
     public String authenticate(LoginRequestDto loginDto)
     {
         // 1. Fetch user from DB (assuming Panache)
-        StaffUserEntity user = StaffUserEntity.findByEmail(loginDto.email());
+        StaffUserEntity user = staffRepository.findByEmail(loginDto.email());
 
         // 2. Verify password against BCrypt hash
         if (user != null && user.isActive() && BcryptUtil.matches(loginDto.password(), user.getPasswordHash())) {

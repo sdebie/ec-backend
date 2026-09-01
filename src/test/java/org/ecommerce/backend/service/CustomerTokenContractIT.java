@@ -1,6 +1,5 @@
 package org.ecommerce.backend.service;
 
-import io.quarkus.panache.mock.PanacheMock;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
@@ -11,6 +10,7 @@ import org.ecommerce.common.entity.CustomerEntity;
 import org.ecommerce.common.entity.UserEntity;
 import org.ecommerce.common.enums.CustomerStatusEn;
 import org.ecommerce.common.enums.CustomerTypeEn;
+import org.ecommerce.common.repository.CustomerRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -46,6 +46,9 @@ class CustomerTokenContractIT
     CustomerAuthService customerAuthService;
 
     @InjectMock
+    CustomerRepository customerRepository;
+
+    @InjectMock
     OrderService orderService;
 
     @InjectMock
@@ -59,8 +62,6 @@ class CustomerTokenContractIT
     @BeforeEach
     void setUp()
     {
-        PanacheMock.mock(CustomerEntity.class);
-
         UUID customerId = UUID.randomUUID();
 
         UserEntity user = new UserEntity();
@@ -78,7 +79,7 @@ class CustomerTokenContractIT
         customer.setStatus(CustomerStatusEn.ACTIVE);
         user.setCustomer(customer);
 
-        when(CustomerEntity.findByEmail(EMAIL)).thenReturn(customer);
+        when(customerRepository.findByEmail(EMAIL)).thenReturn(customer);
         when(orderService.getMyOrders(eq(customerId))).thenReturn(List.of());
         when(wishlistService.getWishlistVariantIds(eq(customerId))).thenReturn(List.of());
 

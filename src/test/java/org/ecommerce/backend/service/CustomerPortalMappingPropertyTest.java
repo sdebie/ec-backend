@@ -4,7 +4,6 @@ package org.ecommerce.backend.service;
 
 import org.ecommerce.backend.mapper.CustomerAddressMapperImpl;
 import net.jqwik.api.*;
-import net.jqwik.api.lifecycle.AfterTry;
 import net.jqwik.api.lifecycle.BeforeTry;
 import org.ecommerce.common.dto.StorefrontCustomerPortalDto;
 import org.ecommerce.common.entity.CustomerAddressEntity;
@@ -12,14 +11,15 @@ import org.ecommerce.common.entity.CustomerEntity;
 import org.ecommerce.common.entity.UserEntity;
 import org.ecommerce.common.enums.AddressTypeEn;
 import org.ecommerce.common.enums.CustomerTypeEn;
-import org.mockito.MockedStatic;
-import org.mockito.Mockito;
+import org.ecommerce.common.repository.CustomerRepository;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 /**
  * Property-based test verifying that the CustomerPortalService mapping logic
@@ -29,7 +29,7 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 public class CustomerPortalMappingPropertyTest
 {
-    private MockedStatic<CustomerEntity> mockedCustomerEntity;
+    private CustomerRepository customerRepository;
     private CustomerPortalService service;
 
     @BeforeTry
@@ -38,15 +38,8 @@ public class CustomerPortalMappingPropertyTest
         service = new CustomerPortalService();
 
         service.customerAddressMapper = new CustomerAddressMapperImpl();
-        mockedCustomerEntity = Mockito.mockStatic(CustomerEntity.class);
-    }
-
-    @AfterTry
-    void teardown()
-    {
-        if (mockedCustomerEntity != null) {
-            mockedCustomerEntity.close();
-        }
+        customerRepository = mock(CustomerRepository.class);
+        service.customerRepository = customerRepository;
     }
 
     @Property(tries = 100)
@@ -54,9 +47,9 @@ public class CustomerPortalMappingPropertyTest
             @ForAll("customerEntities") CustomerEntity customer
     )
     {
-        // Arrange: stub the static finder to return our generated customer
+        // Arrange: stub the repository finder to return our generated customer
         String email = customer.getUser().getEmail();
-        mockedCustomerEntity.when(() -> CustomerEntity.findByEmail(email)).thenReturn(customer);
+        when(customerRepository.findByEmail(email)).thenReturn(customer);
 
         // Act
         StorefrontCustomerPortalDto dto = service.getPortalProfile(email);

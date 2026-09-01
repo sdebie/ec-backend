@@ -1,6 +1,5 @@
 package org.ecommerce.backend.api.rest;
 
-import io.quarkus.panache.mock.PanacheMock;
 import io.quarkus.security.identity.SecurityIdentity;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
@@ -9,6 +8,7 @@ import org.eclipse.microprofile.jwt.JsonWebToken;
 import org.ecommerce.backend.service.OrderCapabilityService;
 import org.ecommerce.common.entity.CustomerEntity;
 import org.ecommerce.common.entity.OrderEntity;
+import org.ecommerce.common.repository.CustomerRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -44,6 +44,9 @@ class OrderOwnershipGuardTest
     @InjectMock
     JsonWebToken jwt;
 
+    @InjectMock
+    CustomerRepository customerRepository;
+
     private UUID orderId;
     private UUID ownerCustomerId;
     private OrderEntity guestOrder;
@@ -52,8 +55,6 @@ class OrderOwnershipGuardTest
     @BeforeEach
     void setUp()
     {
-        PanacheMock.mock(CustomerEntity.class);
-
         orderId = UUID.randomUUID();
         ownerCustomerId = UUID.randomUUID();
 
@@ -96,7 +97,7 @@ class OrderOwnershipGuardTest
         when(jwt.getSubject()).thenReturn(email);
         CustomerEntity customer = new CustomerEntity();
         customer.setId(customerId);
-        when(CustomerEntity.findByEmail(email)).thenReturn(customer);
+        when(customerRepository.findByEmail(email)).thenReturn(customer);
     }
 
     /**

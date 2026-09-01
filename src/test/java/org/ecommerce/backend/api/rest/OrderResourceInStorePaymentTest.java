@@ -8,9 +8,10 @@ import org.ecommerce.backend.service.OrderCapabilityService;
 import org.ecommerce.backend.service.OrderNotificationService;
 import org.ecommerce.common.entity.CustomerEntity;
 import org.ecommerce.common.entity.OrderEntity;
-import org.ecommerce.common.entity.OrderStatusHistoryEntity;
 import org.ecommerce.common.entity.ShippingMethodEntity;
 import org.ecommerce.common.enums.OrderStatusEn;
+import org.ecommerce.common.repository.OrderRepository;
+import org.ecommerce.common.repository.OrderStatusHistoryRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -48,13 +49,19 @@ class OrderResourceInStorePaymentTest
     @InjectMock
     OrderNotificationService orderNotificationService;
 
+    @InjectMock
+    OrderRepository orderRepository;
+
+    @InjectMock
+    OrderStatusHistoryRepository orderStatusHistoryRepository;
+
     @Inject
     OrderCapabilityService orderCapability;
 
     @BeforeEach
     void setUp()
     {
-        PanacheMock.mock(OrderEntity.class, OrderStatusHistoryEntity.class);
+        PanacheMock.mock(OrderEntity.class);
     }
 
     private OrderEntity order(UUID orderId, OrderStatusEn status, boolean requiresAddress)
@@ -99,14 +106,14 @@ class OrderResourceInStorePaymentTest
     {
         UUID orderId = UUID.randomUUID();
         OrderEntity order = order(orderId, OrderStatusEn.CREATED, false);
-        when(OrderEntity.findOrderInfoById(orderId)).thenReturn(order);
+        when(orderRepository.findOrderInfoById(orderId)).thenReturn(order);
         when(OrderEntity.update(anyString(), any(Object[].class))).thenReturn(1);
 
         confirmWithToken(orderId).then()
                 .statusCode(200)
                 .body("status", equalTo("IN_STORE_PAYMENT"));
 
-        PanacheMock.verify(OrderStatusHistoryEntity.class)
+        verify(orderStatusHistoryRepository)
                 .record(any(), any(), anyString(), anyString());
         verify(orderNotificationService, times(1)).sendStatusNotification(order, OrderStatusEn.IN_STORE_PAYMENT);
     }
@@ -121,7 +128,7 @@ class OrderResourceInStorePaymentTest
     void deliveryOrder_isRefused()
     {
         UUID orderId = UUID.randomUUID();
-        when(OrderEntity.findOrderInfoById(orderId)).thenReturn(order(orderId, OrderStatusEn.CREATED, true));
+        when(orderRepository.findOrderInfoById(orderId)).thenReturn(order(orderId, OrderStatusEn.CREATED, true));
 
         confirmWithToken(orderId).then().statusCode(422);
 
@@ -140,7 +147,7 @@ class OrderResourceInStorePaymentTest
         UUID orderId = UUID.randomUUID();
         OrderEntity order = order(orderId, OrderStatusEn.CREATED, false);
         order.setShippingMethod(null);
-        when(OrderEntity.findOrderInfoById(orderId)).thenReturn(order);
+        when(orderRepository.findOrderInfoById(orderId)).thenReturn(order);
 
         confirmWithToken(orderId).then().statusCode(422);
 
@@ -156,7 +163,7 @@ class OrderResourceInStorePaymentTest
     void alreadyConfirmed_isIdempotent()
     {
         UUID orderId = UUID.randomUUID();
-        when(OrderEntity.findOrderInfoById(orderId))
+        when(orderRepository.findOrderInfoById(orderId))
                 .thenReturn(order(orderId, OrderStatusEn.IN_STORE_PAYMENT, false));
 
         confirmWithToken(orderId).then()
@@ -177,7 +184,7 @@ class OrderResourceInStorePaymentTest
     void orderNoLongerCreated_returns409()
     {
         UUID orderId = UUID.randomUUID();
-        when(OrderEntity.findOrderInfoById(orderId))
+        when(orderRepository.findOrderInfoById(orderId))
                 .thenReturn(order(orderId, OrderStatusEn.SYSTEM_CANCELED, false));
 
         confirmWithToken(orderId).then().statusCode(409);
@@ -190,7 +197,7 @@ class OrderResourceInStorePaymentTest
     void unknownOrder_returns404()
     {
         UUID orderId = UUID.randomUUID();
-        when(OrderEntity.findOrderInfoById(orderId)).thenReturn(null);
+        when(orderRepository.findOrderInfoById(orderId)).thenReturn(null);
 
         confirm(orderId).then().statusCode(404);
     }
@@ -211,7 +218,7 @@ class OrderResourceInStorePaymentTest
         CustomerEntity owner = new CustomerEntity();
         owner.setId(UUID.randomUUID());
         order.setCustomerEntity(owner);
-        when(OrderEntity.findOrderInfoById(orderId)).thenReturn(order);
+        when(orderRepository.findOrderInfoById(orderId)).thenReturn(order);
         // Stubbed so that, while the guard is bypassed, the request reaches a genuine
         // 200 rather than a false-negative 409 from PanacheMock's unstubbed-update
         // default of 0 rows affected — the failure this test must show is the

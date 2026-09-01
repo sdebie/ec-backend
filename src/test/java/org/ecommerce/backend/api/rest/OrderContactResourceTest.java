@@ -1,6 +1,6 @@
 package org.ecommerce.backend.api.rest;
 
-import io.quarkus.panache.mock.PanacheMock;
+import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.http.ContentType;
 import io.smallrye.jwt.build.Jwt;
@@ -9,7 +9,9 @@ import org.ecommerce.common.entity.OrderEntity;
 import org.ecommerce.common.entity.OrderItemEntity;
 import org.ecommerce.common.entity.ShippingMethodEntity;
 import org.ecommerce.common.enums.OrderStatusEn;
-import org.junit.jupiter.api.BeforeEach;
+import org.ecommerce.common.repository.CustomerRepository;
+import org.ecommerce.common.repository.OrderRepository;
+import org.ecommerce.common.repository.ShippingMethodRepository;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -26,13 +28,14 @@ import static org.mockito.Mockito.when;
 @QuarkusTest
 class OrderContactResourceTest
 {
-    @BeforeEach
-    void setUp()
-    {
-        PanacheMock.mock(OrderEntity.class);
-        PanacheMock.mock(ShippingMethodEntity.class);
-        PanacheMock.mock(CustomerEntity.class);
-    }
+    @InjectMock
+    OrderRepository orderRepository;
+
+    @InjectMock
+    ShippingMethodRepository shippingMethodRepository;
+
+    @InjectMock
+    CustomerRepository customerRepository;
 
     private String generateCustomerJwt(String email)
     {
@@ -79,8 +82,8 @@ class OrderContactResourceTest
         shippingMethod.setActive(true);
         shippingMethod.setBaseFee(new BigDecimal("89.00"));
 
-        when(OrderEntity.findOrderInfoById(orderId)).thenReturn(order);
-        when(ShippingMethodEntity.findById(shippingMethodId)).thenReturn(shippingMethod);
+        when(orderRepository.findOrderInfoById(orderId)).thenReturn(order);
+        when(shippingMethodRepository.findById(shippingMethodId)).thenReturn(shippingMethod);
 
         String body = """
                 {
@@ -126,8 +129,8 @@ class OrderContactResourceTest
         shippingMethod.setActive(true);
         shippingMethod.setBaseFee(new BigDecimal("89.00"));
 
-        when(OrderEntity.findOrderInfoById(orderId)).thenReturn(order);
-        when(ShippingMethodEntity.findById(shippingMethodId)).thenReturn(shippingMethod);
+        when(orderRepository.findOrderInfoById(orderId)).thenReturn(order);
+        when(shippingMethodRepository.findById(shippingMethodId)).thenReturn(shippingMethod);
 
         String body = """
                 {
@@ -175,7 +178,7 @@ class OrderContactResourceTest
         order.setStatus(OrderStatusEn.CREATED);
         order.setCustomerEntity(owner);
 
-        when(OrderEntity.findOrderInfoById(orderId)).thenReturn(order);
+        when(orderRepository.findOrderInfoById(orderId)).thenReturn(order);
 
         String body = """
                 {
@@ -203,7 +206,7 @@ class OrderContactResourceTest
     {
         UUID orderId = UUID.randomUUID();
 
-        when(OrderEntity.findOrderInfoById(orderId)).thenReturn(null);
+        when(orderRepository.findOrderInfoById(orderId)).thenReturn(null);
 
         String body = """
                 {
@@ -238,8 +241,8 @@ class OrderContactResourceTest
         order.setStatus(OrderStatusEn.CREATED);
         order.setCustomerEntity(customer);
 
-        when(OrderEntity.findOrderInfoById(orderId)).thenReturn(order);
-        when(CustomerEntity.findByEmail(email)).thenReturn(customer);
+        when(orderRepository.findOrderInfoById(orderId)).thenReturn(order);
+        when(customerRepository.findByEmail(email)).thenReturn(customer);
 
         String body = """
                 {
@@ -282,8 +285,8 @@ class OrderContactResourceTest
         order.setStatus(OrderStatusEn.CREATED);
         order.setCustomerEntity(owner);
 
-        when(OrderEntity.findOrderInfoById(orderId)).thenReturn(order);
-        when(CustomerEntity.findByEmail(callerEmail)).thenReturn(caller);
+        when(orderRepository.findOrderInfoById(orderId)).thenReturn(order);
+        when(customerRepository.findByEmail(callerEmail)).thenReturn(caller);
 
         String body = """
                 {
@@ -321,7 +324,7 @@ class OrderContactResourceTest
         order.setTotalAmount(new BigDecimal("500.00"));
         order.setStatus(OrderStatusEn.PAID);
 
-        when(OrderEntity.findOrderInfoById(orderId)).thenReturn(order);
+        when(orderRepository.findOrderInfoById(orderId)).thenReturn(order);
 
         String body = """
                 {
@@ -357,8 +360,8 @@ class OrderContactResourceTest
         order.setTotalAmount(new BigDecimal("500.00"));
         order.setStatus(OrderStatusEn.CREATED);
 
-        when(OrderEntity.findOrderInfoById(orderId)).thenReturn(order);
-        when(ShippingMethodEntity.findById(invalidShippingMethodId)).thenReturn(null);
+        when(orderRepository.findOrderInfoById(orderId)).thenReturn(order);
+        when(shippingMethodRepository.findById(invalidShippingMethodId)).thenReturn(null);
 
         String body = """
                 {
@@ -401,8 +404,8 @@ class OrderContactResourceTest
         express.setActive(true);
         express.setBaseFee(new BigDecimal("250.00"));
 
-        when(OrderEntity.findOrderInfoById(orderId)).thenReturn(order);
-        when(ShippingMethodEntity.findById(shippingMethodId)).thenReturn(express);
+        when(orderRepository.findOrderInfoById(orderId)).thenReturn(order);
+        when(shippingMethodRepository.findById(shippingMethodId)).thenReturn(express);
 
         String body = """
                 {
@@ -461,8 +464,8 @@ class OrderContactResourceTest
         // free same-day delivery by fee and lead time alone.
         collection.setRequiresAddress(false);
 
-        when(OrderEntity.findOrderInfoById(orderId)).thenReturn(order);
-        when(ShippingMethodEntity.findById(shippingMethodId)).thenReturn(collection);
+        when(orderRepository.findOrderInfoById(orderId)).thenReturn(order);
+        when(shippingMethodRepository.findById(shippingMethodId)).thenReturn(collection);
 
         String body = """
                 {
@@ -541,8 +544,8 @@ class OrderContactResourceTest
         shippingMethod.setBaseFee(new BigDecimal("89.00"));
         shippingMethod.setRequiresAddress(false);
 
-        when(OrderEntity.findOrderInfoById(orderId)).thenReturn(order);
-        when(ShippingMethodEntity.findById(shippingMethodId)).thenReturn(shippingMethod);
+        when(orderRepository.findOrderInfoById(orderId)).thenReturn(order);
+        when(shippingMethodRepository.findById(shippingMethodId)).thenReturn(shippingMethod);
 
         String body = """
                 {
@@ -578,7 +581,7 @@ class OrderContactResourceTest
         order.setStatus(OrderStatusEn.CREATED);
         order.setCustomerEntity(null); // Guest order — no customer
 
-        when(OrderEntity.findOrderInfoById(orderId)).thenReturn(order);
+        when(orderRepository.findOrderInfoById(orderId)).thenReturn(order);
 
         String body = """
                 {
@@ -615,7 +618,7 @@ class OrderContactResourceTest
         order.setTotalAmount(new BigDecimal("100.00"));
         order.setStatus(OrderStatusEn.CREATED);
 
-        when(OrderEntity.findOrderInfoById(orderId)).thenReturn(order);
+        when(orderRepository.findOrderInfoById(orderId)).thenReturn(order);
 
         given()
                 .header("X-Order-Token", generateOrderToken(orderId))
@@ -638,7 +641,7 @@ class OrderContactResourceTest
         order.setTotalAmount(new BigDecimal("100.00"));
         order.setStatus(OrderStatusEn.CREATED);
 
-        when(OrderEntity.findOrderInfoById(orderId)).thenReturn(order);
+        when(orderRepository.findOrderInfoById(orderId)).thenReturn(order);
 
         String body = """
                 {
@@ -668,7 +671,7 @@ class OrderContactResourceTest
         order.setTotalAmount(new BigDecimal("100.00"));
         order.setStatus(OrderStatusEn.CREATED);
 
-        when(OrderEntity.findOrderInfoById(orderId)).thenReturn(order);
+        when(orderRepository.findOrderInfoById(orderId)).thenReturn(order);
 
         // 250-char local part + "@example.com" comfortably clears 254 total.
         String body = """
@@ -699,7 +702,7 @@ class OrderContactResourceTest
         order.setTotalAmount(new BigDecimal("100.00"));
         order.setStatus(OrderStatusEn.CREATED);
 
-        when(OrderEntity.findOrderInfoById(orderId)).thenReturn(order);
+        when(orderRepository.findOrderInfoById(orderId)).thenReturn(order);
 
         String body = """
                 {
@@ -729,7 +732,7 @@ class OrderContactResourceTest
         order.setTotalAmount(new BigDecimal("100.00"));
         order.setStatus(OrderStatusEn.CREATED);
 
-        when(OrderEntity.findOrderInfoById(orderId)).thenReturn(order);
+        when(orderRepository.findOrderInfoById(orderId)).thenReturn(order);
 
         String body = """
                 {
@@ -759,7 +762,7 @@ class OrderContactResourceTest
         order.setTotalAmount(new BigDecimal("100.00"));
         order.setStatus(OrderStatusEn.CREATED);
 
-        when(OrderEntity.findOrderInfoById(orderId)).thenReturn(order);
+        when(orderRepository.findOrderInfoById(orderId)).thenReturn(order);
 
         String body = """
                 {
@@ -789,7 +792,7 @@ class OrderContactResourceTest
         order.setTotalAmount(new BigDecimal("100.00"));
         order.setStatus(OrderStatusEn.CREATED);
 
-        when(OrderEntity.findOrderInfoById(orderId)).thenReturn(order);
+        when(orderRepository.findOrderInfoById(orderId)).thenReturn(order);
 
         String body = """
                 {
@@ -819,7 +822,7 @@ class OrderContactResourceTest
         order.setTotalAmount(new BigDecimal("100.00"));
         order.setStatus(OrderStatusEn.CREATED);
 
-        when(OrderEntity.findOrderInfoById(orderId)).thenReturn(order);
+        when(orderRepository.findOrderInfoById(orderId)).thenReturn(order);
 
         String body = """
                 {
@@ -852,7 +855,7 @@ class OrderContactResourceTest
         order.setTotalAmount(new BigDecimal("100.00"));
         order.setStatus(OrderStatusEn.CREATED);
 
-        when(OrderEntity.findOrderInfoById(orderId)).thenReturn(order);
+        when(orderRepository.findOrderInfoById(orderId)).thenReturn(order);
 
         String body = """
                 {

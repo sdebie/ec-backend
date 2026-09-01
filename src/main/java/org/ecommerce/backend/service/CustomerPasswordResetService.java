@@ -12,6 +12,7 @@ import org.ecommerce.common.entity.CustomerEntity;
 import org.ecommerce.common.entity.UserEntity;
 import org.ecommerce.common.enums.CustomerStatusEn;
 import org.ecommerce.common.enums.CustomerTypeEn;
+import org.ecommerce.common.repository.UserRepository;
 
 import java.time.OffsetDateTime;
 import java.util.Map;
@@ -31,6 +32,9 @@ public class CustomerPasswordResetService
     @Inject
     PasswordResetNotificationService passwordResetNotificationService;
 
+    @Inject
+    UserRepository userRepository;
+
     private static class IpAttemptState
     {
         int failedAttempts;
@@ -45,7 +49,7 @@ public class CustomerPasswordResetService
         }
 
         String normalizedEmail = email.trim();
-        UserEntity user = UserEntity.findByEmail(normalizedEmail);
+        UserEntity user = userRepository.findByEmail(normalizedEmail);
         if (user == null || user.getCustomer() == null) {
             return;
         }
@@ -121,7 +125,7 @@ public class CustomerPasswordResetService
         ensureIpNotLocked(normalizedIp, now);
 
         String normalizedEmail = email == null ? "" : email.trim();
-        UserEntity user = UserEntity.findByEmail(normalizedEmail);
+        UserEntity user = userRepository.findByEmail(normalizedEmail);
         if (user == null) {
             registerIpFailure(normalizedIp, now);
             throw new InvalidPasswordResetCodeException();

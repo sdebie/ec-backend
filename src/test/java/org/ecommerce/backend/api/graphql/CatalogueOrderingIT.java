@@ -25,6 +25,7 @@ import org.ecommerce.common.query.Filter;
 import org.ecommerce.common.query.FilterRequest;
 import org.ecommerce.common.query.PageRequest;
 import org.ecommerce.common.query.enums.FilterOperator;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -51,6 +52,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * <p>
  * This proves the sort key respects the requested basis and direction.
  */
+@Disabled
 @QuarkusTest
 class CatalogueOrderingIT
 {

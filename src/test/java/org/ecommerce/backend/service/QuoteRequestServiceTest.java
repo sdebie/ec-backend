@@ -1,6 +1,7 @@
 package org.ecommerce.backend.service;
 
 import io.quarkus.panache.mock.PanacheMock;
+import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
 import org.ecommerce.backend.exception.InvalidQuoteStatusTransitionException;
@@ -15,6 +16,7 @@ import org.ecommerce.common.entity.QuoteRequestEntity;
 import org.ecommerce.common.entity.QuoteRequestItemEntity;
 import org.ecommerce.common.entity.StaffUserEntity;
 import org.ecommerce.common.enums.QuoteRequestStatusEn;
+import org.ecommerce.common.repository.ProductVariantRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -41,10 +43,12 @@ class QuoteRequestServiceTest
     @Inject
     QuoteRequestService quoteRequestService;
 
+    @InjectMock
+    ProductVariantRepository productVariantRepository;
+
     @BeforeEach
     void setUp()
     {
-        PanacheMock.mock(ProductVariantEntity.class);
         PanacheMock.mock(QuoteRequestEntity.class);
     }
 
@@ -756,7 +760,7 @@ class QuoteRequestServiceTest
             UUID variantId = UUID.randomUUID();
             ProductVariantEntity variant = buildVariant(variantId, "Widget Pro", "WID-PRO-001");
 
-            when(ProductVariantEntity.findByIdWithProduct(variantId)).thenReturn(variant);
+            when(productVariantRepository.findByIdWithProduct(variantId)).thenReturn(variant);
             doNothing().when(PanacheMock.getMock(QuoteRequestEntity.class)).persist();
 
             QuoteRequestSubmissionDto dto = buildSubmissionDto(List.of(
@@ -782,8 +786,8 @@ class QuoteRequestServiceTest
             ProductVariantEntity variant1 = buildVariant(variantId1, "Product A", "SKU-A");
             ProductVariantEntity variant2 = buildVariant(variantId2, "Product B", "SKU-B");
 
-            when(ProductVariantEntity.findByIdWithProduct(variantId1)).thenReturn(variant1);
-            when(ProductVariantEntity.findByIdWithProduct(variantId2)).thenReturn(variant2);
+            when(productVariantRepository.findByIdWithProduct(variantId1)).thenReturn(variant1);
+            when(productVariantRepository.findByIdWithProduct(variantId2)).thenReturn(variant2);
             doNothing().when(PanacheMock.getMock(QuoteRequestEntity.class)).persist();
 
             QuoteRequestSubmissionDto dto = buildSubmissionDto(List.of(
@@ -809,7 +813,7 @@ class QuoteRequestServiceTest
             UUID variantId = UUID.randomUUID();
             ProductVariantEntity variant = buildVariant(variantId, "Test Product", "TST-001");
 
-            when(ProductVariantEntity.findByIdWithProduct(variantId)).thenReturn(variant);
+            when(productVariantRepository.findByIdWithProduct(variantId)).thenReturn(variant);
             doNothing().when(PanacheMock.getMock(QuoteRequestEntity.class)).persist();
 
             QuoteRequestSubmissionDto dto = buildSubmissionDto(List.of(
@@ -840,7 +844,7 @@ class QuoteRequestServiceTest
         void unknownVariantThrows()
         {
             UUID unknownId = UUID.randomUUID();
-            when(ProductVariantEntity.findByIdWithProduct(unknownId)).thenReturn(null);
+            when(productVariantRepository.findByIdWithProduct(unknownId)).thenReturn(null);
 
             QuoteRequestSubmissionDto dto = buildSubmissionDto(List.of(new QuoteRequestLineDto(unknownId, 2)));
 
@@ -857,8 +861,8 @@ class QuoteRequestServiceTest
             UUID unknownId = UUID.randomUUID();
             ProductVariantEntity validVariant = buildVariant(validId, "Valid Product", "VAL-001");
 
-            when(ProductVariantEntity.findByIdWithProduct(validId)).thenReturn(validVariant);
-            when(ProductVariantEntity.findByIdWithProduct(unknownId)).thenReturn(null);
+            when(productVariantRepository.findByIdWithProduct(validId)).thenReturn(validVariant);
+            when(productVariantRepository.findByIdWithProduct(unknownId)).thenReturn(null);
 
             QuoteRequestSubmissionDto dto = buildSubmissionDto(List.of(
                     new QuoteRequestLineDto(validId, 1),

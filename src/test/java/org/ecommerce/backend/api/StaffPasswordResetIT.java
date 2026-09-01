@@ -8,6 +8,7 @@ import jakarta.transaction.Transactional;
 import org.ecommerce.backend.service.PasswordResetNotificationService;
 import org.ecommerce.common.entity.StaffUserEntity;
 import org.ecommerce.common.enums.StaffRoleEn;
+import org.ecommerce.common.repository.StaffRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -49,6 +50,16 @@ class StaffPasswordResetIT
     @InjectMock
     PasswordResetNotificationService passwordResetNotificationService;
 
+    // Real (non-mock) injection: every StaffUserEntity.findByEmail() call in this file is
+    // direct real-DB test setup/assertion code (never a when()/verify() stub) for a genuine
+    // @QuarkusTest IT that exercises the REST endpoints against real rows — see the class
+    // javadoc ("Real DB rows"). @InjectMock would replace this bean application-wide,
+    // including inside the production code the REST calls below exercise, silently turning
+    // every assertion in this class into a check against an unstubbed mock. @Inject preserves
+    // the exact real-DB behaviour the removed StaffUserEntity.findByEmail() static had.
+    @Inject
+    StaffRepository staffRepository;
+
     @BeforeEach
     void setUp()
     {
@@ -88,7 +99,7 @@ class StaffPasswordResetIT
     @Transactional
     void seedExpiredCode(String email, String fingerprint)
     {
-        StaffUserEntity user = StaffUserEntity.findByEmail(email);
+        StaffUserEntity user = staffRepository.findByEmail(email);
         user.setPasswordResetCodeHash(fingerprint);
         user.setPasswordResetCodeExpiry(OffsetDateTime.now().minusSeconds(1));
     }
@@ -96,7 +107,7 @@ class StaffPasswordResetIT
     @Transactional
     void seedLiveCode(String email, String fingerprint, int attempts)
     {
-        StaffUserEntity user = StaffUserEntity.findByEmail(email);
+        StaffUserEntity user = staffRepository.findByEmail(email);
         user.setPasswordResetCodeHash(fingerprint);
         user.setPasswordResetCodeExpiry(OffsetDateTime.now().plusMinutes(5));
         user.setPasswordResetCodeAttempts(attempts);
@@ -105,13 +116,13 @@ class StaffPasswordResetIT
     @Transactional
     String queryPasswordHash(String email)
     {
-        return StaffUserEntity.findByEmail(email).getPasswordHash();
+        return staffRepository.findByEmail(email).getPasswordHash();
     }
 
     @Transactional
     Boolean queryResetPasswordFlag(String email)
     {
-        return StaffUserEntity.findByEmail(email).isResetPassword();
+        return staffRepository.findByEmail(email).isResetPassword();
     }
 
     private String captureIssuedCode(String email)
@@ -176,7 +187,7 @@ class StaffPasswordResetIT
     @Transactional
     void setInactive(String email)
     {
-        StaffUserEntity.findByEmail(email).setActive(false);
+        staffRepository.findByEmail(email).setActive(false);
     }
 
     @Test
@@ -228,7 +239,7 @@ class StaffPasswordResetIT
     @Transactional
     void setForcedReset(String email, boolean value)
     {
-        StaffUserEntity.findByEmail(email).setResetPassword(value);
+        staffRepository.findByEmail(email).setResetPassword(value);
     }
 
     @Test

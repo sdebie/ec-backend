@@ -8,6 +8,7 @@ import org.ecommerce.common.entity.VariantPricesEntity;
 import org.ecommerce.common.enums.PriceTypeEn;
 import org.ecommerce.common.enums.ProductImportValidationStatusEn;
 import org.ecommerce.common.repository.ProductVariantRepository;
+import org.ecommerce.common.repository.VariantPricesRepository;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -25,6 +26,9 @@ public class ProductPriceImportValidator
 
     @Inject
     ProductVariantRepository productVariantRepository;
+
+    @Inject
+    VariantPricesRepository variantPricesRepository;
 
     /**
      * Result of validating and diffing a single price import row.
@@ -115,7 +119,7 @@ public class ProductPriceImportValidator
         if (variant == null || variant.getId() == null) {
             return null;
         }
-        VariantPricesEntity price = VariantPricesEntity.findLatestByVariantAndType(variant.getId(), priceType);
+        VariantPricesEntity price = variantPricesRepository.findLatestByVariantAndType(variant.getId(), priceType);
         return price != null ? price.getPrice() : null;
     }
 }

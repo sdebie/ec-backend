@@ -1,6 +1,5 @@
 package org.ecommerce.backend.api.rest;
 
-import io.quarkus.panache.mock.PanacheMock;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
 import io.smallrye.jwt.build.Jwt;
@@ -9,6 +8,7 @@ import org.ecommerce.common.entity.CustomerEntity;
 import org.ecommerce.common.entity.UserEntity;
 import org.ecommerce.common.enums.CustomerStatusEn;
 import org.ecommerce.common.enums.CustomerTypeEn;
+import org.ecommerce.common.repository.CustomerRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -33,14 +33,15 @@ class StorefrontWishlistResourceIT
     @InjectMock
     WishlistService wishlistService;
 
+    @InjectMock
+    CustomerRepository customerRepository;
+
     private UUID customerId;
     private UUID existingVariantId;
 
     @BeforeEach
     void setUp()
     {
-        PanacheMock.mock(CustomerEntity.class);
-
         customerId = UUID.randomUUID();
         existingVariantId = UUID.randomUUID();
 
@@ -61,7 +62,7 @@ class StorefrontWishlistResourceIT
         user.setCustomer(customer);
 
         // Mock CustomerEntity.findByEmail (used by resolveCustomerId in the resource)
-        when(CustomerEntity.findByEmail(CUSTOMER_EMAIL)).thenReturn(customer);
+        when(customerRepository.findByEmail(CUSTOMER_EMAIL)).thenReturn(customer);
     }
 
     private String generateCustomerJwt()

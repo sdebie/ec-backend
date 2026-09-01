@@ -16,6 +16,7 @@ import org.ecommerce.common.entity.QuoteRequestEntity;
 import org.ecommerce.common.entity.QuoteRequestItemEntity;
 import org.ecommerce.common.entity.StaffUserEntity;
 import org.ecommerce.common.enums.QuoteRequestStatusEn;
+import org.ecommerce.common.repository.ProductVariantRepository;
 import org.jboss.logging.Logger;
 
 import java.math.BigDecimal;
@@ -42,6 +43,9 @@ public class QuoteRequestService
     @Inject
     QuoteRequestMapper quoteRequestMapper;
 
+    @Inject
+    ProductVariantRepository productVariantRepository;
+
     /**
      * Submits a new quote request: resolves each variant (unknown → exception for 422),
      * snapshots product name + variant SKU, persists the aggregate, and fires a CDI event
@@ -61,7 +65,7 @@ public class QuoteRequestService
 
         List<QuoteRequestItemEntity> items = new ArrayList<>();
         for (QuoteRequestLineDto line : dto.items()) {
-            ProductVariantEntity variant = ProductVariantEntity.findByIdWithProduct(line.variantId());
+            ProductVariantEntity variant = productVariantRepository.findByIdWithProduct(line.variantId());
             if (variant == null) {
                 throw new IllegalArgumentException("Unknown variant: " + line.variantId());
             }

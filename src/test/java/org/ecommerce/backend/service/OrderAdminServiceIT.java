@@ -11,7 +11,6 @@ import org.ecommerce.common.dto.PageResponse;
 import org.ecommerce.common.entity.CustomerEntity;
 import org.ecommerce.common.entity.OrderEntity;
 import org.ecommerce.common.entity.OrderItemEntity;
-import org.ecommerce.common.entity.OrderStatusHistoryEntity;
 import org.ecommerce.common.entity.PaymentLogEntity;
 import org.ecommerce.common.entity.ProductEntity;
 import org.ecommerce.common.entity.ProductVariantEntity;
@@ -21,6 +20,8 @@ import org.ecommerce.common.enums.CustomerTypeEn;
 import org.ecommerce.common.enums.OrderStatusEn;
 import org.ecommerce.common.enums.ProductStatusEn;
 import org.ecommerce.common.enums.ProductTypeEn;
+import org.ecommerce.common.repository.OrderStatusHistoryRepository;
+import org.ecommerce.common.repository.PaymentLogRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -58,6 +59,12 @@ class OrderAdminServiceIT
 
     @Inject
     EntityManager em;
+
+    @Inject
+    OrderStatusHistoryRepository orderStatusHistoryRepository;
+
+    @Inject
+    PaymentLogRepository paymentLogRepository;
 
     // ── Fixture builders ────────────────────────────────────────────────────
 
@@ -407,8 +414,8 @@ class OrderAdminServiceIT
         order.setPostalCode("8001");
         addLine(order, variant, 3, "100.00");
 
-        OrderStatusHistoryEntity.record(order, OrderStatusEn.CREATED, "Order placed", OrderService.SYSTEM_ACTOR);
-        OrderStatusHistoryEntity.record(order, OrderStatusEn.PAID, "Payment confirmed by PayFast", OrderService.SYSTEM_ACTOR);
+        orderStatusHistoryRepository.record(order, OrderStatusEn.CREATED, "Order placed", OrderService.SYSTEM_ACTOR);
+        orderStatusHistoryRepository.record(order, OrderStatusEn.PAID, "Payment confirmed by PayFast", OrderService.SYSTEM_ACTOR);
         syncAndClear();
 
         AdminOrderDetailDto detail = orderAdminService.adminOrder(order.getId());
@@ -458,7 +465,7 @@ class OrderAdminServiceIT
         OrderEntity order = newOrder(OrderStatusEn.PAID, new BigDecimal("150.00"), WINDOW_DAY);
         syncAndClear();
 
-        PaymentLogEntity.record(order, "PAYFAST", order.getId().toString(), "pf-77001",
+        paymentLogRepository.record(order, "PAYFAST", order.getId().toString(), "pf-77001",
                 new BigDecimal("150.00"), "COMPLETE", "{}");
 
         AdminOrderDetailDto detail = orderAdminService.adminOrder(order.getId());
@@ -479,9 +486,9 @@ class OrderAdminServiceIT
         OrderEntity order = newOrder(OrderStatusEn.PAID, new BigDecimal("150.00"), WINDOW_DAY);
         syncAndClear();
 
-        PaymentLogEntity older = PaymentLogEntity.record(order, "PAYFAST", order.getId().toString(), "pf-older",
+        PaymentLogEntity older = paymentLogRepository.record(order, "PAYFAST", order.getId().toString(), "pf-older",
                 new BigDecimal("150.00"), "FAILED", "{}");
-        PaymentLogEntity newer = PaymentLogEntity.record(order, "PAYFAST", order.getId().toString(), "pf-newer",
+        PaymentLogEntity newer = paymentLogRepository.record(order, "PAYFAST", order.getId().toString(), "pf-newer",
                 new BigDecimal("150.00"), "COMPLETE", "{}");
 
         em.createQuery("update PaymentLogEntity l set l.createdAt = :t where l.id = :id")

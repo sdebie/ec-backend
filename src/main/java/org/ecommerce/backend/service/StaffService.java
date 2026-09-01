@@ -139,7 +139,7 @@ public class StaffService
             throw new IllegalArgumentException("Password is null");
         }
 
-        StaffUserEntity staffEntity = StaffUserEntity.findByEmail(email);
+        StaffUserEntity staffEntity = staffRepository.findByEmail(email);
         if (staffEntity == null) {
             throw new StaffNotFoundException("Staff user with email '" + email + "' not found");
         }

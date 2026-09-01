@@ -1,10 +1,8 @@
 package org.ecommerce.backend.utils;
 
-import io.quarkus.panache.mock.PanacheMock;
 import io.quarkus.test.junit.QuarkusTest;
 import org.ecommerce.common.entity.VariantPricesEntity;
 import org.ecommerce.common.enums.PriceTypeEn;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -13,29 +11,21 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.mockito.Mockito.when;
 
 @QuarkusTest
 class PriceUtilsTest
 {
 
-    @BeforeEach
-    void setUp()
-    {
-        PanacheMock.mock(VariantPricesEntity.class);
-    }
-
     @Test
     void currentPrice_shouldReturnZeroWhenVariantIdOrPriceTypeIsMissing()
     {
         assertEquals(BigDecimal.ZERO, PriceUtils.currentPrice(null, PriceTypeEn.RETAIL_PRICE));
-        assertEquals(BigDecimal.ZERO, PriceUtils.currentPrice(UUID.randomUUID(), null));
+        assertEquals(BigDecimal.ZERO, PriceUtils.currentPrice(List.of(), null));
     }
 
     @Test
     void currentPrice_shouldReturnLatestActivePriceWithinDateWindow()
     {
-        UUID variantId = UUID.randomUUID();
         LocalDateTime now = LocalDateTime.now();
 
         VariantPricesEntity expiredPrice = price(
@@ -78,20 +68,19 @@ class PriceUtilsTest
                 now.minusHours(1),
                 now.minusMinutes(30));
 
-        when(VariantPricesEntity.findByVariantId(variantId)).thenReturn(List.of(
+        List<VariantPricesEntity> prices = List.of(
                 expiredPrice,
                 futurePrice,
                 wholesalePrice,
                 olderActivePrice,
-                latestActivePrice));
+                latestActivePrice);
 
-        assertEquals(new BigDecimal("24.99"), PriceUtils.currentPrice(variantId, PriceTypeEn.RETAIL_PRICE));
+        assertEquals(new BigDecimal("24.99"), PriceUtils.currentPrice(prices, PriceTypeEn.RETAIL_PRICE));
     }
 
     @Test
     void currentPrice_shouldUseRecencyTieBreakersWhenStartDatesMatch()
     {
-        UUID variantId = UUID.randomUUID();
         LocalDateTime now = LocalDateTime.now();
         LocalDateTime startDate = now.minusDays(1);
         LocalDateTime endDate = now.plusDays(1);
@@ -112,9 +101,9 @@ class PriceUtilsTest
                 now.minusDays(2),
                 now.minusMinutes(10));
 
-        when(VariantPricesEntity.findByVariantId(variantId)).thenReturn(List.of(firstPrice, laterUpdatedPrice));
+        List<VariantPricesEntity> prices = List.of(firstPrice, laterUpdatedPrice);
 
-        assertEquals(new BigDecimal("27.50"), PriceUtils.currentPrice(variantId, PriceTypeEn.RETAIL_PRICE));
+        assertEquals(new BigDecimal("27.50"), PriceUtils.currentPrice(prices, PriceTypeEn.RETAIL_PRICE));
     }
 
     private VariantPricesEntity price(

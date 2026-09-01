@@ -13,6 +13,7 @@ import org.ecommerce.common.dto.StorefrontCustomerPortalDto;
 import org.ecommerce.common.entity.CustomerEntity;
 import org.ecommerce.common.entity.UserEntity;
 import org.ecommerce.common.enums.AddressTypeEn;
+import org.ecommerce.common.repository.CustomerRepository;
 import org.jboss.logging.Logger;
 
 import java.util.Map;
@@ -26,6 +27,9 @@ public class CustomerPortalService
     @Inject
     CustomerAddressMapper customerAddressMapper;
 
+    @Inject
+    CustomerRepository customerRepository;
+
     private static final Logger LOG = Logger.getLogger(CustomerPortalService.class);
 
     /**
@@ -37,7 +41,7 @@ public class CustomerPortalService
      */
     public StorefrontCustomerPortalDto getPortalProfile(String email)
     {
-        CustomerEntity customer = CustomerEntity.findByEmail(email);
+        CustomerEntity customer = customerRepository.findByEmail(email);
         if (customer == null) {
             LOG.warnf("Customer portal profile requested for unknown email: %s", email);
             throw new WebApplicationException(
@@ -78,7 +82,7 @@ public class CustomerPortalService
     @Transactional
     public void changePassword(String email, String currentPassword, String newPassword)
     {
-        CustomerEntity customer = CustomerEntity.findByEmail(email);
+        CustomerEntity customer = customerRepository.findByEmail(email);
         if (customer == null) {
             LOG.warnf("Password change attempted for unknown email: %s", email);
             throw new WebApplicationException(
