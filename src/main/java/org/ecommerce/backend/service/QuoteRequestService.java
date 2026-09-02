@@ -10,12 +10,15 @@ import org.ecommerce.common.dto.QuoteItemPriceInput;
 import org.ecommerce.common.dto.QuoteRequestDetailsDto;
 import org.ecommerce.common.dto.QuoteRequestItemDto;
 import org.ecommerce.common.dto.QuoteRequestLineDto;
+import org.ecommerce.common.dto.QuoteRequestListItemDto;
 import org.ecommerce.common.dto.QuoteRequestSubmissionDto;
 import org.ecommerce.common.entity.ProductVariantEntity;
 import org.ecommerce.common.entity.QuoteRequestEntity;
 import org.ecommerce.common.entity.QuoteRequestItemEntity;
 import org.ecommerce.common.entity.StaffUserEntity;
 import org.ecommerce.common.enums.QuoteRequestStatusEn;
+import org.ecommerce.common.query.FilterRequest;
+import org.ecommerce.common.query.PageRequest;
 import org.ecommerce.common.repository.ProductVariantRepository;
 import org.ecommerce.common.repository.QuoteRequestRepository;
 import org.jboss.logging.Logger;
@@ -49,6 +52,16 @@ public class QuoteRequestService
 
     @Inject
     QuoteRequestRepository quoteRequestRepository;
+
+    public List<QuoteRequestListItemDto> allQuoteRequests(PageRequest pageRequest, FilterRequest filterRequest)
+    {
+        return quoteRequestMapper.mapEntityToListItemDto(quoteRequestRepository.findAll(pageRequest, filterRequest));
+    }
+
+    public long quoteRequestCount(FilterRequest filterRequest)
+    {
+        return quoteRequestRepository.count(filterRequest);
+    }
 
     /**
      * Submits a new quote request: resolves each variant (unknown → exception for 422),
