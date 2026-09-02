@@ -121,7 +121,7 @@ public class OrderResource
             throw new GraphQLException("Order not found");
         }
 
-        OrderEntity order = OrderEntity.findById(id);
+        OrderEntity order = orderService.findById(id);
         if (order == null) {
             LOG.debugf("orderStatus: order not found: %s", id);
             throw new GraphQLException("Order not found");
@@ -167,7 +167,7 @@ public class OrderResource
             throw new GraphQLException("Order not found");
         }
 
-        OrderEntity order = OrderEntity.findById(id);
+        OrderEntity order = orderService.findById(id);
         if (order == null) {
             LOG.debugf("getOrderDetail: order not found: %s", id);
             throw new GraphQLException("Order not found");

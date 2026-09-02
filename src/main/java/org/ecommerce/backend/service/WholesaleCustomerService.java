@@ -18,8 +18,10 @@ import org.ecommerce.common.query.Filter;
 import org.ecommerce.common.query.FilterRequest;
 import org.ecommerce.common.query.PageRequest;
 import org.ecommerce.common.query.SortRequest;
+import org.ecommerce.common.repository.CustomerRepository;
 import org.ecommerce.common.repository.UserRepository;
 import org.ecommerce.common.repository.WholesaleApplicationRepository;
+import org.ecommerce.common.repository.WholesaleProfileRepository;
 import org.jboss.logging.Logger;
 
 import java.time.LocalDate;
@@ -37,6 +39,12 @@ public class WholesaleCustomerService
 
     @Inject
     UserRepository userRepository;
+
+    @Inject
+    CustomerRepository customerRepository;
+
+    @Inject
+    WholesaleProfileRepository wholesaleProfileRepository;
 
     @Inject
     WholesaleMapper wholesaleMapper;
@@ -112,7 +120,7 @@ public class WholesaleCustomerService
         // account_email is now optional
         String accountEmail = normalizeEmail(customerDto.getEmail());
         if (accountEmail != null) {
-            WholesaleApplicationEntity existing = WholesaleApplicationEntity.find("lower(accountEmail) = lower(?1)", accountEmail).firstResult();
+            WholesaleApplicationEntity existing = wholesaleApplicationRepository.find("lower(accountEmail) = lower(?1)", accountEmail).firstResult();
             if (existing != null) {
                 throw new IllegalArgumentException("wholesale application already exists with email: " + accountEmail);
             }
@@ -159,7 +167,7 @@ public class WholesaleCustomerService
         application.setPostalProvince(postal != null ? normalizeText(postal.getProvince()) : null);
         application.setPostalPostalCode(postal != null ? normalizeText(postal.getPostalCode()) : null);
 
-        WholesaleApplicationEntity.persist(application);
+        wholesaleApplicationRepository.persist(application);
 
         WholesaleCustomerDto result = wholesaleMapper.toDto(application);
 
@@ -179,7 +187,7 @@ public class WholesaleCustomerService
             throw new IllegalArgumentException("customer is required");
         }
 
-        CustomerEntity customerEntity = CustomerEntity.findById(id);
+        CustomerEntity customerEntity = customerRepository.findById(id);
         if (customerEntity == null) {
             throw new IllegalArgumentException("customer not found: " + id);
         }
@@ -207,7 +215,7 @@ public class WholesaleCustomerService
         customerEntity.setShopperType(CustomerTypeEn.WHOLESALER);
         applyProfileFields(customerEntity, customerDto);
         applyAddresses(customerEntity, customerDto);
-        customerEntity.persist();
+        customerRepository.persist(customerEntity);
 
         return wholesaleMapper.toDto(customerEntity);
     }
@@ -219,7 +227,7 @@ public class WholesaleCustomerService
             throw new IllegalArgumentException("id is required");
         }
 
-        WholesaleApplicationEntity application = WholesaleApplicationEntity.findById(id);
+        WholesaleApplicationEntity application = wholesaleApplicationRepository.findById(id);
         if (application == null) {
             throw new IllegalArgumentException("wholesale application not found: " + id);
         }
@@ -257,7 +265,7 @@ public class WholesaleCustomerService
         // ── Mark application approved ─────────────────────────────────────
         application.setStatus(WholesaleApplicationStatusEn.APPROVED);
         application.setProcessedAt(OffsetDateTime.now());
-        application.persist();
+        wholesaleApplicationRepository.persist(application);
 
         decisionEvent.fire(buildDecisionEvent(application, null, newAccountCreated));
 
@@ -274,7 +282,7 @@ public class WholesaleCustomerService
         UserEntity user = new UserEntity();
         user.setEmail(email);
         user.setPasswordHash(""); // placeholder until the customer sets a password
-        UserEntity.persist(user);
+        userRepository.persist(user);
 
         CustomerEntity customerEntity = new CustomerEntity();
         customerEntity.setUser(user);
@@ -283,14 +291,14 @@ public class WholesaleCustomerService
         customerEntity.setFirstName(normalizeText(application.getFirstName()));
         customerEntity.setLastName(normalizeText(application.getLastName()));
         customerEntity.setPhone(normalizeText(application.getPhone()));
-        CustomerEntity.persist(customerEntity);
+        customerRepository.persist(customerEntity);
 
         WholesaleProfileEntity profile = new WholesaleProfileEntity();
         profile.setCustomer(customerEntity);
         profile.setCompanyName(firstNonBlank(normalizeText(application.getCompanyName()), customerEntity.getFirstName(), "Unknown Company"));
         profile.setVatNumber(normalizeText(application.getVatNumber()));
         profile.setRegNumber(normalizeText(application.getRegNumber()));
-        WholesaleProfileEntity.persist(profile);
+        wholesaleProfileRepository.persist(profile);
 
         applyAddressesFromApplication(customerEntity, application);
 
@@ -328,11 +336,11 @@ public class WholesaleCustomerService
             profile.setCompanyName(firstNonBlank(normalizeText(application.getCompanyName()), customerEntity.getFirstName(), "Unknown Company"));
             profile.setVatNumber(normalizeText(application.getVatNumber()));
             profile.setRegNumber(normalizeText(application.getRegNumber()));
-            WholesaleProfileEntity.persist(profile);
+            wholesaleProfileRepository.persist(profile);
         }
 
         applyAddressesFromApplication(customerEntity, application);
-        customerEntity.persist();
+        customerRepository.persist(customerEntity);
 
         return customerEntity;
     }
@@ -347,7 +355,7 @@ public class WholesaleCustomerService
             throw new IllegalArgumentException("reason is required");
         }
 
-        WholesaleApplicationEntity application = WholesaleApplicationEntity.findById(id);
+        WholesaleApplicationEntity application = wholesaleApplicationRepository.findById(id);
         if (application == null) {
             throw new IllegalArgumentException("wholesale application not found: " + id);
         }
@@ -359,7 +367,7 @@ public class WholesaleCustomerService
         application.setStatus(WholesaleApplicationStatusEn.REJECTED);
         application.setProcessedAt(OffsetDateTime.now());
         application.setRejectionReason(reason.trim());
-        application.persist();
+        wholesaleApplicationRepository.persist(application);
 
         decisionEvent.fire(buildDecisionEvent(application, reason.trim(), false));
 

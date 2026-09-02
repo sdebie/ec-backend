@@ -28,6 +28,7 @@ import org.ecommerce.common.entity.UserEntity;
 import org.ecommerce.common.enums.AddressTypeEn;
 import org.ecommerce.common.enums.CustomerStatusEn;
 import org.ecommerce.common.enums.CustomerTypeEn;
+import org.ecommerce.common.repository.CustomerRepository;
 import org.ecommerce.common.repository.UserRepository;
 import org.jboss.logging.Logger;
 
@@ -59,6 +60,9 @@ public class CustomerResource
 
     @Inject
     UserRepository userRepository;
+
+    @Inject
+    CustomerRepository customerRepository;
 
     @Inject
     JsonWebToken jwt;
@@ -220,7 +224,7 @@ public class CustomerResource
         }
 
         user.setLastLogin(OffsetDateTime.now());
-        user.persist();
+        userRepository.persist(user);
         return Response.ok(toLoginResponseDto(ce)).build();
     }
 
@@ -260,7 +264,7 @@ public class CustomerResource
                 user = new UserEntity();
                 user.setEmail(email);
                 user.setPasswordHash(""); // Google users might not have a local password initially
-                user.persist();
+                userRepository.persist(user);
             }
 
             CustomerEntity ce = user.getCustomer();
@@ -271,7 +275,7 @@ public class CustomerResource
                 ce.setLastName(lastName);
                 ce.setStatus(CustomerStatusEn.ACTIVE); // Auto-activate Google users
                 ce.setShopperType(CustomerTypeEn.RETAILER);
-                ce.persist();
+                customerRepository.persist(ce);
             } else {
                 if (ce.getStatus() == CustomerStatusEn.DISABLED) {
                     return Response.status(Response.Status.FORBIDDEN).entity("Customer account is disabled").build();
@@ -283,11 +287,11 @@ public class CustomerResource
                 if (ce.getShopperType() == null || ce.getShopperType() == CustomerTypeEn.GUEST) {
                     ce.setShopperType(CustomerTypeEn.RETAILER);
                 }
-                ce.persist();
+                customerRepository.persist(ce);
             }
 
             user.setLastLogin(OffsetDateTime.now());
-            user.persist();
+            userRepository.persist(user);
 
             return Response.ok(toLoginResponseDto(ce)).build();
         } catch (Exception e) {
@@ -360,7 +364,7 @@ public class CustomerResource
             user.setEmail(email);
         }
         user.setPasswordHash(CustomerPasswordHashUtil.hash(req.password));
-        UserEntity.persist(user);
+        userRepository.persist(user);
 
         CustomerEntity ce = user.getCustomer();
         if (ce == null) {
@@ -374,7 +378,7 @@ public class CustomerResource
 
         ce.setShopperType(CustomerTypeEn.RETAILER);
         ce.setStatus(CustomerStatusEn.ACTIVE);
-        CustomerEntity.persist(ce);
+        customerRepository.persist(ce);
 
         customerAddressService.upsertAddress(ce, AddressTypeEn.PHYSICAL, req.physicalAddress);
         customerAddressService.upsertAddress(ce, AddressTypeEn.POSTAL, req.postalAddress);
@@ -414,7 +418,7 @@ public class CustomerResource
         if (req.firstName != null) ce.setFirstName(req.firstName);
         if (req.lastName != null) ce.setLastName(req.lastName);
         if (req.phone != null) ce.setPhone(req.phone);
-        ce.persist();
+        customerRepository.persist(ce);
 
         customerAddressService.upsertAddress(ce, AddressTypeEn.PHYSICAL, req.physicalAddress);
         customerAddressService.upsertAddress(ce, AddressTypeEn.POSTAL, req.postalAddress);

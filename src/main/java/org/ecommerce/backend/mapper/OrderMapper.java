@@ -6,11 +6,13 @@ import org.ecommerce.common.dto.OrderItemDetailDto;
 import org.ecommerce.common.dto.OrderResponseDto;
 import org.ecommerce.common.dto.OrderStatusRespDto;
 import org.ecommerce.common.dto.OrderSummaryDto;
+import org.ecommerce.common.dto.ProductImageDto;
 import org.ecommerce.common.dto.ProductVariantDetailDto;
 import org.ecommerce.common.entity.CustomerEntity;
 import org.ecommerce.common.entity.OrderEntity;
 import org.ecommerce.common.entity.OrderItemEntity;
 import org.ecommerce.common.entity.OrderStatusHistoryEntity;
+import org.ecommerce.common.entity.ProductImageEntity;
 import org.ecommerce.common.entity.ProductVariantEntity;
 import org.mapstruct.AfterMapping;
 import org.mapstruct.Context;
@@ -19,6 +21,8 @@ import org.mapstruct.Mapping;
 import org.mapstruct.MappingTarget;
 
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 
 import static org.ecommerce.backend.utils.CollectionUtils.emptyIfNull;
 import static org.mapstruct.NullValueCheckStrategy.ALWAYS;
@@ -45,15 +49,21 @@ public interface OrderMapper
     @Mapping(target = "createDate", source = "createdAt")
     @Mapping(target = "customer", source = "customerEntity")
     @Mapping(target = "itemCount", ignore = true)
-    OrderResponseDto toResponseDto(OrderEntity order);
+    OrderResponseDto toResponseDto(OrderEntity order, @Context Map<UUID, List<ProductImageEntity>> imagesByVariantId);
 
     /**
      * Uses {@link ProductVariantDetailDto} (reduced variant — no sku/status/prices) with
      * {@code ProductDetailDto} (name only) as the nested product reference.
      */
-    OrderItemDetailDto toItemDetailDto(OrderItemEntity item);
+    OrderItemDetailDto toItemDetailDto(OrderItemEntity item, @Context Map<UUID, List<ProductImageEntity>> imagesByVariantId);
 
-    ProductVariantDetailDto toVariantDetailDto(ProductVariantEntity variant);
+    /**
+     * {@code images} is filled by {@link #attachImages} from the caller-supplied
+     * {@code imagesByVariantId} instead of {@code variant.getImages()} — this runs on orders,
+     * a different aggregate, and must never load or touch the variant's own managed collection.
+     */
+    @Mapping(target = "images", ignore = true)
+    ProductVariantDetailDto toVariantDetailDto(ProductVariantEntity variant, @Context Map<UUID, List<ProductImageEntity>> imagesByVariantId);
 
     @Mapping(target = "email", source = "user.email")
     CustomerDto toCustomerDto(CustomerEntity customer);
@@ -75,7 +85,8 @@ public interface OrderMapper
             expression = "java(order.getCustomerEntity() != null && order.getCustomerEntity().getUser() != null "
                     + "? toCustomerDto(order.getCustomerEntity()) : null)")
     @Mapping(target = "statusHistory", expression = "java(toStatusHistoryDtos(history))")
-    OrderDetailRespDto toDetailDto(OrderEntity order, @Context List<OrderStatusHistoryEntity> history);
+    OrderDetailRespDto toDetailDto(OrderEntity order, @Context List<OrderStatusHistoryEntity> history,
+                                   @Context Map<UUID, List<ProductImageEntity>> imagesByVariantId);
 
     OrderDetailRespDto.OrderStatusHistoryDetailRespDto toStatusHistoryDto(OrderStatusHistoryEntity entry);
 
@@ -103,12 +114,21 @@ public interface OrderMapper
         dto.setItems(emptyIfNull(dto.getItems()));
     }
 
-    /** A variant with no images reads as an empty gallery, not a null one. */
-    @AfterMapping
-    default void defaultImagesToEmpty(@MappingTarget ProductVariantDetailDto dto)
-    {
-        dto.setImages(emptyIfNull(dto.getImages()));
-    }
+    List<ProductImageDto> toImageDtos(List<ProductImageEntity> images);
 
+    /**
+     * Looks up this variant's images by id in the caller-supplied map rather than reading
+     * {@code variant.getImages()} — see {@link #toVariantDetailDto}. A variant with no images
+     * (or none in the map) reads as an empty gallery, never a null one.
+     */
+    @AfterMapping
+    default void attachImages(ProductVariantEntity variant, @MappingTarget ProductVariantDetailDto dto,
+                              @Context Map<UUID, List<ProductImageEntity>> imagesByVariantId)
+    {
+        List<ProductImageEntity> images = imagesByVariantId == null || variant.getId() == null
+                ? List.of()
+                : imagesByVariantId.getOrDefault(variant.getId(), List.of());
+        dto.setImages(toImageDtos(images));
+    }
 
 }

@@ -15,6 +15,7 @@ import org.eclipse.microprofile.config.ConfigProvider;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.ecommerce.common.entity.StaffUserEntity;
 import org.ecommerce.common.enums.StaffRoleEn;
+import org.ecommerce.common.repository.StaffRepository;
 import org.jboss.logging.Logger;
 
 @ApplicationScoped
@@ -34,6 +35,9 @@ public class Startup
 
     @Inject
     Router router; // Inject the Vert.x Router
+
+    @Inject
+    StaffRepository staffRepository;
 
     @Transactional
     void onStart(@Observes StartupEvent ev)
@@ -56,14 +60,14 @@ public class Startup
         LOG.info("Image server active for: " + storagePath);
 
         // 3. User Seed logic
-        if (StaffUserEntity.count() == 0) {
+        if (staffRepository.count() == 0) {
             StaffUserEntity admin = new StaffUserEntity();
             admin.setEmail(bootstrapAdminEmail);
             admin.setFullName("System Administrator");
             admin.setRole(StaffRoleEn.SUPER_ADMIN);
             admin.setPasswordHash(BcryptUtil.bcryptHash(bootstrapAdminPassword));
             admin.setActive(true);
-            admin.persist();
+            staffRepository.persist(admin);
         }
     }
 

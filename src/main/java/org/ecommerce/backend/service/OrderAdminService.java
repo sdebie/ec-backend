@@ -9,6 +9,7 @@ import org.ecommerce.common.dto.PageResponse;
 import org.ecommerce.common.entity.OrderEntity;
 import org.ecommerce.common.entity.OrderStatusHistoryEntity;
 import org.ecommerce.common.entity.PaymentLogEntity;
+import org.ecommerce.common.entity.ProductImageEntity;
 import org.ecommerce.common.enums.OrderStatusEn;
 import org.ecommerce.common.query.PageRequest;
 import org.ecommerce.common.query.SortRequest;
@@ -16,11 +17,13 @@ import org.ecommerce.common.query.enums.SortDirection;
 import org.ecommerce.common.repository.OrderRepository;
 import org.ecommerce.common.repository.OrderStatusHistoryRepository;
 import org.ecommerce.common.repository.PaymentLogRepository;
+import org.ecommerce.common.repository.ProductImageRepository;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeParseException;
 import java.util.List;
+import java.util.Map;
 import org.ecommerce.common.enums.FulfilmentState;
 import org.ecommerce.common.enums.PaymentState;
 import java.util.function.Function;
@@ -54,6 +57,9 @@ public class OrderAdminService
 
     @Inject
     PaymentLogRepository paymentLogRepository;
+
+    @Inject
+    ProductImageRepository productImageRepository;
 
     /**
      * One order carries one status, but staff filter on two separate questions of it — has
@@ -127,7 +133,16 @@ public class OrderAdminService
         List<OrderStatusHistoryEntity> history = orderStatusHistoryRepository.findByOrderId(id);
         PaymentLogEntity latestPayment = paymentLogRepository.findLatestByOrderId(id);
 
-        return orderAdminMapper.toDetailDto(order, totals, history, latestPayment);
+        // Never reads ProductVariantEntity.getImages() — see ProductImageRepository
+        // #findGroupedByVariantIds and OrderAdminMapper#attachThumbnail.
+        List<UUID> variantIds = order.getItems() == null ? List.of() : order.getItems().stream()
+                .filter(item -> item != null && item.getVariant() != null && item.getVariant().getId() != null)
+                .map(item -> item.getVariant().getId())
+                .distinct()
+                .toList();
+        Map<UUID, List<ProductImageEntity>> imagesByVariantId = productImageRepository.findGroupedByVariantIds(variantIds);
+
+        return orderAdminMapper.toDetailDto(order, totals, history, latestPayment, imagesByVariantId);
     }
 
     /**

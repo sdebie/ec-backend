@@ -256,7 +256,7 @@ public class ProductService
         }
 
         // Save product
-        product.persist();
+        productRepository.persist(product);
         log.info("Created new product with ID: {}", product.getId());
 
         // Persist variants and their prices
@@ -330,7 +330,7 @@ public class ProductService
         }
 
         // Save updated product
-        product.persist();
+        productRepository.persist(product);
         log.info("Updated product with ID: {}", product.getId());
 
         // Handle product variants updates
@@ -394,7 +394,7 @@ public class ProductService
                 if (image.getProductVariant() != null && image.getProductVariant().getImages() != null) {
                     image.getProductVariant().getImages().remove(image);
                 }
-                image.delete();
+                productImageRepository.delete(image);
             }
             log.warn("No active variant found for product {}; removed all image associations", productId);
             return;
@@ -440,7 +440,7 @@ public class ProductService
                     if (!ownerVariant.getId().equals(existing.getProductVariant().getId())) {
                         existing.setProductVariant(ownerVariant);
                     }
-                    existing.persist();
+                    productImageRepository.persist(existing);
                     processedImages.add(existing);
                     if (imgDto.isFeatured()) {
                         featuredIndex = processedImages.size() - 1;
@@ -453,7 +453,7 @@ public class ProductService
                 newImage.setImageUrl(imgDto.getImageUrl());
                 newImage.setSortOrder(i);
                 newImage.setAltText(imgDto.getAltText());
-                newImage.persist();
+                productImageRepository.persist(newImage);
                 log.info("Created new image association for product {}: {}", productId, imgDto.getImageUrl());
                 processedImages.add(newImage);
                 if (imgDto.isFeatured()) {
@@ -473,7 +473,7 @@ public class ProductService
                 if (existing.getProductVariant() != null && existing.getProductVariant().getImages() != null) {
                     existing.getProductVariant().getImages().remove(existing);
                 }
-                existing.delete();
+                productImageRepository.delete(existing);
                 log.info("Removed image association {} from product {}", existing.getId(), productId);
             }
         }
@@ -525,12 +525,12 @@ public class ProductService
                 if (isDraft && !isOrderReferenced) {
                     // Hard-delete: product is draft and variant is not order-referenced
                     log.info("Hard-deleting variant {} (SKU: {}) — draft product, no order references", existing.getId(), existing.getSku());
-                    existing.delete();
+                    productVariantRepository.delete(existing);
                 } else {
                     // Soft-delete: set status to DISABLED
                     log.info("Soft-deleting variant {} (SKU: {}) — setting status to DISABLED (draft={}, orderRef={})", existing.getId(), existing.getSku(), isDraft, isOrderReferenced);
                     existing.setStatus(ProductStatusEn.DISABLED);
-                    existing.persist();
+                    productVariantRepository.persist(existing);
                 }
             }
         }
@@ -581,7 +581,7 @@ public class ProductService
                 variant.setAttributesJson(variantDto.getAttributesJson());
                 variant.setWeightKg(variantDto.getWeightKg());
                 variant.setStatus(variantDto.getStatus() != null ? ProductStatusEn.valueOf(variantDto.getStatus()) : ProductStatusEn.ACTIVE);
-                variant.persist();
+                productVariantRepository.persist(variant);
                 log.info("Created new variant with SKU: {} for product: {}", variantDto.getSku(), product.getId());
             } else {
                 // Update existing variant fields (patch: only non-null values applied)
@@ -600,7 +600,7 @@ public class ProductService
                 if (variantDto.getStatus() != null) {
                     variant.setStatus(ProductStatusEn.valueOf(variantDto.getStatus()));
                 }
-                variant.persist();
+                productVariantRepository.persist(variant);
                 log.info("Updated variant with SKU: {} for product: {}", variant.getSku(), product.getId());
             }
 
@@ -640,7 +640,7 @@ public class ProductService
 
             // If the DTO carries a price id, update that specific row
             if (priceDto.getId() != null && !priceDto.getId().isBlank()) {
-                price = VariantPricesEntity.findById(UUID.fromString(priceDto.getId()));
+                price = variantPricesRepository.findById(UUID.fromString(priceDto.getId()));
             }
 
             // Otherwise, find by variant + priceType to prevent duplicates
@@ -658,7 +658,7 @@ public class ProductService
             price.setPrice(priceDto.getPrice());
             price.setPriceStartDate(priceDto.getPriceStartDate());
             price.setPriceEndDate(priceDto.getPriceEndDate());
-            price.persist();
+            variantPricesRepository.persist(price);
         }
     }
 
@@ -679,7 +679,7 @@ public class ProductService
         }
 
         product.setStatus(ProductStatusEn.valueOf(status));
-        product.persist();
+        productRepository.persist(product);
         log.info("Updated product {} status to {}", id, status);
     }
 
@@ -712,18 +712,18 @@ public class ProductService
         if (!anyOrderReferenced) {
             // CascadeType.ALL + orphanRemoval on ProductEntity.variants handles
             // cascading removal of variants, their prices, and their images.
-            product.delete();
+            productRepository.delete(product);
             log.info("Hard-deleted product {} — no order references", id);
             return ProductDeletionOutcome.DELETED;
         } else {
             // Archive: set product status to DISABLED, and disable all ACTIVE child variants
             product.setStatus(ProductStatusEn.DISABLED);
-            product.persist();
+            productRepository.persist(product);
 
             for (ProductVariantEntity variant : allVariants) {
                 if (variant.getStatus() == ProductStatusEn.ACTIVE) {
                     variant.setStatus(ProductStatusEn.DISABLED);
-                    variant.persist();
+                    productVariantRepository.persist(variant);
                 }
             }
             log.info("Archived product {} — variants are order-referenced", id);

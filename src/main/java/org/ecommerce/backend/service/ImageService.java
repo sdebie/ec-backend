@@ -384,7 +384,7 @@ public class ImageService
         productImage.setSortOrder(maxSortOrder + 1);
         productImage.setIsFeatured(false);
 
-        productImage.persist();
+        productImageRepository.persist(productImage);
 
         // "Featured" is a product-wide invariant (see ProductImageRepository.setFeaturedImage /
         // findFeaturedByProductId) spanning every variant of the product, not just this one —
