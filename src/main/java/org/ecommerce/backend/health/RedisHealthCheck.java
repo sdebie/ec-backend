@@ -11,7 +11,7 @@ import org.eclipse.microprofile.health.Readiness;
  * Redis backs the rate limiter and the sweep lock. {@code @Readiness}, not
  * {@code @Liveness} — an outage should pull the instance from rotation, not restart it.
  */
-@Readiness
+//@Readiness
 @ApplicationScoped
 public class RedisHealthCheck implements HealthCheck
 {
