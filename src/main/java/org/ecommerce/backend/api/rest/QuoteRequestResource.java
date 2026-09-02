@@ -7,7 +7,6 @@ import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import org.ecommerce.backend.service.QuoteRequestService;
-import org.ecommerce.backend.service.RateLimiterService;
 import org.ecommerce.backend.utils.ClientIpUtils;
 import org.ecommerce.common.dto.QuoteRequestSubmissionDto;
 import org.jboss.logging.Logger;
@@ -19,13 +18,12 @@ import java.util.Set;
  * <p>
  * No auth annotation — public by design, same as {@link ContactEnquiryResource}.
  * <p>
- * Flow: validate → honeypot check → rate-limit → persist + async mail → 201.
+ * Flow: validate → honeypot check → persist + async mail → 201.
  * <p>
  * Status codes:
  * <ul>
  *   <li>{@code 201} — created (request persisted; also returned for honeypot traps)</li>
  *   <li>{@code 422} — validation failure (null body, constraint violations, or unknown variant)</li>
- *   <li>{@code 429} — rate-limited</li>
  * </ul>
  * <p>
  * Deliberately diverges from ContactEnquiryResource: returns 201 (not 202) because
@@ -41,9 +39,6 @@ public class QuoteRequestResource {
 
     @Inject
     QuoteRequestService quoteRequestService;
-
-    @Inject
-    RateLimiterService rateLimiterService;
 
     @Inject
     Validator validator;
@@ -73,13 +68,7 @@ public class QuoteRequestResource {
             return Response.status(Response.Status.CREATED).build();
         }
 
-        // 4. Rate-limit check — keyed by IP only; denial log never contains email
-        Response limited = rateLimiterService.enforce("quote-request", clientIp, 5, 3600);
-        if (limited != null) {
-            return limited;
-        }
-
-        // 5. Submit — persist + post-commit async mail; unknown variant → 422
+        // 4. Submit — persist + post-commit async mail; unknown variant → 422
         try {
             quoteRequestService.submit(dto);
         } catch (IllegalArgumentException e) {

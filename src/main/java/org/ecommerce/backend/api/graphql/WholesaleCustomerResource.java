@@ -6,11 +6,7 @@ import org.eclipse.microprofile.graphql.GraphQLApi;
 import org.eclipse.microprofile.graphql.Mutation;
 import org.eclipse.microprofile.graphql.Name;
 import org.eclipse.microprofile.graphql.Query;
-import org.ecommerce.backend.exception.RateLimitExceededException;
-import org.ecommerce.backend.service.RateLimitDecision;
-import org.ecommerce.backend.service.RateLimiterService;
 import org.ecommerce.backend.service.WholesaleCustomerService;
-import org.ecommerce.backend.utils.CurrentRequestClientIp;
 import org.ecommerce.common.dto.WholesaleApplicationDetailsDto;
 import org.ecommerce.common.dto.WholesaleApplicationListItemDto;
 import org.ecommerce.common.dto.WholesaleCustomerDto;
@@ -25,12 +21,6 @@ public class WholesaleCustomerResource {
 
     @Inject
     WholesaleCustomerService wholesaleCustomerService;
-
-    @Inject
-    RateLimiterService rateLimiterService;
-
-    @Inject
-    CurrentRequestClientIp currentRequestClientIp;
 
     @Query("allWholesaleApplications")
     @RolesAllowed({"SUPER_ADMIN", "ORDER_MANAGER", "VIEWER"})
@@ -73,12 +63,6 @@ public class WholesaleCustomerResource {
 
     @Mutation("createWholesaleApplication")
     public WholesaleCustomerDto createWholesaleApplication(@Name("customer") WholesaleCustomerDto customerDto) {
-        String clientIp = currentRequestClientIp.resolve();
-        RateLimitDecision decision = rateLimiterService.check("wholesale-application", clientIp, 3, 3600);
-        if (!decision.allowed()) {
-            throw new RateLimitExceededException();
-        }
-
         try {
             return wholesaleCustomerService.createWholesaleApplication(customerDto);
         } catch (RuntimeException ex) {
