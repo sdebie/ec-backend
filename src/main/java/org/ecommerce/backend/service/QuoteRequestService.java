@@ -53,6 +53,9 @@ public class QuoteRequestService
     @Inject
     QuoteRequestRepository quoteRequestRepository;
 
+    @Inject
+    StaffService staffService;
+
     public List<QuoteRequestListItemDto> allQuoteRequests(PageRequest pageRequest, FilterRequest filterRequest)
     {
         return quoteRequestMapper.mapEntityToListItemDto(quoteRequestRepository.findAll(pageRequest, filterRequest));
@@ -61,6 +64,21 @@ public class QuoteRequestService
     public long quoteRequestCount(FilterRequest filterRequest)
     {
         return quoteRequestRepository.count(filterRequest);
+    }
+
+    public QuoteRequestDetailsDto getQuoteRequestDetails(UUID id)
+    {
+        return quoteRequestMapper.mapEntityToDetailsDto(requireExisting(id));
+    }
+
+    /** Who to credit as having acted on a quote. {@code email} is the staff JWT's subject. */
+    public StaffUserEntity resolveStaffUser(String email)
+    {
+        StaffUserEntity staff = email == null ? null : staffService.findByEmail(email);
+        if (staff == null) {
+            throw new IllegalArgumentException("Unable to resolve the staff account for this request");
+        }
+        return staff;
     }
 
     /**

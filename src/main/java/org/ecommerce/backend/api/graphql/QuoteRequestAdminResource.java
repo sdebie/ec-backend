@@ -7,19 +7,15 @@ import org.eclipse.microprofile.graphql.Mutation;
 import org.eclipse.microprofile.graphql.Name;
 import org.eclipse.microprofile.graphql.Query;
 import org.eclipse.microprofile.jwt.JsonWebToken;
-import org.ecommerce.backend.mapper.QuoteRequestMapper;
 import org.ecommerce.backend.service.QuoteRequestMailer;
 import org.ecommerce.backend.service.QuoteRequestService;
 import org.ecommerce.common.dto.QuoteItemPriceInput;
 import org.ecommerce.common.dto.QuoteRequestDetailsDto;
 import org.ecommerce.common.dto.QuoteRequestListItemDto;
-import org.ecommerce.common.entity.QuoteRequestEntity;
 import org.ecommerce.common.entity.StaffUserEntity;
 import org.ecommerce.common.enums.QuoteRequestStatusEn;
 import org.ecommerce.common.query.FilterRequest;
 import org.ecommerce.common.query.PageRequest;
-import org.ecommerce.common.repository.QuoteRequestRepository;
-import org.ecommerce.common.repository.StaffRepository;
 
 import java.util.List;
 import java.util.UUID;
@@ -29,15 +25,6 @@ public class QuoteRequestAdminResource
 {
     @Inject
     QuoteRequestService quoteRequestService;
-
-    @Inject
-    QuoteRequestMapper quoteRequestMapper;
-
-    @Inject
-    QuoteRequestRepository quoteRequestRepository;
-
-    @Inject
-    StaffRepository staffRepository;
 
     @Inject
     QuoteRequestMailer quoteRequestMailer;
@@ -75,14 +62,7 @@ public class QuoteRequestAdminResource
     public QuoteRequestDetailsDto quoteRequest(@Name("id") UUID id)
     {
         try {
-            if (id == null) {
-                throw new IllegalArgumentException("id is required");
-            }
-            QuoteRequestEntity entity = quoteRequestRepository.findById(id);
-            if (entity == null) {
-                throw new IllegalArgumentException("Quote request not found: " + id);
-            }
-            return quoteRequestMapper.mapEntityToDetailsDto(entity);
+            return quoteRequestService.getQuoteRequestDetails(id);
         } catch (RuntimeException ex) {
             throw toGraphQlException(ex);
         }
@@ -142,11 +122,7 @@ public class QuoteRequestAdminResource
     /** Who to credit as having generated the quote. The staff JWT carries their email as the subject. */
     private StaffUserEntity resolveStaffUser()
     {
-        StaffUserEntity staff = jwt == null ? null : staffRepository.findByEmail(jwt.getName());
-        if (staff == null) {
-            throw new IllegalArgumentException("Unable to resolve the staff account for this request");
-        }
-        return staff;
+        return quoteRequestService.resolveStaffUser(jwt == null ? null : jwt.getName());
     }
 
     private QuoteRequestStatusEn parseStatus(String status)

@@ -39,6 +39,11 @@ public class StaffService
         return staffRepository.count(filterRequest);
     }
 
+    public StaffUserEntity findByEmail(String email)
+    {
+        return staffRepository.findByEmail(email);
+    }
+
     public StaffDto getStaffById(UUID id)
     {
         if (id == null) {

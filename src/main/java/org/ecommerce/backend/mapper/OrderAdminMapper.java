@@ -11,6 +11,8 @@ import org.ecommerce.common.entity.OrderEntity;
 import org.ecommerce.common.entity.OrderItemEntity;
 import org.ecommerce.common.entity.OrderStatusHistoryEntity;
 import org.ecommerce.common.entity.PaymentLogEntity;
+import org.ecommerce.common.entity.ProductImageEntity;
+import org.ecommerce.common.repository.ProductImageRepository;
 import org.mapstruct.AfterMapping;
 import org.mapstruct.Context;
 import org.mapstruct.Mapper;
@@ -18,6 +20,8 @@ import org.mapstruct.Mapping;
 import org.mapstruct.MappingTarget;
 
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 
 import static org.ecommerce.backend.utils.CollectionUtils.emptyIfNull;
 import static org.mapstruct.NullValueCheckStrategy.ALWAYS;
@@ -70,15 +74,22 @@ public interface OrderAdminMapper
     AdminOrderDetailDto toDetailDto(OrderEntity order,
                                     @Context OrderTotals totals,
                                     @Context List<OrderStatusHistoryEntity> history,
-                                    @Context PaymentLogEntity latestPayment);
+                                    @Context PaymentLogEntity latestPayment,
+                                    @Context Map<UUID, List<ProductImageEntity>> imagesByVariantId);
 
+    /**
+     * {@code thumbnailUrl} is filled by {@link #attachThumbnail} from the caller-supplied
+     * {@code imagesByVariantId} rather than {@code item.getVariant().displayImageUrl()} — that
+     * reads the variant's own managed {@code images} collection, a different aggregate this
+     * mapping must never load or touch.
+     */
     @Mapping(target = "productName", source = "variant.product.name")
     @Mapping(target = "variantSku", source = "variant.sku")
-    @Mapping(target = "thumbnailUrl", expression = "java(item.getVariant() == null ? null : item.getVariant().displayImageUrl())")
+    @Mapping(target = "thumbnailUrl", ignore = true)
     @Mapping(target = "lineTotal", source = "subtotal")
-    AdminOrderLineItemDto toLineItemDto(OrderItemEntity item);
+    AdminOrderLineItemDto toLineItemDto(OrderItemEntity item, @Context Map<UUID, List<ProductImageEntity>> imagesByVariantId);
 
-    List<AdminOrderLineItemDto> toLineItemDtos(List<OrderItemEntity> items);
+    List<AdminOrderLineItemDto> toLineItemDtos(List<OrderItemEntity> items, @Context Map<UUID, List<ProductImageEntity>> imagesByVariantId);
 
     @Mapping(target = "timestamp", source = "createdAt")
     @Mapping(target = "staffName", source = "changedBy")
@@ -103,6 +114,23 @@ public interface OrderAdminMapper
     {
         dto.setStatusHistory(emptyIfNull(dto.getStatusHistory()));
         dto.setLineItems(emptyIfNull(dto.getLineItems()));
+    }
+
+    /**
+     * The featured image if the variant has one, else the first by sort order — same rule as
+     * {@code ProductVariantEntity.displayImageUrl()}, but read from the caller-supplied map:
+     * {@link ProductImageRepository#findGroupedByVariantIds} already orders each variant's list
+     * featured-first then by sort order, so the first element is always the right pick.
+     */
+    @AfterMapping
+    default void attachThumbnail(OrderItemEntity item, @MappingTarget AdminOrderLineItemDto dto,
+                                 @Context Map<UUID, List<ProductImageEntity>> imagesByVariantId)
+    {
+        UUID variantId = item.getVariant() == null ? null : item.getVariant().getId();
+        List<ProductImageEntity> images = variantId == null || imagesByVariantId == null
+                ? List.of()
+                : imagesByVariantId.getOrDefault(variantId, List.of());
+        dto.setThumbnailUrl(images.isEmpty() ? null : images.get(0).getImageUrl());
     }
 
 }

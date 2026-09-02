@@ -19,6 +19,7 @@ import org.ecommerce.common.query.FilterRequest;
 import org.ecommerce.common.query.PageRequest;
 import org.ecommerce.common.repository.OrderRepository;
 import org.ecommerce.common.repository.OrderStatusHistoryRepository;
+import org.ecommerce.common.repository.ProductImageRepository;
 import org.ecommerce.common.repository.ProductVariantRepository;
 import org.hibernate.exception.ConstraintViolationException;
 import org.jboss.logging.Logger;
@@ -45,6 +46,9 @@ public class OrderService
 
     @Inject
     ProductVariantRepository productVariantRepository;
+
+    @Inject
+    ProductImageRepository productImageRepository;
 
     @Inject
     OrderMapper orderMapper;
@@ -678,14 +682,21 @@ public class OrderService
             throw new GraphQLException("Order status changed concurrently; please refresh and try again");
         }
 
-        return orderMapper.toResponseDto(order);
+        Map<UUID, List<ProductImageEntity>> imagesByVariantId = productImageRepository.findGroupedByVariantIds(variantIdsOf(List.of(order)));
+        return orderMapper.toResponseDto(order, imagesByVariantId);
     }
 
     public List<OrderResponseDto> getAllOrders(PageRequest pageRequest, FilterRequest filterRequest) {
         List<OrderEntity> orderEntities = orderRepository.findAllOrderInfo(pageRequest, filterRequest);
+
+        // One batched lookup for the whole page rather than one per order — see
+        // ProductImageRepository#findGroupedByVariantIds for why this never touches
+        // ProductVariantEntity's own managed images collection.
+        Map<UUID, List<ProductImageEntity>> imagesByVariantId = productImageRepository.findGroupedByVariantIds(variantIdsOf(orderEntities));
+
         List<OrderResponseDto> orders = new ArrayList<>(orderEntities.size());
         for (OrderEntity orderEntity : orderEntities) {
-            orders.add(orderMapper.toResponseDto(orderEntity));
+            orders.add(orderMapper.toResponseDto(orderEntity, imagesByVariantId));
         }
         return orders;
     }
@@ -702,8 +713,25 @@ public class OrderService
 
         // Loaded here rather than inside the mapper: mappers do not open queries.
         List<OrderStatusHistoryEntity> history = orderStatusHistoryRepository.findByOrderId(orderId);
+        Map<UUID, List<ProductImageEntity>> imagesByVariantId = productImageRepository.findGroupedByVariantIds(variantIdsOf(List.of(order)));
 
-        return orderMapper.toDetailDto(order, history);
+        return orderMapper.toDetailDto(order, history, imagesByVariantId);
+    }
+
+    /** Distinct variant ids referenced by these orders' items, for a batched image lookup. */
+    private List<UUID> variantIdsOf(List<OrderEntity> orders) {
+        Set<UUID> ids = new LinkedHashSet<>();
+        for (OrderEntity order : orders) {
+            if (order == null || order.getItems() == null) {
+                continue;
+            }
+            for (OrderItemEntity item : order.getItems()) {
+                if (item != null && item.getVariant() != null && item.getVariant().getId() != null) {
+                    ids.add(item.getVariant().getId());
+                }
+            }
+        }
+        return new ArrayList<>(ids);
     }
 
     public List<OrderSummaryDto> getMyOrders(UUID customerId) {

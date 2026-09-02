@@ -14,6 +14,7 @@ import org.ecommerce.common.entity.CustomerEntity;
 import org.ecommerce.common.entity.UserEntity;
 import org.ecommerce.common.enums.AddressTypeEn;
 import org.ecommerce.common.repository.CustomerRepository;
+import org.ecommerce.common.repository.UserRepository;
 import org.jboss.logging.Logger;
 
 import java.util.Map;
@@ -29,6 +30,9 @@ public class CustomerPortalService
 
     @Inject
     CustomerRepository customerRepository;
+
+    @Inject
+    UserRepository userRepository;
 
     private static final Logger LOG = Logger.getLogger(CustomerPortalService.class);
 
@@ -123,7 +127,7 @@ public class CustomerPortalService
 
         // Hash and persist
         user.setPasswordHash(CustomerPasswordHashUtil.hash(newPassword));
-        user.persist();
+        userRepository.persist(user);
     }
 
     // ── Private helpers ──────────────────────────────────────────────────────

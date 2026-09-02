@@ -1,8 +1,9 @@
 package org.ecommerce.backend.service;
 
-import io.quarkus.hibernate.orm.panache.Panache;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
+import org.ecommerce.common.repository.ProductRepository;
 
 import java.io.PrintWriter;
 import java.util.stream.Stream;
@@ -19,76 +20,15 @@ public class ProductExportService
     private static final String CSV_PRICE_HEADER =
             "sku,retail_price,wholesale_price";
 
-
-    private static final String EXPORT_PRD_DETAIL_SQL = """
-            SELECT
-                p.id AS product_id,
-                v.sku,
-                p.name,
-                p.description,
-                p.short_description,
-                (SELECT STRING_AGG(c2.slug, '|' ORDER BY c2.slug)
-                 FROM product_categories pc2
-                 JOIN categories c2 ON pc2.category_id = c2.id
-                 WHERE pc2.product_id = p.id) AS product_categories,
-                p.product_type,
-                b.slug AS brand_slug,
-                (SELECT price FROM variant_prices WHERE variant_id = v.id AND price_type = 'RETAIL_PRICE' ORDER BY created_at DESC LIMIT 1) as retail_price,
-                (SELECT price FROM variant_prices WHERE variant_id = v.id AND price_type = 'WHOLESALE_PRICE' ORDER BY created_at DESC LIMIT 1) as wholesale_price,
-                v.stock_quantity as stock,
-                (SELECT STRING_AGG(image_url, ',') FROM product_images WHERE variant_id = v.id) as images,
-                v.attributes
-            FROM product_variants v
-            JOIN products p ON v.product_id = p.id
-            LEFT JOIN brands b ON p.brand_id = b.id
-            """;
-
-    private static final String EXPORT_PRD_PRICE_SQL = """
-            SELECT
-                v.sku,
-                (SELECT price FROM variant_prices WHERE variant_id = v.id AND price_type = 'RETAIL_PRICE' ORDER BY created_at DESC LIMIT 1) as retail_price,
-                (SELECT price FROM variant_prices WHERE variant_id = v.id AND price_type = 'WHOLESALE_PRICE' ORDER BY created_at DESC LIMIT 1) as wholesale_price
-            FROM product_variants v
-            """;
-
-    private static final String EXPORT_PRD_LIST_SQL = """
-            SELECT
-                p.slug AS product_id,
-                v.sku,
-                p.name,
-                p.description,
-                p.short_description,
-                (SELECT c1.slug
-                 FROM product_categories pc1
-                 JOIN categories c1 ON pc1.category_id = c1.id
-                 WHERE pc1.product_id = p.id
-                 ORDER BY c1.slug
-                 LIMIT 1) AS category_slug,
-                (SELECT STRING_AGG(c2.slug, '|' ORDER BY c2.slug)
-                 FROM product_categories pc2
-                 JOIN categories c2 ON pc2.category_id = c2.id
-                 WHERE pc2.product_id = p.id) AS product_categories,
-                p.product_type,
-                b.slug AS brand_slug,
-                v.stock_quantity as stock,
-                (SELECT STRING_AGG(image_url, ',') FROM product_images WHERE variant_id = v.id) as images,
-                v.attributes
-            FROM product_variants v
-            JOIN products p ON v.product_id = p.id
-            LEFT JOIN brands b ON p.brand_id = b.id
-            """;
+    @Inject
+    ProductRepository productRepository;
 
     @Transactional(Transactional.TxType.SUPPORTS)
     public void writeFullProductsInfoCsv(PrintWriter writer)
     {
         writer.println(CSV_INFO_HEADER);
 
-        @SuppressWarnings("unchecked")
-        Stream<Object[]> resultStream = Panache.getEntityManager()
-                .createNativeQuery(EXPORT_PRD_DETAIL_SQL)
-                .getResultStream();
-
-        try (resultStream) {
+        try (Stream<Object[]> resultStream = productRepository.streamExportRows()) {
             resultStream.forEach(row -> writer.println(formatCsvLine(row)));
         }
 
@@ -100,12 +40,7 @@ public class ProductExportService
     {
         writer.println(CSV_LIST_HEADER);
 
-        @SuppressWarnings("unchecked")
-        Stream<Object[]> resultStream = Panache.getEntityManager()
-                .createNativeQuery(EXPORT_PRD_LIST_SQL)
-                .getResultStream();
-
-        try (resultStream) {
+        try (Stream<Object[]> resultStream = productRepository.streamListExportRows()) {
             resultStream.forEach(row -> writer.println(formatCsvLine(row)));
         }
 
@@ -117,12 +52,7 @@ public class ProductExportService
     {
         writer.println(CSV_PRICE_HEADER);
 
-        @SuppressWarnings("unchecked")
-        Stream<Object[]> resultStream = Panache.getEntityManager()
-                .createNativeQuery(EXPORT_PRD_PRICE_SQL)
-                .getResultStream();
-
-        try (resultStream) {
+        try (Stream<Object[]> resultStream = productRepository.streamPriceExportRows()) {
             resultStream.forEach(row -> writer.println(formatCsvLine(row)));
         }
 
