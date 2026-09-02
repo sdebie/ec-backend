@@ -19,18 +19,6 @@ services:
     volumes:
       - db_data:/var/lib/postgresql/data
 
-  redis:
-    image: redis:7-alpine
-    container_name: ecommerce-redis
-    restart: always
-    ports:
-      - "6379:6379"
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
   flyway:
     image: flyway/flyway:10-alpine
     depends_on:
@@ -71,15 +59,11 @@ services:
 
       # MATCH NEW PATH ABOVE
       - IMAGE_STORAGE_PATH=/deployments/storage/images
-
-      - REDIS_URL=redis://redis:6379
     depends_on:
       db:
         condition: service_healthy
       flyway:
         condition: service_completed_successfully
-      redis:
-        condition: service_healthy
 
   frontend:
     build:

@@ -9,8 +9,6 @@ import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import org.ecommerce.backend.service.OrderService;
 import org.ecommerce.backend.service.OrderTotals;
-import org.ecommerce.backend.service.RateLimiterService;
-import org.ecommerce.backend.utils.ClientIpUtils;
 import org.ecommerce.common.dto.OrderContactRequestDto;
 import org.ecommerce.common.entity.OrderEntity;
 import org.ecommerce.common.entity.ShippingMethodEntity;
@@ -32,24 +30,11 @@ public class OrderContactResource
 {
     private static final Logger LOG = Logger.getLogger(OrderContactResource.class);
 
-    /**
-     * guest-order-authorization Requirement 7.1 — this endpoint had no ceiling of any
-     * kind before this spec. Generous for the same reason {@code CHECKOUT_MAX_PER_WINDOW}
-     * is: carrier-grade NAT puts many genuine shoppers behind one address, and a
-     * shopper may legitimately PATCH contact/address/shipping several times while
-     * refining checkout.
-     */
-    private static final int ORDER_CONTACT_MAX_PER_WINDOW = 30;
-    private static final long ORDER_CONTACT_WINDOW_SECONDS = 3600;
-
     @Inject
     OrderService orderService;
 
     @Inject
     OrderOwnershipGuard ownershipGuard;
-
-    @Inject
-    RateLimiterService rateLimiterService;
 
     @Inject
     OrderRepository orderRepository;
@@ -69,19 +54,9 @@ public class OrderContactResource
     public Response updateContact(
             @PathParam("orderId") UUID orderId,
             @HeaderParam("X-Order-Token") String orderToken,
-            @HeaderParam("CF-Connecting-IP") String cfConnectingIp,
-            @HeaderParam("X-Forwarded-For") String xForwardedFor,
-            @HeaderParam("X-Real-IP") String xRealIp,
             OrderContactRequestDto request
     )
     {
-        String clientIp = ClientIpUtils.resolveClientIp(cfConnectingIp, xForwardedFor, xRealIp);
-        Response limited = rateLimiterService.enforce(
-                "order-contact", clientIp, ORDER_CONTACT_MAX_PER_WINDOW, ORDER_CONTACT_WINDOW_SECONDS);
-        if (limited != null) {
-            return limited;
-        }
-
         // 1. Find order by ID → 404 if missing
         OrderEntity order = orderRepository.findOrderInfoById(orderId);
         if (order == null) {

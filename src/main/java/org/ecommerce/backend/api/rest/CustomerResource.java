@@ -58,9 +58,6 @@ public class CustomerResource
     CustomerAddressMapper customerAddressMapper;
 
     @Inject
-    RateLimiterService rateLimiterService;
-
-    @Inject
     UserRepository userRepository;
 
     @Inject
@@ -102,31 +99,10 @@ public class CustomerResource
     @POST
     @Path("/password-reset/request")
     @Transactional
-    public Response requestPasswordResetCode(
-            PasswordResetRequest req,
-            @HeaderParam("CF-Connecting-IP") String cfConnectingIp,
-            @HeaderParam("X-Forwarded-For") String xForwardedFor,
-            @HeaderParam("X-Real-IP") String xRealIp
-    )
+    public Response requestPasswordResetCode(PasswordResetRequest req)
     {
         if (req == null || req.email == null || req.email.isBlank()) {
             return Response.status(Response.Status.BAD_REQUEST).entity("email is required").build();
-        }
-
-        String clientIp = ClientIpUtils.resolveClientIp(cfConnectingIp, xForwardedFor, xRealIp);
-
-        // Chained-check: IP limiter first; if denied, email counter is NOT incremented.
-        // Silent denial — return the identical generic response to prevent enumeration.
-        RateLimitDecision ipDecision = rateLimiterService.check("password-reset-request", clientIp, 5, 3600);
-        if (!ipDecision.allowed()) {
-            return Response.ok("If an account exists, a reset code has been sent.").build();
-        }
-
-        // Email limiter second (IP passed)
-        String emailKey = req.email.toLowerCase().trim();
-        RateLimitDecision emailDecision = rateLimiterService.check("password-reset-request-email", emailKey, 3, 3600);
-        if (!emailDecision.allowed()) {
-            return Response.ok("If an account exists, a reset code has been sent.").build();
         }
 
         customerPasswordResetService.initiatePasswordResetCode(req.email);
@@ -201,31 +177,10 @@ public class CustomerResource
     @POST
     @Path("/login")
     @Transactional
-    public Response login(
-            LoginRequest req,
-            @HeaderParam("CF-Connecting-IP") String cfConnectingIp,
-            @HeaderParam("X-Forwarded-For") String xForwardedFor,
-            @HeaderParam("X-Real-IP") String xRealIp
-    )
+    public Response login(LoginRequest req)
     {
-        // Body-shape validation stays ahead of the limiter — guarantees email key is non-null
         if (req == null || req.email == null || req.password == null) {
             return Response.status(Response.Status.BAD_REQUEST).entity("email and password required").build();
-        }
-
-        String clientIp = ClientIpUtils.resolveClientIp(cfConnectingIp, xForwardedFor, xRealIp);
-
-        // Chained-check: IP limiter first; if denied, email counter is NOT incremented
-        Response ipLimited = rateLimiterService.enforce("customer-login", clientIp, 10, 900);
-        if (ipLimited != null) {
-            return ipLimited;
-        }
-
-        // Email limiter second (IP passed)
-        String emailKey = req.email.toLowerCase().trim();
-        Response emailLimited = rateLimiterService.enforce("customer-login-email", emailKey, 5, 900);
-        if (emailLimited != null) {
-            return emailLimited;
         }
 
         UserEntity user = userRepository.findByEmail(req.email.trim());
@@ -272,23 +227,10 @@ public class CustomerResource
     @POST
     @Path("/login/google")
     @Transactional
-    public Response loginWithGoogle(
-            GoogleLoginRequest req,
-            @HeaderParam("CF-Connecting-IP") String cfConnectingIp,
-            @HeaderParam("X-Forwarded-For") String xForwardedFor,
-            @HeaderParam("X-Real-IP") String xRealIp
-    )
+    public Response loginWithGoogle(GoogleLoginRequest req)
     {
         if (req == null || req.idToken == null || req.idToken.isBlank()) {
             return Response.status(Response.Status.BAD_REQUEST).entity("idToken is required").build();
-        }
-
-        String clientIp = ClientIpUtils.resolveClientIp(cfConnectingIp, xForwardedFor, xRealIp);
-
-        // Rate limit by IP — no per-email key because email is only known after token verification
-        Response limited = rateLimiterService.enforce("google-login", clientIp, 10, 900);
-        if (limited != null) {
-            return limited;
         }
 
         try {
@@ -379,20 +321,14 @@ public class CustomerResource
      * Only an unclaimed PENDING/GUEST record may be claimed. Token issued only on genuine creation/claim.
      * If token signing fails, the @Transactional handler rolls back — no account persists without its token.
      * <p>
-     * The 409 response is an account-existence oracle; rate limiting slows enumeration/mass signup
-     * but is not a fix for lookup's PII disclosure.
+     * The 409 response is an account-existence oracle — lookup's PII disclosure.
      */
     @POST
     @Path("/register")
     @Transactional
-    public Response register(
-            RegisterRequest req,
-            @HeaderParam("CF-Connecting-IP") String cfConnectingIp,
-            @HeaderParam("X-Forwarded-For") String xForwardedFor,
-            @HeaderParam("X-Real-IP") String xRealIp
-    )
+    public Response register(RegisterRequest req)
     {
-        // Body-shape validation first (400) — before rate limiter to avoid consuming budget on malformed requests
+        // Body-shape validation first (400)
         if (req == null || req.email == null || req.email.isBlank()) {
             return Response.status(Response.Status.BAD_REQUEST).entity("email is required").build();
         }
@@ -403,13 +339,6 @@ public class CustomerResource
             PasswordStrengthValidator.validate(req.password);
         } catch (IllegalArgumentException ex) {
             return Response.status(Response.Status.BAD_REQUEST).entity(ex.getMessage()).build();
-        }
-
-        // Rate limit check — runs after body-shape validation, before the 409 claimed-account guard
-        String clientIp = ClientIpUtils.resolveClientIp(cfConnectingIp, xForwardedFor, xRealIp);
-        Response limited = rateLimiterService.enforce("register", clientIp, 10, 3600);
-        if (limited != null) {
-            return limited;
         }
 
         String email = req.email.trim();

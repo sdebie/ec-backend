@@ -18,10 +18,9 @@ import java.time.OffsetDateTime;
  * reaches from the sign-in screen when they cannot log in at all, distinct from the
  * forced-change flow ({@code staff_users.reset_password}), which only applies to an
  * account that can still authenticate. Mirrors {@link CustomerPasswordResetService}'s
- * shape via the shared {@link PasswordResetCodePolicy}; unlike that service, abuse
- * protection here is per-IP/per-email {@link RateLimiterService} at the REST layer
- * (Requirement 4.4), not an in-memory IP-lockout map, so this class only tracks the
- * DB-persisted account-level attempt counter and lockout.
+ * shape via the shared {@link PasswordResetCodePolicy}; unlike that service, this class
+ * has no in-memory IP-lockout map — it only tracks the DB-persisted account-level
+ * attempt counter and lockout.
  */
 @Slf4j
 @ApplicationScoped
@@ -87,7 +86,7 @@ public class StaffPasswordResetService
         StaffUserEntity user = staffRepository.findByEmail(normalizedEmail);
         if (user == null) {
             log.warn("Staff password reset attempted for unknown email={}, ip={}",
-                    RateLimiterService.maskKey(normalizedEmail), clientIp);
+                    maskKey(normalizedEmail), clientIp);
             throw new InvalidPasswordResetCodeException();
         }
 
@@ -107,7 +106,7 @@ public class StaffPasswordResetService
                 user.setPasswordResetCodeAttempts(0);
             }
             log.warn("Staff password reset failed: invalid or expired code, email={}, ip={}",
-                    RateLimiterService.maskKey(normalizedEmail), clientIp);
+                    maskKey(normalizedEmail), clientIp);
 
             // Mirrors CustomerPasswordResetService: the attempt that TRIGGERS the lock
             // reports the lockout itself, not a generic invalid-code error — the caller
@@ -124,5 +123,23 @@ public class StaffPasswordResetService
         user.setPasswordResetCodeExpiry(null);
         user.setPasswordResetCodeAttempts(0);
         user.setPasswordResetCodeLockedUntil(null);
+    }
+
+    /**
+     * Masks email-shaped keys for logging so denial logs carry no plaintext PII:
+     * the local part is reduced to its first character (e.g. {@code j***@example.com}).
+     * Non-email keys pass through unchanged.
+     */
+    private static String maskKey(String key)
+    {
+        if (key == null) {
+            return null;
+        }
+        int at = key.indexOf('@');
+        if (at < 0) {
+            return key;
+        }
+        String maskedLocal = at == 0 ? "***" : key.charAt(0) + "***";
+        return maskedLocal + key.substring(at);
     }
 }
