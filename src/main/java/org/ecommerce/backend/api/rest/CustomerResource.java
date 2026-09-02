@@ -28,8 +28,6 @@ import org.ecommerce.common.entity.UserEntity;
 import org.ecommerce.common.enums.AddressTypeEn;
 import org.ecommerce.common.enums.CustomerStatusEn;
 import org.ecommerce.common.enums.CustomerTypeEn;
-import org.ecommerce.common.repository.CustomerRepository;
-import org.ecommerce.common.repository.UserRepository;
 import org.jboss.logging.Logger;
 
 import java.time.OffsetDateTime;
@@ -57,12 +55,6 @@ public class CustomerResource
 
     @Inject
     CustomerAddressMapper customerAddressMapper;
-
-    @Inject
-    UserRepository userRepository;
-
-    @Inject
-    CustomerRepository customerRepository;
 
     @Inject
     JsonWebToken jwt;
@@ -187,7 +179,7 @@ public class CustomerResource
             return Response.status(Response.Status.BAD_REQUEST).entity("email and password required").build();
         }
 
-        UserEntity user = userRepository.findByEmail(req.email.trim());
+        UserEntity user = customerAuthService.findUserByEmail(req.email.trim());
         if (user == null || user.getPasswordHash() == null) {
             return Response.status(Response.Status.UNAUTHORIZED).entity("Invalid credentials").build();
         }
@@ -224,7 +216,7 @@ public class CustomerResource
         }
 
         user.setLastLogin(OffsetDateTime.now());
-        userRepository.persist(user);
+        customerAuthService.persistUser(user);
         return Response.ok(toLoginResponseDto(ce)).build();
     }
 
@@ -259,12 +251,12 @@ public class CustomerResource
             String firstName = (String) payload.get("given_name");
             String lastName = (String) payload.get("family_name");
 
-            UserEntity user = userRepository.findByEmail(email);
+            UserEntity user = customerAuthService.findUserByEmail(email);
             if (user == null) {
                 user = new UserEntity();
                 user.setEmail(email);
                 user.setPasswordHash(""); // Google users might not have a local password initially
-                userRepository.persist(user);
+                customerAuthService.persistUser(user);
             }
 
             CustomerEntity ce = user.getCustomer();
@@ -275,7 +267,7 @@ public class CustomerResource
                 ce.setLastName(lastName);
                 ce.setStatus(CustomerStatusEn.ACTIVE); // Auto-activate Google users
                 ce.setShopperType(CustomerTypeEn.RETAILER);
-                customerRepository.persist(ce);
+                customerAuthService.persistCustomer(ce);
             } else {
                 if (ce.getStatus() == CustomerStatusEn.DISABLED) {
                     return Response.status(Response.Status.FORBIDDEN).entity("Customer account is disabled").build();
@@ -287,11 +279,11 @@ public class CustomerResource
                 if (ce.getShopperType() == null || ce.getShopperType() == CustomerTypeEn.GUEST) {
                     ce.setShopperType(CustomerTypeEn.RETAILER);
                 }
-                customerRepository.persist(ce);
+                customerAuthService.persistCustomer(ce);
             }
 
             user.setLastLogin(OffsetDateTime.now());
-            userRepository.persist(user);
+            customerAuthService.persistUser(user);
 
             return Response.ok(toLoginResponseDto(ce)).build();
         } catch (Exception e) {
@@ -348,7 +340,7 @@ public class CustomerResource
         String email = req.email.trim();
 
         // ── 409 guards: reject if any method already claims account ──
-        UserEntity user = userRepository.findByEmail(email);
+        UserEntity user = customerAuthService.findUserByEmail(email);
         if (user != null && user.getCustomer() != null) {
             CustomerEntity ec = user.getCustomer();
             boolean hasPassword = user.getPasswordHash() != null && !user.getPasswordHash().isBlank();
@@ -364,7 +356,7 @@ public class CustomerResource
             user.setEmail(email);
         }
         user.setPasswordHash(CustomerPasswordHashUtil.hash(req.password));
-        userRepository.persist(user);
+        customerAuthService.persistUser(user);
 
         CustomerEntity ce = user.getCustomer();
         if (ce == null) {
@@ -378,7 +370,7 @@ public class CustomerResource
 
         ce.setShopperType(CustomerTypeEn.RETAILER);
         ce.setStatus(CustomerStatusEn.ACTIVE);
-        customerRepository.persist(ce);
+        customerAuthService.persistCustomer(ce);
 
         customerAddressService.upsertAddress(ce, AddressTypeEn.PHYSICAL, req.physicalAddress);
         customerAddressService.upsertAddress(ce, AddressTypeEn.POSTAL, req.postalAddress);
@@ -408,7 +400,7 @@ public class CustomerResource
         }
 
         String email = jwt.getSubject();
-        UserEntity user = userRepository.findByEmail(email);
+        UserEntity user = customerAuthService.findUserByEmail(email);
         if (user == null || user.getCustomer() == null) {
             return Response.status(Response.Status.NOT_FOUND).entity("Customer not found").build();
         }
@@ -418,7 +410,7 @@ public class CustomerResource
         if (req.firstName != null) ce.setFirstName(req.firstName);
         if (req.lastName != null) ce.setLastName(req.lastName);
         if (req.phone != null) ce.setPhone(req.phone);
-        customerRepository.persist(ce);
+        customerAuthService.persistCustomer(ce);
 
         customerAddressService.upsertAddress(ce, AddressTypeEn.PHYSICAL, req.physicalAddress);
         customerAddressService.upsertAddress(ce, AddressTypeEn.POSTAL, req.postalAddress);

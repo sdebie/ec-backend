@@ -8,6 +8,7 @@ import org.eclipse.microprofile.graphql.*;
 import org.eclipse.microprofile.jwt.JsonWebToken;
 import org.ecommerce.backend.api.rest.OrderOwnershipGuard;
 import org.ecommerce.backend.mapper.OrderMapper;
+import org.ecommerce.backend.service.CustomerAuthService;
 import org.ecommerce.backend.service.OrderService;
 import org.ecommerce.backend.service.OrderTracking;
 import org.ecommerce.backend.utils.CurrentRequestOrderToken;
@@ -19,7 +20,6 @@ import org.ecommerce.common.entity.CustomerEntity;
 import org.ecommerce.common.entity.OrderEntity;
 import org.ecommerce.common.query.FilterRequest;
 import org.ecommerce.common.query.PageRequest;
-import org.ecommerce.common.repository.CustomerRepository;
 import org.jboss.logging.Logger;
 
 import java.util.List;
@@ -50,7 +50,7 @@ public class OrderResource
     OrderMapper orderMapper;
 
     @Inject
-    CustomerRepository customerRepository;
+    CustomerAuthService customerAuthService;
 
     // NOTE: there is deliberately no createOrder mutation here.
     // Order creation is REST-only (`POST /api/orders` → OrderService.createOrderFromCart),
@@ -191,7 +191,7 @@ public class OrderResource
         }
 
         String email = jwt.getSubject();
-        CustomerEntity customer = customerRepository.findByEmail(email);
+        CustomerEntity customer = customerAuthService.findCustomerByEmail(email);
         if (customer == null) {
             LOG.warnf("myOrders: customer not found for email: %s", email);
             throw new GraphQLException("Unauthorized");

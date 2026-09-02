@@ -14,6 +14,7 @@ import org.ecommerce.common.repository.StoreSettingsRepository;
 import org.ecommerce.common.repository.ShippingMethodRepository;
 
 import java.util.List;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @ApplicationScoped
@@ -46,9 +47,27 @@ public class SettingsService
         return settingsMapper.mapStoreSettingsEntityToDtoList(storeSettingsRepository.listAll());
     }
 
+    /** A single store_settings row's raw value by key, or null if the row does not exist. */
+    public String getStoreSettingValue(String key)
+    {
+        StoreSettingsEntity setting = storeSettingsRepository.findById(key);
+        return setting == null ? null : setting.getValue();
+    }
+
     public List<ShippingMethodDto> getShippingMethods()
     {
         return settingsMapper.mapShippingMethodEntityToDtoList(shippingMethodRepository.listAll());
+    }
+
+    /** Active shipping methods only — the storefront's own set, distinct from the admin list above. */
+    public List<ShippingMethodEntity> getActiveShippingMethodEntities()
+    {
+        return shippingMethodRepository.findAllActive();
+    }
+
+    public ShippingMethodEntity findShippingMethodById(UUID id)
+    {
+        return shippingMethodRepository.findById(id);
     }
 
     public List<CountrySettingsDto> getCountrySettings()

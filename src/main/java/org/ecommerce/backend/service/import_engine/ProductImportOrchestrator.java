@@ -127,6 +127,14 @@ public class ProductImportOrchestrator extends BaseImportOrchestrator {
         return status;
     }
 
+    public List<ProductImportBatchEntity> listBatchesOrderedByCreatedAtDesc() {
+        return batchRepository.listAllOrderByCreatedAtDesc();
+    }
+
+    public List<ProductImportStagedEntity> getStagedRows(UUID batchId) {
+        return stagedRepository.findByBatchId(batchId);
+    }
+
     private void applyProductRow(ProductImportStagedEntity staged) {
         ProductVariantEntity variant = variantRepository.findBySku(staged.getSku());
         if (variant == null) {

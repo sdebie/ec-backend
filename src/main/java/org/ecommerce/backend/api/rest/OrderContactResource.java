@@ -9,12 +9,11 @@ import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import org.ecommerce.backend.service.OrderService;
 import org.ecommerce.backend.service.OrderTotals;
+import org.ecommerce.backend.service.SettingsService;
 import org.ecommerce.common.dto.OrderContactRequestDto;
 import org.ecommerce.common.entity.OrderEntity;
 import org.ecommerce.common.entity.ShippingMethodEntity;
 import org.ecommerce.common.enums.OrderStatusEn;
-import org.ecommerce.common.repository.OrderRepository;
-import org.ecommerce.common.repository.ShippingMethodRepository;
 import org.jboss.logging.Logger;
 
 import java.util.LinkedHashMap;
@@ -37,10 +36,7 @@ public class OrderContactResource
     OrderOwnershipGuard ownershipGuard;
 
     @Inject
-    OrderRepository orderRepository;
-
-    @Inject
-    ShippingMethodRepository shippingMethodRepository;
+    SettingsService settingsService;
 
     // Explicit, not @Valid — matching ContactEnquiryResource's documented reason:
     // @Valid's default violation response would be 400, inconsistent with every
@@ -58,7 +54,7 @@ public class OrderContactResource
     )
     {
         // 1. Find order by ID → 404 if missing
-        OrderEntity order = orderRepository.findOrderInfoById(orderId);
+        OrderEntity order = orderService.findOrderInfoById(orderId);
         if (order == null) {
             LOG.debugf("Order not found: %s", orderId);
             return Response.status(Response.Status.NOT_FOUND)
@@ -117,7 +113,7 @@ public class OrderContactResource
                         .build();
             }
 
-            shippingMethod = shippingMethodRepository.findById(shippingMethodUuid);
+            shippingMethod = settingsService.findShippingMethodById(shippingMethodUuid);
             if (shippingMethod == null || !shippingMethod.isActive()) {
                 LOG.debugf("Invalid or inactive shipping method: %s", request.getShippingMethodId());
                 return Response.status(422)

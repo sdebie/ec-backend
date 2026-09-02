@@ -77,6 +77,21 @@ public class CategoryService
         return Optional.ofNullable(categoryMapper.mapEntityToDto(categoryEntity));
     }
 
+    public boolean categoryExists(UUID id)
+    {
+        return id != null && categoryRepository.findById(id) != null;
+    }
+
+    /** Direct children of {@code parentId} — one level, not the full descendant tree. */
+    public List<UUID> findChildCategoryIds(UUID parentId)
+    {
+        return categoryRepository.list("parent.id", parentId)
+                .stream()
+                .map(CategoryEntity::getId)
+                .filter(id -> id != null)
+                .toList();
+    }
+
     @Transactional
     public void createCategory(CategoryDto categoryDto)
     {

@@ -8,6 +8,7 @@ import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import org.eclipse.microprofile.jwt.JsonWebToken;
+import org.ecommerce.backend.service.CustomerAuthService;
 import org.ecommerce.backend.service.WishlistHydrationService;
 import org.ecommerce.backend.service.WishlistService;
 import org.ecommerce.common.dto.WishlistHydratedItemDto;
@@ -15,7 +16,6 @@ import org.ecommerce.common.dto.WishlistHydrationRequestDto;
 import org.ecommerce.common.dto.WishlistHydrationResponseDto;
 import org.ecommerce.common.dto.WishlistResponseDto;
 import org.ecommerce.common.entity.CustomerEntity;
-import org.ecommerce.common.repository.CustomerRepository;
 import org.jboss.logging.Logger;
 
 import java.util.List;
@@ -39,7 +39,7 @@ public class StorefrontWishlistResource
     JsonWebToken jwt;
 
     @Inject
-    CustomerRepository customerRepository;
+    CustomerAuthService customerAuthService;
 
     @GET
     @RolesAllowed("customer")
@@ -147,7 +147,7 @@ public class StorefrontWishlistResource
     private UUID resolveCustomerId()
     {
         String email = jwt.getSubject();
-        CustomerEntity customer = customerRepository.findByEmail(email);
+        CustomerEntity customer = customerAuthService.findCustomerByEmail(email);
         if (customer == null) {
             LOG.warn("Customer not found for JWT subject: " + email);
             return null;

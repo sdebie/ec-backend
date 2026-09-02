@@ -10,8 +10,8 @@ import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
-import org.ecommerce.common.entity.StoreSettingsEntity;
-import org.ecommerce.common.repository.StoreSettingsRepository;
+import org.ecommerce.backend.service.SettingsService;
+import org.ecommerce.common.dto.StoreSettingsDto;
 
 import java.util.List;
 import java.util.Map;
@@ -28,7 +28,7 @@ public class StorefrontConfigResource
 {
 
     @Inject
-    StoreSettingsRepository storeSettingsRepository;
+    SettingsService settingsService;
 
     @Inject
     ObjectMapper objectMapper;
@@ -36,12 +36,12 @@ public class StorefrontConfigResource
     @GET
     public Response getConfig()
     {
-        List<StoreSettingsEntity> rows = storeSettingsRepository.listAll();
+        List<StoreSettingsDto> rows = settingsService.getAllSettings();
 
         Map<String, String> rawSettings = rows
                 .stream()
                 .filter(r -> r.getKey().startsWith("storefront."))
-                .collect(Collectors.toMap(StoreSettingsEntity::getKey, StoreSettingsEntity::getValue));
+                .collect(Collectors.toMap(StoreSettingsDto::getKey, StoreSettingsDto::getValue));
 
         Map<String, JsonNode> sections = rawSettings.entrySet()
                 .stream()

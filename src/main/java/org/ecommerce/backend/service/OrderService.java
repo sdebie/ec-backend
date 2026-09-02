@@ -19,6 +19,7 @@ import org.ecommerce.common.query.FilterRequest;
 import org.ecommerce.common.query.PageRequest;
 import org.ecommerce.common.repository.OrderRepository;
 import org.ecommerce.common.repository.OrderStatusHistoryRepository;
+import org.ecommerce.common.repository.PaymentLogRepository;
 import org.ecommerce.common.repository.ProductImageRepository;
 import org.ecommerce.common.repository.ProductVariantRepository;
 import org.hibernate.exception.ConstraintViolationException;
@@ -49,6 +50,9 @@ public class OrderService
 
     @Inject
     ProductImageRepository productImageRepository;
+
+    @Inject
+    PaymentLogRepository paymentLogRepository;
 
     @Inject
     OrderMapper orderMapper;
@@ -749,5 +753,25 @@ public class OrderService
             return null;
         }
         return orderRepository.findById(orderUuid);
+    }
+
+    /** The fully hydrated order (customer, items, variants) — for a caller that needs to read or mutate its lines, not just its id-level fields. */
+    public OrderEntity findOrderInfoById(UUID orderUuid) {
+        if (orderUuid == null) {
+            return null;
+        }
+        return orderRepository.findOrderInfoById(orderUuid);
+    }
+
+    public OrderEntity findByIdempotencyKey(UUID key) {
+        if (key == null) {
+            return null;
+        }
+        return orderRepository.findByIdempotencyKey(key);
+    }
+
+    public PaymentLogEntity recordPaymentLog(OrderEntity order, String gatewayName, String internalReference,
+                                             String externalReference, BigDecimal amountGross, String status, String rawResponse) {
+        return paymentLogRepository.record(order, gatewayName, internalReference, externalReference, amountGross, status, rawResponse);
     }
 }
