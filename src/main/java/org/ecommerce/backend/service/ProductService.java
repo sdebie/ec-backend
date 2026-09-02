@@ -88,11 +88,28 @@ public class ProductService
     public PageResponse<AdminProductListItemDto> getAdminProductList(int pageIndex, int pageSize, String status, String categoryId, String brandId, String search)
     {
         LocalDateTime now = LocalDateTime.now();
-        PageResponse<ProductEntity> page = productRepository.findAdminProductPage(pageIndex, pageSize, status, categoryId, brandId, search);
 
-        List<AdminProductListItemDto> content = productListItemAssembler.buildAdminListItems(page.getContent(), now);
+        int effectivePageSize = Math.clamp(pageSize, 1, 100);
+        int effectivePageIndex = Math.max(pageIndex, 0);
 
-        return new PageResponse<>(content, page.getTotalElements(), page.getTotalPages(), page.getPageIndex(), page.getPageSize());
+        long totalElements = productRepository.countAdminProducts(status, categoryId, brandId, search);
+        int totalPages = (int) Math.ceil((double) totalElements / effectivePageSize);
+        // A deletion or filter change can make a previously valid client page fall
+        // outside the result set between requests. Return the final available page
+        // instead of an avoidable empty page; the client can render response metadata
+        // without an effect-driven pagination correction.
+        if (totalPages > 0) {
+            effectivePageIndex = Math.min(effectivePageIndex, totalPages - 1);
+        }
+
+        PageRequest pageRequest = new PageRequest();
+        pageRequest.setPageIndex(effectivePageIndex);
+        pageRequest.setPageSize(effectivePageSize);
+
+        List<ProductEntity> products = productRepository.findAdminProducts(pageRequest, status, categoryId, brandId, search);
+        List<AdminProductListItemDto> content = productListItemAssembler.buildAdminListItems(products, now);
+
+        return new PageResponse<>(content, totalElements, totalPages, effectivePageIndex, effectivePageSize);
     }
 
     @Transactional(value = TxType.SUPPORTS)
