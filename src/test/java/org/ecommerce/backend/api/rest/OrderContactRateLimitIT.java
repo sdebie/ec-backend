@@ -5,11 +5,12 @@ import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.http.ContentType;
 import jakarta.inject.Inject;
+import jakarta.ws.rs.core.Response;
 import org.ecommerce.backend.service.OrderCapabilityService;
-import org.ecommerce.backend.service.RateLimitDecision;
 import org.ecommerce.backend.service.RateLimiterService;
 import org.ecommerce.common.entity.OrderEntity;
 import org.ecommerce.common.enums.OrderStatusEn;
+import org.ecommerce.common.repository.OrderRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -33,16 +34,18 @@ class OrderContactRateLimitIT
     @InjectMock
     RateLimiterService rateLimiterService;
 
+    @InjectMock
+    OrderRepository orderRepository;
+
     @Inject
     OrderCapabilityService orderCapability;
 
     @BeforeEach
     void setUp()
     {
-        PanacheMock.mock(OrderEntity.class);
         PanacheMock.mock(org.ecommerce.common.entity.ShippingMethodEntity.class);
-        when(rateLimiterService.check(anyString(), anyString(), anyInt(), anyLong()))
-                .thenReturn(new RateLimitDecision(true, 0));
+        when(rateLimiterService.enforce(anyString(), anyString(), anyInt(), anyLong()))
+                .thenReturn(null);
     }
 
     private OrderEntity order(UUID orderId)
@@ -67,9 +70,9 @@ class OrderContactRateLimitIT
     {
         UUID orderId = UUID.randomUUID();
         OrderEntity order = order(orderId);
-        when(OrderEntity.findOrderInfoById(orderId)).thenReturn(order);
-        when(rateLimiterService.check(eq("order-contact"), anyString(), anyInt(), anyLong()))
-                .thenReturn(new RateLimitDecision(false, 900));
+        when(orderRepository.findOrderInfoById(orderId)).thenReturn(order);
+        when(rateLimiterService.enforce(eq("order-contact"), anyString(), anyInt(), anyLong()))
+                .thenReturn(Response.status(429).header("Retry-After", 900L).build());
 
         given()
                 .header("X-Order-Token", orderCapability.mint(orderId))
@@ -90,7 +93,7 @@ class OrderContactRateLimitIT
     void limiterIsKeyedOnResolvedClientIp()
     {
         UUID orderId = UUID.randomUUID();
-        when(OrderEntity.findOrderInfoById(orderId)).thenReturn(order(orderId));
+        when(orderRepository.findOrderInfoById(orderId)).thenReturn(order(orderId));
 
         given()
                 .header("X-Order-Token", orderCapability.mint(orderId))
@@ -102,7 +105,7 @@ class OrderContactRateLimitIT
                 .then()
                 .statusCode(200);
 
-        org.mockito.Mockito.verify(rateLimiterService).check(eq("order-contact"), eq("203.0.113.80"), anyInt(), anyLong());
+        org.mockito.Mockito.verify(rateLimiterService).enforce(eq("order-contact"), eq("203.0.113.80"), anyInt(), anyLong());
     }
 
     @Test
@@ -110,7 +113,7 @@ class OrderContactRateLimitIT
     void allowedCaller_updatesNormally()
     {
         UUID orderId = UUID.randomUUID();
-        when(OrderEntity.findOrderInfoById(orderId)).thenReturn(order(orderId));
+        when(orderRepository.findOrderInfoById(orderId)).thenReturn(order(orderId));
 
         given()
                 .header("X-Order-Token", orderCapability.mint(orderId))

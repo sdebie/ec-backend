@@ -23,8 +23,6 @@ import static org.mockito.Mockito.*;
  * Key assertions:
  * <ul>
  *   <li>REST /password-reset/request: response body on denial is byte-identical to allowed response</li>
- *   <li>GraphQL initiateCustomerPasswordReset: response payload on denial is indistinguishable from allowed</li>
- *   <li>GraphQL completeCustomerPasswordReset: exceeding limit → GraphQL error</li>
  *   <li>PasswordResetNotificationService NOT invoked on denial</li>
  * </ul>
  */
@@ -47,8 +45,6 @@ class PasswordResetRateLimitIT
                 .thenReturn(new RateLimitDecision(true, 0));
         // Default: service calls do nothing
         doNothing().when(customerPasswordResetService).initiatePasswordResetCode(anyString());
-        doNothing().when(customerPasswordResetService).initiatePasswordReset(anyString());
-        doNothing().when(customerPasswordResetService).completePasswordReset(anyString(), anyString());
     }
 
     // ── REST /password-reset/request ────────────────────────────────────────────
@@ -175,155 +171,6 @@ class PasswordResetRateLimitIT
                     .statusCode(400);
 
             verify(rateLimiterService, never()).check(anyString(), anyString(), anyInt(), anyLong());
-        }
-    }
-
-    // ── GraphQL initiateCustomerPasswordReset ───────────────────────────────────
-
-    @Nested
-    @DisplayName("GraphQL initiateCustomerPasswordReset")
-    class GraphQlInitiatePasswordReset
-    {
-
-        private static final String GENERIC_RESPONSE = "If the account exists, a reset link has been sent.";
-
-        private String graphqlBody(String email)
-        {
-            return "{\"query\":\"mutation { initiateCustomerPasswordReset(email: \\\"" + email + "\\\") }\"}";
-        }
-
-        @Test
-        @DisplayName("allowed request returns generic success and invokes service")
-        void allowed_returnsGenericSuccess_invokesService()
-        {
-            given()
-                    .contentType(ContentType.JSON)
-                    .header("X-Forwarded-For", "10.0.0.1")
-                    .body(graphqlBody("user@test.com"))
-                    .when()
-                    .post("/api/graphql")
-                    .then()
-                    .statusCode(200)
-                    .body("data.initiateCustomerPasswordReset", equalTo(GENERIC_RESPONSE))
-                    .body("errors", nullValue());
-
-            verify(customerPasswordResetService).initiatePasswordReset("user@test.com");
-        }
-
-        @Test
-        @DisplayName("IP rate limit denial: response is indistinguishable from allowed, service NOT invoked")
-        void ipDenied_responseIndistinguishable_serviceNotInvoked()
-        {
-            when(rateLimiterService.check(eq("password-reset-request"), anyString(), anyInt(), anyLong()))
-                    .thenReturn(new RateLimitDecision(false, 3500));
-
-            given()
-                    .contentType(ContentType.JSON)
-                    .header("X-Forwarded-For", "10.0.0.1")
-                    .body(graphqlBody("user@test.com"))
-                    .when()
-                    .post("/api/graphql")
-                    .then()
-                    .statusCode(200)
-                    .body("data.initiateCustomerPasswordReset", equalTo(GENERIC_RESPONSE))
-                    .body("errors", nullValue());
-
-            verify(customerPasswordResetService, never()).initiatePasswordReset(anyString());
-        }
-
-        @Test
-        @DisplayName("email rate limit denial: response is indistinguishable from allowed, service NOT invoked")
-        void emailDenied_responseIndistinguishable_serviceNotInvoked()
-        {
-            when(rateLimiterService.check(eq("password-reset-request"), anyString(), anyInt(), anyLong()))
-                    .thenReturn(new RateLimitDecision(true, 0));
-            when(rateLimiterService.check(eq("password-reset-request-email"), anyString(), anyInt(), anyLong()))
-                    .thenReturn(new RateLimitDecision(false, 2000));
-
-            given()
-                    .contentType(ContentType.JSON)
-                    .header("X-Forwarded-For", "10.0.0.1")
-                    .body(graphqlBody("user@test.com"))
-                    .when()
-                    .post("/api/graphql")
-                    .then()
-                    .statusCode(200)
-                    .body("data.initiateCustomerPasswordReset", equalTo(GENERIC_RESPONSE))
-                    .body("errors", nullValue());
-
-            verify(customerPasswordResetService, never()).initiatePasswordReset(anyString());
-        }
-
-        @Test
-        @DisplayName("IP denied short-circuits: email limiter is NOT consulted")
-        void ipDenied_emailLimiterNotConsulted()
-        {
-            when(rateLimiterService.check(eq("password-reset-request"), anyString(), anyInt(), anyLong()))
-                    .thenReturn(new RateLimitDecision(false, 3500));
-
-            given()
-                    .contentType(ContentType.JSON)
-                    .header("X-Forwarded-For", "10.0.0.1")
-                    .body(graphqlBody("user@test.com"))
-                    .when()
-                    .post("/api/graphql")
-                    .then()
-                    .statusCode(200);
-
-            verify(rateLimiterService, never()).check(eq("password-reset-request-email"), anyString(), anyInt(), anyLong());
-        }
-    }
-
-    // ── GraphQL completeCustomerPasswordReset ───────────────────────────────────
-
-    @Nested
-    @DisplayName("GraphQL completeCustomerPasswordReset")
-    class GraphQlCompletePasswordReset
-    {
-
-        private String graphqlBody(String token, String newPassword)
-        {
-            return "{\"query\":\"mutation { completeCustomerPasswordReset(token: \\\"" + token + "\\\", newPassword: \\\"" + newPassword + "\\\") }\"}";
-        }
-
-        @Test
-        @DisplayName("allowed request invokes service and returns success")
-        void allowed_invokesService_returnsSuccess()
-        {
-            given()
-                    .contentType(ContentType.JSON)
-                    .header("X-Forwarded-For", "10.0.0.1")
-                    .body(graphqlBody("valid-token-123", "NewPass123"))
-                    .when()
-                    .post("/api/graphql")
-                    .then()
-                    .statusCode(200)
-                    .body("data.completeCustomerPasswordReset", equalTo("Password updated successfully."))
-                    .body("errors", nullValue());
-
-            verify(customerPasswordResetService).completePasswordReset("valid-token-123", "NewPass123");
-        }
-
-        @Test
-        @DisplayName("rate limit exceeded: returns GraphQL error, service NOT invoked")
-        void rateLimitExceeded_returnsGraphQlError_serviceNotInvoked()
-        {
-            when(rateLimiterService.check(eq("password-reset-complete"), anyString(), anyInt(), anyLong()))
-                    .thenReturn(new RateLimitDecision(false, 3500));
-
-            given()
-                    .contentType(ContentType.JSON)
-                    .header("X-Forwarded-For", "10.0.0.1")
-                    .body(graphqlBody("valid-token-123", "NewPass123"))
-                    .when()
-                    .post("/api/graphql")
-                    .then()
-                    .statusCode(200)
-                    .body("errors", not(empty()))
-                    .body("errors[0].message", equalTo("Too many requests — please try again later."))
-                    .body("data.completeCustomerPasswordReset", nullValue());
-
-            verify(customerPasswordResetService, never()).completePasswordReset(anyString(), anyString());
         }
     }
 }

@@ -4,18 +4,17 @@ package org.ecommerce.backend.mapper;
 
 import org.ecommerce.backend.csv.ProductPriceImportValidator;
 import org.ecommerce.backend.csv.ProductPriceImportParser;
-import io.quarkus.panache.mock.PanacheMock;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
 import org.ecommerce.backend.csv.ProductPriceImportParser.ParsedPriceRow;
-import org.ecommerce.common.entity.ProductPriceUploadStagedEntity;
+import org.ecommerce.common.entity.ProductPriceImportStagedEntity;
 import org.ecommerce.common.entity.ProductVariantEntity;
 import org.ecommerce.common.entity.VariantPricesEntity;
 import org.ecommerce.common.enums.PriceTypeEn;
 import org.ecommerce.common.enums.ProductImportValidationStatusEn;
 import org.ecommerce.common.repository.ProductVariantRepository;
-import org.junit.jupiter.api.BeforeEach;
+import org.ecommerce.common.repository.VariantPricesRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -54,11 +53,8 @@ class ProductPriceImportErrorAccumulationEquivalenceTest
     @InjectMock
     ProductVariantRepository productVariantRepository;
 
-    @BeforeEach
-    void setUp()
-    {
-        PanacheMock.mock(VariantPricesEntity.class);
-    }
+    @InjectMock
+    VariantPricesRepository variantPricesRepository;
 
     // ══════════════════════════════════════════════════════════════════════════
     // Scenario 1: All-valid rows — no errors accumulated
@@ -397,7 +393,7 @@ class ProductPriceImportErrorAccumulationEquivalenceTest
                     validator.validateAndDiff(row.sku(), row.retailPrice(), row.wholesalePrice(), row.validationErrors());
 
             // Apply results to a staged entity (sets status + joins errors)
-            ProductPriceUploadStagedEntity staged = new ProductPriceUploadStagedEntity();
+            ProductPriceImportStagedEntity staged = new ProductPriceImportStagedEntity();
             staged.setSku(row.sku());
             staged.setRetailPrice(row.retailPrice());
             staged.setWholesalePrice(row.wholesalePrice());
@@ -452,6 +448,6 @@ class ProductPriceImportErrorAccumulationEquivalenceTest
             priceEntity.setPriceType(priceType);
             priceEntity.setPrice(price);
         }
-        when(VariantPricesEntity.findLatestByVariantAndType(variant.getId(), priceType)).thenReturn(priceEntity);
+        when(variantPricesRepository.findLatestByVariantAndType(variant.getId(), priceType)).thenReturn(priceEntity);
     }
 }

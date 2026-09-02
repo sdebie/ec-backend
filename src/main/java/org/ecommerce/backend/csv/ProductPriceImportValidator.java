@@ -2,12 +2,13 @@ package org.ecommerce.backend.csv;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
-import org.ecommerce.common.entity.ProductPriceUploadStagedEntity;
+import org.ecommerce.common.entity.ProductPriceImportStagedEntity;
 import org.ecommerce.common.entity.ProductVariantEntity;
 import org.ecommerce.common.entity.VariantPricesEntity;
 import org.ecommerce.common.enums.PriceTypeEn;
 import org.ecommerce.common.enums.ProductImportValidationStatusEn;
 import org.ecommerce.common.repository.ProductVariantRepository;
+import org.ecommerce.common.repository.VariantPricesRepository;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -18,10 +19,6 @@ import static org.ecommerce.common.util.CsvImportUtils.isBlank;
 /**
  * Validates price-import staged rows: SKU existence, variant lookup,
  * price diff/comparison, and error accumulation.
- * <p>
- * Extracted from {@code ProductPriceImportService} — the validation logic is
- * identical to the pre-extraction behaviour (same error messages, same ordering,
- * same diff semantics).
  */
 @ApplicationScoped
 public class ProductPriceImportValidator
@@ -29,6 +26,9 @@ public class ProductPriceImportValidator
 
     @Inject
     ProductVariantRepository productVariantRepository;
+
+    @Inject
+    VariantPricesRepository variantPricesRepository;
 
     /**
      * Result of validating and diffing a single price import row.
@@ -46,16 +46,9 @@ public class ProductPriceImportValidator
     }
 
     /**
-     * Validates a parsed price row and computes the diff against current prices.
-     * <p>
-     * Behaviour matches the original {@code ProductPriceImportService.stageProductPriceRowsChunkInTransaction}:
-     * <ul>
-     *   <li>Accumulates any parse errors from the parser</li>
-     *   <li>Checks SKU is not blank — adds "sku is required" if blank</li>
-     *   <li>Looks up variant by SKU — adds "variant with sku 'X' not found" if missing</li>
-     *   <li>Compares proposed retail/wholesale prices with current latest prices</li>
-     *   <li>Determines hasChanges flag based on price comparison</li>
-     * </ul>
+     * Validates a parsed price row and computes the diff against current retail/wholesale
+     * prices. Accumulates any parse errors alongside its own SKU-required / variant-not-found
+     * failures.
      *
      * @param sku            the SKU from the parsed row
      * @param retailPrice    the proposed retail price
@@ -82,13 +75,11 @@ public class ProductPriceImportValidator
     /**
      * Applies validation results to the staged entity: sets the validation status
      * and joins error messages.
-     * <p>
-     * Behaviour matches the original {@code ProductPriceImportService.applyValidationResults}.
      *
      * @param staged           the staged entity to update
      * @param validationErrors the accumulated errors
      */
-    public void applyValidationResults(ProductPriceUploadStagedEntity staged, List<String> validationErrors)
+    public void applyValidationResults(ProductPriceImportStagedEntity staged, List<String> validationErrors)
     {
         staged.setValidationStatus(validationErrors.isEmpty() ? ProductImportValidationStatusEn.VALID : ProductImportValidationStatusEn.INVALID);
         staged.setValidationErrors(validationErrors.isEmpty() ? null : String.join("; ", validationErrors));
@@ -128,7 +119,7 @@ public class ProductPriceImportValidator
         if (variant == null || variant.getId() == null) {
             return null;
         }
-        VariantPricesEntity price = VariantPricesEntity.findLatestByVariantAndType(variant.getId(), priceType);
+        VariantPricesEntity price = variantPricesRepository.findLatestByVariantAndType(variant.getId(), priceType);
         return price != null ? price.getPrice() : null;
     }
 }

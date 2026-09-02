@@ -9,7 +9,6 @@ import jakarta.ws.rs.core.Response;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.ecommerce.backend.service.OrderNotificationService;
 import org.ecommerce.backend.service.OrderService;
-import org.ecommerce.backend.service.RateLimitDecision;
 import org.ecommerce.backend.service.RateLimiterService;
 import org.ecommerce.backend.service.StatusTransition;
 import org.ecommerce.backend.service.TransitionOutcome;
@@ -17,8 +16,8 @@ import org.ecommerce.backend.service.payfast.HtmlFormField;
 import org.ecommerce.backend.service.payfast.PayFastService;
 import org.ecommerce.backend.utils.ClientIpUtils;
 import org.ecommerce.common.entity.OrderEntity;
-import org.ecommerce.common.entity.PaymentLogEntity;
 import org.ecommerce.common.enums.OrderStatusEn;
+import org.ecommerce.common.repository.PaymentLogRepository;
 import org.jboss.logging.Logger;
 
 import java.math.BigDecimal;
@@ -61,6 +60,9 @@ public class PayFastResource
     @Inject
     RateLimiterService rateLimiterService;
 
+    @Inject
+    PaymentLogRepository paymentLogRepository;
+
     @ConfigProperty(name = "payfast.gateway.url")
     String gatewayUrl;
 
@@ -77,10 +79,10 @@ public class PayFastResource
         LOG.debug("Checkout received: " + formParams);
 
         String clientIp = ClientIpUtils.resolveClientIp(cfConnectingIp, xForwardedFor, xRealIp);
-        RateLimitDecision decision = rateLimiterService.check(
+        Response limited = rateLimiterService.enforce(
                 "payment-checkout", clientIp, PAYMENT_CHECKOUT_MAX_PER_WINDOW, PAYMENT_CHECKOUT_WINDOW_SECONDS);
-        if (!decision.allowed()) {
-            return Response.status(429).header("Retry-After", decision.retryAfterSeconds()).build();
+        if (limited != null) {
+            return limited;
         }
 
         String orderIdParam = formParams.getFirst("id");
@@ -115,9 +117,8 @@ public class PayFastResource
                     .entity(Map.of("error", "Order not found")).build();
         }
 
-        // Requirement 8: the payer email comes from the order — contactEmail, then the
-        // linked customer's account email — never from a caller-supplied parameter,
-        // which used to take priority over both and let anyone redirect the receipt.
+        // Requirement 8: the payer email comes from the order — see resolveEmail's own
+        // Javadoc for why it is never a caller-supplied parameter.
         String email = resolveEmail(quote);
 
         if (email == null || email.isBlank()) {
@@ -134,6 +135,19 @@ public class PayFastResource
         // back and resubmitted, so it stays put rather than erroring.
         OrderStatusEn from = quote.getStatus();
         if (from != OrderStatusEn.PENDING_PAYMENT) {
+            // Checked before calling applyTransition, not after: this call site names
+            // its own live status as expectedFrom, so the mismatch check inside
+            // applyTransition can never disagree with itself and canSystemTransitionTo
+            // is the only thing left to say no — and it throws rather than reporting a
+            // lost claim (BACKLOG.md payfast-checkout-terminal-order-500). A terminal
+            // order (DELIVERED, SYSTEM_CANCELED, REFUNDED, COLLECTED, ...) must never
+            // reach that throw from a REST method with nothing to catch it.
+            if (!from.canSystemTransitionTo(OrderStatusEn.PENDING_PAYMENT)) {
+                LOG.warnf("Refused payment start for order %s: %s cannot move to PENDING_PAYMENT", orderUuid, from);
+                return Response.status(Response.Status.CONFLICT)
+                        .entity(Map.of("error", "Order can no longer be paid")).build();
+            }
+
             TransitionOutcome outcome = orderService.applyTransition(quote,
                     StatusTransition.system(from, OrderStatusEn.PENDING_PAYMENT, "Payment started"));
             if (!outcome.claimed()) {
@@ -211,15 +225,14 @@ public class PayFastResource
 
         try {
             // 3. Generic Logging
-            PaymentLogEntity log = new PaymentLogEntity();
-            log.setGatewayName("PAYFAST");
-            log.setInternalReference(params.get("m_payment_id"));
-            log.setExternalReference(params.get("pf_payment_id"));
-            log.setAmountGross(amountGross);
-            log.setStatus(params.get("payment_status"));
-            // Store raw JSON for auditing
-            log.setRawResponse(params.toString());
-            log.persist();
+            paymentLogRepository.record(
+                    resolveOrderForLog(params.get("m_payment_id")),
+                    "PAYFAST",
+                    params.get("m_payment_id"),
+                    params.get("pf_payment_id"),
+                    amountGross,
+                    params.get("payment_status"),
+                    params.toString()); // raw params for auditing
         } catch (Exception e) {
             LOG.error("Error logging payment: " + e.getMessage());
         }
@@ -335,6 +348,24 @@ public class PayFastResource
         LOG.errorf("PayFast confirmed payment for order %s but it is no longer CREATED (current status: %s) — "
                 + "payment received, stock may not be reserved. Manual review required.", orderId, currentStatus);
         orderNotificationService.sendPaymentAnomalyAlert(current != null ? current : staleOrder, amountGross);
+    }
+
+    /**
+     * Resolves the order a log row belongs to, purely for linking (BACKLOG.md
+     * payment-logs-never-linked-to-their-order) — an unparseable or unmatched
+     * m_payment_id leaves the log unlinked rather than failing the ITN, since the
+     * log write itself is already best-effort (guarded by its own try/catch above).
+     */
+    private OrderEntity resolveOrderForLog(String orderIdStr)
+    {
+        if (orderIdStr == null) {
+            return null;
+        }
+        try {
+            return OrderEntity.findById(UUID.fromString(orderIdStr));
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
     }
 
     /**

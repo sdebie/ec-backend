@@ -11,7 +11,7 @@ import org.ecommerce.common.dto.PageResponse;
 import org.ecommerce.common.entity.CustomerEntity;
 import org.ecommerce.common.entity.OrderEntity;
 import org.ecommerce.common.entity.OrderItemEntity;
-import org.ecommerce.common.entity.OrderStatusHistoryEntity;
+import org.ecommerce.common.entity.PaymentLogEntity;
 import org.ecommerce.common.entity.ProductEntity;
 import org.ecommerce.common.entity.ProductVariantEntity;
 import org.ecommerce.common.entity.UserEntity;
@@ -20,6 +20,8 @@ import org.ecommerce.common.enums.CustomerTypeEn;
 import org.ecommerce.common.enums.OrderStatusEn;
 import org.ecommerce.common.enums.ProductStatusEn;
 import org.ecommerce.common.enums.ProductTypeEn;
+import org.ecommerce.common.repository.OrderStatusHistoryRepository;
+import org.ecommerce.common.repository.PaymentLogRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -57,6 +59,12 @@ class OrderAdminServiceIT
 
     @Inject
     EntityManager em;
+
+    @Inject
+    OrderStatusHistoryRepository orderStatusHistoryRepository;
+
+    @Inject
+    PaymentLogRepository paymentLogRepository;
 
     // ── Fixture builders ────────────────────────────────────────────────────
 
@@ -406,8 +414,8 @@ class OrderAdminServiceIT
         order.setPostalCode("8001");
         addLine(order, variant, 3, "100.00");
 
-        OrderStatusHistoryEntity.record(order, OrderStatusEn.CREATED, "Order placed", OrderService.SYSTEM_ACTOR);
-        OrderStatusHistoryEntity.record(order, OrderStatusEn.PAID, "Payment confirmed by PayFast", OrderService.SYSTEM_ACTOR);
+        orderStatusHistoryRepository.record(order, OrderStatusEn.CREATED, "Order placed", OrderService.SYSTEM_ACTOR);
+        orderStatusHistoryRepository.record(order, OrderStatusEn.PAID, "Payment confirmed by PayFast", OrderService.SYSTEM_ACTOR);
         syncAndClear();
 
         AdminOrderDetailDto detail = orderAdminService.adminOrder(order.getId());
@@ -445,6 +453,58 @@ class OrderAdminServiceIT
                 .map(entry -> entry.getStatus() + "/" + entry.getStaffName())
                 .toList();
         assertEquals(List.of("PAID/SYSTEM", "CREATED/SYSTEM"), timeline, "timeline must be newest first");
+
+        assertNull(detail.getLatestPayment(), "no payment log was ever written for this order");
+    }
+
+    @Test
+    @TestTransaction
+    @DisplayName("surfaces the linked payment log as latestPayment (BACKLOG.md payment-logs-never-linked-to-their-order)")
+    void adminOrder_withPaymentLog_includesLatestPayment()
+    {
+        OrderEntity order = newOrder(OrderStatusEn.PAID, new BigDecimal("150.00"), WINDOW_DAY);
+        syncAndClear();
+
+        paymentLogRepository.record(order, "PAYFAST", order.getId().toString(), "pf-77001",
+                new BigDecimal("150.00"), "COMPLETE", "{}");
+
+        AdminOrderDetailDto detail = orderAdminService.adminOrder(order.getId());
+
+        assertNotNull(detail.getLatestPayment(), "a linked payment log must surface on the admin detail");
+        assertEquals("PAYFAST", detail.getLatestPayment().getGateway());
+        assertEquals("pf-77001", detail.getLatestPayment().getExternalReference());
+        assertEquals(0, new BigDecimal("150.00").compareTo(detail.getLatestPayment().getAmountGross()));
+        assertEquals("COMPLETE", detail.getLatestPayment().getStatus());
+        assertNotNull(detail.getLatestPayment().getReceivedAt());
+    }
+
+    @Test
+    @TestTransaction
+    @DisplayName("when more than one payment log exists, latestPayment is the newest one, not the first")
+    void adminOrder_withMultiplePaymentLogs_returnsTheNewestOne()
+    {
+        OrderEntity order = newOrder(OrderStatusEn.PAID, new BigDecimal("150.00"), WINDOW_DAY);
+        syncAndClear();
+
+        PaymentLogEntity older = paymentLogRepository.record(order, "PAYFAST", order.getId().toString(), "pf-older",
+                new BigDecimal("150.00"), "FAILED", "{}");
+        PaymentLogEntity newer = paymentLogRepository.record(order, "PAYFAST", order.getId().toString(), "pf-newer",
+                new BigDecimal("150.00"), "COMPLETE", "{}");
+
+        em.createQuery("update PaymentLogEntity l set l.createdAt = :t where l.id = :id")
+                .setParameter("t", WINDOW_DAY.minusMinutes(10))
+                .setParameter("id", older.getId())
+                .executeUpdate();
+        em.createQuery("update PaymentLogEntity l set l.createdAt = :t where l.id = :id")
+                .setParameter("t", WINDOW_DAY)
+                .setParameter("id", newer.getId())
+                .executeUpdate();
+        syncAndClear();
+
+        AdminOrderDetailDto detail = orderAdminService.adminOrder(order.getId());
+
+        assertEquals("pf-newer", detail.getLatestPayment().getExternalReference());
+        assertEquals("COMPLETE", detail.getLatestPayment().getStatus());
     }
 
     @Test

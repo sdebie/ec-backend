@@ -17,9 +17,9 @@ import java.math.BigDecimal;
  * <p>
  * <b>Nothing here decides whether to send.</b> That is
  * {@link OrderStatusEn#customerNotification()}, and only {@code applyTransition} acts on
- * it. Before that, one confirmation email was sent from three separate call sites that
- * each decided for themselves — so a new writer sent nothing and nothing caught it, the
- * same defect class the stock rules already had.
+ * it — a call site that sends its own email instead of going through here bypasses that
+ * single source of truth, and a status with nothing wired to it ends up notifying nobody
+ * with nothing to catch it.
  * <p>
  * A send never fails a transition. The order has already moved and the change is already
  * committed by the time anyone would notice a bounce; failing the operation because an

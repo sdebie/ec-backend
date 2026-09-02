@@ -1,6 +1,5 @@
 package org.ecommerce.backend.api.graphql;
 
-import io.quarkus.panache.mock.PanacheMock;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
 import io.smallrye.jwt.build.Jwt;
@@ -10,6 +9,7 @@ import org.ecommerce.common.entity.CustomerEntity;
 import org.ecommerce.common.entity.UserEntity;
 import org.ecommerce.common.enums.CustomerStatusEn;
 import org.ecommerce.common.enums.CustomerTypeEn;
+import org.ecommerce.common.repository.CustomerRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -35,6 +35,9 @@ class OrderResourceMyOrdersIT
     @InjectMock
     OrderService orderService;
 
+    @InjectMock
+    CustomerRepository customerRepository;
+
     private UUID customerAId;
 
     // OrderSummaryDto for customer A (newest first)
@@ -47,8 +50,6 @@ class OrderResourceMyOrdersIT
     @BeforeEach
     void setUp()
     {
-        PanacheMock.mock(CustomerEntity.class);
-
         customerAId = UUID.randomUUID();
         UUID customerBId = UUID.randomUUID();
 
@@ -112,8 +113,8 @@ class OrderResourceMyOrdersIT
         summaryB1.setTotalAmount(320.00);
 
         // Mock CustomerEntity.findByEmail for both customers
-        when(CustomerEntity.findByEmail(CUSTOMER_A_EMAIL)).thenReturn(customerA);
-        when(CustomerEntity.findByEmail(CUSTOMER_B_EMAIL)).thenReturn(customerB);
+        when(customerRepository.findByEmail(CUSTOMER_A_EMAIL)).thenReturn(customerA);
+        when(customerRepository.findByEmail(CUSTOMER_B_EMAIL)).thenReturn(customerB);
 
         // Mock OrderService.getMyOrders for each customer
         when(orderService.getMyOrders(eq(customerAId))).thenReturn(List.of(summaryA1, summaryA2));

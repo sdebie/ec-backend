@@ -10,7 +10,7 @@ import net.jqwik.api.lifecycle.BeforeTry;
 import org.ecommerce.backend.utils.PasswordHashUtil;
 import org.ecommerce.common.entity.CustomerEntity;
 import org.ecommerce.common.entity.UserEntity;
-import org.mockito.MockedStatic;
+import org.ecommerce.common.repository.CustomerRepository;
 import org.mockito.Mockito;
 
 import java.util.UUID;
@@ -35,7 +35,7 @@ class PasswordValidationPropertyTest
     private static final String CURRENT_PASSWORD = "current123";
     private static final String CURRENT_PASSWORD_HASH = PasswordHashUtil.hash("current123");
 
-    private MockedStatic<CustomerEntity> mockedCustomerEntity;
+    private CustomerRepository customerRepository;
     private CustomerPortalService service;
 
     @BeforeTry
@@ -44,7 +44,13 @@ class PasswordValidationPropertyTest
         service = new CustomerPortalService();
 
         service.customerAddressMapper = new CustomerAddressMapperImpl();
-        mockedCustomerEntity = Mockito.mockStatic(CustomerEntity.class);
+        // Not @InjectMock: this class has no @QuarkusTest (jqwik's @Property does not
+        // compose with @QuarkusTest CDI, per OrderDetailOwnershipPropertyTest's javadoc in
+        // this same package), and `service` itself is plain-`new`'d, not CDI-managed — so a
+        // plain Mockito mock, wired the same manual way as customerAddressMapper above, is
+        // the only thing that actually gets exercised by the code under test.
+        customerRepository = Mockito.mock(CustomerRepository.class);
+        service.customerRepository = customerRepository;
 
         // Set up a customer with a known password hash
         CustomerEntity customer = new CustomerEntity();
@@ -62,15 +68,14 @@ class PasswordValidationPropertyTest
         Mockito.doNothing().when(user).persist();
         customer.setUser(user);
 
-        mockedCustomerEntity.when(() -> CustomerEntity.findByEmail(TEST_EMAIL)).thenReturn(customer);
+        Mockito.when(customerRepository.findByEmail(TEST_EMAIL)).thenReturn(customer);
     }
 
     @AfterTry
     void teardown()
     {
-        if (mockedCustomerEntity != null) {
-            mockedCustomerEntity.close();
-        }
+        // No MockedStatic to close now that CustomerEntity.findByEmail is mocked via the
+        // plain customerRepository field above.
     }
 
     /**
@@ -115,6 +120,21 @@ class PasswordValidationPropertyTest
         assertEquals(400, ex.getResponse().getStatus(), "Null password should be rejected with HTTP 400");
     }
 
+    /**
+     * <p>
+     * For any new password longer than 72 characters, changePassword SHALL throw
+     * a WebApplicationException with status 400 — BCrypt's effective input limit.
+     */
+    @Property(tries = 30)
+    void passwordsLongerThan72CharactersAreRejected(@ForAll("overlongPasswords") String newPassword)
+    {
+        assertTrue(newPassword.length() > 72, "Test precondition: password must be longer than 72 characters");
+
+        WebApplicationException ex = assertThrows(WebApplicationException.class, () -> service.changePassword(TEST_EMAIL, CURRENT_PASSWORD, newPassword));
+
+        assertEquals(400, ex.getResponse().getStatus(), "Overlong passwords should be rejected with HTTP 400");
+    }
+
     @Provide
     Arbitrary<String> shortPasswords()
     {
@@ -136,13 +156,26 @@ class PasswordValidationPropertyTest
     @Provide
     Arbitrary<String> validPasswords()
     {
-        // Generate random strings of length 8-100
-        return Arbitraries.integers().between(8, 100)
+        // Generate random strings of length 8-72 — PasswordStrengthValidator's upper
+        // bound (BCrypt's effective input limit) narrowed this from the original 8-100.
+        return Arbitraries.integers().between(8, 72)
                 .flatMap(length -> Arbitraries.strings()
                         .withCharRange('a', 'z')
                         .withCharRange('A', 'Z')
                         .withCharRange('0', '9')
                         .withChars('!', '@', '#', '$', '%', '^', '&', '*')
+                        .ofLength(length));
+    }
+
+    @Provide
+    Arbitrary<String> overlongPasswords()
+    {
+        // Generate random strings of length 73-150
+        return Arbitraries.integers().between(73, 150)
+                .flatMap(length -> Arbitraries.strings()
+                        .withCharRange('a', 'z')
+                        .withCharRange('A', 'Z')
+                        .withCharRange('0', '9')
                         .ofLength(length));
     }
 }

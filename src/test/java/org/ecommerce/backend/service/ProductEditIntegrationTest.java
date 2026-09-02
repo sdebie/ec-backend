@@ -255,6 +255,71 @@ class ProductEditIntegrationTest
         assertThat(storefrontRead.getVariants().getFirst().getSku(), equalTo(variantToKeepSku));
     }
 
+    @Test
+    @TestTransaction
+    void editPersistsEveryChange_storefrontReadExcludesPendingVariantButAdminReadKeepsIt()
+    {
+        String marker = "ZZED-PEND-" + UUID.randomUUID().toString().substring(0, 6) + "-";
+
+        // Create an ACTIVE product with 2 variants (both default to ACTIVE)
+        ProductInformationDto created = createProduct(marker, "ACTIVE");
+        String productId = created.getProduct().getId();
+        String slug = created.getProduct().getSlug();
+        em.flush();
+        em.clear();
+
+        ProductInformationDto original = productService.getProductInformationDto(productId);
+        String activeVariantSku = original.getVariants().get(0).getSku();
+        String pendingVariantSku = original.getVariants().get(1).getSku();
+
+        // Update: keep variant 0 ACTIVE, stage variant 1 as PENDING (draft, not yet published)
+        ProductInformationDto updateInput = new ProductInformationDto();
+        updateInput.setProduct(new ProductDto());
+        updateInput.getProduct().setId(productId);
+        updateInput.getProduct().setStatus("ACTIVE");
+
+        ProductVariantDto activeVariant = new ProductVariantDto();
+        activeVariant.setId(original.getVariants().get(0).getId());
+        activeVariant.setSku(activeVariantSku);
+        activeVariant.setStockQuantity(original.getVariants().get(0).getStockQuantity());
+        VariantPriceDto activePrice = new VariantPriceDto();
+        activePrice.setPriceType("RETAIL_PRICE");
+        activePrice.setPrice(original.getVariants().get(0).getPrices().getFirst().getPrice());
+        activePrice.setId(original.getVariants().get(0).getPrices().getFirst().getId());
+        activeVariant.setPrices(List.of(activePrice));
+        activeVariant.setImages(List.of(new ProductImageDto(null, "/images/active.jpg", 0, true)));
+
+        ProductVariantDto pendingVariant = new ProductVariantDto();
+        pendingVariant.setId(original.getVariants().get(1).getId());
+        pendingVariant.setSku(pendingVariantSku);
+        pendingVariant.setStatus("PENDING");
+        pendingVariant.setStockQuantity(original.getVariants().get(1).getStockQuantity());
+        VariantPriceDto pendingPrice = new VariantPriceDto();
+        pendingPrice.setPriceType("RETAIL_PRICE");
+        pendingPrice.setPrice(original.getVariants().get(1).getPrices().getFirst().getPrice());
+        pendingPrice.setId(original.getVariants().get(1).getPrices().getFirst().getId());
+        pendingVariant.setPrices(List.of(pendingPrice));
+        pendingVariant.setImages(List.of());
+
+        updateInput.setVariants(List.of(activeVariant, pendingVariant));
+
+        productService.updateProductInformation(productId, updateInput);
+        em.flush();
+        em.clear();
+
+        // Public storefront read must NEVER expose a PENDING (unpublished) variant
+        ProductInformationDto storefrontRead = productService.getProductInformationBySlug(slug);
+        assertNotNull(storefrontRead);
+        assertThat(storefrontRead.getVariants(), hasSize(1));
+        assertThat(storefrontRead.getVariants().getFirst().getSku(), equalTo(activeVariantSku));
+
+        // Admin-edit read must still show the PENDING variant — it's staged, not deleted
+        ProductInformationDto adminRead = productService.getProductInformationDto(productId);
+        assertThat(adminRead.getVariants(), hasSize(2));
+        List<String> adminSkus = adminRead.getVariants().stream().map(ProductVariantDto::getSku).toList();
+        assertThat(adminSkus, hasItem(pendingVariantSku));
+    }
+
     // ─── Deletion Policy: Variant removal ───────────────────────────────────
 
     @Test
@@ -416,9 +481,11 @@ class ProductEditIntegrationTest
         em.clear();
 
         // Delete the product
-        productService.deleteProduct(productId);
+        ProductDeletionOutcome outcome = productService.deleteProduct(productId);
         em.flush();
         em.clear();
+
+        assertThat(outcome, equalTo(ProductDeletionOutcome.DELETED));
 
         // Product must be physically gone
         ProductEntity deletedProduct = em.find(ProductEntity.class, UUID.fromString(productId));
@@ -444,9 +511,11 @@ class ProductEditIntegrationTest
         em.clear();
 
         // Delete the product
-        productService.deleteProduct(productId);
+        ProductDeletionOutcome outcome = productService.deleteProduct(productId);
         em.flush();
         em.clear();
+
+        assertThat(outcome, equalTo(ProductDeletionOutcome.DELETED));
 
         // Order history is the only bar to physical deletion: an ACTIVE product
         // with no ordered variants is hard-deleted like a draft.
@@ -477,9 +546,11 @@ class ProductEditIntegrationTest
         em.clear();
 
         // Delete the product
-        productService.deleteProduct(productId);
+        ProductDeletionOutcome outcome = productService.deleteProduct(productId);
         em.flush();
         em.clear();
+
+        assertThat(outcome, equalTo(ProductDeletionOutcome.ARCHIVED));
 
         // Product must still exist with DISABLED status (order-referenced prevents hard delete)
         ProductEntity product = em.find(ProductEntity.class, UUID.fromString(productId));

@@ -1,17 +1,19 @@
 package org.ecommerce.backend.service;
 
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.core.Response;
-import org.ecommerce.backend.utils.PasswordHashUtil;
-import org.ecommerce.common.dto.StorefrontCustomerPortalDto;
-import jakarta.inject.Inject;
 import org.ecommerce.backend.mapper.CustomerAddressMapper;
-import org.ecommerce.common.entity.CustomerAddressEntity;
+import org.ecommerce.backend.utils.CustomerPasswordHashUtil;
+import org.ecommerce.backend.utils.PasswordStrengthValidator;
+import org.ecommerce.common.dto.AddressDto;
+import org.ecommerce.common.dto.StorefrontCustomerPortalDto;
 import org.ecommerce.common.entity.CustomerEntity;
 import org.ecommerce.common.entity.UserEntity;
 import org.ecommerce.common.enums.AddressTypeEn;
+import org.ecommerce.common.repository.CustomerRepository;
 import org.jboss.logging.Logger;
 
 import java.util.Map;
@@ -25,6 +27,9 @@ public class CustomerPortalService
     @Inject
     CustomerAddressMapper customerAddressMapper;
 
+    @Inject
+    CustomerRepository customerRepository;
+
     private static final Logger LOG = Logger.getLogger(CustomerPortalService.class);
 
     /**
@@ -36,7 +41,7 @@ public class CustomerPortalService
      */
     public StorefrontCustomerPortalDto getPortalProfile(String email)
     {
-        CustomerEntity customer = CustomerEntity.findByEmail(email);
+        CustomerEntity customer = customerRepository.findByEmail(email);
         if (customer == null) {
             LOG.warnf("Customer portal profile requested for unknown email: %s", email);
             throw new WebApplicationException(
@@ -77,7 +82,7 @@ public class CustomerPortalService
     @Transactional
     public void changePassword(String email, String currentPassword, String newPassword)
     {
-        CustomerEntity customer = CustomerEntity.findByEmail(email);
+        CustomerEntity customer = customerRepository.findByEmail(email);
         if (customer == null) {
             LOG.warnf("Password change attempted for unknown email: %s", email);
             throw new WebApplicationException(
@@ -98,7 +103,7 @@ public class CustomerPortalService
         }
 
         // Verify current password
-        if (!PasswordHashUtil.verify(currentPassword, user.getPasswordHash())) {
+        if (!CustomerPasswordHashUtil.verify(currentPassword, user.getPasswordHash())) {
             LOG.warnf("Incorrect current password during password change for: %s", email);
             throw new WebApplicationException(
                     Response.status(Response.Status.UNAUTHORIZED)
@@ -106,22 +111,24 @@ public class CustomerPortalService
                             .build());
         }
 
-        // Validate new password length
-        if (newPassword == null || newPassword.length() < 8) {
+        // Validate new password strength
+        try {
+            PasswordStrengthValidator.validate(newPassword);
+        } catch (IllegalArgumentException ex) {
             throw new WebApplicationException(
                     Response.status(Response.Status.BAD_REQUEST)
-                            .entity(Map.of("error", "Password must be at least 8 characters"))
+                            .entity(Map.of("error", ex.getMessage()))
                             .build());
         }
 
         // Hash and persist
-        user.setPasswordHash(PasswordHashUtil.hash(newPassword));
+        user.setPasswordHash(CustomerPasswordHashUtil.hash(newPassword));
         user.persist();
     }
 
     // ── Private helpers ──────────────────────────────────────────────────────
 
-    private StorefrontCustomerPortalDto.AddressDto mapAddress(CustomerEntity customer, AddressTypeEn type)
+    private AddressDto mapAddress(CustomerEntity customer, AddressTypeEn type)
     {
         return customer.getAddresses()
                 .stream()

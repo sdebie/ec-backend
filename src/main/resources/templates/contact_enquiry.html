@@ -1,83 +1,8 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <style>
-        body {
-            font-family: sans-serif;
-            color: #333;
-            line-height: 1.6;
-        }
+{#include email_layout}
+{#headline}New Contact Enquiry{/headline}
+{#subheading}<p>From <strong>{name}</strong></p>{/subheading}
 
-        .container {
-            width: 100%;
-            max-width: 600px;
-            margin: 0 auto;
-            border: 1px solid #eee;
-            padding: 20px;
-            border-radius: 10px;
-        }
-
-        .header {
-            text-align: center;
-            border-bottom: 2px solid #3b82f6;
-            padding-bottom: 20px;
-        }
-
-        .details-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin: 20px 0;
-        }
-
-        .details-table th {
-            text-align: left;
-            padding: 8px 10px;
-            border-bottom: 1px solid #eee;
-            color: #555;
-            width: 120px;
-            vertical-align: top;
-        }
-
-        .details-table td {
-            padding: 8px 10px;
-            border-bottom: 1px solid #eee;
-        }
-
-        .message-section {
-            margin: 20px 0;
-            padding: 15px;
-            background-color: #f9f9f9;
-            border-radius: 6px;
-        }
-
-        .message-section h3 {
-            margin: 0 0 10px 0;
-            font-size: 14px;
-            color: #555;
-        }
-
-        .message-section p {
-            margin: 0;
-            white-space: pre-wrap;
-        }
-
-        .footer {
-            font-size: 12px;
-            color: #777;
-            margin-top: 30px;
-            text-align: center;
-        }
-    </style>
-    <title>New Contact Enquiry</title>
-</head>
-<body>
-<div class="container">
-    <div class="header">
-        <h1>New Contact Enquiry</h1>
-        <p>From <strong>{name}</strong></p>
-    </div>
-
+{#body}
     <table class="details-table">
         <tr>
             <th>Name</th>
@@ -103,11 +28,10 @@
         <h3>Message</h3>
         <p>{message}</p>
     </div>
+{/body}
 
-    <div class="footer">
-        <p>This enquiry was submitted via the contact form on your website.</p>
-        <p>Reply directly to this email to respond to the sender.</p>
-    </div>
-</div>
-</body>
-</html>
+{#footer}
+    <p>This enquiry was submitted via the contact form on your website.</p>
+    <p>Reply directly to this email to respond to the sender.</p>
+{/footer}
+{/include}

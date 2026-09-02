@@ -1,10 +1,12 @@
 package org.ecommerce.backend.service;
 
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import org.ecommerce.common.entity.CustomerEntity;
 import org.ecommerce.common.entity.ProductVariantEntity;
 import org.ecommerce.common.entity.WishlistItemEntity;
+import org.ecommerce.common.repository.WishlistItemRepository;
 import org.jboss.logging.Logger;
 
 import java.util.List;
@@ -16,6 +18,9 @@ public class WishlistService
 {
     private static final Logger LOG = Logger.getLogger(WishlistService.class);
 
+    @Inject
+    WishlistItemRepository wishlistItemRepository;
+
     public enum AddResult
     {
         CREATED,
@@ -25,7 +30,7 @@ public class WishlistService
 
     public List<UUID> getWishlistVariantIds(UUID customerId)
     {
-        List<WishlistItemEntity> items = WishlistItemEntity.findByCustomerId(customerId);
+        List<WishlistItemEntity> items = wishlistItemRepository.findByCustomerId(customerId);
         return items
                 .stream()
                 .map(item -> item.getVariant().getId())
@@ -43,7 +48,7 @@ public class WishlistService
         }
 
         // Check for existing entry (idempotent)
-        WishlistItemEntity existing = WishlistItemEntity.findByCustomerAndVariant(customerId, variantId);
+        WishlistItemEntity existing = wishlistItemRepository.findByCustomerAndVariant(customerId, variantId);
         if (existing != null) {
             return AddResult.ALREADY_EXISTS;
         }
@@ -61,6 +66,6 @@ public class WishlistService
     @Transactional
     public void removeFromWishlist(UUID customerId, UUID variantId)
     {
-        WishlistItemEntity.deleteByCustomerAndVariant(customerId, variantId);
+        wishlistItemRepository.deleteByCustomerAndVariant(customerId, variantId);
     }
 }

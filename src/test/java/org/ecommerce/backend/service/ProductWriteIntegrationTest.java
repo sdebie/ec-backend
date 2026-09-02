@@ -225,6 +225,52 @@ class ProductWriteIntegrationTest
         assertTrue(found, "Created product must appear in adminProductList when searching by its marker");
     }
 
+    @Test
+    @TestTransaction
+    void adminProductList_searchMatchesByNameOnly_findsProduct()
+    {
+        String marker = "ZZPW-NAME-" + UUID.randomUUID().toString().substring(0, 6) + "-";
+        ProductInformationDto created = productService.addProductInformation(validCreateInput(marker));
+        em.flush();
+
+        // Present in the product name ("<marker>Test Product"), absent from both SKUs ("<marker>SKU-A/B-...").
+        PageResponse<AdminProductListItemDto> listPage =
+                productService.getAdminProductList(0, 100, null, null, null, marker + "Test");
+
+        boolean found = listPage.getContent().stream()
+                .anyMatch(item -> item.getId().equals(created.getProduct().getId()));
+        assertTrue(found, "A term matching only the product name must still find the product");
+    }
+
+    @Test
+    @TestTransaction
+    void adminProductList_searchMatchesBySkuOnly_findsProduct()
+    {
+        String marker = "ZZPW-SKU-" + UUID.randomUUID().toString().substring(0, 6) + "-";
+        ProductInformationDto created = productService.addProductInformation(validCreateInput(marker));
+        em.flush();
+
+        // Present in variant1's SKU ("<marker>SKU-A-..."), absent from the product name ("<marker>Test Product").
+        PageResponse<AdminProductListItemDto> listPage =
+                productService.getAdminProductList(0, 100, null, null, null, marker + "SKU-A");
+
+        boolean found = listPage.getContent().stream()
+                .anyMatch(item -> item.getId().equals(created.getProduct().getId()));
+        assertTrue(found, "A term matching only a variant SKU must still find the product");
+    }
+
+    @Test
+    @TestTransaction
+    void adminProductList_searchMatchesNothing_returnsEmptyPageNotError()
+    {
+        PageResponse<AdminProductListItemDto> listPage =
+                productService.getAdminProductList(0, 100, null, null, null, "NOMATCH-" + UUID.randomUUID());
+
+        assertThat(listPage.getContent(), empty());
+        assertEquals(0, listPage.getTotalElements());
+        assertEquals(0, listPage.getTotalPages());
+    }
+
     // ─── Aggregate guard: malformed payloads fail atomically ─────────────────
 
     @Test

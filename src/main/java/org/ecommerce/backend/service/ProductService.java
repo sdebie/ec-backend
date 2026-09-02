@@ -60,7 +60,7 @@ public class ProductService
     {
         CatalogueSortEn effectiveSort = sortBy != null ? sortBy : CatalogueSortEn.NAME_ASC;
         PriceBasisEn effectiveBasis = priceBasis != null ? priceBasis : PriceBasisEn.RETAIL;
-        FilterRequest effectiveFilterRequest = applyActiveProductStatusFilter(filterRequest, false);
+        FilterRequest effectiveFilterRequest = applyActiveProductStatusFilter(filterRequest);
         LocalDateTime now = LocalDateTime.now();
         return productListItemAssembler.buildShoppingListItems(productRepository.findShoppingProductEntities(pageRequest, effectiveFilterRequest, onSale, effectiveSort, effectiveBasis, inStockOnly), now, false);
     }
@@ -88,11 +88,28 @@ public class ProductService
     public PageResponse<AdminProductListItemDto> getAdminProductList(int pageIndex, int pageSize, String status, String categoryId, String brandId, String search)
     {
         LocalDateTime now = LocalDateTime.now();
-        PageResponse<ProductEntity> page = productRepository.findAdminProductPage(pageIndex, pageSize, status, categoryId, brandId, search);
 
-        List<AdminProductListItemDto> content = productListItemAssembler.buildAdminListItems(page.getContent(), now);
+        int effectivePageSize = Math.clamp(pageSize, 1, 100);
+        int effectivePageIndex = Math.max(pageIndex, 0);
 
-        return new PageResponse<>(content, page.getTotalElements(), page.getTotalPages(), page.getPageIndex(), page.getPageSize());
+        long totalElements = productRepository.countAdminProducts(status, categoryId, brandId, search);
+        int totalPages = (int) Math.ceil((double) totalElements / effectivePageSize);
+        // A deletion or filter change can make a previously valid client page fall
+        // outside the result set between requests. Return the final available page
+        // instead of an avoidable empty page; the client can render response metadata
+        // without an effect-driven pagination correction.
+        if (totalPages > 0) {
+            effectivePageIndex = Math.min(effectivePageIndex, totalPages - 1);
+        }
+
+        PageRequest pageRequest = new PageRequest();
+        pageRequest.setPageIndex(effectivePageIndex);
+        pageRequest.setPageSize(effectivePageSize);
+
+        List<ProductEntity> products = productRepository.findAdminProducts(pageRequest, status, categoryId, brandId, search);
+        List<AdminProductListItemDto> content = productListItemAssembler.buildAdminListItems(products, now);
+
+        return new PageResponse<>(content, totalElements, totalPages, effectivePageIndex, effectivePageSize);
     }
 
     @Transactional(value = TxType.SUPPORTS)
@@ -109,20 +126,20 @@ public class ProductService
     @Transactional(value = TxType.SUPPORTS)
     public long productCount(FilterRequest filterRequest)
     {
-        return productRepository.count(applyActiveProductStatusFilter(filterRequest, false));
+        return productRepository.count(applyActiveProductStatusFilter(filterRequest));
     }
 
     @Transactional(value = TxType.SUPPORTS)
     public long countShoppingProducts(FilterRequest filterRequest, boolean onSale, Boolean inStockOnly)
     {
-        FilterRequest effectiveFilterRequest = applyActiveProductStatusFilter(filterRequest, false);
+        FilterRequest effectiveFilterRequest = applyActiveProductStatusFilter(filterRequest);
         return productRepository.countShoppingProducts(effectiveFilterRequest, onSale, inStockOnly);
     }
 
-    private FilterRequest applyActiveProductStatusFilter(FilterRequest filterRequest, boolean ignoreStatus)
+    private FilterRequest applyActiveProductStatusFilter(FilterRequest filterRequest)
     {
         FilterRequest effectiveFilterRequest = copyFilterRequest(filterRequest);
-        if (ignoreStatus) {
+        if (false) {
             return effectiveFilterRequest;
         }
 
@@ -177,8 +194,9 @@ public class ProductService
             return null;
         }
 
-        // Active-only read: exclude DISABLED variants so soft-deleted variants are absent
-        return productMapper.mapToProductInformationDto(product, productVariantRepository.findActiveVariantsForProductId(pid));
+        // Admin-edit read: excludes only DISABLED (soft-deleted) variants — a PENDING
+        // variant the admin is still staging remains visible.
+        return productMapper.mapToProductInformationDto(product, productVariantRepository.findNonDisabledVariantsForProductId(pid));
     }
 
     @Transactional(value = TxType.REQUIRED)
@@ -241,8 +259,8 @@ public class ProductService
         List<ProductImageDto> imageManifest = extractImageManifest(input);
         updateProductImages(product.getId(), imageManifest);
 
-        // Return the full aggregate via the active-only read path
-        return productMapper.mapToProductInformationDto(product, productVariantRepository.findActiveVariantsForProductId(product.getId()));
+        // Return the full aggregate via the admin-edit read path (excludes DISABLED only)
+        return productMapper.mapToProductInformationDto(product, productVariantRepository.findNonDisabledVariantsForProductId(product.getId()));
     }
 
     @Transactional(value = TxType.REQUIRED)
@@ -315,8 +333,8 @@ public class ProductService
         List<ProductImageDto> imageManifest = extractImageManifest(input);
         updateProductImages(pid, imageManifest);
 
-        // Active-only read: exclude DISABLED variants from the returned aggregate
-        return productMapper.mapToProductInformationDto(product, productVariantRepository.findActiveVariantsForProductId(pid));
+        // Admin-edit read: excludes only DISABLED variants from the returned aggregate
+        return productMapper.mapToProductInformationDto(product, productVariantRepository.findNonDisabledVariantsForProductId(pid));
     }
 
     /**
@@ -329,7 +347,7 @@ public class ProductService
         if (input.getVariants() == null || input.getVariants().isEmpty()) {
             return List.of();
         }
-        ProductVariantDto firstVariant = input.getVariants().get(0);
+        ProductVariantDto firstVariant = input.getVariants().getFirst();
         if (firstVariant.getImages() == null || firstVariant.getImages().isEmpty()) {
             return List.of();
         }
@@ -342,13 +360,8 @@ public class ProductService
      * The manifest is a single ordered list of images that the product editor carries on
      * payload variant index 0 (transport convention only). After all variant upserts, this
      * method determines the "owner variant" — the ACTIVE variant with the lowest UUID
-     * (sorted by UUID.toString()) — and persists the manifest on it.
-     * <p>
-     * Steps:
-     * 1. Determine the owner variant (active, lowest UUID).
-     * 2. Load all existing ProductImageEntity rows for this product (across all variants).
-     * 3. Reconcile: add new images, remove images not in the manifest, update sortOrder/isFeatured.
-     * 4. Normalise: move any existing images on a non-owner variant to the owner variant.
+     * (sorted by UUID.toString()) — and persists the manifest on it, moving any images that
+     * had landed on a non-owner variant back onto it.
      */
     private void updateProductImages(UUID productId, List<ProductImageDto> manifest)
     {
@@ -390,6 +403,18 @@ public class ProductService
         // 3. Reconcile: track which existing image ids are still in the manifest
         Set<UUID> manifestImageIds = new LinkedHashSet<>();
 
+        // "Featured" is a single product-wide invariant, not each row's own isFeatured flag
+        // taken at face value — a manifest with more than one entry marked featured no longer
+        // produces more than one featured row; the last such entry wins. Every row this method
+        // touches is already a managed entity by the time we know the winner (both branches
+        // below persist() their entity before we can know if it is the winner, since a new
+        // row's id doesn't exist until persist() assigns it), so the flag is set directly on
+        // each managed entity — not via a bulk UPDATE, which wouldn't be reflected back on
+        // these same in-memory entities for the rest of this transaction (including this
+        // request's own response and any caller reading them back before commit).
+        List<ProductImageEntity> processedImages = new ArrayList<>(manifest.size());
+        int featuredIndex = -1;
+
         for (int i = 0; i < manifest.size(); i++) {
             ProductImageDto imgDto = manifest.get(i);
 
@@ -401,13 +426,16 @@ public class ProductService
                 ProductImageEntity existing = existingById.get(imageId);
                 if (existing != null) {
                     existing.setSortOrder(i);
-                    existing.setIsFeatured(imgDto.isFeatured());
                     existing.setAltText(imgDto.getAltText());
                     // Normalise: move to owner variant if not already there
                     if (!ownerVariant.getId().equals(existing.getProductVariant().getId())) {
                         existing.setProductVariant(ownerVariant);
                     }
                     existing.persist();
+                    processedImages.add(existing);
+                    if (imgDto.isFeatured()) {
+                        featuredIndex = processedImages.size() - 1;
+                    }
                 }
             } else {
                 // New image — create entity on the owner variant
@@ -415,11 +443,18 @@ public class ProductService
                 newImage.setProductVariant(ownerVariant);
                 newImage.setImageUrl(imgDto.getImageUrl());
                 newImage.setSortOrder(i);
-                newImage.setIsFeatured(imgDto.isFeatured());
                 newImage.setAltText(imgDto.getAltText());
                 newImage.persist();
                 log.info("Created new image association for product {}: {}", productId, imgDto.getImageUrl());
+                processedImages.add(newImage);
+                if (imgDto.isFeatured()) {
+                    featuredIndex = processedImages.size() - 1;
+                }
             }
+        }
+
+        for (int i = 0; i < processedImages.size(); i++) {
+            processedImages.get(i).setIsFeatured(i == featuredIndex);
         }
 
         // 4. Remove images not in the manifest
@@ -493,17 +528,14 @@ public class ProductService
     }
 
     /**
-     * Shared validate-and-persist helper for variants and their price rows.
-     * Used by both addProductInformation (create) and updateProductVariants (update).
+     * Shared validate-and-persist helper for variants and their price rows, used by both
+     * addProductInformation (create) and updateProductVariants (update). Each variant DTO is
+     * matched to an existing row by id (verified to belong to this product) or, failing
+     * that, by SKU; an unmatched DTO creates a new variant. Prices are upserted per type so
+     * a variant never accumulates duplicate price rows.
      * <p>
-     * For each variant DTO:
-     * - If it carries an id, look it up and verify it belongs to this product (cross-product guard).
-     * - If it carries no id, try to match by SKU against existing variants for this product.
-     * - Create or update the variant entity accordingly.
-     * - Persist each price via upsert, preventing duplicate price rows for the same type.
-     * <p>
-     * Assumptions: the ProductWriteValidator has already validated the aggregate
-     * (non-blank SKUs, request-unique SKUs, exactly one positive RETAIL_PRICE, ownership).
+     * Assumes {@code ProductWriteValidator} has already validated the aggregate (non-blank
+     * SKUs, request-unique SKUs, exactly one positive RETAIL_PRICE, ownership).
      */
     private void persistVariantsWithPrices(ProductEntity product, List<ProductVariantDto> variantDtos)
     {
@@ -571,12 +603,10 @@ public class ProductService
     }
 
     /**
-     * Upserts price rows for a variant. For each price DTO:
-     * - If a price id is supplied, update that specific row (already ownership-validated).
-     * - Otherwise find existing row by (variant, priceType) and update it — no duplicate.
-     * - If no existing row exists, create one.
-     * <p>
-     * This prevents duplicate price rows for the same price type on a variant.
+     * Upserts price rows for a variant: updates the row a supplied price id names (already
+     * ownership-validated), or the existing row for that (variant, priceType) pair when no
+     * id is given, creating one only if neither is found — so a variant never accumulates
+     * duplicate rows for the same price type.
      */
     private void persistVariantPrices(ProductVariantEntity variant, List<VariantPriceDto> priceDtos)
     {
@@ -645,7 +675,7 @@ public class ProductService
     }
 
     @Transactional(value = TxType.REQUIRED)
-    public void deleteProduct(String id)
+    public ProductDeletionOutcome deleteProduct(String id)
     {
         if (id == null || id.isBlank()) {
             throw new IllegalArgumentException("Product id is required");
@@ -668,12 +698,14 @@ public class ProductService
         // Order history is the ONLY bar to physical deletion: a product whose
         // variants were never ordered may be hard-deleted in any status; one
         // with order references is archived (DISABLED) so orders keep their
-        // variant rows. (Supersedes the old drafts-only hard-delete rule.)
+        // variant rows. (Supersedes the old drafts-only hard-delete rule.) The
+        // caller cannot see which happened from a void return, so it is reported.
         if (!anyOrderReferenced) {
             // CascadeType.ALL + orphanRemoval on ProductEntity.variants handles
             // cascading removal of variants, their prices, and their images.
             product.delete();
             log.info("Hard-deleted product {} — no order references", id);
+            return ProductDeletionOutcome.DELETED;
         } else {
             // Archive: set product status to DISABLED, and disable all ACTIVE child variants
             product.setStatus(ProductStatusEn.DISABLED);
@@ -686,6 +718,7 @@ public class ProductService
                 }
             }
             log.info("Archived product {} — variants are order-referenced", id);
+            return ProductDeletionOutcome.ARCHIVED;
         }
     }
 
@@ -701,7 +734,8 @@ public class ProductService
         if (product == null) {
             return null;
         }
-        // Active-only read: exclude DISABLED variants for storefront detail
+        // Public storefront read: ACTIVE-only — a PENDING (unpublished) or DISABLED
+        // (soft-deleted) variant must never be customer-visible
         return productMapper.mapToProductInformationDto(product, productVariantRepository.findActiveVariantsForProductId(pid));
     }
 }

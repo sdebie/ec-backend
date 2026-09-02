@@ -12,17 +12,20 @@ import java.util.Currency;
 import java.util.Locale;
 
 /**
- * Assembles the store's own details for a customer email, from seed configuration.
- * <p>
- * These used to be literals in the order confirmation template — a store name, a street
- * address and a support address that belonged to nobody, shipped to every client of the
- * platform. Law 1 says a client is configured through seed data, and an email footer is
- * no exception: the wrong shop's address on a shopper's receipt is exactly the failure
- * that law exists to prevent.
+ * Assembles the store's own details for a customer email, from seed configuration,
+ * never literals — the wrong shop's address on a shopper's receipt is exactly
+ * the failure that would cause.
  * <p>
  * Reads the customer-facing half of {@code storefront.contact};
  * {@link EnquiryRecipientResolver} owns the staff mailbox field in the same key and is
  * deliberately left alone, because the two answer different questions.
+ * <p>
+ * The display name prefers {@code storefront.branding} &rarr; {@code name}, falling back
+ * to {@code storefront.config} &rarr; {@code clientName} — the same precedence
+ * {@code StorefrontConfigResource} uses for the storefront header/footer, so an email
+ * names the store the same way the site the shopper just left did. Any other class
+ * needing the store's display name for an email calls {@link #resolveStoreName()} rather
+ * than reading either setting independently.
  * <p>
  * Never throws. A missing setting costs the email a line of its footer, not its delivery
  * — the order has already happened, and failing to tell the shopper about it because
@@ -35,6 +38,7 @@ public class StoreEmailDetailsResolver
 
     private static final String CONTACT_KEY = "storefront.contact";
     private static final String CONFIG_KEY = "storefront.config";
+    private static final String BRANDING_KEY = "storefront.branding";
 
     @Inject
     SettingsRepository settingsRepository;
@@ -46,14 +50,31 @@ public class StoreEmailDetailsResolver
     {
         JsonNode contact = read(CONTACT_KEY);
         JsonNode config = read(CONFIG_KEY);
+        JsonNode branding = read(BRANDING_KEY);
 
         return new StoreEmailDetails(
-                text(config, "clientName"),
+                storeName(branding, config),
                 currencySymbol(text(config, "currency")),
                 text(contact, "physicalAddress"),
                 text(contact, "businessHours"),
                 text(contact, "enquiryEmail"),
                 phone(contact));
+    }
+
+    /**
+     * The store's display name: {@code storefront.branding} &rarr; {@code name}, falling
+     * back to {@code storefront.config} &rarr; {@code clientName}. Null if neither is
+     * configured.
+     */
+    public String resolveStoreName()
+    {
+        return storeName(read(BRANDING_KEY), read(CONFIG_KEY));
+    }
+
+    private static String storeName(JsonNode branding, JsonNode config)
+    {
+        String brandingName = text(branding, "name");
+        return brandingName != null ? brandingName : text(config, "clientName");
     }
 
     private JsonNode read(String key)

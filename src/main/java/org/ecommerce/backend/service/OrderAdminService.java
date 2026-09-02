@@ -8,6 +8,7 @@ import org.ecommerce.common.dto.AdminOrderListItemDto;
 import org.ecommerce.common.dto.PageResponse;
 import org.ecommerce.common.entity.OrderEntity;
 import org.ecommerce.common.entity.OrderStatusHistoryEntity;
+import org.ecommerce.common.entity.PaymentLogEntity;
 import org.ecommerce.common.enums.OrderStatusEn;
 import org.ecommerce.common.query.PageRequest;
 import org.ecommerce.common.query.SortRequest;
@@ -119,7 +120,11 @@ public class OrderAdminService
                 .find("select h from OrderStatusHistoryEntity h where h.order.id = ?1 order by h.createdAt desc", id)
                 .list();
 
-        return orderAdminMapper.toDetailDto(order, totals, history);
+        PaymentLogEntity latestPayment = PaymentLogEntity
+                .find("select l from PaymentLogEntity l where l.orderEntity.id = ?1 order by l.createdAt desc", id)
+                .firstResult();
+
+        return orderAdminMapper.toDetailDto(order, totals, history, latestPayment);
     }
 
     /**

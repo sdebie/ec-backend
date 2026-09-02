@@ -9,7 +9,9 @@ import org.ecommerce.common.dto.ShippingMethodDto;
 import org.ecommerce.common.dto.StoreSettingsDto;
 import org.ecommerce.common.entity.ShippingMethodEntity;
 import org.ecommerce.common.entity.StoreSettingsEntity;
+import org.ecommerce.common.repository.CountrySettingsRepository;
 import org.ecommerce.common.repository.SettingsRepository;
+import org.ecommerce.common.repository.ShippingMethodRepository;
 
 import java.util.List;
 import java.util.stream.Collectors;
@@ -20,6 +22,12 @@ public class SettingsService
 
     @Inject
     SettingsRepository settingsRepository;
+
+    @Inject
+    ShippingMethodRepository shippingMethodRepository;
+
+    @Inject
+    CountrySettingsRepository countrySettingsRepository;
 
     @Inject
     SettingsMapper settingsMapper;
@@ -40,12 +48,12 @@ public class SettingsService
 
     public List<ShippingMethodDto> getShippingMethods()
     {
-        return settingsMapper.mapShippingMethodEntityToDtoList(settingsRepository.getAllShippingMethods());
+        return settingsMapper.mapShippingMethodEntityToDtoList(shippingMethodRepository.listAll());
     }
 
     public List<CountrySettingsDto> getCountrySettings()
     {
-        return settingsMapper.mapCountrySettingsEntityToDtoList(settingsRepository.getAllCountrySettings());
+        return settingsMapper.mapCountrySettingsEntityToDtoList(countrySettingsRepository.listAll());
     }
 
     public List<StoreSettingsDto> saveStoreSettings(List<StoreSettingsDto> settings)
@@ -68,14 +76,14 @@ public class SettingsService
         if (methodDto.getId() == null) {
             entity = settingsMapper.mapShippingMethodDtoToEntity(methodDto, new ShippingMethodEntity());
         } else {
-            entity = ShippingMethodEntity.findById(methodDto.getId());
+            entity = shippingMethodRepository.findById(methodDto.getId());
             if (entity == null) {
                 entity = new ShippingMethodEntity();
                 entity.setId(methodDto.getId());
             }
             settingsMapper.mapShippingMethodDtoToEntity(methodDto, entity);
         }
-        entity = settingsRepository.saveShippingMethod(entity);
+        entity = shippingMethodRepository.save(entity);
         return settingsMapper.mapShippingMethodEntityToDto(entity);
     }
 }

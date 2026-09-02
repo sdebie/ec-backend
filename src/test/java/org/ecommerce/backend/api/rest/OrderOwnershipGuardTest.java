@@ -1,6 +1,5 @@
 package org.ecommerce.backend.api.rest;
 
-import io.quarkus.panache.mock.PanacheMock;
 import io.quarkus.security.identity.SecurityIdentity;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
@@ -9,6 +8,7 @@ import org.eclipse.microprofile.jwt.JsonWebToken;
 import org.ecommerce.backend.service.OrderCapabilityService;
 import org.ecommerce.common.entity.CustomerEntity;
 import org.ecommerce.common.entity.OrderEntity;
+import org.ecommerce.common.repository.CustomerRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -44,6 +44,9 @@ class OrderOwnershipGuardTest
     @InjectMock
     JsonWebToken jwt;
 
+    @InjectMock
+    CustomerRepository customerRepository;
+
     private UUID orderId;
     private UUID ownerCustomerId;
     private OrderEntity guestOrder;
@@ -52,8 +55,6 @@ class OrderOwnershipGuardTest
     @BeforeEach
     void setUp()
     {
-        PanacheMock.mock(CustomerEntity.class);
-
         orderId = UUID.randomUUID();
         ownerCustomerId = UUID.randomUUID();
 
@@ -96,7 +97,18 @@ class OrderOwnershipGuardTest
         when(jwt.getSubject()).thenReturn(email);
         CustomerEntity customer = new CustomerEntity();
         customer.setId(customerId);
-        when(CustomerEntity.findByEmail(email)).thenReturn(customer);
+        when(customerRepository.findByEmail(email)).thenReturn(customer);
+    }
+
+    /**
+     * Distinct from the {@code @BeforeEach} default of "no credential at all": a role
+     * only staff hold, so a guard that ever branched on it (rather than solely on
+     * {@code hasRole("customer")}) would diverge from the no-credential cases here.
+     */
+    private void authenticateAsStaff()
+    {
+        when(securityIdentity.hasRole("SUPER_ADMIN")).thenReturn(true);
+        when(jwt.getSubject()).thenReturn("staff@test.com");
     }
 
     // ── Guest order ─────────────────────────────────────────────────────────
@@ -142,6 +154,7 @@ class OrderOwnershipGuardTest
     void guestOrder_staffJwt_refused()
     {
         // Staff hold a role name, never "customer" — the same branch as anonymous.
+        authenticateAsStaff();
         assertFalse(guard.mayAct(guestOrder, null));
     }
 
@@ -195,6 +208,7 @@ class OrderOwnershipGuardTest
     @DisplayName("customer-owned order × staff JWT (no token) → refused (Requirement 1.6)")
     void customerOrder_staffJwt_refused()
     {
+        authenticateAsStaff();
         assertFalse(guard.mayAct(customerOrder, null));
     }
 

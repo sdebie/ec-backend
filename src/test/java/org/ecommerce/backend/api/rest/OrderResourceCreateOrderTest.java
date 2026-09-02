@@ -1,6 +1,5 @@
 package org.ecommerce.backend.api.rest;
 
-import io.quarkus.panache.mock.PanacheMock;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.http.ContentType;
@@ -8,6 +7,7 @@ import io.smallrye.jwt.build.Jwt;
 import org.ecommerce.backend.service.OrderService;
 import org.ecommerce.common.dto.OrderCheckoutResponseDto;
 import org.ecommerce.common.entity.CustomerEntity;
+import org.ecommerce.common.repository.CustomerRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -37,11 +37,12 @@ class OrderResourceCreateOrderTest
     @InjectMock
     OrderService orderService;
 
+    @InjectMock
+    CustomerRepository customerRepository;
+
     @BeforeEach
     void setUp()
     {
-        PanacheMock.mock(CustomerEntity.class);
-
         OrderCheckoutResponseDto response = new OrderCheckoutResponseDto();
         response.setOrderId(UUID.randomUUID().toString());
         response.setSessionId(UUID.randomUUID().toString());
@@ -92,7 +93,7 @@ class OrderResourceCreateOrderTest
         String email = "alice@test.com";
         CustomerEntity customer = new CustomerEntity();
         customer.setId(UUID.randomUUID());
-        when(CustomerEntity.findByEmail(email)).thenReturn(customer);
+        when(customerRepository.findByEmail(email)).thenReturn(customer);
 
         given()
                 .header("Authorization", "Bearer " + generateCustomerJwt(email))
@@ -118,7 +119,7 @@ class OrderResourceCreateOrderTest
         // role at all, and must not collapse into a silent guest checkout —
         // mirrors getOrderDetail/myOrders, which both throw on exactly this.
         String email = "ghost@test.com";
-        when(CustomerEntity.findByEmail(email)).thenReturn(null);
+        when(customerRepository.findByEmail(email)).thenReturn(null);
 
         given()
                 .header("Authorization", "Bearer " + generateCustomerJwt(email))

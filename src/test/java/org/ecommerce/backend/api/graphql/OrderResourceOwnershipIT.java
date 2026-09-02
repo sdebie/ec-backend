@@ -9,6 +9,7 @@ import org.ecommerce.common.dto.OrderDetailRespDto;
 import org.ecommerce.common.entity.CustomerEntity;
 import org.ecommerce.common.entity.OrderEntity;
 import org.ecommerce.common.entity.UserEntity;
+import org.ecommerce.common.repository.CustomerRepository;
 import org.ecommerce.common.enums.CustomerStatusEn;
 import org.ecommerce.common.enums.CustomerTypeEn;
 import org.ecommerce.common.enums.OrderStatusEn;
@@ -41,13 +42,15 @@ class OrderResourceOwnershipIT
     @InjectMock
     OrderService orderService;
 
+    @InjectMock
+    CustomerRepository customerRepository;
+
     private OrderEntity orderA;
     private OrderEntity orderB;
 
     @BeforeEach
     void setUp()
     {
-        PanacheMock.mock(CustomerEntity.class);
         PanacheMock.mock(OrderEntity.class);
 
         // Customer A
@@ -114,7 +117,7 @@ class OrderResourceOwnershipIT
         when(orderService.getOrderDetail(orderA.getId())).thenReturn(orderDetailA);
         when(orderService.getOrderDetail(orderB.getId())).thenReturn(orderDetailB);
 
-        // Mock CustomerEntity.findByEmail using PanacheMock
+        // Mock CustomerRepository.findByEmail
         mockFindByEmail(CUSTOMER_A_EMAIL, customerA);
         mockFindByEmail(CUSTOMER_B_EMAIL, customerB);
 
@@ -125,7 +128,7 @@ class OrderResourceOwnershipIT
 
     private void mockFindByEmail(String email, CustomerEntity result)
     {
-        when(CustomerEntity.findByEmail(email)).thenReturn(result);
+        when(customerRepository.findByEmail(email)).thenReturn(result);
     }
 
     private String generateCustomerJwt(String email)

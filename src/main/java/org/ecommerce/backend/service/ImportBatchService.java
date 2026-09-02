@@ -1,6 +1,6 @@
 package org.ecommerce.backend.service;
 
-import org.ecommerce.common.dto.ProductUploadBatchDto;
+import org.ecommerce.common.dto.ProductImportBatchDto;
 import org.ecommerce.common.entity.StaffUserEntity;
 
 import java.util.List;
@@ -23,6 +23,6 @@ public interface ImportBatchService<ROW_DTO, STATUS_DTO, BATCH_ENTITY>
 
     List<ROW_DTO> getImportRows(UUID batchId);
 
-    List<ProductUploadBatchDto> getUploadBatches();
+    List<ProductImportBatchDto> getImportBatches();
 }
 

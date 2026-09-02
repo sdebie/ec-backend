@@ -7,7 +7,6 @@ import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import org.ecommerce.backend.service.QuoteRequestService;
-import org.ecommerce.backend.service.RateLimitDecision;
 import org.ecommerce.backend.service.RateLimiterService;
 import org.ecommerce.backend.utils.ClientIpUtils;
 import org.ecommerce.common.dto.QuoteRequestSubmissionDto;
@@ -75,9 +74,9 @@ public class QuoteRequestResource {
         }
 
         // 4. Rate-limit check — keyed by IP only; denial log never contains email
-        RateLimitDecision decision = rateLimiterService.check("quote-request", clientIp, 5, 3600);
-        if (!decision.allowed()) {
-            return Response.status(429).header("Retry-After", decision.retryAfterSeconds()).build();
+        Response limited = rateLimiterService.enforce("quote-request", clientIp, 5, 3600);
+        if (limited != null) {
+            return limited;
         }
 
         // 5. Submit — persist + post-commit async mail; unknown variant → 422

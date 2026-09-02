@@ -1,6 +1,6 @@
 package org.ecommerce.backend.api.rest;
 
-import io.quarkus.panache.mock.PanacheMock;
+import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.http.ContentType;
 import io.smallrye.jwt.build.Jwt;
@@ -9,7 +9,9 @@ import org.ecommerce.common.entity.OrderEntity;
 import org.ecommerce.common.entity.OrderItemEntity;
 import org.ecommerce.common.entity.ShippingMethodEntity;
 import org.ecommerce.common.enums.OrderStatusEn;
-import org.junit.jupiter.api.BeforeEach;
+import org.ecommerce.common.repository.CustomerRepository;
+import org.ecommerce.common.repository.OrderRepository;
+import org.ecommerce.common.repository.ShippingMethodRepository;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -26,13 +28,14 @@ import static org.mockito.Mockito.when;
 @QuarkusTest
 class OrderContactResourceTest
 {
-    @BeforeEach
-    void setUp()
-    {
-        PanacheMock.mock(OrderEntity.class);
-        PanacheMock.mock(ShippingMethodEntity.class);
-        PanacheMock.mock(CustomerEntity.class);
-    }
+    @InjectMock
+    OrderRepository orderRepository;
+
+    @InjectMock
+    ShippingMethodRepository shippingMethodRepository;
+
+    @InjectMock
+    CustomerRepository customerRepository;
 
     private String generateCustomerJwt(String email)
     {
@@ -79,8 +82,8 @@ class OrderContactResourceTest
         shippingMethod.setActive(true);
         shippingMethod.setBaseFee(new BigDecimal("89.00"));
 
-        when(OrderEntity.findOrderInfoById(orderId)).thenReturn(order);
-        when(ShippingMethodEntity.findById(shippingMethodId)).thenReturn(shippingMethod);
+        when(orderRepository.findOrderInfoById(orderId)).thenReturn(order);
+        when(shippingMethodRepository.findById(shippingMethodId)).thenReturn(shippingMethod);
 
         String body = """
                 {
@@ -126,8 +129,8 @@ class OrderContactResourceTest
         shippingMethod.setActive(true);
         shippingMethod.setBaseFee(new BigDecimal("89.00"));
 
-        when(OrderEntity.findOrderInfoById(orderId)).thenReturn(order);
-        when(ShippingMethodEntity.findById(shippingMethodId)).thenReturn(shippingMethod);
+        when(orderRepository.findOrderInfoById(orderId)).thenReturn(order);
+        when(shippingMethodRepository.findById(shippingMethodId)).thenReturn(shippingMethod);
 
         String body = """
                 {
@@ -175,7 +178,7 @@ class OrderContactResourceTest
         order.setStatus(OrderStatusEn.CREATED);
         order.setCustomerEntity(owner);
 
-        when(OrderEntity.findOrderInfoById(orderId)).thenReturn(order);
+        when(orderRepository.findOrderInfoById(orderId)).thenReturn(order);
 
         String body = """
                 {
@@ -203,7 +206,7 @@ class OrderContactResourceTest
     {
         UUID orderId = UUID.randomUUID();
 
-        when(OrderEntity.findOrderInfoById(orderId)).thenReturn(null);
+        when(orderRepository.findOrderInfoById(orderId)).thenReturn(null);
 
         String body = """
                 {
@@ -238,8 +241,8 @@ class OrderContactResourceTest
         order.setStatus(OrderStatusEn.CREATED);
         order.setCustomerEntity(customer);
 
-        when(OrderEntity.findOrderInfoById(orderId)).thenReturn(order);
-        when(CustomerEntity.findByEmail(email)).thenReturn(customer);
+        when(orderRepository.findOrderInfoById(orderId)).thenReturn(order);
+        when(customerRepository.findByEmail(email)).thenReturn(customer);
 
         String body = """
                 {
@@ -282,8 +285,8 @@ class OrderContactResourceTest
         order.setStatus(OrderStatusEn.CREATED);
         order.setCustomerEntity(owner);
 
-        when(OrderEntity.findOrderInfoById(orderId)).thenReturn(order);
-        when(CustomerEntity.findByEmail(callerEmail)).thenReturn(caller);
+        when(orderRepository.findOrderInfoById(orderId)).thenReturn(order);
+        when(customerRepository.findByEmail(callerEmail)).thenReturn(caller);
 
         String body = """
                 {
@@ -321,7 +324,7 @@ class OrderContactResourceTest
         order.setTotalAmount(new BigDecimal("500.00"));
         order.setStatus(OrderStatusEn.PAID);
 
-        when(OrderEntity.findOrderInfoById(orderId)).thenReturn(order);
+        when(orderRepository.findOrderInfoById(orderId)).thenReturn(order);
 
         String body = """
                 {
@@ -357,8 +360,8 @@ class OrderContactResourceTest
         order.setTotalAmount(new BigDecimal("500.00"));
         order.setStatus(OrderStatusEn.CREATED);
 
-        when(OrderEntity.findOrderInfoById(orderId)).thenReturn(order);
-        when(ShippingMethodEntity.findById(invalidShippingMethodId)).thenReturn(null);
+        when(orderRepository.findOrderInfoById(orderId)).thenReturn(order);
+        when(shippingMethodRepository.findById(invalidShippingMethodId)).thenReturn(null);
 
         String body = """
                 {
@@ -401,8 +404,8 @@ class OrderContactResourceTest
         express.setActive(true);
         express.setBaseFee(new BigDecimal("250.00"));
 
-        when(OrderEntity.findOrderInfoById(orderId)).thenReturn(order);
-        when(ShippingMethodEntity.findById(shippingMethodId)).thenReturn(express);
+        when(orderRepository.findOrderInfoById(orderId)).thenReturn(order);
+        when(shippingMethodRepository.findById(shippingMethodId)).thenReturn(express);
 
         String body = """
                 {
@@ -461,8 +464,8 @@ class OrderContactResourceTest
         // free same-day delivery by fee and lead time alone.
         collection.setRequiresAddress(false);
 
-        when(OrderEntity.findOrderInfoById(orderId)).thenReturn(order);
-        when(ShippingMethodEntity.findById(shippingMethodId)).thenReturn(collection);
+        when(orderRepository.findOrderInfoById(orderId)).thenReturn(order);
+        when(shippingMethodRepository.findById(shippingMethodId)).thenReturn(collection);
 
         String body = """
                 {
@@ -515,6 +518,59 @@ class OrderContactResourceTest
     }
 
     @Test
+    void updateContact_partialBody_preservesPreviouslySavedContactFields()
+    {
+        // A caller that PATCHes only shippingMethodId — the storefront never does
+        // this today (useCheckoutSubmit always sends the full contact block), but
+        // nothing stops a different caller from doing so — must not silently null
+        // out contact fields an earlier call in the same checkout already saved.
+        // The address fields below already guard this via firstNonBlank/null
+        // checks; email/firstName/lastName did not.
+        UUID orderId = UUID.randomUUID();
+        UUID shippingMethodId = UUID.randomUUID();
+
+        OrderEntity order = new OrderEntity();
+        order.setId(orderId);
+        order.setTotalAmount(new BigDecimal("250.00"));
+        order.setStatus(OrderStatusEn.CREATED);
+        order.setContactEmail("already-saved@example.com");
+        order.setContactFirstName("Already");
+        order.setContactLastName("Saved");
+
+        ShippingMethodEntity shippingMethod = new ShippingMethodEntity();
+        shippingMethod.setId(shippingMethodId);
+        shippingMethod.setName("Standard Delivery");
+        shippingMethod.setActive(true);
+        shippingMethod.setBaseFee(new BigDecimal("89.00"));
+        shippingMethod.setRequiresAddress(false);
+
+        when(orderRepository.findOrderInfoById(orderId)).thenReturn(order);
+        when(shippingMethodRepository.findById(shippingMethodId)).thenReturn(shippingMethod);
+
+        String body = """
+                {
+                    "shippingMethodId": "%s"
+                }
+                """.formatted(shippingMethodId);
+
+        given()
+                .header("X-Order-Token", generateOrderToken(orderId))
+                .contentType(ContentType.JSON)
+                .body(body)
+                .when()
+                .patch("/api/orders/{orderId}/contact", orderId)
+                .then()
+                .statusCode(200)
+                .body("contactEmail", equalTo("already-saved@example.com"))
+                .body("contactFirstName", equalTo("Already"))
+                .body("contactLastName", equalTo("Saved"));
+
+        assertEquals("already-saved@example.com", order.getContactEmail());
+        assertEquals("Already", order.getContactFirstName());
+        assertEquals("Saved", order.getContactLastName());
+    }
+
+    @Test
     void updateContact_guestOrderNoCustomer_returns200()
     {
         UUID orderId = UUID.randomUUID();
@@ -525,7 +581,7 @@ class OrderContactResourceTest
         order.setStatus(OrderStatusEn.CREATED);
         order.setCustomerEntity(null); // Guest order — no customer
 
-        when(OrderEntity.findOrderInfoById(orderId)).thenReturn(order);
+        when(orderRepository.findOrderInfoById(orderId)).thenReturn(order);
 
         String body = """
                 {
@@ -547,5 +603,275 @@ class OrderContactResourceTest
                 .body("contactEmail", equalTo("guest@example.com"))
                 .body("contactFirstName", equalTo("Jane"))
                 .body("contactLastName", equalTo("Guest"));
+    }
+
+    @Test
+    void updateContact_nullBody_returns400()
+    {
+        // Mirrors OrderResource.createOrder's own null-body guard: a missing
+        // request body is malformed, not "well-formed but invalid" — a
+        // different problem to the 422s below, so it gets 400 instead.
+        UUID orderId = UUID.randomUUID();
+
+        OrderEntity order = new OrderEntity();
+        order.setId(orderId);
+        order.setTotalAmount(new BigDecimal("100.00"));
+        order.setStatus(OrderStatusEn.CREATED);
+
+        when(orderRepository.findOrderInfoById(orderId)).thenReturn(order);
+
+        given()
+                .header("X-Order-Token", generateOrderToken(orderId))
+                .contentType(ContentType.JSON)
+                .body("null")
+                .when()
+                .patch("/api/orders/{orderId}/contact", orderId)
+                .then()
+                .statusCode(400)
+                .body("error", equalTo("Request body is required"));
+    }
+
+    @Test
+    void updateContact_invalidEmailFormat_returns422AndDoesNotMutate()
+    {
+        UUID orderId = UUID.randomUUID();
+
+        OrderEntity order = new OrderEntity();
+        order.setId(orderId);
+        order.setTotalAmount(new BigDecimal("100.00"));
+        order.setStatus(OrderStatusEn.CREATED);
+
+        when(orderRepository.findOrderInfoById(orderId)).thenReturn(order);
+
+        String body = """
+                {
+                    "email": "not-an-email"
+                }
+                """;
+
+        given()
+                .header("X-Order-Token", generateOrderToken(orderId))
+                .contentType(ContentType.JSON)
+                .body(body)
+                .when()
+                .patch("/api/orders/{orderId}/contact", orderId)
+                .then()
+                .statusCode(422);
+
+        assertNull(order.getContactEmail());
+    }
+
+    @Test
+    void updateContact_emailExceedsMaxLength_returns422AndDoesNotMutate()
+    {
+        UUID orderId = UUID.randomUUID();
+
+        OrderEntity order = new OrderEntity();
+        order.setId(orderId);
+        order.setTotalAmount(new BigDecimal("100.00"));
+        order.setStatus(OrderStatusEn.CREATED);
+
+        when(orderRepository.findOrderInfoById(orderId)).thenReturn(order);
+
+        // 250-char local part + "@example.com" comfortably clears 254 total.
+        String body = """
+                {
+                    "email": "%s@example.com"
+                }
+                """.formatted("a".repeat(250));
+
+        given()
+                .header("X-Order-Token", generateOrderToken(orderId))
+                .contentType(ContentType.JSON)
+                .body(body)
+                .when()
+                .patch("/api/orders/{orderId}/contact", orderId)
+                .then()
+                .statusCode(422);
+
+        assertNull(order.getContactEmail());
+    }
+
+    @Test
+    void updateContact_firstNameExceedsMaxLength_returns422AndDoesNotMutate()
+    {
+        UUID orderId = UUID.randomUUID();
+
+        OrderEntity order = new OrderEntity();
+        order.setId(orderId);
+        order.setTotalAmount(new BigDecimal("100.00"));
+        order.setStatus(OrderStatusEn.CREATED);
+
+        when(orderRepository.findOrderInfoById(orderId)).thenReturn(order);
+
+        String body = """
+                {
+                    "firstName": "%s"
+                }
+                """.formatted("A".repeat(121));
+
+        given()
+                .header("X-Order-Token", generateOrderToken(orderId))
+                .contentType(ContentType.JSON)
+                .body(body)
+                .when()
+                .patch("/api/orders/{orderId}/contact", orderId)
+                .then()
+                .statusCode(422);
+
+        assertNull(order.getContactFirstName());
+    }
+
+    @Test
+    void updateContact_lastNameExceedsMaxLength_returns422AndDoesNotMutate()
+    {
+        UUID orderId = UUID.randomUUID();
+
+        OrderEntity order = new OrderEntity();
+        order.setId(orderId);
+        order.setTotalAmount(new BigDecimal("100.00"));
+        order.setStatus(OrderStatusEn.CREATED);
+
+        when(orderRepository.findOrderInfoById(orderId)).thenReturn(order);
+
+        String body = """
+                {
+                    "lastName": "%s"
+                }
+                """.formatted("B".repeat(121));
+
+        given()
+                .header("X-Order-Token", generateOrderToken(orderId))
+                .contentType(ContentType.JSON)
+                .body(body)
+                .when()
+                .patch("/api/orders/{orderId}/contact", orderId)
+                .then()
+                .statusCode(422);
+
+        assertNull(order.getContactLastName());
+    }
+
+    @Test
+    void updateContact_streetAddressExceedsMaxLength_returns422AndDoesNotMutate()
+    {
+        UUID orderId = UUID.randomUUID();
+
+        OrderEntity order = new OrderEntity();
+        order.setId(orderId);
+        order.setTotalAmount(new BigDecimal("100.00"));
+        order.setStatus(OrderStatusEn.CREATED);
+
+        when(orderRepository.findOrderInfoById(orderId)).thenReturn(order);
+
+        String body = """
+                {
+                    "streetAddress": "%s"
+                }
+                """.formatted("1".repeat(201));
+
+        given()
+                .header("X-Order-Token", generateOrderToken(orderId))
+                .contentType(ContentType.JSON)
+                .body(body)
+                .when()
+                .patch("/api/orders/{orderId}/contact", orderId)
+                .then()
+                .statusCode(422);
+
+        assertNull(order.getStreetAddress());
+    }
+
+    @Test
+    void updateContact_cityExceedsMaxLength_returns422AndDoesNotMutate()
+    {
+        UUID orderId = UUID.randomUUID();
+
+        OrderEntity order = new OrderEntity();
+        order.setId(orderId);
+        order.setTotalAmount(new BigDecimal("100.00"));
+        order.setStatus(OrderStatusEn.CREATED);
+
+        when(orderRepository.findOrderInfoById(orderId)).thenReturn(order);
+
+        String body = """
+                {
+                    "city": "%s"
+                }
+                """.formatted("C".repeat(121));
+
+        given()
+                .header("X-Order-Token", generateOrderToken(orderId))
+                .contentType(ContentType.JSON)
+                .body(body)
+                .when()
+                .patch("/api/orders/{orderId}/contact", orderId)
+                .then()
+                .statusCode(422);
+
+        assertNull(order.getCity());
+    }
+
+    @Test
+    void updateContact_provinceExceedsMaxLength_returns422AndDoesNotMutate()
+    {
+        UUID orderId = UUID.randomUUID();
+
+        OrderEntity order = new OrderEntity();
+        order.setId(orderId);
+        order.setTotalAmount(new BigDecimal("100.00"));
+        order.setStatus(OrderStatusEn.CREATED);
+
+        when(orderRepository.findOrderInfoById(orderId)).thenReturn(order);
+
+        String body = """
+                {
+                    "province": "%s"
+                }
+                """.formatted("P".repeat(121));
+
+        given()
+                .header("X-Order-Token", generateOrderToken(orderId))
+                .contentType(ContentType.JSON)
+                .body(body)
+                .when()
+                .patch("/api/orders/{orderId}/contact", orderId)
+                .then()
+                .statusCode(422);
+
+        assertNull(order.getProvince());
+    }
+
+    @Test
+    void updateContact_postalCodeExceedsMaxLength_returns422AndDoesNotMutate()
+    {
+        // 20 is deliberately generous, not South-Africa-specific — long enough for
+        // any real country's postal/ZIP format, so this only catches genuine
+        // garbage, never a legitimate one from a future non-SA client.
+        UUID orderId = UUID.randomUUID();
+
+        OrderEntity order = new OrderEntity();
+        order.setId(orderId);
+        order.setTotalAmount(new BigDecimal("100.00"));
+        order.setStatus(OrderStatusEn.CREATED);
+
+        when(orderRepository.findOrderInfoById(orderId)).thenReturn(order);
+
+        String body = """
+                {
+                    "postalCode": "%s"
+                }
+                """.formatted("1".repeat(21));
+
+        given()
+                .header("X-Order-Token", generateOrderToken(orderId))
+                .contentType(ContentType.JSON)
+                .body(body)
+                .when()
+                .patch("/api/orders/{orderId}/contact", orderId)
+                .then()
+                .statusCode(422);
+
+        assertNull(order.getPostalCode());
     }
 }

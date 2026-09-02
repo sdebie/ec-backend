@@ -6,6 +6,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.ecommerce.backend.service.DistributedLockService;
 import org.ecommerce.backend.service.OrderService;
 import org.ecommerce.backend.service.StatusTransition;
 import org.ecommerce.backend.service.TransitionOutcome;
@@ -13,9 +14,11 @@ import org.ecommerce.common.entity.OrderEntity;
 import org.ecommerce.common.enums.OrderStatusEn;
 import org.jboss.logging.Logger;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -25,53 +28,30 @@ import java.util.UUID;
  * otherwise hold that stock forever. This sweep cancels CREATED orders older
  * than the configured hold window and returns their stock to sale.
  * <p>
- * Which statuses it touches is {@link OrderStatusEn#isReclaimableByStockRecovery()},
- * not a literal here — every unpaid status that keeps its reservation, and no other.
- * That covers a checkout abandoned before payment was started, one abandoned at the
- * gateway, and one whose card was declined and never retried; the last of those holds
- * its stock on purpose so a retry has something to buy, which is exactly why something
- * has to reclaim it if the retry never comes.
+ * Reclaimable statuses come from {@link OrderStatusEn#isReclaimableByStockRecovery()},
+ * not a literal here. PAID and later are real commitments and are never touched;
+ * IN_STORE_PAYMENT is excluded too — a shopper who came to the shop hasn't abandoned
+ * anything. PAYMENT_FAILED stays reclaimable on purpose, so a retry has something to
+ * buy if the retry never comes. Staff cancellation recovers stock the same way, via
+ * {@link OrderService#applyTransition}, so a hand-cancelled order never needs this sweep.
  * <p>
- * PAID and every later status are real commitments and must never be auto-cancelled.
- * IN_STORE_PAYMENT is excluded too, although unpaid: a shopper coming to the shop to
- * pay has not abandoned anything, so their order is cancelled by hand or not at all.
- * <p>
- * That narrow filter is also why this sweep is not the whole story: a staff member
- * cancelling an order by hand recovers its stock through the same
- * {@link OrderService#applyTransition} call this uses, since such an order never
- * becomes visible to this query.
- *
- * <h2>Why each order gets its own transaction</h2>
- * A sweep-wide transaction makes this job destroy itself under exactly the
- * conditions it exists to handle. Three properties depend on the per-order
- * boundary, and all three are lost the moment someone reintroduces
- * {@code @Transactional} on the sweep:
- * <ol>
- *   <li><b>Progress survives failure.</b> An order that cannot be released
- *       rolls back alone. Sweep-wide, one bad row discards every release
- *       already done in that tick, and the same row is re-read next tick — so
- *       the job never gets past it.</li>
- *   <li><b>Checkout keeps running.</b> Recovering stock takes a row lock on
- *       {@code product_variants}, held until commit. Per order that is
- *       milliseconds; sweep-wide it is the whole sweep, and checkout's own
- *       conditional decrement blocks behind it on exactly the popular variants
- *       most likely to appear in abandoned orders.</li>
- *   <li><b>No transaction outlives its timeout.</b> A sweep-wide transaction
- *       grows with the backlog until it exceeds the JTA timeout, rolls back,
- *       releases nothing, and meets a larger backlog next tick — stock
- *       recovery then stops permanently, and silently.</li>
- * </ol>
- * The batch limit bounds the same risks by work rather than by time: a backlog
- * drains over successive ticks instead of in one oversized pass.
- * <p>
- * Correctness under all of this rests on the atomic conditional claim in
- * {@link #releaseOrder}, not on transaction scope — which is also why
- * {@code SKIP} below is about cost, not safety.
+ * Each order commits in its own transaction rather than one sweep-wide transaction,
+ * which would let one bad row roll back every release already done that tick, hold a
+ * {@code product_variants} row lock for the whole sweep instead of milliseconds, and
+ * eventually exceed the JTA timeout as the backlog grows — stopping stock recovery
+ * permanently and silently. The batch limit bounds the same risk by work instead of
+ * time. Correctness rests on the atomic conditional claim in {@link #releaseOrder},
+ * not on transaction scope — {@code SKIP} and {@link #lockService}'s cluster-wide
+ * lock (stopping a second run on this JVM and across replicas, respectively) are
+ * both about cost, not safety.
  */
 @ApplicationScoped
 public class StockRecoveryJob
 {
     private static final Logger LOG = Logger.getLogger(StockRecoveryJob.class);
+
+    /** Package-visible so the test can simulate another instance already holding it. */
+    static final String LOCK_NAME = "stock-recovery-sweep";
 
     @ConfigProperty(name = "order.abandoned.hold-minutes", defaultValue = "30")
     int holdMinutes;
@@ -79,21 +59,40 @@ public class StockRecoveryJob
     @ConfigProperty(name = "order.abandoned.batch-size", defaultValue = "200")
     int batchSize;
 
+    @ConfigProperty(name = "order.abandoned.lock-lease-seconds", defaultValue = "240")
+    long lockLeaseSeconds;
+
     @Inject
     OrderService orderService;
+
+    @Inject
+    DistributedLockService lockService;
 
     @Inject
     EntityManager em;
 
     /**
-     * SKIP rather than the default PROCEED: a sweep that outruns its interval
-     * would otherwise have a second sweep started alongside it, and each extra
-     * runner makes the next one likelier. Overlap is never a correctness
-     * problem — the atomic claim admits one winner — so this exists purely to
-     * stop the job competing with itself for the database.
+     * SKIP rather than PROCEED: overlap is never a correctness problem (the atomic
+     * claim admits one winner), so this exists purely to stop the job competing
+     * with itself. The lock below is the same idea across replicas.
      */
     @Scheduled(every = "5m", concurrentExecution = Scheduled.ConcurrentExecution.SKIP)
     public void releaseAbandonedOrders()
+    {
+        Optional<String> lockToken = lockService.tryAcquire(LOCK_NAME, Duration.ofSeconds(lockLeaseSeconds));
+        if (lockToken.isEmpty()) {
+            LOG.debugf("Stock recovery sweep skipped: another instance already holds the lock");
+            return;
+        }
+
+        try {
+            sweep();
+        } finally {
+            lockService.release(LOCK_NAME, lockToken.get());
+        }
+    }
+
+    private void sweep()
     {
         LocalDateTime cutoff = LocalDateTime.now().minusMinutes(holdMinutes);
         List<UUID> candidateIds = QuarkusTransaction.requiringNew().call(() -> findAbandonedIds(cutoff));

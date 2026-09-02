@@ -11,10 +11,12 @@ import jakarta.transaction.Transactional;
 import jakarta.transaction.Transactional.TxType;
 import org.eclipse.microprofile.graphql.*;
 import org.ecommerce.backend.service.FeaturedProductService;
+import org.ecommerce.backend.service.ProductDeletionOutcome;
 import org.ecommerce.backend.service.ProductService;
 import org.ecommerce.common.dto.*;
 import org.ecommerce.common.enums.CatalogueSortEn;
 import org.ecommerce.common.enums.PriceBasisEn;
+import org.ecommerce.common.enums.StaffRoleEn;
 import org.ecommerce.common.query.Filter;
 import org.ecommerce.common.query.FilterRequest;
 import org.ecommerce.common.query.PageRequest;
@@ -28,8 +30,7 @@ import java.util.*;
 @GraphQLApi
 public class ProductResource
 {
-    private static final Set<String> STAFF_ROLES = Set.of(
-            "SUPER_ADMIN", "CATALOG_MANAGER", "ORDER_MANAGER", "VIEWER");
+    private static final Set<String> STAFF_ROLES = StaffRoleEn.names();
 
     @Inject
     ProductService productService;
@@ -300,12 +301,14 @@ public class ProductResource
     }
 
     @Mutation("deleteProduct")
-    @Description("Delete a product and all its variants. SUPER_ADMIN only.")
+    @Description("Delete a product and all its variants. If any variant has order history, the product and its "
+            + "variants are archived (status DISABLED) instead, to preserve order records — check the returned "
+            + "outcome to tell which happened. SUPER_ADMIN only.")
     @RolesAllowed("SUPER_ADMIN")
     @Transactional(value = TxType.REQUIRED)
-    public void deleteProduct(@Name("id") String id)
+    public ProductDeletionOutcome deleteProduct(@Name("id") String id)
     {
-        productService.deleteProduct(id);
+        return productService.deleteProduct(id);
     }
 
     @Query("featuredProductList")

@@ -25,9 +25,6 @@ import java.util.stream.Collectors;
  * coordinates page-level repository preloads — it does not open queries itself,
  * and it is not a pure mapper. Repositories own the queries; services orchestrate
  * repository → assembler. Pure field copying lives here.
- * <p>
- * Replaces the former query-bearing {@code ProductListItemMapper} and the DTO
- * assembly that briefly lived inside {@code ProductRepository}.
  */
 @ApplicationScoped
 public class ProductListItemAssembler
@@ -96,7 +93,7 @@ public class ProductListItemAssembler
         }
 
         if (!variants.isEmpty()) {
-            ProductVariantEntity primaryVariant = variants.get(0);
+            ProductVariantEntity primaryVariant = variants.getFirst();
             dto.setSku(primaryVariant.getSku());
             ProductImageEntity thumb = thumbnailByVariant.get(primaryVariant.getId());
             if (thumb != null) {
@@ -157,9 +154,9 @@ public class ProductListItemAssembler
         dto.setStatus(product.getStatus() == null ? null : product.getStatus().name());
 
         dto.setVariantCount(variants.size());
-        dto.setVariantId(product.getProductType() != ProductTypeEn.SIMPLE ? null : variants.isEmpty() ? null : variants.get(0).getId().toString());
+        dto.setVariantId(product.getProductType() != ProductTypeEn.SIMPLE ? null : variants.isEmpty() ? null : variants.getFirst().getId().toString());
         dto.setSku(product.getProductType() != ProductTypeEn.SIMPLE ? null
-                : variants.isEmpty() ? null : variants.get(0).getSku());
+                : variants.isEmpty() ? null : variants.getFirst().getSku());
         dto.setInStock(variants.stream()
                 .anyMatch(v -> v.getStockQuantity() != null && v.getStockQuantity() > 0));
         dto.setImages(images
@@ -184,9 +181,9 @@ public class ProductListItemAssembler
             List<ProductEntity> products, List<PriceTypeEn> priceTypes, LocalDateTime now, boolean ignoreStatus)
     {
         Comparator<VariantPricesEntity> priceOrder = Comparator
-                .comparing((VariantPricesEntity price) -> price.getPrice())
-                .thenComparing(price -> price.getPriceStartDate(), Comparator.nullsFirst(Comparator.naturalOrder()))
-                .thenComparing(price -> price.getCreatedAt(), Comparator.nullsFirst(Comparator.naturalOrder()));
+                .comparing(VariantPricesEntity::getPrice)
+                .thenComparing(VariantPricesEntity::getPriceStartDate, Comparator.nullsFirst(Comparator.naturalOrder()))
+                .thenComparing(VariantPricesEntity::getCreatedAt, Comparator.nullsFirst(Comparator.naturalOrder()));
 
         Map<UUID, Map<PriceTypeEn, VariantPricesEntity>> result = new HashMap<>();
         for (VariantPricesEntity price : variantPricesRepository.findActiveForProductIds(productIds(products), priceTypes, now, ignoreStatus)) {

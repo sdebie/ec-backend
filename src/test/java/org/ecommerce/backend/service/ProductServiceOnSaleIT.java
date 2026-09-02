@@ -243,7 +243,7 @@ class ProductServiceOnSaleIT
         em.flush();
 
         FilterRequest filterRequest = new FilterRequest();
-        filterRequest.setFilters(List.of(new Filter("categories.id", FilterOperator.EQUALS, category.getId().toString())));
+        filterRequest.setFilters(List.of(new Filter("category.id", FilterOperator.EQUALS, category.getId().toString())));
 
         List<ProductShoppingListItemDto> results = productService.getShoppingProducts(pageOf(0, 50), filterRequest, true, null, null, null);
 

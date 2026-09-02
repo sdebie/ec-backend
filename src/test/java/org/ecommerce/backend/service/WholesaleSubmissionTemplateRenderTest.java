@@ -4,6 +4,7 @@ import io.quarkus.qute.Location;
 import io.quarkus.qute.Template;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
+import org.ecommerce.common.dto.AddressDto;
 import org.ecommerce.common.dto.WholesaleCustomerDto;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -50,16 +51,20 @@ class WholesaleSubmissionTemplateRenderTest
         dto.setFinanceContactEmail("fin@acme.com");
         dto.setFinanceContactPhone("0837654321");
         dto.setPurchaseOrderRequired(true);
-        dto.setPhysicalAddressLine1("1 Main Rd");
-        dto.setPhysicalAddressLine2("Unit 2");
-        dto.setPhysicalSuburb("Gardens");
-        dto.setPhysicalCity("Cape Town");
-        dto.setPhysicalProvince("Western Cape");
-        dto.setPhysicalPostalCode("8001");
-        dto.setPostalAddressLine1("PO Box 99");
-        dto.setPostalCity("Cape Town");
-        dto.setPostalProvince("Western Cape");
-        dto.setPostalPostalCode("8000");
+        AddressDto physical = new AddressDto();
+        physical.setLine1("1 Main Rd");
+        physical.setLine2("Unit 2");
+        physical.setSuburb("Gardens");
+        physical.setCity("Cape Town");
+        physical.setProvince("Western Cape");
+        physical.setPostalCode("8001");
+        dto.setPhysicalAddress(physical);
+        AddressDto postal = new AddressDto();
+        postal.setLine1("PO Box 99");
+        postal.setCity("Cape Town");
+        postal.setProvince("Western Cape");
+        postal.setPostalCode("8000");
+        dto.setPostalAddress(postal);
         dto.setNotes("Please call before delivery");
         return dto;
     }
@@ -74,6 +79,11 @@ class WholesaleSubmissionTemplateRenderTest
         dto.setFirstName("Jane");
         dto.setCompanyName("ACME Corp");
         dto.setPurchaseOrderRequired(false);
+        // WholesaleMapper always returns a non-null AddressDto (only its leaf fields go
+        // null) — mirrors that guarantee rather than a container shape the real mapper
+        // never actually produces.
+        dto.setPhysicalAddress(new AddressDto());
+        dto.setPostalAddress(new AddressDto());
         return dto;
     }
 

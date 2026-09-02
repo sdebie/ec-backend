@@ -1,5 +1,6 @@
 package org.ecommerce.backend.api.rest;
 
+import io.quarkus.security.identity.SecurityIdentity;
 import jakarta.annotation.security.RolesAllowed;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.GET;
@@ -8,7 +9,9 @@ import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import org.eclipse.microprofile.jwt.JsonWebToken;
+import org.ecommerce.backend.security.ForcedPasswordResetIdentityAugmentor;
 import org.ecommerce.common.entity.StaffUserEntity;
+import org.ecommerce.common.repository.StaffRepository;
 import org.jboss.logging.Logger;
 
 import java.util.List;
@@ -24,11 +27,22 @@ public class AdminMeResource {
     @Inject
     JsonWebToken jwt;
 
+    @Inject
+    SecurityIdentity securityIdentity;
+
+    @Inject
+    StaffRepository staffRepository;
+
     @GET
     @Path("/me")
-    @RolesAllowed({"SUPER_ADMIN", "CATALOG_MANAGER", "ORDER_MANAGER", "VIEWER"})
+    @RolesAllowed({"SUPER_ADMIN", "CATALOG_MANAGER", "ORDER_MANAGER", "VIEWER",
+            ForcedPasswordResetIdentityAugmentor.PASSWORD_RESET_REQUIRED_ROLE})
     public Response me() {
-        Set<String> groups = jwt.getGroups();
+        // Reads the augmented SecurityIdentity, not the raw JWT groups claim: a
+        // flagged/deactivated account's roles are rewritten by
+        // ForcedPasswordResetIdentityAugmentor on every request, while the JWT's own
+        // groups claim stays frozen to whatever was true at login.
+        Set<String> groups = securityIdentity.getRoles();
         String role = groups != null && !groups.isEmpty() ? groups.iterator().next() : "VIEWER";
         String email = jwt.getName();
 
@@ -36,7 +50,7 @@ public class AdminMeResource {
         // Defaults to true so an unresolvable user cannot be admitted to the portal:
         // the client treats "must reset" as the locked state, so this fails closed.
         boolean resetPassword = true;
-        StaffUserEntity user = StaffUserEntity.findByEmail(email);
+        StaffUserEntity user = staffRepository.findByEmail(email);
         if (user != null) {
             id = user.getId();
             resetPassword = user.isResetPassword();

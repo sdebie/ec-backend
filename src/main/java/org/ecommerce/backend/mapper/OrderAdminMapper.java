@@ -5,19 +5,21 @@ import org.ecommerce.common.dto.AdminOrderAddressDto;
 import org.ecommerce.common.dto.AdminOrderDetailDto;
 import org.ecommerce.common.dto.AdminOrderLineItemDto;
 import org.ecommerce.common.dto.AdminOrderListItemDto;
+import org.ecommerce.common.dto.AdminOrderPaymentDto;
 import org.ecommerce.common.dto.AdminOrderStatusHistoryDto;
 import org.ecommerce.common.entity.OrderEntity;
 import org.ecommerce.common.entity.OrderItemEntity;
 import org.ecommerce.common.entity.OrderStatusHistoryEntity;
+import org.ecommerce.common.entity.PaymentLogEntity;
 import org.mapstruct.AfterMapping;
 import org.mapstruct.Context;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 import org.mapstruct.MappingTarget;
 
-import java.util.ArrayList;
 import java.util.List;
 
+import static org.ecommerce.backend.utils.CollectionUtils.emptyIfNull;
 import static org.mapstruct.NullValueCheckStrategy.ALWAYS;
 import static org.mapstruct.ReportingPolicy.ERROR;
 import static org.mapstruct.NullValueMappingStrategy.RETURN_NULL;
@@ -44,8 +46,10 @@ public interface OrderAdminMapper
     AdminOrderListItemDto toListItemDto(OrderEntity order);
 
     /**
-     * @param totals  the money the service computed for this order
-     * @param history status timeline, newest first
+     * @param totals        the money the service computed for this order
+     * @param history       status timeline, newest first
+     * @param latestPayment the most recent gateway callback for this order, or null
+     *                      if none has been recorded yet
      */
     @Mapping(target = "customerName", source = "placedByName")
     @Mapping(target = "placedAt", source = "createdAt")
@@ -62,9 +66,11 @@ public interface OrderAdminMapper
     // money that changed hands.
     @Mapping(target = "grandTotal", source = "totalAmount")
     @Mapping(target = "statusHistory", expression = "java(toStatusHistoryDtos(history))")
+    @Mapping(target = "latestPayment", expression = "java(toPaymentDto(latestPayment))")
     AdminOrderDetailDto toDetailDto(OrderEntity order,
                                     @Context OrderTotals totals,
-                                    @Context List<OrderStatusHistoryEntity> history);
+                                    @Context List<OrderStatusHistoryEntity> history,
+                                    @Context PaymentLogEntity latestPayment);
 
     @Mapping(target = "productName", source = "variant.product.name")
     @Mapping(target = "variantSku", source = "variant.sku")
@@ -83,6 +89,10 @@ public interface OrderAdminMapper
     @Mapping(target = "street", source = "streetAddress")
     AdminOrderAddressDto toAddressDto(OrderEntity order);
 
+    @Mapping(target = "gateway", source = "gatewayName")
+    @Mapping(target = "receivedAt", source = "createdAt")
+    AdminOrderPaymentDto toPaymentDto(PaymentLogEntity log);
+
     /**
      * An absent timeline or line-item set reads as empty, never as a null the client has to
      * guard. The DTO initialises both, but the status-history mapping assigns
@@ -91,12 +101,8 @@ public interface OrderAdminMapper
     @AfterMapping
     default void defaultCollectionsToEmpty(@MappingTarget AdminOrderDetailDto dto)
     {
-        if (dto.getStatusHistory() == null) {
-            dto.setStatusHistory(new ArrayList<>());
-        }
-        if (dto.getLineItems() == null) {
-            dto.setLineItems(new ArrayList<>());
-        }
+        dto.setStatusHistory(emptyIfNull(dto.getStatusHistory()));
+        dto.setLineItems(emptyIfNull(dto.getLineItems()));
     }
 
 }

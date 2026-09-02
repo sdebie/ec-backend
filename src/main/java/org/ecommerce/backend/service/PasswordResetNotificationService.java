@@ -17,13 +17,6 @@ public class PasswordResetNotificationService
     @ConfigProperty(name = "quarkus.mailer.from")
     String mailerFrom;
 
-    public void sendResetLink(String email, String token)
-    {
-        // Placeholder transport; avoid logging secrets like raw tokens.
-        // No live caller today — the token-based reset flow has no frontend consumer.
-        LOG.infof("Password reset requested for %s", email);
-    }
-
     public void sendResetCode(String email, String code, int expiresInMinutes)
     {
         if (mailerFrom == null || mailerFrom.isBlank()) {

@@ -1,0 +1,95 @@
+{#include email_layout}
+{#headline}Your Quote{/headline}
+{#subheading}<p>From <strong>{store.name ?: 'our team'}</strong></p>{/subheading}
+
+{#extraStyles}
+        .items-section {
+            margin: 20px 0;
+        }
+
+        .items-section h3 {
+            margin: 0 0 10px 0;
+            font-size: 14px;
+            color: #555;
+        }
+
+        .items-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .items-table th {
+            text-align: left;
+            padding: 10px 8px;
+            border-bottom: 2px solid #ddd;
+            color: #555;
+            font-size: 13px;
+            text-transform: uppercase;
+        }
+
+        .items-table td {
+            padding: 10px 8px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .items-table td.numeric, .items-table th.numeric {
+            text-align: right;
+        }
+
+        .total-row td {
+            font-weight: bold;
+            border-top: 2px solid #ddd;
+            border-bottom: none;
+        }
+{/extraStyles}
+
+{#body}
+    <div class="content">
+        <p>Hi {name},</p>
+        <p>Thank you for your interest. Here is your quote for the items you requested.</p>
+    </div>
+
+    <div class="items-section">
+        <h3>Requested Items</h3>
+        <table class="items-table">
+            <thead>
+            <tr>
+                <th>Product</th>
+                <th>Variant / SKU</th>
+                <th class="numeric">Quantity</th>
+                <th class="numeric">Unit Price</th>
+                <th class="numeric">Line Total</th>
+            </tr>
+            </thead>
+            <tbody>
+            {#for item in items}
+                <tr>
+                    <td>{item.productNameSnapshot}</td>
+                    <td>{item.variantSkuSnapshot ?: '-'}</td>
+                    <td class="numeric">{item.quantity}</td>
+                    <td class="numeric">{#if store.currencySymbol??}{store.currencySymbol} {/if}{item.unitPrice}</td>
+                    <td class="numeric">{#if store.currencySymbol??}{store.currencySymbol} {/if}{item.lineTotal}</td>
+                </tr>
+            {/for}
+            <tr class="total-row">
+                <td colspan="4">Total</td>
+                <td class="numeric">{#if store.currencySymbol??}{store.currencySymbol} {/if}{quotedAmount}</td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+
+    {#if quotedNotes}
+        <div class="message-section">
+            <h3>Notes</h3>
+            <p>{quotedNotes}</p>
+        </div>
+    {/if}
+{/body}
+
+{#footer}
+    <p>{store.name ?: ''}</p>
+    {#if store.address}<p>{store.address}</p>{/if}
+    {#if store.enquiryEmail}<p>Questions? Reply to this email or contact {store.enquiryEmail}</p>{/if}
+{/footer}
+{/include}

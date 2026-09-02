@@ -1,6 +1,6 @@
 package org.ecommerce.backend.api.rest;
 
-import io.quarkus.panache.mock.PanacheMock;
+import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
 import io.smallrye.jwt.build.Jwt;
 import org.ecommerce.common.entity.CustomerAddressEntity;
@@ -9,6 +9,7 @@ import org.ecommerce.common.entity.UserEntity;
 import org.ecommerce.common.enums.AddressTypeEn;
 import org.ecommerce.common.enums.CustomerStatusEn;
 import org.ecommerce.common.enums.CustomerTypeEn;
+import org.ecommerce.common.repository.CustomerRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -32,11 +33,12 @@ class StorefrontCustomerPortalResourceIT
     private static final String CUSTOMER_WITH_ADDR_EMAIL = "portal-test@example.com";
     private static final String CUSTOMER_NO_ADDR_EMAIL = "portal-noaddr@example.com";
 
+    @InjectMock
+    CustomerRepository customerRepository;
+
     @BeforeEach
     void setUp()
     {
-        PanacheMock.mock(CustomerEntity.class);
-
         // ── Customer WITH addresses and password ──────────────────────────────
         UserEntity userWithAddr = new UserEntity();
         userWithAddr.setId(UUID.randomUUID());
@@ -95,8 +97,8 @@ class StorefrontCustomerPortalResourceIT
         customerWithoutAddresses.setAddresses(new ArrayList<>());
 
         // Mock entity finders
-        when(CustomerEntity.findByEmail(CUSTOMER_WITH_ADDR_EMAIL)).thenReturn(customerWithAddresses);
-        when(CustomerEntity.findByEmail(CUSTOMER_NO_ADDR_EMAIL)).thenReturn(customerWithoutAddresses);
+        when(customerRepository.findByEmail(CUSTOMER_WITH_ADDR_EMAIL)).thenReturn(customerWithAddresses);
+        when(customerRepository.findByEmail(CUSTOMER_NO_ADDR_EMAIL)).thenReturn(customerWithoutAddresses);
     }
 
     /**

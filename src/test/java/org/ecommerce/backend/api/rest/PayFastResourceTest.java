@@ -12,11 +12,15 @@ import org.ecommerce.backend.service.payfast.HtmlFormField;
 import org.ecommerce.backend.service.payfast.PayFastService;
 import org.ecommerce.common.entity.CustomerEntity;
 import org.ecommerce.common.entity.OrderEntity;
-import org.ecommerce.common.entity.OrderStatusHistoryEntity;
+import org.ecommerce.common.entity.PaymentLogEntity;
 import org.ecommerce.common.enums.OrderStatusEn;
+import org.ecommerce.common.repository.OrderStatusHistoryRepository;
+import org.ecommerce.common.repository.PaymentLogRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -38,17 +42,25 @@ class PayFastResourceTest
     @InjectMock
     OrderNotificationService orderNotificationService;
 
+    @InjectMock
+    OrderStatusHistoryRepository orderStatusHistoryRepository;
+
+    @InjectMock
+    PaymentLogRepository paymentLogRepository;
+
     @Inject
     OrderCapabilityService orderCapability;
 
     @BeforeEach
     void setUp()
     {
-        // OrderStatusHistoryEntity is mocked alongside OrderEntity because the ITN
-        // handler now records the PAID transition on the status timeline. These
-        // orders exist only as mocks, so a real persist would fail the row's
-        // foreign key to a non-existent order and roll the whole request back.
-        PanacheMock.mock(OrderEntity.class, OrderStatusHistoryEntity.class);
+        // PaymentLogEntity is mocked alongside OrderEntity: the ITN handler records
+        // the PAID transition on the status timeline (via the injected
+        // OrderStatusHistoryRepository mock) AND a payment-gateway log row, and both
+        // reference this order. These orders exist only as mocks, so a real persist
+        // would fail the row's foreign key to a non-existent order and roll the whole
+        // request back.
+        PanacheMock.mock(OrderEntity.class, PaymentLogEntity.class);
     }
 
     @Test
@@ -229,6 +241,42 @@ class PayFastResourceTest
                 .statusCode(400);
     }
 
+    /**
+     * BACKLOG.md payfast-checkout-terminal-order-500. This call site reads the order's
+     * live status and passes that same value as applyTransition's own expectedFrom, so
+     * the mismatch check (which every other call site relies on for a clean lost-claim
+     * 409) can never fire here — it trivially always matches itself. The only remaining
+     * gate was canSystemTransitionTo, which legitimately returns false for a terminal
+     * order and used to throw straight out of this REST method with nothing to catch it.
+     */
+    @ParameterizedTest(name = "checkout on a {0} order is a clean 409, not an unmapped 500")
+    @CsvSource({"DELIVERED", "SYSTEM_CANCELED", "REFUNDED", "COLLECTED"})
+    void checkout_terminalOrderStatus_returns409NotUnmapped500(String status)
+    {
+        UUID orderId = UUID.randomUUID();
+
+        OrderEntity order = new OrderEntity();
+        order.setId(orderId);
+        order.setTotalAmount(new BigDecimal("500.00"));
+        order.setStatus(OrderStatusEn.valueOf(status));
+        order.setContactEmail("guest@example.com");
+
+        when(OrderEntity.findById(orderId)).thenReturn(order);
+
+        given()
+                .header("X-Order-Token", orderCapability.mint(orderId))
+                .contentType(ContentType.URLENC)
+                .formParam("id", orderId.toString())
+                .when()
+                .post("/api/payments/checkout")
+                .then()
+                .statusCode(409)
+                .body("error", equalTo("Order can no longer be paid"));
+
+        PanacheMock.verify(OrderEntity.class, never()).update(anyString(), any(Object[].class));
+        verify(payFastService, never()).generateHiddenHTMLForm(any(), any());
+    }
+
     @Test
     void itn_withInvalidSignature_returns401AndDoesNotTouchOrder()
     {
@@ -274,7 +322,7 @@ class PayFastResourceTest
 
         assertEquals(OrderStatusEn.PAID, order.getStatus());
         verify(orderNotificationService).sendStatusNotification(order, OrderStatusEn.PAID);
-        PanacheMock.verify(OrderStatusHistoryEntity.class)
+        verify(orderStatusHistoryRepository)
                 .record(order, OrderStatusEn.PAID, "Payment confirmed by PayFast", OrderService.SYSTEM_ACTOR);
     }
 

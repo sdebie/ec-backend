@@ -8,10 +8,9 @@ import org.ecommerce.common.entity.CustomerEntity;
 import org.ecommerce.common.entity.UserEntity;
 import org.ecommerce.common.enums.AddressTypeEn;
 import org.ecommerce.common.enums.CustomerTypeEn;
-import org.junit.jupiter.api.AfterEach;
+import org.ecommerce.common.repository.CustomerRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 
 import java.util.ArrayList;
@@ -30,7 +29,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class CustomerPortalServiceTest
 {
     private CustomerPortalService service;
-    private MockedStatic<CustomerEntity> customerEntityMock;
+    private CustomerRepository customerRepository;
 
     @BeforeEach
     void setUp()
@@ -38,13 +37,8 @@ class CustomerPortalServiceTest
         service = new CustomerPortalService();
 
         service.customerAddressMapper = new CustomerAddressMapperImpl();
-        customerEntityMock = Mockito.mockStatic(CustomerEntity.class);
-    }
-
-    @AfterEach
-    void tearDown()
-    {
-        customerEntityMock.close();
+        customerRepository = Mockito.mock(CustomerRepository.class);
+        service.customerRepository = customerRepository;
     }
 
     // ── Helper methods ──────────────────────────────────────────────────────
@@ -94,7 +88,7 @@ class CustomerPortalServiceTest
     {
         CustomerEntity customer = buildCustomer("test@example.com", "John", "Doe", "0821234567", CustomerTypeEn.RETAILER, "somehash", new ArrayList<>());
 
-        customerEntityMock.when(() -> CustomerEntity.findByEmail("test@example.com")).thenReturn(customer);
+        Mockito.when(customerRepository.findByEmail("test@example.com")).thenReturn(customer);
 
         StorefrontCustomerPortalDto result = service.getPortalProfile("test@example.com");
 
@@ -109,7 +103,7 @@ class CustomerPortalServiceTest
 
         CustomerEntity customer = buildCustomer("test@example.com", "Jane", "Smith", null, CustomerTypeEn.WHOLESALER, "hash123", List.of(physical));
 
-        customerEntityMock.when(() -> CustomerEntity.findByEmail("test@example.com")).thenReturn(customer);
+        Mockito.when(customerRepository.findByEmail("test@example.com")).thenReturn(customer);
 
         StorefrontCustomerPortalDto result = service.getPortalProfile("test@example.com");
 
@@ -130,7 +124,7 @@ class CustomerPortalServiceTest
 
         CustomerEntity customer = buildCustomer("test@example.com", "Bob", "Brown", "0839876543", CustomerTypeEn.GUEST, "passwordhash", List.of(postal));
 
-        customerEntityMock.when(() -> CustomerEntity.findByEmail("test@example.com")).thenReturn(customer);
+        Mockito.when(customerRepository.findByEmail("test@example.com")).thenReturn(customer);
 
         StorefrontCustomerPortalDto result = service.getPortalProfile("test@example.com");
 
@@ -152,7 +146,7 @@ class CustomerPortalServiceTest
 
         CustomerEntity customer = buildCustomer("test@example.com", "Alice", "Green", "0115551234", CustomerTypeEn.RETAILER, "hash", List.of(physical, postal));
 
-        customerEntityMock.when(() -> CustomerEntity.findByEmail("test@example.com")).thenReturn(customer);
+        Mockito.when(customerRepository.findByEmail("test@example.com")).thenReturn(customer);
 
         StorefrontCustomerPortalDto result = service.getPortalProfile("test@example.com");
 
@@ -182,7 +176,7 @@ class CustomerPortalServiceTest
     {
         CustomerEntity customer = buildCustomer("test@example.com", "John", "Doe", null, CustomerTypeEn.RETAILER, null, new ArrayList<>());
 
-        customerEntityMock.when(() -> CustomerEntity.findByEmail("test@example.com")).thenReturn(customer);
+        Mockito.when(customerRepository.findByEmail("test@example.com")).thenReturn(customer);
 
         StorefrontCustomerPortalDto result = service.getPortalProfile("test@example.com");
 
@@ -194,7 +188,7 @@ class CustomerPortalServiceTest
     {
         CustomerEntity customer = buildCustomer("test@example.com", "John", "Doe", null, CustomerTypeEn.RETAILER, "", new ArrayList<>());
 
-        customerEntityMock.when(() -> CustomerEntity.findByEmail("test@example.com")).thenReturn(customer);
+        Mockito.when(customerRepository.findByEmail("test@example.com")).thenReturn(customer);
 
         StorefrontCustomerPortalDto result = service.getPortalProfile("test@example.com");
 
@@ -206,7 +200,7 @@ class CustomerPortalServiceTest
     {
         CustomerEntity customer = buildCustomer("test@example.com", "John", "Doe", null, CustomerTypeEn.RETAILER, "abc123hash", new ArrayList<>());
 
-        customerEntityMock.when(() -> CustomerEntity.findByEmail("test@example.com")).thenReturn(customer);
+        Mockito.when(customerRepository.findByEmail("test@example.com")).thenReturn(customer);
 
         StorefrontCustomerPortalDto result = service.getPortalProfile("test@example.com");
 
@@ -220,7 +214,7 @@ class CustomerPortalServiceTest
     {
         CustomerEntity customer = buildCustomer("test@example.com", "John", "Doe", null, CustomerTypeEn.RETAILER, "hash", new ArrayList<>());
 
-        customerEntityMock.when(() -> CustomerEntity.findByEmail("test@example.com")).thenReturn(customer);
+        Mockito.when(customerRepository.findByEmail("test@example.com")).thenReturn(customer);
 
         StorefrontCustomerPortalDto result = service.getPortalProfile("test@example.com");
 
@@ -232,7 +226,7 @@ class CustomerPortalServiceTest
     {
         CustomerEntity customer = buildCustomer("test@example.com", "John", "Doe", null, CustomerTypeEn.WHOLESALER, "hash", new ArrayList<>());
 
-        customerEntityMock.when(() -> CustomerEntity.findByEmail("test@example.com")).thenReturn(customer);
+        Mockito.when(customerRepository.findByEmail("test@example.com")).thenReturn(customer);
 
         StorefrontCustomerPortalDto result = service.getPortalProfile("test@example.com");
 
@@ -244,7 +238,7 @@ class CustomerPortalServiceTest
     {
         CustomerEntity customer = buildCustomer("test@example.com", "John", "Doe", null, CustomerTypeEn.GUEST, "hash", new ArrayList<>());
 
-        customerEntityMock.when(() -> CustomerEntity.findByEmail("test@example.com")).thenReturn(customer);
+        Mockito.when(customerRepository.findByEmail("test@example.com")).thenReturn(customer);
 
         StorefrontCustomerPortalDto result = service.getPortalProfile("test@example.com");
 
@@ -256,7 +250,7 @@ class CustomerPortalServiceTest
     {
         CustomerEntity customer = buildCustomer("test@example.com", "John", "Doe", null, null, "hash", new ArrayList<>());
 
-        customerEntityMock.when(() -> CustomerEntity.findByEmail("test@example.com")).thenReturn(customer);
+        Mockito.when(customerRepository.findByEmail("test@example.com")).thenReturn(customer);
 
         StorefrontCustomerPortalDto result = service.getPortalProfile("test@example.com");
 
@@ -268,7 +262,7 @@ class CustomerPortalServiceTest
     @Test
     void getPortalProfile_customerNotFound_throws404()
     {
-        customerEntityMock.when(() -> CustomerEntity.findByEmail("unknown@example.com")).thenReturn(null);
+        Mockito.when(customerRepository.findByEmail("unknown@example.com")).thenReturn(null);
 
         WebApplicationException ex = assertThrows(WebApplicationException.class, () -> service.getPortalProfile("unknown@example.com"));
 
@@ -299,13 +293,14 @@ class CustomerPortalServiceTest
         Mockito.doNothing().when(user).persist();
         customer.setUser(user);
 
-        customerEntityMock.when(() -> CustomerEntity.findByEmail(email)).thenReturn(customer);
+        Mockito.when(customerRepository.findByEmail(email)).thenReturn(customer);
 
         // Should not throw — validates current password matches and new password is long enough
         assertDoesNotThrow(() -> service.changePassword(email, currentPassword, newPassword));
 
-        // Verify the password was actually updated to the new hash
-        assertEquals(org.ecommerce.backend.utils.PasswordHashUtil.hash(newPassword), user.getPasswordHash());
+        // Verify the password was actually updated to a BCrypt hash of the new password
+        assertTrue(user.getPasswordHash().startsWith("$2"), "Password change must write a BCrypt hash, not the legacy SHA-256 format");
+        assertTrue(org.ecommerce.backend.utils.CustomerPasswordHashUtil.verify(newPassword, user.getPasswordHash()));
     }
 
     // ── changePassword: Failure scenarios ───────────────────────────────────
@@ -322,7 +317,7 @@ class CustomerPortalServiceTest
                 org.ecommerce.backend.utils.PasswordHashUtil.hash("correctPassword"),
                 new ArrayList<>());
 
-        customerEntityMock.when(() -> CustomerEntity.findByEmail(email)).thenReturn(customer);
+        Mockito.when(customerRepository.findByEmail(email)).thenReturn(customer);
 
         WebApplicationException ex = assertThrows(WebApplicationException.class, () -> service.changePassword(email, currentPassword, newPassword));
 
@@ -341,7 +336,7 @@ class CustomerPortalServiceTest
                 org.ecommerce.backend.utils.PasswordHashUtil.hash(currentPassword),
                 new ArrayList<>());
 
-        customerEntityMock.when(() -> CustomerEntity.findByEmail(email)).thenReturn(customer);
+        Mockito.when(customerRepository.findByEmail(email)).thenReturn(customer);
 
         WebApplicationException ex = assertThrows(WebApplicationException.class, () -> service.changePassword(email, currentPassword, newPassword));
 
@@ -358,7 +353,7 @@ class CustomerPortalServiceTest
         // passwordHash is null — Google-only account
         CustomerEntity customer = buildCustomer(email, "Test", "User", null, CustomerTypeEn.RETAILER, null, new ArrayList<>());
 
-        customerEntityMock.when(() -> CustomerEntity.findByEmail(email)).thenReturn(customer);
+        Mockito.when(customerRepository.findByEmail(email)).thenReturn(customer);
 
         WebApplicationException ex = assertThrows(WebApplicationException.class, () -> service.changePassword(email, currentPassword, newPassword));
 
@@ -368,7 +363,7 @@ class CustomerPortalServiceTest
     @Test
     void changePassword_customerNotFound_throws404()
     {
-        customerEntityMock.when(() -> CustomerEntity.findByEmail("unknown@example.com"))
+        Mockito.when(customerRepository.findByEmail("unknown@example.com"))
                 .thenReturn(null);
 
         WebApplicationException ex = assertThrows(WebApplicationException.class, () -> service.changePassword("unknown@example.com", "pass", "newPass123"));
@@ -383,7 +378,7 @@ class CustomerPortalServiceTest
     {
         CustomerEntity customer = buildCustomer("alice@shop.co.za", "Alice", "Wonder", "0821112233", CustomerTypeEn.WHOLESALER, "hashed", new ArrayList<>());
 
-        customerEntityMock.when(() -> CustomerEntity.findByEmail("alice@shop.co.za")).thenReturn(customer);
+        Mockito.when(customerRepository.findByEmail("alice@shop.co.za")).thenReturn(customer);
 
         StorefrontCustomerPortalDto result = service.getPortalProfile("alice@shop.co.za");
 

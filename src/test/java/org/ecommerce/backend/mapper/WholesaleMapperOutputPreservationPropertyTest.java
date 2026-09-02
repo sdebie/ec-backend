@@ -3,6 +3,7 @@ package org.ecommerce.backend.mapper;
 // Feature: service-layer-refactor, Property 2: Mapper output preservation (wholesale application)
 
 import net.jqwik.api.*;
+import org.ecommerce.common.dto.AddressDto;
 import org.ecommerce.common.dto.WholesaleApplicationDetailsDto;
 import org.ecommerce.common.entity.CustomerEntity;
 import org.ecommerce.common.entity.WholesaleApplicationEntity;
@@ -50,19 +51,23 @@ public class WholesaleMapperOutputPreservationPropertyTest
         dto.setLastName(application.getLastName());
         dto.setPhone(application.getPhone());
 
-        dto.setPhysicalAddressLine1(application.getPhysicalAddressLine1());
-        dto.setPhysicalAddressLine2(application.getPhysicalAddressLine2());
-        dto.setPhysicalSuburb(application.getPhysicalSuburb());
-        dto.setPhysicalCity(application.getPhysicalCity());
-        dto.setPhysicalProvince(application.getPhysicalProvince());
-        dto.setPhysicalPostalCode(application.getPhysicalPostalCode());
+        AddressDto physical = new AddressDto();
+        physical.setLine1(application.getPhysicalAddressLine1());
+        physical.setLine2(application.getPhysicalAddressLine2());
+        physical.setSuburb(application.getPhysicalSuburb());
+        physical.setCity(application.getPhysicalCity());
+        physical.setProvince(application.getPhysicalProvince());
+        physical.setPostalCode(application.getPhysicalPostalCode());
+        dto.setPhysicalAddress(physical);
 
-        dto.setPostalAddressLine1(application.getPostalAddressLine1());
-        dto.setPostalAddressLine2(application.getPostalAddressLine2());
-        dto.setPostalSuburb(application.getPostalSuburb());
-        dto.setPostalCity(application.getPostalCity());
-        dto.setPostalProvince(application.getPostalProvince());
-        dto.setPostalPostalCode(application.getPostalPostalCode());
+        AddressDto postal = new AddressDto();
+        postal.setLine1(application.getPostalAddressLine1());
+        postal.setLine2(application.getPostalAddressLine2());
+        postal.setSuburb(application.getPostalSuburb());
+        postal.setCity(application.getPostalCity());
+        postal.setProvince(application.getPostalProvince());
+        postal.setPostalCode(application.getPostalPostalCode());
+        dto.setPostalAddress(postal);
 
         dto.setCompanyName(application.getCompanyName());
         dto.setTradingName(application.getTradingName());
@@ -106,19 +111,19 @@ public class WholesaleMapperOutputPreservationPropertyTest
         assertEquals(referenceResult.getLastName(), mapperResult.getLastName(), "lastName mismatch");
         assertEquals(referenceResult.getPhone(), mapperResult.getPhone(), "phone mismatch");
 
-        assertEquals(referenceResult.getPhysicalAddressLine1(), mapperResult.getPhysicalAddressLine1(), "physicalAddressLine1 mismatch");
-        assertEquals(referenceResult.getPhysicalAddressLine2(), mapperResult.getPhysicalAddressLine2(), "physicalAddressLine2 mismatch");
-        assertEquals(referenceResult.getPhysicalSuburb(), mapperResult.getPhysicalSuburb(), "physicalSuburb mismatch");
-        assertEquals(referenceResult.getPhysicalCity(), mapperResult.getPhysicalCity(), "physicalCity mismatch");
-        assertEquals(referenceResult.getPhysicalProvince(), mapperResult.getPhysicalProvince(), "physicalProvince mismatch");
-        assertEquals(referenceResult.getPhysicalPostalCode(), mapperResult.getPhysicalPostalCode(), "physicalPostalCode mismatch");
+        assertEquals(referenceResult.getPhysicalAddress().getLine1(), mapperResult.getPhysicalAddress().getLine1(), "physicalAddress.line1 mismatch");
+        assertEquals(referenceResult.getPhysicalAddress().getLine2(), mapperResult.getPhysicalAddress().getLine2(), "physicalAddress.line2 mismatch");
+        assertEquals(referenceResult.getPhysicalAddress().getSuburb(), mapperResult.getPhysicalAddress().getSuburb(), "physicalAddress.suburb mismatch");
+        assertEquals(referenceResult.getPhysicalAddress().getCity(), mapperResult.getPhysicalAddress().getCity(), "physicalAddress.city mismatch");
+        assertEquals(referenceResult.getPhysicalAddress().getProvince(), mapperResult.getPhysicalAddress().getProvince(), "physicalAddress.province mismatch");
+        assertEquals(referenceResult.getPhysicalAddress().getPostalCode(), mapperResult.getPhysicalAddress().getPostalCode(), "physicalAddress.postalCode mismatch");
 
-        assertEquals(referenceResult.getPostalAddressLine1(), mapperResult.getPostalAddressLine1(), "postalAddressLine1 mismatch");
-        assertEquals(referenceResult.getPostalAddressLine2(), mapperResult.getPostalAddressLine2(), "postalAddressLine2 mismatch");
-        assertEquals(referenceResult.getPostalSuburb(), mapperResult.getPostalSuburb(), "postalSuburb mismatch");
-        assertEquals(referenceResult.getPostalCity(), mapperResult.getPostalCity(), "postalCity mismatch");
-        assertEquals(referenceResult.getPostalProvince(), mapperResult.getPostalProvince(), "postalProvince mismatch");
-        assertEquals(referenceResult.getPostalPostalCode(), mapperResult.getPostalPostalCode(), "postalPostalCode mismatch");
+        assertEquals(referenceResult.getPostalAddress().getLine1(), mapperResult.getPostalAddress().getLine1(), "postalAddress.line1 mismatch");
+        assertEquals(referenceResult.getPostalAddress().getLine2(), mapperResult.getPostalAddress().getLine2(), "postalAddress.line2 mismatch");
+        assertEquals(referenceResult.getPostalAddress().getSuburb(), mapperResult.getPostalAddress().getSuburb(), "postalAddress.suburb mismatch");
+        assertEquals(referenceResult.getPostalAddress().getCity(), mapperResult.getPostalAddress().getCity(), "postalAddress.city mismatch");
+        assertEquals(referenceResult.getPostalAddress().getProvince(), mapperResult.getPostalAddress().getProvince(), "postalAddress.province mismatch");
+        assertEquals(referenceResult.getPostalAddress().getPostalCode(), mapperResult.getPostalAddress().getPostalCode(), "postalAddress.postalCode mismatch");
 
         assertEquals(referenceResult.getCompanyName(), mapperResult.getCompanyName(), "companyName mismatch");
         assertEquals(referenceResult.getTradingName(), mapperResult.getTradingName(), "tradingName mismatch");

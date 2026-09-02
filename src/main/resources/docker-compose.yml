@@ -19,6 +19,18 @@ services:
     volumes:
       - db_data:/var/lib/postgresql/data
 
+  redis:
+    image: redis:7-alpine
+    container_name: ecommerce-redis
+    restart: always
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   flyway:
     image: flyway/flyway:10-alpine
     depends_on:
@@ -59,11 +71,15 @@ services:
 
       # MATCH NEW PATH ABOVE
       - IMAGE_STORAGE_PATH=/deployments/storage/images
+
+      - REDIS_URL=redis://redis:6379
     depends_on:
       db:
         condition: service_healthy
       flyway:
         condition: service_completed_successfully
+      redis:
+        condition: service_healthy
 
   frontend:
     build:
@@ -71,19 +87,11 @@ services:
       dockerfile: Dockerfile.jvm
     container_name: ec-frontend
     ports:
-      - "3001:3000"
-    environment:
-      # USE RELATIVE PATHS FOR THE BROWSER (Crucial for production/Docker)
-      #- VITE_API_URL=https://ecapi.sdebiehome.co.za/api/
-      #- REACT_APP_API_URL=https://ecapi.sdebiehome.co.za/api/graphql
-      #- VITE_IMAGE_BASE_URL=https://ecapi.sdebiehome.co.za/static/images/
-      #- VITE_PROXY_TARGET=https://ecapi.sdebiehome.co.za
-      #- VITE_API_BASE_URL=https://ecapi.sdebiehome.co.za/api
-      - VITE_API_URL=/api/
-      - REACT_APP_API_URL=/api/graphql
-      - VITE_IMAGE_BASE_URL=/static/images/
-      - VITE_API_BASE_URL=/api
-      - VITE_PROXY_TARGET=http://ec-backend:8080
+      # nginx (Dockerfile.jvm's production stage) listens on 80 inside the
+      # container; these VITE_*/REACT_APP_* values are build-time-only and
+      # baked into the static bundle from ec-frontend/.env, so they cannot
+      # be set here as container-runtime environment vars.
+      - "3001:80"
     depends_on:
       - backend
 

@@ -1,15 +1,14 @@
 package org.ecommerce.backend.service;
 
-import io.quarkus.panache.mock.PanacheMock;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
-import org.ecommerce.backend.utils.PasswordHashUtil;
+import org.ecommerce.backend.utils.CustomerPasswordHashUtil;
 import org.ecommerce.common.entity.CustomerEntity;
 import org.ecommerce.common.entity.UserEntity;
 import org.ecommerce.common.enums.CustomerStatusEn;
 import org.ecommerce.common.enums.CustomerTypeEn;
-import org.junit.jupiter.api.BeforeEach;
+import org.ecommerce.common.repository.UserRepository;
 import org.junit.jupiter.api.Test;
 
 import java.time.OffsetDateTime;
@@ -22,42 +21,30 @@ class CustomerPasswordResetServiceTest
 {
     private static final String EMAIL = "shopper@example.com";
     private static final String RESET_CODE = "123456";
-    private static final String RESET_TOKEN = "token-1234";
     private static final String CLIENT_IP = "203.0.113.10";
 
     @Inject
     CustomerPasswordResetService customerPasswordResetService;
 
+    // Real bean, not mocked: the fixture must fingerprint RESET_CODE the same way
+    // production does (HMAC-SHA256, keyed), or every "valid code" fixture below would
+    // silently stop matching the moment the storage scheme changed out from under it.
+    @Inject
+    PasswordResetCodePolicy policy;
+
     @InjectMock
     PasswordResetNotificationService passwordResetNotificationService;
 
-    @BeforeEach
-    void setUp()
-    {
-        PanacheMock.mock(UserEntity.class);
-    }
+    @InjectMock
+    UserRepository userRepository;
 
-    private static UserEntity userWithValidResetCode(CustomerEntity customer)
+    private UserEntity userWithValidResetCode(CustomerEntity customer)
     {
         UserEntity user = new UserEntity();
         user.setEmail(EMAIL);
         user.setPasswordHash("");
-        user.setPasswordResetCodeHash(PasswordHashUtil.hash(RESET_CODE));
+        user.setPasswordResetCodeHash(policy.fingerprint(RESET_CODE));
         user.setPasswordResetCodeExpiry(OffsetDateTime.now().plusMinutes(5));
-        user.setCustomer(customer);
-        if (customer != null) {
-            customer.setUser(user);
-        }
-        return user;
-    }
-
-    private static UserEntity userWithValidResetToken(CustomerEntity customer)
-    {
-        UserEntity user = new UserEntity();
-        user.setEmail(EMAIL);
-        user.setPasswordHash("");
-        user.setResetToken(RESET_TOKEN);
-        user.setResetTokenExpiry(OffsetDateTime.now().plusMinutes(5));
         user.setCustomer(customer);
         if (customer != null) {
             customer.setUser(user);
@@ -80,13 +67,14 @@ class CustomerPasswordResetServiceTest
     {
         CustomerEntity customer = customerOf(CustomerTypeEn.GUEST, CustomerStatusEn.PENDING);
         UserEntity user = userWithValidResetCode(customer);
-        when(UserEntity.findByEmail(EMAIL)).thenReturn(user);
+        when(userRepository.findByEmail(EMAIL)).thenReturn(user);
 
         customerPasswordResetService.completePasswordResetWithCode(EMAIL, RESET_CODE, "newPassword1!", CLIENT_IP);
 
         assertEquals(CustomerTypeEn.RETAILER, customer.getShopperType());
         assertEquals(CustomerStatusEn.ACTIVE, customer.getStatus());
-        assertEquals(PasswordHashUtil.hash("newPassword1!"), user.getPasswordHash());
+        assertTrue(user.getPasswordHash().startsWith("$2"), "Password reset must write a BCrypt hash, not the legacy SHA-256 format");
+        assertTrue(CustomerPasswordHashUtil.verify("newPassword1!", user.getPasswordHash()));
     }
 
     @Test
@@ -94,7 +82,7 @@ class CustomerPasswordResetServiceTest
     {
         CustomerEntity customer = customerOf(null, CustomerStatusEn.PENDING);
         UserEntity user = userWithValidResetCode(customer);
-        when(UserEntity.findByEmail(EMAIL)).thenReturn(user);
+        when(userRepository.findByEmail(EMAIL)).thenReturn(user);
 
         customerPasswordResetService.completePasswordResetWithCode(EMAIL, RESET_CODE, "newPassword1!", CLIENT_IP);
 
@@ -106,7 +94,7 @@ class CustomerPasswordResetServiceTest
     {
         CustomerEntity customer = customerOf(CustomerTypeEn.WHOLESALER, CustomerStatusEn.ACTIVE);
         UserEntity user = userWithValidResetCode(customer);
-        when(UserEntity.findByEmail(EMAIL)).thenReturn(user);
+        when(userRepository.findByEmail(EMAIL)).thenReturn(user);
 
         customerPasswordResetService.completePasswordResetWithCode(EMAIL, RESET_CODE, "newPassword1!", CLIENT_IP);
 
@@ -119,7 +107,7 @@ class CustomerPasswordResetServiceTest
     {
         CustomerEntity customer = customerOf(CustomerTypeEn.RETAILER, CustomerStatusEn.ACTIVE);
         UserEntity user = userWithValidResetCode(customer);
-        when(UserEntity.findByEmail(EMAIL)).thenReturn(user);
+        when(userRepository.findByEmail(EMAIL)).thenReturn(user);
 
         customerPasswordResetService.completePasswordResetWithCode(EMAIL, RESET_CODE, "newPassword1!", CLIENT_IP);
 
@@ -130,50 +118,25 @@ class CustomerPasswordResetServiceTest
     void completeWithCode_userWithoutCustomer_doesNotThrow()
     {
         UserEntity user = userWithValidResetCode(null);
-        when(UserEntity.findByEmail(EMAIL)).thenReturn(user);
+        when(userRepository.findByEmail(EMAIL)).thenReturn(user);
 
         assertDoesNotThrow(() -> customerPasswordResetService.completePasswordResetWithCode(EMAIL, RESET_CODE, "newPassword1!", CLIENT_IP));
-        assertEquals(PasswordHashUtil.hash("newPassword1!"), user.getPasswordHash());
+        assertTrue(user.getPasswordHash().startsWith("$2"), "Password reset must write a BCrypt hash, not the legacy SHA-256 format");
+        assertTrue(CustomerPasswordHashUtil.verify("newPassword1!", user.getPasswordHash()));
     }
 
-    // ── completePasswordReset (token path) ────────────────────────────────────
-
     @Test
-    void completeWithToken_guestCustomer_upgradesToRetailer()
+    void completeWithCode_weakPassword_throwsAndDoesNotUpdateHash()
     {
         CustomerEntity customer = customerOf(CustomerTypeEn.GUEST, CustomerStatusEn.PENDING);
-        UserEntity user = userWithValidResetToken(customer);
-        when(UserEntity.findByResetToken(RESET_TOKEN)).thenReturn(user);
+        UserEntity user = userWithValidResetCode(customer);
+        when(userRepository.findByEmail(EMAIL)).thenReturn(user);
 
-        customerPasswordResetService.completePasswordReset(RESET_TOKEN, "newPassword1!");
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> customerPasswordResetService.completePasswordResetWithCode(EMAIL, RESET_CODE, "short", CLIENT_IP));
 
-        assertEquals(CustomerTypeEn.RETAILER, customer.getShopperType());
-        assertEquals(CustomerStatusEn.ACTIVE, customer.getStatus());
-        assertNull(user.getResetToken());
-        assertEquals(PasswordHashUtil.hash("newPassword1!"), user.getPasswordHash());
+        assertEquals("Password must be at least 8 characters", ex.getMessage());
+        assertEquals("", user.getPasswordHash(), "A rejected weak password must never be hashed or stored");
     }
 
-    @Test
-    void completeWithToken_nullShopperType_upgradesToRetailer()
-    {
-        CustomerEntity customer = customerOf(null, CustomerStatusEn.PENDING);
-        UserEntity user = userWithValidResetToken(customer);
-        when(UserEntity.findByResetToken(RESET_TOKEN)).thenReturn(user);
-
-        customerPasswordResetService.completePasswordReset(RESET_TOKEN, "newPassword1!");
-
-        assertEquals(CustomerTypeEn.RETAILER, customer.getShopperType());
-    }
-
-    @Test
-    void completeWithToken_wholesalerCustomer_isNotDowngraded()
-    {
-        CustomerEntity customer = customerOf(CustomerTypeEn.WHOLESALER, CustomerStatusEn.ACTIVE);
-        UserEntity user = userWithValidResetToken(customer);
-        when(UserEntity.findByResetToken(RESET_TOKEN)).thenReturn(user);
-
-        customerPasswordResetService.completePasswordReset(RESET_TOKEN, "newPassword1!");
-
-        assertEquals(CustomerTypeEn.WHOLESALER, customer.getShopperType());
-    }
 }

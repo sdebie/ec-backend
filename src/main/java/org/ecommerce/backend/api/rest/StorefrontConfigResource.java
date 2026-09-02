@@ -64,8 +64,6 @@ public class StorefrontConfigResource
         return Response.ok(config).build();
     }
 
-    // ── Section assemblers ────────────────────────────────────────────────────
-
     private void applyConfigSection(ObjectNode out, JsonNode section)
     {
         if (section == null) {

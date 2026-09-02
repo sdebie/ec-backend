@@ -1,93 +1,98 @@
 package org.ecommerce.backend.service;
 
+import io.quarkus.redis.datasource.RedisDataSource;
+import io.quarkus.redis.datasource.keys.RedisKeyNotFoundException;
+import io.quarkus.redis.datasource.value.ValueCommands;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+import jakarta.ws.rs.core.Response;
 import org.eclipse.microprofile.config.Config;
 import org.jboss.logging.Logger;
 
-import java.time.Duration;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicInteger;
-
 /**
- * Shared, config-driven, in-memory fixed-window rate limiter.
- * <p>
- * Buckets are keyed by {@code "<limiterName>:<key>"} so each (name, key) pair
- * gets its own independent counter. Limits are resolved per limiter name from
- * MicroProfile Config ({@code ratelimit.<name>.max} / {@code ratelimit.<name>.window-seconds}),
- * falling back to code defaults passed by the caller.
- * <p>
- * <strong>Known limitation:</strong> this limiter is single-node only — it is NOT shared
- * across replicas. If the platform scales to multiple backend instances, a distributed
- * store (e.g. Redis) must replace this implementation. Do not mistake this for
- * distributed protection.
- * <p>
- * The window resets lazily: the first request in a new window replaces the old bucket.
+ * Config-driven, Redis-backed fixed-window rate limiter. Buckets are keyed
+ * by {@code "<limiterName>:<key>"}, stored as a Redis integer whose TTL is the
+ * window — {@code INCR} is atomic across every replica sharing this Redis, which is
+ * what makes this safe with more than one backend instance.
  */
 @ApplicationScoped
 public class RateLimiterService
 {
     private static final Logger LOG = Logger.getLogger(RateLimiterService.class);
 
-    /**
-     * When the map grows beyond this many entries, expired windows are swept on the
-     * next request. Bounds memory on public endpoints where every distinct source IP
-     * would otherwise leave a permanent entry.
-     */
-    static final int CLEANUP_THRESHOLD = 10_000;
-
     @Inject
     Config config;
 
-    private final ConcurrentHashMap<String, WindowBucket> buckets = new ConcurrentHashMap<>();
+    @Inject
+    RedisDataSource redisDataSource;
 
     /**
      * Check whether a request identified by (name, key) is within the rate limit.
      *
-     * @param name                 logical limiter name (e.g. "enquiry", "customer-login")
-     * @param key                  per-caller discriminator (typically client IP or normalised email)
-     * @param defaultMax           maximum requests per window (used when no config override exists)
-     * @param defaultWindowSeconds window length in seconds (used when no config override exists)
-     * @return a {@link RateLimitDecision} indicating whether the request is allowed and,
-     * if denied, how many seconds remain in the current window
+     * @param name                 limiter name (e.g. "enquiry")
+     * @param key                  per-caller key (IP or email)
+     * @param defaultMax           max requests per window if unconfigured
+     * @param defaultWindowSeconds window length if unconfigured
+     * @return allowed/denied, plus retry-after seconds when denied
      */
     public RateLimitDecision check(String name, String key, int defaultMax, long defaultWindowSeconds)
     {
         int max = resolveMax(name, defaultMax);
         long windowSeconds = resolveWindowSeconds(name, defaultWindowSeconds);
-        long windowMillis = Duration.ofSeconds(windowSeconds).toMillis();
-        long now = currentTimeMillis();
-
-        // Bound memory: sweep expired windows once the map grows large.
-        if (buckets.size() > CLEANUP_THRESHOLD) {
-            buckets.entrySet().removeIf(entry -> {
-                long bucketWindowMillis = Duration.ofSeconds(entry.getValue().windowSeconds).toMillis();
-                return now - entry.getValue().windowStart >= bucketWindowMillis;
-            });
-        }
-
         String compositeKey = name + ":" + key;
 
-        WindowBucket bucket = buckets.compute(compositeKey, (k, existing) -> {
-            if (existing == null || now - existing.windowStart >= windowMillis) {
-                // New window — start fresh
-                return new WindowBucket(now, new AtomicInteger(1), windowSeconds);
-            }
-            existing.count.incrementAndGet();
-            return existing;
-        });
+        ValueCommands<String, Long> counters = redisDataSource.value(Long.class);
+        long count = counters.incr(compositeKey);
+        if (count == 1) {
+            // Only the creating request sets expiry, or the window would never end.
+            redisDataSource.key(String.class).expire(compositeKey, windowSeconds);
+        }
 
-        boolean allowed = bucket.count.get() <= max;
+        boolean allowed = count <= max;
         if (!allowed) {
-            long elapsedMillis = now - bucket.windowStart;
-            long remainingSeconds = Math.max(1, windowSeconds - (elapsedMillis / 1000));
+            long remainingSeconds = clampRetryAfter(remainingTtlSeconds(compositeKey, windowSeconds));
             // Denials are logged, not persisted: there is no ops-visible record of who was
             // limited and how often. Tracked as rate-limit-denial-audit in the backlog.
             LOG.warnf("Rate limit denied: limiter=%s, key=%s, count=%d/%d",
-                    name, maskKey(key), bucket.count.get(), max);
+                    name, maskKey(key), count, max);
             return new RateLimitDecision(false, remainingSeconds);
         }
         return new RateLimitDecision(true, 0);
+    }
+
+    /**
+     * Convenience wrapper around {@link #check} for the common REST call-site shape:
+     * check the limit and, on denial, build the 429 response inline instead of every
+     * caller re-deriving {@code Response.status(429).header("Retry-After", ...)} from a
+     * {@link RateLimitDecision} by hand. Returns {@code null} when the request is
+     * allowed, so callers short-circuit with {@code if (result != null) return result;}.
+     * <p>
+     * An endpoint that must respond differently on denial — e.g. the anti-enumeration
+     * generic 200 on password-reset-request — calls {@link #check} directly instead.
+     */
+    public Response enforce(String name, String key, int defaultMax, long defaultWindowSeconds)
+    {
+        RateLimitDecision decision = check(name, key, defaultMax, defaultWindowSeconds);
+        if (decision.allowed()) {
+            return null;
+        }
+        return Response.status(429).header("Retry-After", decision.retryAfterSeconds()).build();
+    }
+
+    /** Falls back to a full window on the vanishingly rare expiry-mid-read race. */
+    private long remainingTtlSeconds(String compositeKey, long windowSeconds)
+    {
+        try {
+            return redisDataSource.key(String.class).ttl(compositeKey);
+        } catch (RedisKeyNotFoundException e) {
+            return windowSeconds;
+        }
+    }
+
+    /** Redis's TTL can report 0 a moment before expiry — never retry-after-zero. */
+    static long clampRetryAfter(long ttlSeconds)
+    {
+        return Math.max(1, ttlSeconds);
     }
 
     /**
@@ -109,45 +114,24 @@ public class RateLimiterService
         return maskedLocal + key.substring(at);
     }
 
+    /**
+     * Resolution order: the limiter's own override, then the shared
+     * {@code ratelimit.default.*} fallback, then the caller's code-provided default.
+     * The shared fallback exists so a new limiter needs no config of its own just to
+     * avoid interfering with unrelated tests — see the comment on that key in
+     * {@code application.properties}.
+     */
     private int resolveMax(String name, int defaultMax)
     {
         return config.getOptionalValue("ratelimit." + name + ".max", Integer.class)
+                .or(() -> config.getOptionalValue("ratelimit.default.max", Integer.class))
                 .orElse(defaultMax);
     }
 
     private long resolveWindowSeconds(String name, long defaultWindowSeconds)
     {
         return config.getOptionalValue("ratelimit." + name + ".window-seconds", Long.class)
+                .or(() -> config.getOptionalValue("ratelimit.default.window-seconds", Long.class))
                 .orElse(defaultWindowSeconds);
-    }
-
-    /**
-     * Visible for testing — allows subclasses/mocks to override the clock.
-     */
-    long currentTimeMillis()
-    {
-        return System.currentTimeMillis();
-    }
-
-    /**
-     * Visible for testing — exposes the bucket map size.
-     */
-    int bucketCount()
-    {
-        return buckets.size();
-    }
-
-    static class WindowBucket
-    {
-        final long windowStart;
-        final AtomicInteger count;
-        final long windowSeconds;
-
-        WindowBucket(long windowStart, AtomicInteger count, long windowSeconds)
-        {
-            this.windowStart = windowStart;
-            this.count = count;
-            this.windowSeconds = windowSeconds;
-        }
     }
 }

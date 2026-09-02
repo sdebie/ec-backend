@@ -3,9 +3,9 @@ package org.ecommerce.backend.api.rest;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.http.ContentType;
+import jakarta.ws.rs.core.Response;
 import org.ecommerce.backend.exception.RecipientNotConfiguredException;
 import org.ecommerce.backend.service.ContactEnquiryMailer;
-import org.ecommerce.backend.service.RateLimitDecision;
 import org.ecommerce.backend.service.RateLimiterService;
 import org.ecommerce.common.dto.ContactEnquiryRequestDto;
 import org.junit.jupiter.api.BeforeEach;
@@ -35,8 +35,8 @@ class ContactEnquiryResourceTest
     @BeforeEach
     void setUp()
     {
-        // Default: allow all requests (under rate limit)
-        when(rateLimiterService.check(anyString(), anyString(), anyInt(), anyLong())).thenReturn(new RateLimitDecision(true, 0));
+        // Default: allow all requests (under rate limit) — enforce() returns null when allowed
+        when(rateLimiterService.enforce(anyString(), anyString(), anyInt(), anyLong())).thenReturn(null);
         // Default: mailer does nothing (no throw = success)
         doNothing().when(contactEnquiryMailer).send(any(ContactEnquiryRequestDto.class));
     }
@@ -281,8 +281,8 @@ class ContactEnquiryResourceTest
     @DisplayName("rate limit exceeded returns 429 and does not invoke mailer")
     void rateLimitExceeded_returns429_noMail()
     {
-        when(rateLimiterService.check(anyString(), anyString(), anyInt(), anyLong()))
-                .thenReturn(new RateLimitDecision(false, 3500));
+        when(rateLimiterService.enforce(anyString(), anyString(), anyInt(), anyLong()))
+                .thenReturn(Response.status(429).header("Retry-After", 3500L).build());
 
         given()
                 .contentType(ContentType.JSON)
@@ -379,7 +379,7 @@ class ContactEnquiryResourceTest
 
         // Proves XFF parsing at the resource layer: the LAST (proxy-appended) hop —
         // never the client-controlled first entry — is what reaches the rate limiter.
-        verify(rateLimiterService).check(eq("enquiry"), eq("10.0.0.1"), anyInt(), anyLong());
+        verify(rateLimiterService).enforce(eq("enquiry"), eq("10.0.0.1"), anyInt(), anyLong());
     }
 
     @Test
@@ -396,7 +396,7 @@ class ContactEnquiryResourceTest
                 .then()
                 .statusCode(202);
 
-        verify(rateLimiterService).check(eq("enquiry"), eq("203.0.113.9"), anyInt(), anyLong());
+        verify(rateLimiterService).enforce(eq("enquiry"), eq("203.0.113.9"), anyInt(), anyLong());
     }
 
     @Test
@@ -412,6 +412,6 @@ class ContactEnquiryResourceTest
                 .then()
                 .statusCode(202);
 
-        verify(rateLimiterService).check(eq("enquiry"), eq("198.51.100.7"), anyInt(), anyLong());
+        verify(rateLimiterService).enforce(eq("enquiry"), eq("198.51.100.7"), anyInt(), anyLong());
     }
 }

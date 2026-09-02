@@ -11,27 +11,23 @@ import static org.hamcrest.Matchers.*;
  * Permanent regression guard: the three legacy product-list queries must stay deleted.
  * <p>
  * {@code productList}, {@code productListByCategory} and {@code productListByBrand}
- * lived on {@link ProductResource} and returned the legacy {@code ProductListItemDto}
- * shape. Three separate callsite sweeps — auth-hardening task 6 (2026-07-19), the
- * catalogue-ordering spec review (2026-07-28) and the deletion audit itself — each
- * found <b>zero</b> {@code ec-frontend} consumers. The storefront uses
- * {@code shoppingProductList}/{@code saleProductList}; the admin table uses
- * {@code adminProductList}.
+ * returned the legacy {@code ProductListItemDto} shape and have no {@code ec-frontend}
+ * consumers. The storefront uses {@code shoppingProductList}/{@code saleProductList};
+ * the admin table uses {@code adminProductList}.
  * <p>
  * They were not a security hole — auth-hardening had already guarded all three with
  * {@code @RolesAllowed({SUPER_ADMIN, CATALOG_MANAGER, ORDER_MANAGER, VIEWER})}, so
  * they were never anonymously reachable. What made them worth removing rather than
  * repairing is that they were dead API sitting on a genuinely expensive path: both
  * backing repository methods join-fetched {@code p.categories} and then called
- * {@code .page(...)}, which Hibernate cannot push down to LIMIT/OFFSET, so every
- * call materialised the whole filtered result set (~2,443 products) before paging it
- * in memory — and {@code ProductService.enrichProductListItems} then ran two further
- * queries per returned row on top of that.
+ * {@code .page(...)}, which Hibernate cannot push down to LIMIT/OFFSET, so every call
+ * materialised the whole filtered result set before paging it in memory — and
+ * {@code ProductService.enrichProductListItems} then ran two further queries per
+ * returned row on top of that.
  * <p>
  * Reintroducing any of them would restore that cost for no consumer, so this test
  * exists to make the removal stick. If a future admin surface genuinely needs a
- * product list, build it on {@code adminProductList} (law 4: reuse, don't duplicate)
- * rather than reviving these.
+ * product list, build it on {@code adminProductList} rather than reviving these.
  *
  * @see OrderMutationAbsenceIT the same guard pattern, applied to order creation
  */

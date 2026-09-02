@@ -1,6 +1,5 @@
 package org.ecommerce.backend.service;
 
-import io.quarkus.panache.mock.PanacheMock;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
@@ -11,6 +10,7 @@ import org.ecommerce.common.entity.CustomerEntity;
 import org.ecommerce.common.entity.UserEntity;
 import org.ecommerce.common.enums.CustomerStatusEn;
 import org.ecommerce.common.enums.CustomerTypeEn;
+import org.ecommerce.common.repository.CustomerRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -31,9 +31,9 @@ import static org.mockito.Mockito.when;
  * Producer→consumer contract test for the customer JWT.
  * <p>
  * Every other IT mints its own token with Jwt.subject(...), which lets the real
- * issuer drift from what the consumers expect — exactly the defect shipped on
- * 2026-07-19, where CustomerAuthService set only upn while every endpoint read
- * jwt.getSubject(). This test uses the REAL production issuer
+ * issuer drift from what the consumers expect — exactly the shape of defect this
+ * guards against: {@code CustomerAuthService} setting only {@code upn} while every
+ * endpoint reads {@code jwt.getSubject()}. This test uses the REAL production issuer
  * (CustomerAuthService.generateToken) and asserts the token is accepted by the
  * real consumer endpoints.
  */
@@ -46,6 +46,9 @@ class CustomerTokenContractIT
     CustomerAuthService customerAuthService;
 
     @InjectMock
+    CustomerRepository customerRepository;
+
+    @InjectMock
     OrderService orderService;
 
     @InjectMock
@@ -55,14 +58,11 @@ class CustomerTokenContractIT
     CustomerPortalService customerPortalService;
 
     private CustomerEntity customer;
-    private UUID customerId;
 
     @BeforeEach
     void setUp()
     {
-        PanacheMock.mock(CustomerEntity.class);
-
-        customerId = UUID.randomUUID();
+        UUID customerId = UUID.randomUUID();
 
         UserEntity user = new UserEntity();
         user.setId(UUID.randomUUID());
@@ -79,7 +79,7 @@ class CustomerTokenContractIT
         customer.setStatus(CustomerStatusEn.ACTIVE);
         user.setCustomer(customer);
 
-        when(CustomerEntity.findByEmail(EMAIL)).thenReturn(customer);
+        when(customerRepository.findByEmail(EMAIL)).thenReturn(customer);
         when(orderService.getMyOrders(eq(customerId))).thenReturn(List.of());
         when(wishlistService.getWishlistVariantIds(eq(customerId))).thenReturn(List.of());
 

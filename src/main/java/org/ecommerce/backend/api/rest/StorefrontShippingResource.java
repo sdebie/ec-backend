@@ -6,6 +6,7 @@ import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
 import org.ecommerce.common.dto.ShippingMethodDto;
 import org.ecommerce.common.entity.ShippingMethodEntity;
+import org.ecommerce.common.repository.ShippingMethodRepository;
 
 import java.util.List;
 
@@ -20,11 +21,14 @@ public class StorefrontShippingResource
     @jakarta.inject.Inject
     org.ecommerce.backend.mapper.ShippingMethodMapper shippingMethodMapper;
 
+    @jakarta.inject.Inject
+    ShippingMethodRepository shippingMethodRepository;
+
 
     @GET
     public List<ShippingMethodDto> getActiveShippingMethods()
     {
-        return ShippingMethodEntity.<ShippingMethodEntity>list("isActive", true)
+        return shippingMethodRepository.findAllActive()
                 .stream()
                 .map(shippingMethodMapper::toDto)
                 .toList();

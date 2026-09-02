@@ -3,7 +3,7 @@ package org.ecommerce.backend.api.rest;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.http.ContentType;
-import org.ecommerce.backend.service.RateLimitDecision;
+import jakarta.ws.rs.core.Response;
 import org.ecommerce.backend.service.RateLimiterService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -32,8 +32,8 @@ class CustomerEndpointRateLimitIT
     void setUp()
     {
         // Default: allow all requests
-        when(rateLimiterService.check(anyString(), anyString(), anyInt(), anyLong()))
-                .thenReturn(new RateLimitDecision(true, 0));
+        when(rateLimiterService.enforce(anyString(), anyString(), anyInt(), anyLong()))
+                .thenReturn(null);
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -44,8 +44,8 @@ class CustomerEndpointRateLimitIT
     @DisplayName("/register: exceeding IP rate limit returns 429 with Retry-After header")
     void register_ipLimitExceeded_returns429WithRetryAfter()
     {
-        when(rateLimiterService.check(eq("register"), anyString(), anyInt(), anyLong()))
-                .thenReturn(new RateLimitDecision(false, 1800));
+        when(rateLimiterService.enforce(eq("register"), anyString(), anyInt(), anyLong()))
+                .thenReturn(Response.status(429).header("Retry-After", 1800L).build());
 
         given()
                 .contentType(ContentType.JSON)
@@ -63,8 +63,8 @@ class CustomerEndpointRateLimitIT
     void register_recoveryAfterWindow_requestSucceeds()
     {
         // First: denied
-        when(rateLimiterService.check(eq("register"), anyString(), anyInt(), anyLong()))
-                .thenReturn(new RateLimitDecision(false, 2));
+        when(rateLimiterService.enforce(eq("register"), anyString(), anyInt(), anyLong()))
+                .thenReturn(Response.status(429).header("Retry-After", 2L).build());
 
         given()
                 .contentType(ContentType.JSON)
@@ -78,8 +78,8 @@ class CustomerEndpointRateLimitIT
         // After window: allowed again — the request reaches the service layer
         // It will likely fail with 500 (no DB in this mock scenario) or succeed,
         // but the point is it is NOT 429
-        when(rateLimiterService.check(eq("register"), anyString(), anyInt(), anyLong()))
-                .thenReturn(new RateLimitDecision(true, 0));
+        when(rateLimiterService.enforce(eq("register"), anyString(), anyInt(), anyLong()))
+                .thenReturn(null);
 
         int status = given()
                 .contentType(ContentType.JSON)
@@ -105,7 +105,7 @@ class CustomerEndpointRateLimitIT
                 .when()
                 .post("/api/customers/register");
 
-        verify(rateLimiterService).check(eq("register"), eq("10.0.0.1"), anyInt(), anyLong());
+        verify(rateLimiterService).enforce(eq("register"), eq("10.0.0.1"), anyInt(), anyLong());
     }
 
     @Test
@@ -119,7 +119,7 @@ class CustomerEndpointRateLimitIT
                 .when()
                 .post("/api/customers/register");
 
-        verify(rateLimiterService).check(eq("register"), eq("198.51.100.30"), anyInt(), anyLong());
+        verify(rateLimiterService).enforce(eq("register"), eq("198.51.100.30"), anyInt(), anyLong());
     }
 
     @Test
@@ -142,7 +142,7 @@ class CustomerEndpointRateLimitIT
                 .statusCode(400);
 
         // Rate limiter should not have been consulted for an invalid body
-        verify(rateLimiterService, never()).check(anyString(), anyString(), anyInt(), anyLong());
+        verify(rateLimiterService, never()).enforce(anyString(), anyString(), anyInt(), anyLong());
     }
 
     @Test
@@ -164,7 +164,7 @@ class CustomerEndpointRateLimitIT
                 .then()
                 .statusCode(400);
 
-        verify(rateLimiterService, never()).check(anyString(), anyString(), anyInt(), anyLong());
+        verify(rateLimiterService, never()).enforce(anyString(), anyString(), anyInt(), anyLong());
     }
 
     @Test
@@ -172,8 +172,8 @@ class CustomerEndpointRateLimitIT
     void register_limiterRunsBeforeConflictGuard()
     {
         // Simulate: the IP is denied by the rate limiter
-        when(rateLimiterService.check(eq("register"), anyString(), anyInt(), anyLong()))
-                .thenReturn(new RateLimitDecision(false, 900));
+        when(rateLimiterService.enforce(eq("register"), anyString(), anyInt(), anyLong()))
+                .thenReturn(Response.status(429).header("Retry-After", 900L).build());
 
         // Even if the account exists (which would normally give 409),
         // rate limit denial fires first

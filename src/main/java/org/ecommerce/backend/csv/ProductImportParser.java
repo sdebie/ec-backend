@@ -18,9 +18,8 @@ import static org.ecommerce.common.util.CsvImportUtils.getValue;
 import static org.ecommerce.common.util.CsvImportUtils.isBlank;
 
 /**
- * Parses product import CSV files into typed row objects.
- * Extracted from {@code ProductImportService} to separate parsing concerns
- * from validation and orchestration.
+ * Parses product import CSV files into typed row objects. Validation and orchestration
+ * live in {@code ProductImportService}; this class handles parsing only.
  */
 @ApplicationScoped
 public class ProductImportParser {
@@ -80,12 +79,12 @@ public class ProductImportParser {
                 record.getRecordNumber(),
                 normalizeSlug(getValue(record, "product_slug", "product-slug")),
                 getValue(record, "sku", "SKU"),
-                getValue(record, "name", "Name"),
+                getValue(record, "product_name"),
                 getValue(record, "description", "description"),
-                getValue(record, "categories_slug", "Category", "category_name"),
+                getValue(record, "categories_slug"),
                 getValue(record, "short_description", "short_description"),
                 stock,
-                getValue(record, "brand_slug", "brand_name", "Brand"),
+                getValue(record, "brand_slug"),
                 getValue(record, "images"),
                 getValue(record, "attributes"),
                 List.copyOf(validationErrors));

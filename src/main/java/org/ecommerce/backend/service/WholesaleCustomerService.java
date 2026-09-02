@@ -5,15 +5,20 @@ import jakarta.enterprise.event.Event;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import org.ecommerce.backend.mapper.WholesaleMapper;
+import org.ecommerce.common.dto.AddressDto;
 import org.ecommerce.common.dto.WholesaleApplicationDetailsDto;
 import org.ecommerce.common.dto.WholesaleApplicationListItemDto;
 import org.ecommerce.common.dto.WholesaleCustomerDto;
-import org.ecommerce.common.entity.*;
+import org.ecommerce.common.entity.CustomerEntity;
+import org.ecommerce.common.entity.UserEntity;
+import org.ecommerce.common.entity.WholesaleApplicationEntity;
+import org.ecommerce.common.entity.WholesaleProfileEntity;
 import org.ecommerce.common.enums.*;
 import org.ecommerce.common.query.Filter;
 import org.ecommerce.common.query.FilterRequest;
 import org.ecommerce.common.query.PageRequest;
 import org.ecommerce.common.query.SortRequest;
+import org.ecommerce.common.repository.UserRepository;
 import org.ecommerce.common.repository.WholesaleApplicationRepository;
 import org.jboss.logging.Logger;
 
@@ -22,7 +27,6 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeParseException;
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 
 @ApplicationScoped
@@ -32,7 +36,13 @@ public class WholesaleCustomerService
     WholesaleApplicationRepository wholesaleApplicationRepository;
 
     @Inject
+    UserRepository userRepository;
+
+    @Inject
     WholesaleMapper wholesaleMapper;
+
+    @Inject
+    CustomerAddressService customerAddressService;
 
     @Inject
     Event<WholesaleDecisionEvent> decisionEvent;
@@ -50,8 +60,8 @@ public class WholesaleCustomerService
     {
         WholesaleApplicationStatusEn status = extractStatusFilter(filterRequest);
         SortRequest sort = extractSort(filterRequest);
-        OffsetDateTime from = toInclusiveStart(fromDate, "fromDate");
-        OffsetDateTime toExclusive = toExclusiveEnd(toDate, "toDate");
+        OffsetDateTime from = toInclusiveStart(fromDate);
+        OffsetDateTime toExclusive = toExclusiveEnd(toDate);
 
         return wholesaleApplicationRepository.findForAdmin(status, from, toExclusive, sort, pageRequest)
                 .stream()
@@ -59,12 +69,14 @@ public class WholesaleCustomerService
                 .toList();
     }
 
-    /** @see #getWholesaleApplications(PageRequest, FilterRequest, String, String) */
+    /**
+     * @see #getWholesaleApplications(PageRequest, FilterRequest, String, String)
+     */
     public long wholesaleApplicationCount(FilterRequest filterRequest, String fromDate, String toDate)
     {
         WholesaleApplicationStatusEn status = extractStatusFilter(filterRequest);
-        OffsetDateTime from = toInclusiveStart(fromDate, "fromDate");
-        OffsetDateTime toExclusive = toExclusiveEnd(toDate, "toDate");
+        OffsetDateTime from = toInclusiveStart(fromDate);
+        OffsetDateTime toExclusive = toExclusiveEnd(toDate);
 
         return wholesaleApplicationRepository.countForAdmin(status, from, toExclusive);
     }
@@ -125,25 +137,27 @@ public class WholesaleCustomerService
         application.setFinanceContactName(normalizeText(customerDto.getFinanceContactName()));
         application.setFinanceContactEmail(normalizeText(customerDto.getFinanceContactEmail()));
         application.setFinanceContactPhone(normalizeText(customerDto.getFinanceContactPhone()));
-        application.setPurchaseOrderRequired(customerDto.getPurchaseOrderRequired() != null ? customerDto.getPurchaseOrderRequired() : false);
+        application.setPurchaseOrderRequired(customerDto.getPurchaseOrderRequired() != null && customerDto.getPurchaseOrderRequired());
 
         // Server-controlled status — ignore any client-supplied status on the public create path
         application.setStatus(WholesaleApplicationStatusEn.PENDING);
         application.setNotes(normalizeText(customerDto.getNotes()));
 
-        application.setPhysicalAddressLine1(normalizeText(customerDto.getPhysicalAddressLine1()));
-        application.setPhysicalAddressLine2(normalizeText(customerDto.getPhysicalAddressLine2()));
-        application.setPhysicalSuburb(normalizeText(customerDto.getPhysicalSuburb()));
-        application.setPhysicalCity(normalizeText(customerDto.getPhysicalCity()));
-        application.setPhysicalProvince(normalizeText(customerDto.getPhysicalProvince()));
-        application.setPhysicalPostalCode(normalizeText(customerDto.getPhysicalPostalCode()));
+        AddressDto physical = customerDto.getPhysicalAddress();
+        application.setPhysicalAddressLine1(physical != null ? normalizeText(physical.getLine1()) : null);
+        application.setPhysicalAddressLine2(physical != null ? normalizeText(physical.getLine2()) : null);
+        application.setPhysicalSuburb(physical != null ? normalizeText(physical.getSuburb()) : null);
+        application.setPhysicalCity(physical != null ? normalizeText(physical.getCity()) : null);
+        application.setPhysicalProvince(physical != null ? normalizeText(physical.getProvince()) : null);
+        application.setPhysicalPostalCode(physical != null ? normalizeText(physical.getPostalCode()) : null);
 
-        application.setPostalAddressLine1(normalizeText(customerDto.getPostalAddressLine1()));
-        application.setPostalAddressLine2(normalizeText(customerDto.getPostalAddressLine2()));
-        application.setPostalSuburb(normalizeText(customerDto.getPostalSuburb()));
-        application.setPostalCity(normalizeText(customerDto.getPostalCity()));
-        application.setPostalProvince(normalizeText(customerDto.getPostalProvince()));
-        application.setPostalPostalCode(normalizeText(customerDto.getPostalPostalCode()));
+        AddressDto postal = customerDto.getPostalAddress();
+        application.setPostalAddressLine1(postal != null ? normalizeText(postal.getLine1()) : null);
+        application.setPostalAddressLine2(postal != null ? normalizeText(postal.getLine2()) : null);
+        application.setPostalSuburb(postal != null ? normalizeText(postal.getSuburb()) : null);
+        application.setPostalCity(postal != null ? normalizeText(postal.getCity()) : null);
+        application.setPostalProvince(postal != null ? normalizeText(postal.getProvince()) : null);
+        application.setPostalPostalCode(postal != null ? normalizeText(postal.getPostalCode()) : null);
 
         WholesaleApplicationEntity.persist(application);
 
@@ -179,7 +193,7 @@ public class WholesaleCustomerService
             if (email == null) {
                 throw new IllegalArgumentException("email cannot be blank");
             }
-            UserEntity existing = UserEntity.findByEmail(email);
+            UserEntity existing = userRepository.findByEmail(email);
             if (existing != null && !existing.getId().equals(customerEntity.getUser().getId())) {
                 throw new IllegalArgumentException("customer already exists with email: " + email);
             }
@@ -227,7 +241,7 @@ public class WholesaleCustomerService
         boolean newAccountCreated = false;
 
         if (application.getCustomer() == null) {
-            UserEntity existingUser = UserEntity.findByEmail(email);
+            UserEntity existingUser = userRepository.findByEmail(email);
             CustomerEntity customerEntity;
             if (existingUser != null) {
                 customerEntity = upgradeExistingAccountToWholesaler(application, existingUser);
@@ -287,8 +301,7 @@ public class WholesaleCustomerService
      * Upgrades an existing account to wholesale rather than rejecting the approval.
      * Never touches {@code status} beyond promoting PENDING→ACTIVE — a staff-disabled
      * account must not be silently reactivated by a wholesale approval, mirroring the
-     * same restraint {@link CustomerPasswordResetService#activateCustomerProfile}
-     * applies on password-reset completion.
+     * same restraint applies on password-reset completion.
      */
     private CustomerEntity upgradeExistingAccountToWholesaler(WholesaleApplicationEntity application, UserEntity existingUser)
     {
@@ -386,7 +399,7 @@ public class WholesaleCustomerService
         if (filterRequest == null || filterRequest.getSort() == null || filterRequest.getSort().isEmpty()) {
             return null;
         }
-        return filterRequest.getSort().get(0);
+        return filterRequest.getSort().getFirst();
     }
 
     private LocalDate parseDate(String value, String fieldName)
@@ -407,9 +420,9 @@ public class WholesaleCustomerService
      * {@code .kiro/specs/temporal-type-correctness}, which exists because exactly this kind
      * of implicit-zone comparison has already produced a live defect elsewhere).
      */
-    private OffsetDateTime toInclusiveStart(String date, String fieldName)
+    private OffsetDateTime toInclusiveStart(String date)
     {
-        LocalDate day = parseDate(date, fieldName);
+        LocalDate day = parseDate(date, "fromDate");
         return day == null ? null : day.atStartOfDay(ZoneOffset.UTC).toOffsetDateTime();
     }
 
@@ -417,9 +430,9 @@ public class WholesaleCustomerService
      * The UI sends whole days, so an inclusive "to" is every instant before the following
      * midnight — a plain {@code <=} would drop everything after 00:00 on the "to" day.
      */
-    private OffsetDateTime toExclusiveEnd(String date, String fieldName)
+    private OffsetDateTime toExclusiveEnd(String date)
     {
-        LocalDate day = parseDate(date, fieldName);
+        LocalDate day = parseDate(date, "toDate");
         return day == null ? null : day.plusDays(1).atStartOfDay(ZoneOffset.UTC).toOffsetDateTime();
     }
 
@@ -438,66 +451,33 @@ public class WholesaleCustomerService
 
     private void applyAddresses(CustomerEntity ce, WholesaleCustomerDto dto)
     {
-        upsertAddress(ce, AddressTypeEn.PHYSICAL,
-                dto.getPhysicalAddressLine1(), dto.getPhysicalAddressLine2(),
-                dto.getPhysicalSuburb(), dto.getPhysicalCity(),
-                dto.getPhysicalProvince(), dto.getPhysicalPostalCode());
-
-        upsertAddress(ce, AddressTypeEn.POSTAL,
-                dto.getPostalAddressLine1(), dto.getPostalAddressLine2(),
-                dto.getPostalSuburb(), dto.getPostalCity(),
-                dto.getPostalProvince(), dto.getPostalPostalCode());
+        customerAddressService.upsertAddress(ce, AddressTypeEn.PHYSICAL, dto.getPhysicalAddress());
+        customerAddressService.upsertAddress(ce, AddressTypeEn.POSTAL, dto.getPostalAddress());
     }
 
+    /**
+     * WholesaleApplicationEntity's flat columns are written exactly once, by
+     * {@link #createWholesaleApplication}, which already normalizes — but this read is a
+     * second, independent use of that data, so it re-normalizes defensively rather than
+     * trusting the invariant to hold forever.
+     */
     private void applyAddressesFromApplication(CustomerEntity ce, WholesaleApplicationEntity application)
     {
-        upsertAddress(ce, AddressTypeEn.PHYSICAL,
-                normalizeText(application.getPhysicalAddressLine1()), normalizeText(application.getPhysicalAddressLine2()),
-                normalizeText(application.getPhysicalSuburb()), normalizeText(application.getPhysicalCity()),
-                normalizeText(application.getPhysicalProvince()), normalizeText(application.getPhysicalPostalCode()));
-
-        upsertAddress(ce, AddressTypeEn.POSTAL,
-                normalizeText(application.getPostalAddressLine1()), normalizeText(application.getPostalAddressLine2()),
-                normalizeText(application.getPostalSuburb()), normalizeText(application.getPostalCity()),
-                normalizeText(application.getPostalProvince()), normalizeText(application.getPostalPostalCode()));
+        customerAddressService.upsertAddress(ce, AddressTypeEn.PHYSICAL,
+                normalizeAddress(wholesaleMapper.wholesaleApplicationPhysicalAddress(application)));
+        customerAddressService.upsertAddress(ce, AddressTypeEn.POSTAL,
+                normalizeAddress(wholesaleMapper.wholesaleApplicationPostalAddress(application)));
     }
 
-    private static void upsertAddress(CustomerEntity ce, AddressTypeEn type, String line1, String line2, String suburb, String city, String province, String postalCode)
+    private AddressDto normalizeAddress(AddressDto address)
     {
-        if (line1 == null && city == null && province == null && postalCode == null) {
-            return;
-        }
-
-        CustomerAddressEntity addr = ce.getAddresses()
-                .stream()
-                .filter(a -> a.getAddressType() == type)
-                .findFirst()
-                .orElseGet(() -> {
-                    CustomerAddressEntity a = new CustomerAddressEntity();
-                    a.setCustomer(ce);
-                    a.setAddressType(type);
-                    ce.getAddresses().add(a);
-                    return a;
-                });
-
-        if (line1 != null) {
-            addr.setAddressLine1(line1);
-        }
-        if (line2 != null) {
-            addr.setAddressLine2(line2);
-        }
-        if (suburb != null) {
-            addr.setSuburb(suburb);
-        }
-        if (city != null) {
-            addr.setCity(city);
-        }
-        if (province != null) {
-            addr.setProvince(province);
-        }
-        if (postalCode != null) {
-            addr.setPostalCode(postalCode);
-        }
+        address.setLine1(normalizeText(address.getLine1()));
+        address.setLine2(normalizeText(address.getLine2()));
+        address.setSuburb(normalizeText(address.getSuburb()));
+        address.setCity(normalizeText(address.getCity()));
+        address.setProvince(normalizeText(address.getProvince()));
+        address.setPostalCode(normalizeText(address.getPostalCode()));
+        return address;
     }
 
     private String normalizeEmail(String email)
@@ -512,20 +492,6 @@ public class WholesaleCustomerService
         if (value == null) return null;
         String normalized = value.trim();
         return normalized.isEmpty() ? null : normalized;
-    }
-
-    private WholesaleApplicationStatusEn resolveApplicationStatus(WholesaleCustomerStatusEn status)
-    {
-        if (status == null) {
-            return WholesaleApplicationStatusEn.PENDING;
-        }
-        return switch (status) {
-            case PENDING -> WholesaleApplicationStatusEn.PENDING;
-            case APPROVED -> WholesaleApplicationStatusEn.APPROVED;
-            case REJECTED -> WholesaleApplicationStatusEn.REJECTED;
-            case CONVERTED -> WholesaleApplicationStatusEn.CONVERTED;
-            default -> throw new IllegalArgumentException("invalid application status: " + status);
-        };
     }
 
     private CustomerStatusEn resolveStatus(WholesaleCustomerStatusEn statusValue, CustomerStatusEn fallback)
@@ -551,7 +517,6 @@ public class WholesaleCustomerService
         }
         return null;
     }
-
 
 
     private WholesaleDecisionEvent buildDecisionEvent(WholesaleApplicationEntity application, String rejectionReason, boolean newAccountCreated)

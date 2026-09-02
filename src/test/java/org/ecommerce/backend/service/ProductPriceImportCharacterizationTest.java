@@ -1,20 +1,22 @@
 package org.ecommerce.backend.service;
 
-import io.quarkus.panache.mock.PanacheMock;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
+import org.ecommerce.backend.service.import_engine.ProductPriceImportOrchestrator;
+import org.ecommerce.backend.service.import_engine.GenericImportAsyncService;
 import org.ecommerce.common.dto.ProductPriceComparisonDto;
-import org.ecommerce.common.entity.ProductPriceUploadBatchEntity;
-import org.ecommerce.common.entity.ProductPriceUploadStagedEntity;
+import org.ecommerce.common.entity.ProductPriceImportBatchEntity;
+import org.ecommerce.common.entity.ProductPriceImportStagedEntity;
 import org.ecommerce.common.entity.ProductVariantEntity;
 import org.ecommerce.common.entity.VariantPricesEntity;
 import org.ecommerce.common.enums.PriceTypeEn;
 import org.ecommerce.common.enums.ProductImportValidationStatusEn;
 import org.ecommerce.common.enums.ProductUploadStatusEn;
-import org.ecommerce.common.repository.ProductPriceUploadBatchRepository;
-import org.ecommerce.common.repository.ProductPriceUploadStagedRepository;
+import org.ecommerce.common.repository.ProductPriceImportBatchRepository;
+import org.ecommerce.common.repository.ProductPriceImportStagedRepository;
 import org.ecommerce.common.repository.ProductVariantRepository;
+import org.ecommerce.common.repository.VariantPricesRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -32,16 +34,15 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.when;
 
 /**
- * Characterization tests for {@link ProductPriceImportService}.
+ * Characterization tests for {@link ProductPriceImportOrchestrator}.
  * <p>
- * Pins the current behaviour of the CSV upload → staging → comparison pipeline:
+ * Pins the current behaviour of the CSV staging → comparison pipeline:
  * - All-valid price file: rows staged as VALID, correct proposed/current prices, hasChanges flags
  * - Invalid rows: missing/unknown SKUs produce specific validation errors
  * - Malformed data: non-numeric prices produce specific error messages
  * - Empty file: zero rows staged, batch marked PENDING with zero counts
  * <p>
- * These baselines guard against behavioural regression during the upcoming
- * decomposition into parser/validator/orchestrator (tasks 8.2–8.4).
+ * These baselines guard against behavioural regression during the import pipeline.
  * <p>
  * Requirements: 4.2, 4.4
  */
@@ -49,28 +50,32 @@ import static org.mockito.Mockito.when;
 class ProductPriceImportCharacterizationTest
 {
     @Inject
-    ProductPriceImportService productPriceImportService;
+    ProductPriceImportOrchestrator productPriceImportOrchestrator;
+
+    @Inject
+    GenericImportAsyncService asyncService;
 
     @InjectMock
-    ProductPriceUploadBatchRepository productPriceUploadBatchRepository;
+    ProductPriceImportBatchRepository productPriceImportBatchRepository;
 
     @InjectMock
-    ProductPriceUploadStagedRepository productPriceUploadStagedRepository;
+    ProductPriceImportStagedRepository productPriceImportStagedRepository;
 
     @InjectMock
     ProductVariantRepository productVariantRepository;
 
+    @InjectMock
+    VariantPricesRepository variantPricesRepository;
+
     private UUID batchId;
-    private ProductPriceUploadBatchEntity batch;
-    private List<ProductPriceUploadStagedEntity> capturedStagedRows;
+    private ProductPriceImportBatchEntity batch;
+    private List<ProductPriceImportStagedEntity> capturedStagedRows;
 
     @BeforeEach
     void setUp()
     {
-        PanacheMock.mock(VariantPricesEntity.class);
-
         batchId = UUID.randomUUID();
-        batch = new ProductPriceUploadBatchEntity();
+        batch = new ProductPriceImportBatchEntity();
         batch.setId(batchId);
         batch.setProductUploadStatusEn(ProductUploadStatusEn.IMPORTING);
         batch.setTotalRows(0);
@@ -78,15 +83,15 @@ class ProductPriceImportCharacterizationTest
         batch.setSkippedRows(0);
         batch.setValidationErrorCount(0);
 
-        when(productPriceUploadBatchRepository.findById(batchId)).thenReturn(batch);
+        when(productPriceImportBatchRepository.findById(batchId)).thenReturn(batch);
 
         capturedStagedRows = new ArrayList<>();
         doAnswer(invocation -> {
-            ProductPriceUploadStagedEntity entity = invocation.getArgument(0);
+            ProductPriceImportStagedEntity entity = invocation.getArgument(0);
             entity.setId(UUID.randomUUID());
             capturedStagedRows.add(entity);
             return null;
-        }).when(productPriceUploadStagedRepository).persist(any(ProductPriceUploadStagedEntity.class));
+        }).when(productPriceImportStagedRepository).persist(any(ProductPriceImportStagedEntity.class));
     }
 
     // ── Test: All-valid price file ──────────────────────────────────────────
@@ -104,13 +109,13 @@ class ProductPriceImportCharacterizationTest
         // variant1 has existing retail=100.00, wholesale=80.00
         VariantPricesEntity existingRetail1 = buildPrice(variant1, PriceTypeEn.RETAIL_PRICE, new BigDecimal("100.00"));
         VariantPricesEntity existingWholesale1 = buildPrice(variant1, PriceTypeEn.WHOLESALE_PRICE, new BigDecimal("80.00"));
-        when(VariantPricesEntity.findLatestByVariantAndType(variant1.getId(), PriceTypeEn.RETAIL_PRICE)).thenReturn(existingRetail1);
-        when(VariantPricesEntity.findLatestByVariantAndType(variant1.getId(), PriceTypeEn.WHOLESALE_PRICE)).thenReturn(existingWholesale1);
+        when(variantPricesRepository.findLatestByVariantAndType(variant1.getId(), PriceTypeEn.RETAIL_PRICE)).thenReturn(existingRetail1);
+        when(variantPricesRepository.findLatestByVariantAndType(variant1.getId(), PriceTypeEn.WHOLESALE_PRICE)).thenReturn(existingWholesale1);
 
         // variant2 has existing retail=200.00, no wholesale
         VariantPricesEntity existingRetail2 = buildPrice(variant2, PriceTypeEn.RETAIL_PRICE, new BigDecimal("200.00"));
-        when(VariantPricesEntity.findLatestByVariantAndType(variant2.getId(), PriceTypeEn.RETAIL_PRICE)).thenReturn(existingRetail2);
-        when(VariantPricesEntity.findLatestByVariantAndType(variant2.getId(), PriceTypeEn.WHOLESALE_PRICE)).thenReturn(null);
+        when(variantPricesRepository.findLatestByVariantAndType(variant2.getId(), PriceTypeEn.RETAIL_PRICE)).thenReturn(existingRetail2);
+        when(variantPricesRepository.findLatestByVariantAndType(variant2.getId(), PriceTypeEn.WHOLESALE_PRICE)).thenReturn(null);
 
         String csv = """
                 sku,retail_price,wholesale_price
@@ -120,13 +125,13 @@ class ProductPriceImportCharacterizationTest
 
         // Act
         InputStream is = new ByteArrayInputStream(csv.getBytes(StandardCharsets.UTF_8));
-        productPriceImportService.handleProductPriceCsvUploadForBatch(is, batchId);
+        asyncService.stageRowsAsync("price-csv", is, batchId);
 
         // Assert: two staged rows captured
         assertEquals(2, capturedStagedRows.size());
 
         // Row 1: SKU-001, prices changed (retail 100→150, wholesale 80→90)
-        ProductPriceUploadStagedEntity row1 = capturedStagedRows.get(0);
+        ProductPriceImportStagedEntity row1 = capturedStagedRows.get(0);
         assertEquals("SKU-001", row1.getSku());
         assertEquals(0, new BigDecimal("150.00").compareTo(row1.getRetailPrice()));
         assertEquals(0, new BigDecimal("90.00").compareTo(row1.getWholesalePrice()));
@@ -137,7 +142,7 @@ class ProductPriceImportCharacterizationTest
         assertTrue(row1.getHasChanges(), "hasChanges should be true when prices differ");
 
         // Row 2: SKU-002, retail unchanged (200→200), wholesale new (null→120)
-        ProductPriceUploadStagedEntity row2 = capturedStagedRows.get(1);
+        ProductPriceImportStagedEntity row2 = capturedStagedRows.get(1);
         assertEquals("SKU-002", row2.getSku());
         assertEquals(0, new BigDecimal("200.00").compareTo(row2.getRetailPrice()));
         assertEquals(0, new BigDecimal("120.00").compareTo(row2.getWholesalePrice()));
@@ -161,8 +166,8 @@ class ProductPriceImportCharacterizationTest
 
         VariantPricesEntity existingRetail = buildPrice(variant, PriceTypeEn.RETAIL_PRICE, new BigDecimal("100.00"));
         VariantPricesEntity existingWholesale = buildPrice(variant, PriceTypeEn.WHOLESALE_PRICE, new BigDecimal("80.00"));
-        when(VariantPricesEntity.findLatestByVariantAndType(variant.getId(), PriceTypeEn.RETAIL_PRICE)).thenReturn(existingRetail);
-        when(VariantPricesEntity.findLatestByVariantAndType(variant.getId(), PriceTypeEn.WHOLESALE_PRICE)).thenReturn(existingWholesale);
+        when(variantPricesRepository.findLatestByVariantAndType(variant.getId(), PriceTypeEn.RETAIL_PRICE)).thenReturn(existingRetail);
+        when(variantPricesRepository.findLatestByVariantAndType(variant.getId(), PriceTypeEn.WHOLESALE_PRICE)).thenReturn(existingWholesale);
 
         String csv = """
                 sku,retail_price,wholesale_price
@@ -170,10 +175,10 @@ class ProductPriceImportCharacterizationTest
                 """;
 
         InputStream is = new ByteArrayInputStream(csv.getBytes(StandardCharsets.UTF_8));
-        productPriceImportService.handleProductPriceCsvUploadForBatch(is, batchId);
+        asyncService.stageRowsAsync("price-csv",is, batchId);
 
         assertEquals(1, capturedStagedRows.size());
-        ProductPriceUploadStagedEntity row = capturedStagedRows.get(0);
+        ProductPriceImportStagedEntity row = capturedStagedRows.get(0);
         assertEquals("SKU-SAME", row.getSku());
         assertEquals(ProductImportValidationStatusEn.VALID, row.getValidationStatus());
         assertFalse(row.getHasChanges(), "hasChanges should be false when prices are identical");
@@ -190,8 +195,8 @@ class ProductPriceImportCharacterizationTest
         when(productVariantRepository.findBySku("SKU-UNKNOWN")).thenReturn(null);
 
         VariantPricesEntity existingRetail = buildPrice(knownVariant, PriceTypeEn.RETAIL_PRICE, new BigDecimal("50.00"));
-        when(VariantPricesEntity.findLatestByVariantAndType(knownVariant.getId(), PriceTypeEn.RETAIL_PRICE)).thenReturn(existingRetail);
-        when(VariantPricesEntity.findLatestByVariantAndType(knownVariant.getId(), PriceTypeEn.WHOLESALE_PRICE)).thenReturn(null);
+        when(variantPricesRepository.findLatestByVariantAndType(knownVariant.getId(), PriceTypeEn.RETAIL_PRICE)).thenReturn(existingRetail);
+        when(variantPricesRepository.findLatestByVariantAndType(knownVariant.getId(), PriceTypeEn.WHOLESALE_PRICE)).thenReturn(null);
 
         String csv = """
                 sku,retail_price,wholesale_price
@@ -200,18 +205,18 @@ class ProductPriceImportCharacterizationTest
                 """;
 
         InputStream is = new ByteArrayInputStream(csv.getBytes(StandardCharsets.UTF_8));
-        productPriceImportService.handleProductPriceCsvUploadForBatch(is, batchId);
+        asyncService.stageRowsAsync("price-csv",is, batchId);
 
         assertEquals(2, capturedStagedRows.size());
 
         // Row 1: valid
-        ProductPriceUploadStagedEntity validRow = capturedStagedRows.get(0);
+        ProductPriceImportStagedEntity validRow = capturedStagedRows.get(0);
         assertEquals("SKU-KNOWN", validRow.getSku());
         assertEquals(ProductImportValidationStatusEn.VALID, validRow.getValidationStatus());
         assertNull(validRow.getValidationErrors());
 
         // Row 2: invalid — unknown SKU
-        ProductPriceUploadStagedEntity invalidRow = capturedStagedRows.get(1);
+        ProductPriceImportStagedEntity invalidRow = capturedStagedRows.get(1);
         assertEquals("SKU-UNKNOWN", invalidRow.getSku());
         assertEquals(ProductImportValidationStatusEn.INVALID, invalidRow.getValidationStatus());
         assertEquals("variant with sku 'SKU-UNKNOWN' not found", invalidRow.getValidationErrors());
@@ -236,10 +241,10 @@ class ProductPriceImportCharacterizationTest
         when(productVariantRepository.findBySku("")).thenReturn(null);
 
         InputStream is = new ByteArrayInputStream(csv.getBytes(StandardCharsets.UTF_8));
-        productPriceImportService.handleProductPriceCsvUploadForBatch(is, batchId);
+        asyncService.stageRowsAsync("price-csv",is, batchId);
 
         assertEquals(1, capturedStagedRows.size());
-        ProductPriceUploadStagedEntity row = capturedStagedRows.get(0);
+        ProductPriceImportStagedEntity row = capturedStagedRows.get(0);
         assertEquals(ProductImportValidationStatusEn.INVALID, row.getValidationStatus());
         assertEquals("sku is required", row.getValidationErrors());
 
@@ -253,8 +258,8 @@ class ProductPriceImportCharacterizationTest
     {
         ProductVariantEntity variant = buildVariant("SKU-VALID");
         when(productVariantRepository.findBySku("SKU-VALID")).thenReturn(variant);
-        when(VariantPricesEntity.findLatestByVariantAndType(variant.getId(), PriceTypeEn.RETAIL_PRICE)).thenReturn(null);
-        when(VariantPricesEntity.findLatestByVariantAndType(variant.getId(), PriceTypeEn.WHOLESALE_PRICE)).thenReturn(null);
+        when(variantPricesRepository.findLatestByVariantAndType(variant.getId(), PriceTypeEn.RETAIL_PRICE)).thenReturn(null);
+        when(variantPricesRepository.findLatestByVariantAndType(variant.getId(), PriceTypeEn.WHOLESALE_PRICE)).thenReturn(null);
 
         String csv = """
                 sku,retail_price,wholesale_price
@@ -262,10 +267,10 @@ class ProductPriceImportCharacterizationTest
                 """;
 
         InputStream is = new ByteArrayInputStream(csv.getBytes(StandardCharsets.UTF_8));
-        productPriceImportService.handleProductPriceCsvUploadForBatch(is, batchId);
+        asyncService.stageRowsAsync("price-csv",is, batchId);
 
         assertEquals(1, capturedStagedRows.size());
-        ProductPriceUploadStagedEntity row = capturedStagedRows.get(0);
+        ProductPriceImportStagedEntity row = capturedStagedRows.get(0);
         assertEquals("SKU-VALID", row.getSku());
         assertEquals(ProductImportValidationStatusEn.INVALID, row.getValidationStatus());
         // Pin the exact error message format: "Invalid decimal value for {header}: {value}"
@@ -282,8 +287,8 @@ class ProductPriceImportCharacterizationTest
     {
         ProductVariantEntity variant = buildVariant("SKU-PARTIAL");
         when(productVariantRepository.findBySku("SKU-PARTIAL")).thenReturn(variant);
-        when(VariantPricesEntity.findLatestByVariantAndType(variant.getId(), PriceTypeEn.RETAIL_PRICE)).thenReturn(null);
-        when(VariantPricesEntity.findLatestByVariantAndType(variant.getId(), PriceTypeEn.WHOLESALE_PRICE)).thenReturn(null);
+        when(variantPricesRepository.findLatestByVariantAndType(variant.getId(), PriceTypeEn.RETAIL_PRICE)).thenReturn(null);
+        when(variantPricesRepository.findLatestByVariantAndType(variant.getId(), PriceTypeEn.WHOLESALE_PRICE)).thenReturn(null);
 
         // retail_price valid, wholesale_price malformed
         String csv = """
@@ -292,10 +297,10 @@ class ProductPriceImportCharacterizationTest
                 """;
 
         InputStream is = new ByteArrayInputStream(csv.getBytes(StandardCharsets.UTF_8));
-        productPriceImportService.handleProductPriceCsvUploadForBatch(is, batchId);
+        asyncService.stageRowsAsync("price-csv",is, batchId);
 
         assertEquals(1, capturedStagedRows.size());
-        ProductPriceUploadStagedEntity row = capturedStagedRows.get(0);
+        ProductPriceImportStagedEntity row = capturedStagedRows.get(0);
         assertEquals("SKU-PARTIAL", row.getSku());
         assertEquals(ProductImportValidationStatusEn.INVALID, row.getValidationStatus());
         assertEquals("Invalid decimal value for wholesale_price: not-a-number", row.getValidationErrors());
@@ -317,7 +322,7 @@ class ProductPriceImportCharacterizationTest
                 """;
 
         InputStream is = new ByteArrayInputStream(csv.getBytes(StandardCharsets.UTF_8));
-        productPriceImportService.handleProductPriceCsvUploadForBatch(is, batchId);
+        asyncService.stageRowsAsync("price-csv",is, batchId);
 
         // No rows staged
         assertTrue(capturedStagedRows.isEmpty());
@@ -334,7 +339,7 @@ class ProductPriceImportCharacterizationTest
         String csv = "";
 
         InputStream is = new ByteArrayInputStream(csv.getBytes(StandardCharsets.UTF_8));
-        productPriceImportService.handleProductPriceCsvUploadForBatch(is, batchId);
+        asyncService.stageRowsAsync("price-csv",is, batchId);
 
         assertTrue(capturedStagedRows.isEmpty());
         assertEquals(ProductUploadStatusEn.PENDING, batch.getProductUploadStatusEn());
@@ -348,7 +353,7 @@ class ProductPriceImportCharacterizationTest
     void getProductPriceImportRows_mapsStageEntitiesToComparisonDtos()
     {
         // Arrange: pre-built staged entities returned by the repository
-        ProductPriceUploadStagedEntity staged1 = new ProductPriceUploadStagedEntity();
+        ProductPriceImportStagedEntity staged1 = new ProductPriceImportStagedEntity();
         staged1.setId(UUID.randomUUID());
         staged1.setSku("SKU-A");
         staged1.setRetailPrice(new BigDecimal("199.99"));
@@ -359,7 +364,7 @@ class ProductPriceImportCharacterizationTest
         staged1.setValidationErrors(null);
         staged1.setHasChanges(true);
 
-        ProductPriceUploadStagedEntity staged2 = new ProductPriceUploadStagedEntity();
+        ProductPriceImportStagedEntity staged2 = new ProductPriceImportStagedEntity();
         staged2.setId(UUID.randomUUID());
         staged2.setSku("SKU-B");
         staged2.setRetailPrice(null);
@@ -370,10 +375,10 @@ class ProductPriceImportCharacterizationTest
         staged2.setValidationErrors("Invalid decimal value for retail_price: bad");
         staged2.setHasChanges(false);
 
-        when(productPriceUploadStagedRepository.findByBatchId(batchId)).thenReturn(List.of(staged1, staged2));
+        when(productPriceImportStagedRepository.findByBatchId(batchId)).thenReturn(List.of(staged1, staged2));
 
         // Act
-        List<ProductPriceComparisonDto> result = productPriceImportService.getProductPriceImportRows(batchId);
+        List<ProductPriceComparisonDto> result = productPriceImportOrchestrator.getImportRows(batchId);
 
         // Assert: pins the DTO construction
         assertEquals(2, result.size());
@@ -411,8 +416,8 @@ class ProductPriceImportCharacterizationTest
         when(productVariantRepository.findBySku("BAD-SKU")).thenReturn(null);
         when(productVariantRepository.findBySku("")).thenReturn(null);
 
-        when(VariantPricesEntity.findLatestByVariantAndType(variant1.getId(), PriceTypeEn.RETAIL_PRICE)).thenReturn(null);
-        when(VariantPricesEntity.findLatestByVariantAndType(variant1.getId(), PriceTypeEn.WHOLESALE_PRICE)).thenReturn(null);
+        when(variantPricesRepository.findLatestByVariantAndType(variant1.getId(), PriceTypeEn.RETAIL_PRICE)).thenReturn(null);
+        when(variantPricesRepository.findLatestByVariantAndType(variant1.getId(), PriceTypeEn.WHOLESALE_PRICE)).thenReturn(null);
 
         String csv = """
                 sku,retail_price,wholesale_price
@@ -423,7 +428,7 @@ class ProductPriceImportCharacterizationTest
                 """;
 
         InputStream is = new ByteArrayInputStream(csv.getBytes(StandardCharsets.UTF_8));
-        productPriceImportService.handleProductPriceCsvUploadForBatch(is, batchId);
+        asyncService.stageRowsAsync("price-csv",is, batchId);
 
         assertEquals(4, capturedStagedRows.size());
 
@@ -461,8 +466,8 @@ class ProductPriceImportCharacterizationTest
         when(productVariantRepository.findBySku("SKU-BLANK")).thenReturn(variant);
 
         VariantPricesEntity existingRetail = buildPrice(variant, PriceTypeEn.RETAIL_PRICE, new BigDecimal("50.00"));
-        when(VariantPricesEntity.findLatestByVariantAndType(variant.getId(), PriceTypeEn.RETAIL_PRICE)).thenReturn(existingRetail);
-        when(VariantPricesEntity.findLatestByVariantAndType(variant.getId(), PriceTypeEn.WHOLESALE_PRICE)).thenReturn(null);
+        when(variantPricesRepository.findLatestByVariantAndType(variant.getId(), PriceTypeEn.RETAIL_PRICE)).thenReturn(existingRetail);
+        when(variantPricesRepository.findLatestByVariantAndType(variant.getId(), PriceTypeEn.WHOLESALE_PRICE)).thenReturn(null);
 
         String csv = """
                 sku,retail_price,wholesale_price
@@ -470,10 +475,10 @@ class ProductPriceImportCharacterizationTest
                 """;
 
         InputStream is = new ByteArrayInputStream(csv.getBytes(StandardCharsets.UTF_8));
-        productPriceImportService.handleProductPriceCsvUploadForBatch(is, batchId);
+        asyncService.stageRowsAsync("price-csv",is, batchId);
 
         assertEquals(1, capturedStagedRows.size());
-        ProductPriceUploadStagedEntity row = capturedStagedRows.get(0);
+        ProductPriceImportStagedEntity row = capturedStagedRows.get(0);
         assertEquals("SKU-BLANK", row.getSku());
         // Blank values are parsed as BigDecimal.ZERO by CsvImportUtils.parseBigDecimal
         assertEquals(0, BigDecimal.ZERO.compareTo(row.getRetailPrice()));

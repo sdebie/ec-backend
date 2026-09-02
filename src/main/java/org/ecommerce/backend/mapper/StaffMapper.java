@@ -24,5 +24,9 @@ public interface StaffMapper
     List<StaffDto> mapEntityToDto(List<StaffUserEntity> allStaffUsers);
 
     @Mapping(target = "passwordHash", ignore = true) // credentials are never set from a DTO
+    @Mapping(target = "passwordResetCodeHash", ignore = true) // OTP state is owned by StaffPasswordResetService
+    @Mapping(target = "passwordResetCodeExpiry", ignore = true)
+    @Mapping(target = "passwordResetCodeAttempts", ignore = true)
+    @Mapping(target = "passwordResetCodeLockedUntil", ignore = true)
     StaffUserEntity mapDtoToEntity(StaffDto staffDto, @MappingTarget StaffUserEntity staffUserEntity);
 }

@@ -3,8 +3,8 @@ package org.ecommerce.backend.api.rest;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.http.ContentType;
+import jakarta.ws.rs.core.Response;
 import org.ecommerce.backend.service.QuoteRequestService;
-import org.ecommerce.backend.service.RateLimitDecision;
 import org.ecommerce.backend.service.RateLimiterService;
 import org.ecommerce.common.entity.QuoteRequestEntity;
 import org.ecommerce.common.enums.QuoteRequestStatusEn;
@@ -40,7 +40,7 @@ class QuoteRequestResourceIT
     void setUp()
     {
         // Default: allow all requests (under rate limit)
-        when(rateLimiterService.check(anyString(), anyString(), anyInt(), anyLong())).thenReturn(new RateLimitDecision(true, 0));
+        when(rateLimiterService.enforce(anyString(), anyString(), anyInt(), anyLong())).thenReturn(null);
 
         // Default: submit returns a persisted entity
         QuoteRequestEntity entity = new QuoteRequestEntity();
@@ -323,8 +323,8 @@ class QuoteRequestResourceIT
     @DisplayName("rate limit exceeded returns 429 with Retry-After header")
     void rateLimitExceeded_returns429_withRetryAfter()
     {
-        when(rateLimiterService.check(anyString(), anyString(), anyInt(), anyLong()))
-                .thenReturn(new RateLimitDecision(false, 3500));
+        when(rateLimiterService.enforce(anyString(), anyString(), anyInt(), anyLong()))
+                .thenReturn(Response.status(429).header("Retry-After", 3500L).build());
 
         given()
                 .contentType(ContentType.JSON)
@@ -374,7 +374,7 @@ class QuoteRequestResourceIT
                 .then()
                 .statusCode(201);
 
-        verify(rateLimiterService).check(eq("quote-request"), eq("10.0.0.1"), anyInt(), anyLong());
+        verify(rateLimiterService).enforce(eq("quote-request"), eq("10.0.0.1"), anyInt(), anyLong());
     }
 
     @Test
@@ -391,7 +391,7 @@ class QuoteRequestResourceIT
                 .then()
                 .statusCode(201);
 
-        verify(rateLimiterService).check(eq("quote-request"), eq("203.0.113.9"), anyInt(), anyLong());
+        verify(rateLimiterService).enforce(eq("quote-request"), eq("203.0.113.9"), anyInt(), anyLong());
     }
 
     @Test
@@ -407,7 +407,7 @@ class QuoteRequestResourceIT
                 .then()
                 .statusCode(201);
 
-        verify(rateLimiterService).check(eq("quote-request"), eq("198.51.100.7"), anyInt(), anyLong());
+        verify(rateLimiterService).enforce(eq("quote-request"), eq("198.51.100.7"), anyInt(), anyLong());
     }
 
     // ── Endpoint is public (no auth required) ───────────────────────────────
@@ -439,6 +439,6 @@ class QuoteRequestResourceIT
                 .then()
                 .statusCode(201);
 
-        verify(rateLimiterService).check(eq("quote-request"), anyString(), eq(5), eq(3600L));
+        verify(rateLimiterService).enforce(eq("quote-request"), anyString(), eq(5), eq(3600L));
     }
 }

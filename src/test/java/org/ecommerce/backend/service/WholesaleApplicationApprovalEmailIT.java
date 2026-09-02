@@ -13,6 +13,7 @@ import org.ecommerce.common.entity.WholesaleApplicationEntity;
 import org.ecommerce.common.enums.CustomerStatusEn;
 import org.ecommerce.common.enums.CustomerTypeEn;
 import org.ecommerce.common.enums.WholesaleApplicationStatusEn;
+import org.ecommerce.common.repository.UserRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -48,6 +49,16 @@ class WholesaleApplicationApprovalEmailIT
 
     @Inject
     MockMailbox mailbox;
+
+    // Real (non-mock) injection: the UserEntity.findByEmail() call in cleanup() below is
+    // direct real-DB test teardown code (never a when()/verify() stub) for a genuine
+    // @QuarkusTest IT that exercises WholesaleCustomerService against real committed rows
+    // (see the class javadoc). @InjectMock would replace this bean application-wide,
+    // including inside the production code approveWholesaleApplication() exercises, silently
+    // turning this into a check against an unstubbed mock. @Inject preserves the exact
+    // real-DB behaviour the removed UserEntity.findByEmail() static had.
+    @Inject
+    UserRepository userRepository;
 
     private final List<UUID> createdApplicationIds = Collections.synchronizedList(new ArrayList<>());
     private final List<String> createdEmails = Collections.synchronizedList(new ArrayList<>());
@@ -102,7 +113,7 @@ class WholesaleApplicationApprovalEmailIT
             em.createQuery("delete from WholesaleApplicationEntity a where a.id = :id").setParameter("id", appId).executeUpdate();
         }
         for (String email : createdEmails) {
-            UserEntity user = UserEntity.findByEmail(email);
+            UserEntity user = userRepository.findByEmail(email);
             if (user != null) {
                 CustomerEntity customer = user.getCustomer();
                 if (customer != null) {

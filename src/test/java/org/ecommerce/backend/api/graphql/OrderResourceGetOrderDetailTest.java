@@ -16,6 +16,7 @@ import org.ecommerce.backend.utils.CurrentRequestOrderToken;
 import org.ecommerce.common.dto.OrderDetailRespDto;
 import org.ecommerce.common.entity.CustomerEntity;
 import org.ecommerce.common.entity.OrderEntity;
+import org.ecommerce.common.repository.CustomerRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -67,13 +68,15 @@ class OrderResourceGetOrderDetailTest
     @InjectMock
     RateLimiterService rateLimiterService;
 
+    @InjectMock
+    CustomerRepository customerRepository;
+
     @Inject
     OrderCapabilityService orderCapability;
 
     @BeforeEach
     void setUp()
     {
-        PanacheMock.mock(CustomerEntity.class);
         PanacheMock.mock(OrderEntity.class);
         when(currentRequestClientIp.resolve()).thenReturn("192.0.2.99");
         when(rateLimiterService.check(anyString(), anyString(), anyInt(), anyLong()))
@@ -101,7 +104,7 @@ class OrderResourceGetOrderDetailTest
         // findByEmail calls findById-style query internally
         CustomerEntity customer = new CustomerEntity();
         customer.setId(customerId);
-        when(CustomerEntity.findByEmail(email)).thenReturn(customer);
+        when(customerRepository.findByEmail(email)).thenReturn(customer);
 
         // Configure order entity lookup with matching customer
         OrderEntity order = new OrderEntity();
@@ -139,7 +142,7 @@ class OrderResourceGetOrderDetailTest
         // Configure customer lookup
         CustomerEntity customer = new CustomerEntity();
         customer.setId(customerId);
-        when(CustomerEntity.findByEmail(email)).thenReturn(customer);
+        when(customerRepository.findByEmail(email)).thenReturn(customer);
 
         // Configure order entity lookup with DIFFERENT customer
         OrderEntity order = new OrderEntity();
@@ -173,7 +176,7 @@ class OrderResourceGetOrderDetailTest
         // Configure customer lookup
         CustomerEntity customer = new CustomerEntity();
         customer.setId(customerId);
-        when(CustomerEntity.findByEmail(email)).thenReturn(customer);
+        when(customerRepository.findByEmail(email)).thenReturn(customer);
 
         // Configure order entity with null customerEntity (guest order)
         OrderEntity order = new OrderEntity();
@@ -269,7 +272,7 @@ class OrderResourceGetOrderDetailTest
         when(orderService.getOrderDetail(orderId)).thenReturn(detail);
 
         // Configure customer lookup to return null (not found)
-        when(CustomerEntity.findByEmail(email)).thenReturn(null);
+        when(customerRepository.findByEmail(email)).thenReturn(null);
 
         // Act & Assert
         GraphQLException ex = assertThrows(GraphQLException.class, () -> orderResource.getOrderDetail(orderId.toString()));

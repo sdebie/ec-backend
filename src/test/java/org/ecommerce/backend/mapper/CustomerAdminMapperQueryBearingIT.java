@@ -18,15 +18,13 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 /**
  * Output-preservation test for {@code CustomerAdminMapper.toListItemDto(customer, application)}.
  * <p>
- * ⚠️ The wholesale-application lookup this class used to exercise now lives in
- * {@code CustomerAdminService.wholesaleApplicationFor} — mappers do not open queries. These
- * assertions still pin the mapping, but the query itself no longer has a dedicated test.
+ * ⚠️ The wholesale-application lookup lives in {@code CustomerAdminService.wholesaleApplicationFor},
+ * since mappers do not open queries — that query has no dedicated test of its own; these
+ * assertions only pin the mapping.
  * <p>
  * Asserts that the query-bearing method output equals the pinned inline-method baseline —
  * does NOT re-implement the query in the test (per Requirement 4.4).
@@ -68,7 +66,6 @@ class CustomerAdminMapperQueryBearingIT
     // ══════════════════════════════════════════════════════════════════════════
 
     @Test
-    @SuppressWarnings("unchecked")
     void toListItemDto_queryBearing_customerWithWholesaleApp_matchesBaseline()
     {
         UUID customerId = UUID.randomUUID();
@@ -83,7 +80,6 @@ class CustomerAdminMapperQueryBearingIT
     }
 
     @Test
-    @SuppressWarnings("unchecked")
     void toListItemDto_queryBearing_customerWithoutWholesaleApp_matchesBaseline()
     {
         UUID customerId = UUID.randomUUID();
@@ -97,7 +93,6 @@ class CustomerAdminMapperQueryBearingIT
     }
 
     @Test
-    @SuppressWarnings("unchecked")
     void toListItemDto_queryBearing_nullUser_emailAndRegisteredAtNull()
     {
         UUID customerId = UUID.randomUUID();
@@ -114,7 +109,6 @@ class CustomerAdminMapperQueryBearingIT
     }
 
     @Test
-    @SuppressWarnings("unchecked")
     void toListItemDto_queryBearing_nullStatusAndShopperType_mapsToNull()
     {
         UUID customerId = UUID.randomUUID();
@@ -132,7 +126,6 @@ class CustomerAdminMapperQueryBearingIT
     }
 
     @Test
-    @SuppressWarnings("unchecked")
     void toListItemDto_queryBearing_pendingWholesaleApp_statusMapped()
     {
         UUID customerId = UUID.randomUUID();
@@ -148,7 +141,6 @@ class CustomerAdminMapperQueryBearingIT
     }
 
     @Test
-    @SuppressWarnings("unchecked")
     void toListItemDto_queryBearing_appWithNullStatus_wholesaleStatusIsNull()
     {
         UUID customerId = UUID.randomUUID();

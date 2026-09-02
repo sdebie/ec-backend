@@ -6,55 +6,39 @@ import jakarta.transaction.Transactional;
 import lombok.extern.slf4j.Slf4j;
 import org.ecommerce.backend.exception.InvalidPasswordResetCodeException;
 import org.ecommerce.backend.exception.PasswordResetLockedException;
-import org.ecommerce.backend.utils.PasswordHashUtil;
+import org.ecommerce.backend.utils.CustomerPasswordHashUtil;
+import org.ecommerce.backend.utils.PasswordStrengthValidator;
 import org.ecommerce.common.entity.CustomerEntity;
 import org.ecommerce.common.entity.UserEntity;
 import org.ecommerce.common.enums.CustomerStatusEn;
 import org.ecommerce.common.enums.CustomerTypeEn;
+import org.ecommerce.common.repository.UserRepository;
 
-import java.security.SecureRandom;
 import java.time.OffsetDateTime;
 import java.util.Map;
-import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Slf4j
 @ApplicationScoped
 public class CustomerPasswordResetService
 {
-    private static final int RESET_CODE_LENGTH = 6;
-    private static final int RESET_CODE_EXPIRY_MINUTES = 10;
-    private static final int MAX_INVALID_ATTEMPTS = 3;
     private static final int LOCKOUT_MINUTES = 15;
-    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
     private final Map<String, IpAttemptState> ipAttemptStateMap = new ConcurrentHashMap<>();
 
     @Inject
+    PasswordResetCodePolicy policy;
+
+    @Inject
     PasswordResetNotificationService passwordResetNotificationService;
+
+    @Inject
+    UserRepository userRepository;
 
     private static class IpAttemptState
     {
         int failedAttempts;
         OffsetDateTime lockedUntil;
-    }
-
-    @Transactional
-    public void initiatePasswordReset(String email)
-    {
-        if (email == null || email.isBlank()) {
-            return;
-        }
-
-        UserEntity user = UserEntity.findByEmail(email.trim());
-        if (user != null) {
-            String token = UUID.randomUUID().toString();
-            user.setResetToken(token);
-            user.setResetTokenExpiry(OffsetDateTime.now().plusMinutes(20));
-
-            // Keep generic caller response; notification transport can be upgraded later.
-            passwordResetNotificationService.sendResetLink(user.getEmail(), token);
-        }
     }
 
     @Transactional
@@ -65,38 +49,46 @@ public class CustomerPasswordResetService
         }
 
         String normalizedEmail = email.trim();
-        UserEntity user = UserEntity.findByEmail(normalizedEmail);
+        UserEntity user = userRepository.findByEmail(normalizedEmail);
         if (user == null || user.getCustomer() == null) {
             return;
         }
 
-        String rawCode = generateResetCode();
+        String rawCode = policy.generateCode();
         OffsetDateTime now = OffsetDateTime.now();
 
         log.debug("Password Reset {}", rawCode);
-        user.setPasswordResetCodeHash(PasswordHashUtil.hash(rawCode));
-        user.setPasswordResetCodeExpiry(now.plusMinutes(RESET_CODE_EXPIRY_MINUTES));
+        user.setPasswordResetCodeHash(policy.fingerprint(rawCode));
+        user.setPasswordResetCodeExpiry(now.plusMinutes(policy.ttlMinutes()));
         user.setPasswordResetCodeAttempts(0);
         user.setPasswordResetCodeLockedUntil(null);
 
-        passwordResetNotificationService.sendResetCode(user.getEmail(), rawCode, RESET_CODE_EXPIRY_MINUTES);
+        passwordResetNotificationService.sendResetCode(user.getEmail(), rawCode, policy.ttlMinutes());
     }
 
-    @Transactional
+    // dontRollbackOn is required, not stylistic: both exceptions are thrown AFTER
+    // verifyCodeInternal writes attempt-counter/lockout state that must survive — the
+    // JTA default is to mark any unchecked exception's transaction rollback-only,
+    // which silently discarded that write on every failed attempt, making the
+    // 3-attempt lockout structurally unable to ever trigger against real persistence.
+    // Invisible to CustomerPasswordResetServiceTest (PanacheMock has no real
+    // transaction to roll back); caught by CustomerPasswordResetLockoutIT.
+    @Transactional(dontRollbackOn = {InvalidPasswordResetCodeException.class, PasswordResetLockedException.class})
     public void verifyPasswordResetCode(String email, String code, String clientIp)
     {
         verifyCodeInternal(email, code, clientIp);
     }
 
-    @Transactional
+    @Transactional(dontRollbackOn = {InvalidPasswordResetCodeException.class, PasswordResetLockedException.class})
     public void completePasswordResetWithCode(String email, String code, String newPassword, String clientIp)
     {
         if (newPassword == null || newPassword.isBlank()) {
             throw new IllegalArgumentException("New password is required");
         }
+        PasswordStrengthValidator.validate(newPassword);
 
         UserEntity user = verifyCodeInternal(email, code, clientIp);
-        user.setPasswordHash(PasswordHashUtil.hash(newPassword));
+        user.setPasswordHash(CustomerPasswordHashUtil.hash(newPassword));
         user.setLastLogin(OffsetDateTime.now());
 
         activateCustomerProfile(user.getCustomer());
@@ -105,31 +97,6 @@ public class CustomerPasswordResetService
         user.setPasswordResetCodeExpiry(null);
         user.setPasswordResetCodeAttempts(0);
         user.setPasswordResetCodeLockedUntil(null);
-    }
-
-    @Transactional
-    public void completePasswordReset(String token, String newPassword)
-    {
-        if (token == null || token.isBlank()) {
-            throw new IllegalArgumentException("Reset token is required");
-        }
-
-        if (newPassword == null || newPassword.isBlank()) {
-            throw new IllegalArgumentException("New password is required");
-        }
-
-        UserEntity user = UserEntity.findByResetToken(token);
-        if (user == null || user.getResetTokenExpiry() == null || user.getResetTokenExpiry().isBefore(OffsetDateTime.now())) {
-            throw new IllegalArgumentException("Invalid or expired reset token");
-        }
-
-        user.setPasswordHash(PasswordHashUtil.hash(newPassword));
-        user.setLastLogin(OffsetDateTime.now());
-
-        activateCustomerProfile(user.getCustomer());
-
-        user.setResetToken(null);
-        user.setResetTokenExpiry(null);
     }
 
     /**
@@ -158,7 +125,7 @@ public class CustomerPasswordResetService
         ensureIpNotLocked(normalizedIp, now);
 
         String normalizedEmail = email == null ? "" : email.trim();
-        UserEntity user = UserEntity.findByEmail(normalizedEmail);
+        UserEntity user = userRepository.findByEmail(normalizedEmail);
         if (user == null) {
             registerIpFailure(normalizedIp, now);
             throw new InvalidPasswordResetCodeException();
@@ -166,11 +133,8 @@ public class CustomerPasswordResetService
 
         ensureAccountNotLocked(user, now);
 
-        boolean validCode = isValidCodeFormat(code)
-                && user.getPasswordResetCodeHash() != null
-                && user.getPasswordResetCodeExpiry() != null
-                && !user.getPasswordResetCodeExpiry().isBefore(now)
-                && PasswordHashUtil.hash(code.trim()).equals(user.getPasswordResetCodeHash());
+        boolean validCode = !policy.isExpired(user.getPasswordResetCodeExpiry(), now)
+                && policy.matches(code, user.getPasswordResetCodeHash());
 
         if (!validCode) {
             registerFailure(user, normalizedIp, now);
@@ -185,13 +149,15 @@ public class CustomerPasswordResetService
 
     private void ensureAccountNotLocked(UserEntity user, OffsetDateTime now)
     {
-        if (user.getPasswordResetCodeLockedUntil() != null && user.getPasswordResetCodeLockedUntil().isAfter(now)) {
-            throw new PasswordResetLockedException(user.getPasswordResetCodeLockedUntil());
+        OffsetDateTime lockedUntil = user.getPasswordResetCodeLockedUntil();
+        if (lockedUntil == null) {
+            return;
         }
-        if (user.getPasswordResetCodeLockedUntil() != null && !user.getPasswordResetCodeLockedUntil().isAfter(now)) {
-            user.setPasswordResetCodeLockedUntil(null);
-            user.setPasswordResetCodeAttempts(0);
+        if (policy.isLocked(lockedUntil, now)) {
+            throw new PasswordResetLockedException(lockedUntil);
         }
+        user.setPasswordResetCodeLockedUntil(null);
+        user.setPasswordResetCodeAttempts(0);
     }
 
     private void ensureIpNotLocked(String ip, OffsetDateTime now)
@@ -200,18 +166,19 @@ public class CustomerPasswordResetService
         if (state == null) {
             return;
         }
-        if (state.lockedUntil != null && state.lockedUntil.isAfter(now)) {
+        if (policy.isLocked(state.lockedUntil, now)) {
             throw new PasswordResetLockedException(state.lockedUntil);
         }
-        if (state.lockedUntil != null && !state.lockedUntil.isAfter(now)) {
+        if (state.lockedUntil != null) {
             ipAttemptStateMap.remove(ip);
         }
     }
 
     private void registerFailure(UserEntity user, String ip, OffsetDateTime now)
     {
-        user.setPasswordResetCodeAttempts(user.getPasswordResetCodeAttempts() + 1);
-        if (user.getPasswordResetCodeAttempts() >= MAX_INVALID_ATTEMPTS) {
+        int attempts = user.getPasswordResetCodeAttempts() + 1;
+        user.setPasswordResetCodeAttempts(attempts);
+        if (policy.shouldLock(attempts)) {
             OffsetDateTime lockedUntil = now.plusMinutes(LOCKOUT_MINUTES);
             user.setPasswordResetCodeLockedUntil(lockedUntil);
             user.setPasswordResetCodeAttempts(0);
@@ -228,7 +195,7 @@ public class CustomerPasswordResetService
     {
         IpAttemptState state = ipAttemptStateMap.computeIfAbsent(ip, ignored -> new IpAttemptState());
         state.failedAttempts = state.failedAttempts + 1;
-        if (state.failedAttempts >= MAX_INVALID_ATTEMPTS) {
+        if (policy.shouldLock(state.failedAttempts)) {
             state.lockedUntil = now.plusMinutes(LOCKOUT_MINUTES);
             state.failedAttempts = 0;
             throw new PasswordResetLockedException(state.lockedUntil);
@@ -246,31 +213,6 @@ public class CustomerPasswordResetService
             return "unknown";
         }
         return clientIp.trim();
-    }
-
-    private static String generateResetCode()
-    {
-        int floor = (int) Math.pow(10, RESET_CODE_LENGTH - 1);
-        int bound = floor * 9;
-        int code = floor + SECURE_RANDOM.nextInt(bound);
-        return String.format("%06d", code);
-    }
-
-    private static boolean isValidCodeFormat(String code)
-    {
-        if (code == null) {
-            return false;
-        }
-        String trimmed = code.trim();
-        if (trimmed.length() != RESET_CODE_LENGTH) {
-            return false;
-        }
-        for (int i = 0; i < trimmed.length(); i++) {
-            if (!Character.isDigit(trimmed.charAt(i))) {
-                return false;
-            }
-        }
-        return true;
     }
 
 }

@@ -41,6 +41,8 @@ public final class PasswordHashUtil {
      */
     public static boolean verify(String plain, String storedHash) {
         if (plain == null || storedHash == null) return false;
-        return hash(plain).equals(storedHash);
+        return MessageDigest.isEqual(
+                hash(plain).getBytes(StandardCharsets.UTF_8),
+                storedHash.getBytes(StandardCharsets.UTF_8));
     }
 }

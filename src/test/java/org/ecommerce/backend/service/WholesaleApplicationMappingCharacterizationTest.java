@@ -52,7 +52,6 @@ class WholesaleApplicationMappingCharacterizationTest
     @InjectMock
     WholesaleApplicationRepository wholesaleApplicationRepository;
 
-    @SuppressWarnings("unchecked")
     @BeforeEach
     void setUp()
     {
@@ -76,7 +75,6 @@ class WholesaleApplicationMappingCharacterizationTest
     }
 
     @Test
-    @SuppressWarnings("unchecked")
     void toApplicationDetailsDto_fullyPopulated_pinsAllFields()
     {
         UUID customerId = UUID.randomUUID();
@@ -129,7 +127,6 @@ class WholesaleApplicationMappingCharacterizationTest
     }
 
     @Test
-    @SuppressWarnings("unchecked")
     void toApplicationDetailsDto_nullOptionalFields_pinsNullsCorrectly()
     {
         UUID customerId = UUID.randomUUID();
@@ -171,18 +168,18 @@ class WholesaleApplicationMappingCharacterizationTest
         assertNull(dto.getProcessedAt());
 
         // Address fields null
-        assertNull(dto.getPhysicalAddressLine1());
-        assertNull(dto.getPhysicalAddressLine2());
-        assertNull(dto.getPhysicalSuburb());
-        assertNull(dto.getPhysicalCity());
-        assertNull(dto.getPhysicalProvince());
-        assertNull(dto.getPhysicalPostalCode());
-        assertNull(dto.getPostalAddressLine1());
-        assertNull(dto.getPostalAddressLine2());
-        assertNull(dto.getPostalSuburb());
-        assertNull(dto.getPostalCity());
-        assertNull(dto.getPostalProvince());
-        assertNull(dto.getPostalPostalCode());
+        assertNull(dto.getPhysicalAddress().getLine1());
+        assertNull(dto.getPhysicalAddress().getLine2());
+        assertNull(dto.getPhysicalAddress().getSuburb());
+        assertNull(dto.getPhysicalAddress().getCity());
+        assertNull(dto.getPhysicalAddress().getProvince());
+        assertNull(dto.getPhysicalAddress().getPostalCode());
+        assertNull(dto.getPostalAddress().getLine1());
+        assertNull(dto.getPostalAddress().getLine2());
+        assertNull(dto.getPostalAddress().getSuburb());
+        assertNull(dto.getPostalAddress().getCity());
+        assertNull(dto.getPostalAddress().getProvince());
+        assertNull(dto.getPostalAddress().getPostalCode());
     }
 
     @Test
@@ -250,7 +247,6 @@ class WholesaleApplicationMappingCharacterizationTest
     }
 
     @Test
-    @SuppressWarnings("unchecked")
     void toApplicationDetailsDto_nullCustomerOnApp_customerId_isNull()
     {
         UUID customerId = UUID.randomUUID();
@@ -440,20 +436,20 @@ class WholesaleApplicationMappingCharacterizationTest
         assertEquals(app.getCustomer() != null ? app.getCustomer().getId() : null, dto.getCustomerId());
 
         // Physical address
-        assertEquals(app.getPhysicalAddressLine1(), dto.getPhysicalAddressLine1());
-        assertEquals(app.getPhysicalAddressLine2(), dto.getPhysicalAddressLine2());
-        assertEquals(app.getPhysicalSuburb(), dto.getPhysicalSuburb());
-        assertEquals(app.getPhysicalCity(), dto.getPhysicalCity());
-        assertEquals(app.getPhysicalProvince(), dto.getPhysicalProvince());
-        assertEquals(app.getPhysicalPostalCode(), dto.getPhysicalPostalCode());
+        assertEquals(app.getPhysicalAddressLine1(), dto.getPhysicalAddress().getLine1());
+        assertEquals(app.getPhysicalAddressLine2(), dto.getPhysicalAddress().getLine2());
+        assertEquals(app.getPhysicalSuburb(), dto.getPhysicalAddress().getSuburb());
+        assertEquals(app.getPhysicalCity(), dto.getPhysicalAddress().getCity());
+        assertEquals(app.getPhysicalProvince(), dto.getPhysicalAddress().getProvince());
+        assertEquals(app.getPhysicalPostalCode(), dto.getPhysicalAddress().getPostalCode());
 
         // Postal address
-        assertEquals(app.getPostalAddressLine1(), dto.getPostalAddressLine1());
-        assertEquals(app.getPostalAddressLine2(), dto.getPostalAddressLine2());
-        assertEquals(app.getPostalSuburb(), dto.getPostalSuburb());
-        assertEquals(app.getPostalCity(), dto.getPostalCity());
-        assertEquals(app.getPostalProvince(), dto.getPostalProvince());
-        assertEquals(app.getPostalPostalCode(), dto.getPostalPostalCode());
+        assertEquals(app.getPostalAddressLine1(), dto.getPostalAddress().getLine1());
+        assertEquals(app.getPostalAddressLine2(), dto.getPostalAddress().getLine2());
+        assertEquals(app.getPostalSuburb(), dto.getPostalAddress().getSuburb());
+        assertEquals(app.getPostalCity(), dto.getPostalAddress().getCity());
+        assertEquals(app.getPostalProvince(), dto.getPostalAddress().getProvince());
+        assertEquals(app.getPostalPostalCode(), dto.getPostalAddress().getPostalCode());
     }
 
     private void assertMinimalBaseline(WholesaleApplicationDetailsDto dto, WholesaleApplicationEntity app)
@@ -483,18 +479,18 @@ class WholesaleApplicationMappingCharacterizationTest
         assertNull(dto.getCustomerId());
 
         // Address fields null
-        assertNull(dto.getPhysicalAddressLine1());
-        assertNull(dto.getPhysicalAddressLine2());
-        assertNull(dto.getPhysicalSuburb());
-        assertNull(dto.getPhysicalCity());
-        assertNull(dto.getPhysicalProvince());
-        assertNull(dto.getPhysicalPostalCode());
-        assertNull(dto.getPostalAddressLine1());
-        assertNull(dto.getPostalAddressLine2());
-        assertNull(dto.getPostalSuburb());
-        assertNull(dto.getPostalCity());
-        assertNull(dto.getPostalProvince());
-        assertNull(dto.getPostalPostalCode());
+        assertNull(dto.getPhysicalAddress().getLine1());
+        assertNull(dto.getPhysicalAddress().getLine2());
+        assertNull(dto.getPhysicalAddress().getSuburb());
+        assertNull(dto.getPhysicalAddress().getCity());
+        assertNull(dto.getPhysicalAddress().getProvince());
+        assertNull(dto.getPhysicalAddress().getPostalCode());
+        assertNull(dto.getPostalAddress().getLine1());
+        assertNull(dto.getPostalAddress().getLine2());
+        assertNull(dto.getPostalAddress().getSuburb());
+        assertNull(dto.getPostalAddress().getCity());
+        assertNull(dto.getPostalAddress().getProvince());
+        assertNull(dto.getPostalAddress().getPostalCode());
     }
 
     private void assertDtosEqual(WholesaleApplicationDetailsDto a, WholesaleApplicationDetailsDto b)
@@ -524,19 +520,19 @@ class WholesaleApplicationMappingCharacterizationTest
         assertEquals(a.getProcessedAt(), b.getProcessedAt(), "processedAt");
         assertEquals(a.getCustomerId(), b.getCustomerId(), "customerId");
 
-        assertEquals(a.getPhysicalAddressLine1(), b.getPhysicalAddressLine1(), "physicalAddressLine1");
-        assertEquals(a.getPhysicalAddressLine2(), b.getPhysicalAddressLine2(), "physicalAddressLine2");
-        assertEquals(a.getPhysicalSuburb(), b.getPhysicalSuburb(), "physicalSuburb");
-        assertEquals(a.getPhysicalCity(), b.getPhysicalCity(), "physicalCity");
-        assertEquals(a.getPhysicalProvince(), b.getPhysicalProvince(), "physicalProvince");
-        assertEquals(a.getPhysicalPostalCode(), b.getPhysicalPostalCode(), "physicalPostalCode");
+        assertEquals(a.getPhysicalAddress().getLine1(), b.getPhysicalAddress().getLine1(), "physicalAddress.line1");
+        assertEquals(a.getPhysicalAddress().getLine2(), b.getPhysicalAddress().getLine2(), "physicalAddress.line2");
+        assertEquals(a.getPhysicalAddress().getSuburb(), b.getPhysicalAddress().getSuburb(), "physicalAddress.suburb");
+        assertEquals(a.getPhysicalAddress().getCity(), b.getPhysicalAddress().getCity(), "physicalAddress.city");
+        assertEquals(a.getPhysicalAddress().getProvince(), b.getPhysicalAddress().getProvince(), "physicalAddress.province");
+        assertEquals(a.getPhysicalAddress().getPostalCode(), b.getPhysicalAddress().getPostalCode(), "physicalAddress.postalCode");
 
-        assertEquals(a.getPostalAddressLine1(), b.getPostalAddressLine1(), "postalAddressLine1");
-        assertEquals(a.getPostalAddressLine2(), b.getPostalAddressLine2(), "postalAddressLine2");
-        assertEquals(a.getPostalSuburb(), b.getPostalSuburb(), "postalSuburb");
-        assertEquals(a.getPostalCity(), b.getPostalCity(), "postalCity");
-        assertEquals(a.getPostalProvince(), b.getPostalProvince(), "postalProvince");
-        assertEquals(a.getPostalPostalCode(), b.getPostalPostalCode(), "postalPostalCode");
+        assertEquals(a.getPostalAddress().getLine1(), b.getPostalAddress().getLine1(), "postalAddress.line1");
+        assertEquals(a.getPostalAddress().getLine2(), b.getPostalAddress().getLine2(), "postalAddress.line2");
+        assertEquals(a.getPostalAddress().getSuburb(), b.getPostalAddress().getSuburb(), "postalAddress.suburb");
+        assertEquals(a.getPostalAddress().getCity(), b.getPostalAddress().getCity(), "postalAddress.city");
+        assertEquals(a.getPostalAddress().getProvince(), b.getPostalAddress().getProvince(), "postalAddress.province");
+        assertEquals(a.getPostalAddress().getPostalCode(), b.getPostalAddress().getPostalCode(), "postalAddress.postalCode");
     }
 
     private void assertStatusMappedCorrectly(WholesaleApplicationStatusEn status)

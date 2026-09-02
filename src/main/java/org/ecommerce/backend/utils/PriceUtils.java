@@ -7,6 +7,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.Comparator;
+import java.util.List;
 import java.util.UUID;
 
 public class PriceUtils
@@ -23,21 +24,22 @@ public class PriceUtils
                             Comparator.nullsFirst(UUID::compareTo));
 
     /**
-     * The price in force right now for a variant and price type — the most recent row whose
-     * date window contains the current instant, ties broken by recency.
+     * The price in force right now for a price type, among the given prices for one
+     * variant — the most recent row whose date window contains the current instant, ties
+     * broken by recency.
      * <p>
      * Returns {@link BigDecimal#ZERO} when no row is active, which callers render as
      * "no price set" rather than as free.
      */
-    public static BigDecimal currentPrice(UUID variantId, PriceTypeEn priceType)
+    public static BigDecimal currentPrice(List<VariantPricesEntity> prices, PriceTypeEn priceType)
     {
-        if (variantId == null || priceType == null) {
+        if (prices == null || priceType == null) {
             return BigDecimal.ZERO;
         }
 
         LocalDateTime now = LocalDateTime.now();
 
-        return VariantPricesEntity.findByVariantId(variantId).stream()
+        return prices.stream()
                 .filter(price -> price != null
                         && price.getPriceType() == priceType
                         && price.getPrice() != null

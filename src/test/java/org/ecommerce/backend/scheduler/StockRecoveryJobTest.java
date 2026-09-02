@@ -5,6 +5,7 @@ import io.quarkus.test.junit.mockito.InjectSpy;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
+import org.ecommerce.backend.service.DistributedLockService;
 import org.ecommerce.backend.service.OrderService;
 import org.ecommerce.common.entity.OrderEntity;
 import org.ecommerce.common.entity.OrderItemEntity;
@@ -21,9 +22,11 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -36,22 +39,20 @@ import static org.mockito.Mockito.doThrow;
 
 /**
  * DB-backed tests for {@link StockRecoveryJob#releaseAbandonedOrders()}.
- *
- * <h2>Why these commit instead of using {@code @TestTransaction}</h2>
- * The job releases each order in its own {@code QuarkusTransaction.requiringNew()}.
- * A {@code @TestTransaction} wrapper would be worse than merely unhelpful here: the
- * job's transactions could not see the test's uncommitted fixtures at all, so every
- * sweep would find nothing and the tests would pass by vacuum. These follow the
- * codebase's tracked-id + {@code @AfterEach} cleanup pattern instead.
- *
- * <h2>Why every fixture is backdated to 2001</h2>
- * Committing changes what an invoked sweep can damage. With the former
- * {@code hold-minutes=0}, a sweep would have been eligible to cancel real CREATED
- * orders in the shared database and return their stock — permanently, since no
- * rollback covers it any more. {@code %test.order.abandoned.hold-minutes} is a full
- * year, so only these far-past fixtures are ever candidates. That also makes the
- * batch test deterministic: ordering is oldest-first, so 2001 fixtures always sort
- * ahead of anything real.
+ * <p>
+ * These commit rather than using {@code @TestTransaction}: the job releases each order in
+ * its own {@code QuarkusTransaction.requiringNew()}, and that wrapper would be worse than
+ * merely unhelpful here — the job's transactions could not see the test's uncommitted
+ * fixtures at all, so every sweep would find nothing and the tests would pass by vacuum.
+ * These follow the codebase's tracked-id + {@code @AfterEach} cleanup pattern instead.
+ * <p>
+ * Every fixture is backdated to 2001 because committing changes what an invoked sweep can
+ * damage: too short a hold window would leave a sweep eligible to cancel real CREATED
+ * orders in the shared database and return their stock — permanently, since no rollback
+ * covers it any more. {@code %test.order.abandoned.hold-minutes} is a full year, so only
+ * these far-past fixtures are ever candidates. That also makes the batch test
+ * deterministic: ordering is oldest-first, so 2001 fixtures always sort ahead of anything
+ * real.
  */
 @QuarkusTest
 class StockRecoveryJobTest
@@ -71,6 +72,9 @@ class StockRecoveryJobTest
      */
     @InjectSpy
     OrderService orderService;
+
+    @Inject
+    DistributedLockService lockService;
 
     private final List<UUID> orderIds = new ArrayList<>();
     private final List<UUID> variantIds = new ArrayList<>();
@@ -188,8 +192,8 @@ class StockRecoveryJobTest
                 .setParameter("id", orderId)
                 .getResultList();
         assertEquals(1, history.size());
-        assertEquals(OrderStatusEn.SYSTEM_CANCELED, history.get(0).getStatus());
-        assertEquals("SYSTEM", history.get(0).getChangedBy());
+        assertEquals(OrderStatusEn.SYSTEM_CANCELED, history.getFirst().getStatus());
+        assertEquals("SYSTEM", history.getFirst().getChangedBy());
     }
 
     /**
@@ -349,5 +353,52 @@ class StockRecoveryJobTest
                 "the failed order rolls back whole — status included — so the next tick retries it");
         assertEquals(0, stockOf(poisonVariant));
         assertEquals(0L, historyCountFor(poisonOrder), "a rolled-back release must leave no timeline entry");
+    }
+
+    // ── Cross-instance coordination ─────────────────────────────────────────
+
+    @Test
+    @DisplayName("the sweep is skipped entirely while another instance holds the lock")
+    void sweepIsSkipped_whileAnotherInstanceHoldsTheLock()
+    {
+        String marker = "ZZSRJ-LOCKED-" + UUID.randomUUID().toString().substring(0, 8);
+        UUID variantId = newVariant(marker, 5);
+        UUID orderId = newOrder(OrderStatusEn.CREATED, variantId, 3, FAR_PAST);
+
+        // Simulates a different backend replica already running this tick's sweep.
+        Optional<String> otherInstanceToken =
+                lockService.tryAcquire(StockRecoveryJob.LOCK_NAME, Duration.ofSeconds(30));
+        assertTrue(otherInstanceToken.isPresent(), "test setup: the lock must start free");
+
+        try {
+            job.releaseAbandonedOrders();
+
+            assertEquals(OrderStatusEn.CREATED, statusOf(orderId),
+                    "a genuinely eligible order must be left untouched when the lock is held elsewhere");
+            assertEquals(5, stockOf(variantId));
+            assertEquals(0L, historyCountFor(orderId), "a skipped sweep must not even attempt the order");
+        } finally {
+            lockService.release(StockRecoveryJob.LOCK_NAME, otherInstanceToken.get());
+        }
+    }
+
+    @Test
+    @DisplayName("the sweep proceeds normally once the lock is free again")
+    void sweepProceeds_onceTheLockIsFreeAgain()
+    {
+        String marker = "ZZSRJ-UNLOCKED-" + UUID.randomUUID().toString().substring(0, 8);
+        UUID variantId = newVariant(marker, 5);
+        UUID orderId = newOrder(OrderStatusEn.CREATED, variantId, 3, FAR_PAST);
+
+        job.releaseAbandonedOrders();
+
+        assertEquals(OrderStatusEn.SYSTEM_CANCELED, statusOf(orderId));
+        assertEquals(8, stockOf(variantId));
+
+        // The lock is free again — proves the job releases on its own.
+        Optional<String> nextTickToken =
+                lockService.tryAcquire(StockRecoveryJob.LOCK_NAME, Duration.ofSeconds(30));
+        assertTrue(nextTickToken.isPresent(), "the job must release its own lock when the sweep completes");
+        lockService.release(StockRecoveryJob.LOCK_NAME, nextTickToken.get());
     }
 }

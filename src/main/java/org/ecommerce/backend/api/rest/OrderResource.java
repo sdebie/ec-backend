@@ -12,7 +12,6 @@ import org.ecommerce.backend.exception.IdempotencyConflictException;
 import org.ecommerce.backend.exception.UnavailableVariantsException;
 import org.ecommerce.backend.service.OrderNotificationService;
 import org.ecommerce.backend.service.OrderService;
-import org.ecommerce.backend.service.RateLimitDecision;
 import org.ecommerce.backend.service.RateLimiterService;
 import org.ecommerce.backend.service.StatusTransition;
 import org.ecommerce.backend.service.TransitionOutcome;
@@ -25,6 +24,8 @@ import org.ecommerce.common.entity.ShippingMethodEntity;
 import org.ecommerce.common.enums.CustomerTypeEn;
 import org.ecommerce.common.enums.OrderStatusEn;
 import org.ecommerce.common.enums.StockEffect;
+import org.ecommerce.common.repository.CustomerRepository;
+import org.ecommerce.common.repository.OrderRepository;
 import org.jboss.logging.Logger;
 
 import java.util.Map;
@@ -55,6 +56,12 @@ public class OrderResource {
 
     @Inject
     SecurityIdentity securityIdentity;
+
+    @Inject
+    OrderRepository orderRepository;
+
+    @Inject
+    CustomerRepository customerRepository;
 
     /**
      * Maximum checkouts one caller may start per window.
@@ -117,10 +124,10 @@ public class OrderResource {
         // against the same bucket as the original submission, deliberately — see
         // design §3.3.
         String clientIp = ClientIpUtils.resolveClientIp(cfConnectingIp, xForwardedFor, xRealIp);
-        RateLimitDecision decision = rateLimiterService.check(
+        Response limited = rateLimiterService.enforce(
                 "checkout", clientIp, CHECKOUT_MAX_PER_WINDOW, CHECKOUT_WINDOW_SECONDS);
-        if (!decision.allowed()) {
-            return Response.status(429).header("Retry-After", decision.retryAfterSeconds()).build();
+        if (limited != null) {
+            return limited;
         }
 
         String fingerprint = OrderService.fingerprint(request.getItems());
@@ -132,7 +139,7 @@ public class OrderResource {
         // against the winner either way. This exists to avoid the wasted work of
         // that revalidate → reserve → roll-back cycle on the common case (a
         // sequential retry), not to make it correct.
-        OrderEntity existing = OrderEntity.findByIdempotencyKey(idempotencyKey);
+        OrderEntity existing = orderRepository.findByIdempotencyKey(idempotencyKey);
         if (existing != null) {
             return resolveExisting(existing, fingerprint);
         }
@@ -149,7 +156,7 @@ public class OrderResource {
             // won. Our transaction has rolled back, releasing the stock it
             // reserved; the winner's has committed and is visible to this fresh
             // read.
-            OrderEntity winner = OrderEntity.findByIdempotencyKey(idempotencyKey);
+            OrderEntity winner = orderRepository.findByIdempotencyKey(idempotencyKey);
             if (winner == null) {
                 LOG.errorf("Idempotency claim on %s was lost but no winning order is visible", idempotencyKey);
                 return Response.status(500).entity(Map.of("error", "Unexpected error")).build();
@@ -161,7 +168,7 @@ public class OrderResource {
             // last-unit race that neither the lookup above nor the claim inside
             // createOrderFromCart can catch, because this exit is reached before
             // persist() is ever attempted.
-            OrderEntity winner = OrderEntity.findByIdempotencyKey(idempotencyKey);
+            OrderEntity winner = orderRepository.findByIdempotencyKey(idempotencyKey);
             if (winner != null) {
                 return resolveExisting(winner, fingerprint);
             }
@@ -255,7 +262,7 @@ public class OrderResource {
     @Transactional
     public Response confirmInStorePayment(@PathParam("orderId") UUID orderId,
                                            @HeaderParam("X-Order-Token") String orderToken) {
-        OrderEntity order = OrderEntity.findOrderInfoById(orderId);
+        OrderEntity order = orderRepository.findOrderInfoById(orderId);
         if (order == null || !ownershipGuard.mayAct(order, orderToken)) {
             return Response.status(Response.Status.NOT_FOUND)
                     .entity(Map.of("error", "Order not found"))
@@ -332,7 +339,7 @@ public class OrderResource {
             return null;
         }
         String email = jwt.getSubject();
-        CustomerEntity customer = CustomerEntity.findByEmail(email);
+        CustomerEntity customer = customerRepository.findByEmail(email);
         if (customer == null) {
             LOG.warnf("createOrder: customer role present but no matching CustomerEntity for email: %s", email);
             throw new WebApplicationException(

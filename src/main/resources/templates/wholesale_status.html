@@ -1,67 +1,8 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <style>
-        body {
-            font-family: sans-serif;
-            color: #333;
-            line-height: 1.6;
-        }
+{#include email_layout}
+{#headline}Wholesale Application Update{/headline}
+{#subheading}<p>From <strong>{storeName}</strong></p>{/subheading}
 
-        .container {
-            width: 100%;
-            max-width: 600px;
-            margin: 0 auto;
-            border: 1px solid #eee;
-            padding: 20px;
-            border-radius: 10px;
-        }
-
-        .header {
-            text-align: center;
-            border-bottom: 2px solid #3b82f6;
-            padding-bottom: 20px;
-        }
-
-        .content {
-            margin: 20px 0;
-        }
-
-        .reason-section {
-            margin: 20px 0;
-            padding: 15px;
-            background-color: #f9f9f9;
-            border-radius: 6px;
-        }
-
-        .reason-section h3 {
-            margin: 0 0 10px 0;
-            font-size: 14px;
-            color: #555;
-        }
-
-        .reason-section p {
-            margin: 0;
-            white-space: pre-wrap;
-        }
-
-        .footer {
-            font-size: 12px;
-            color: #777;
-            margin-top: 30px;
-            text-align: center;
-        }
-    </style>
-    <title>Wholesale Application Update</title>
-</head>
-<body>
-<div class="container">
-    <div class="header">
-        <h1>Wholesale Application Update</h1>
-        <p>From <strong>{storeName}</strong></p>
-    </div>
-
+{#body}
     <div class="content">
         <p>Hi {firstName},</p>
 
@@ -79,7 +20,7 @@
                 at this time.</p>
 
             {#if rejectionReason}
-                <div class="reason-section">
+                <div class="message-section">
                     <h3>Reason</h3>
                     <p>{rejectionReason}</p>
                 </div>
@@ -88,10 +29,9 @@
             <p>If you have any questions about this decision, please get in touch with us.</p>
         {/if}
     </div>
+{/body}
 
-    <div class="footer">
-        <p>{storeName}</p>
-    </div>
-</div>
-</body>
-</html>
+{#footer}
+    <p>{storeName}</p>
+{/footer}
+{/include}
