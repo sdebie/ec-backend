@@ -218,13 +218,5 @@
                 <enabled>true</enabled>
             </snapshots>
         </repository>
-        <repository>
-            <id>github-infra</id>
-            <name>GitHub Packages - Infra</name>
-            <url>https://maven.pkg.github.com/sdebie/ec-infra</url>
-            <snapshots>
-                <enabled>true</enabled>
-            </snapshots>
-        </repository>
     </repositories>
 </project>
