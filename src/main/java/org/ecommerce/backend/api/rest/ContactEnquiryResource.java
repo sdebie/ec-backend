@@ -8,7 +8,6 @@ import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import org.ecommerce.backend.exception.RecipientNotConfiguredException;
 import org.ecommerce.backend.service.ContactEnquiryMailer;
-import org.ecommerce.backend.service.RateLimiterService;
 import org.ecommerce.backend.utils.ClientIpUtils;
 import org.ecommerce.common.dto.ContactEnquiryRequestDto;
 import org.jboss.logging.Logger;
@@ -20,13 +19,12 @@ import java.util.Set;
  * <p>
  * No auth annotation — public by design, matching {@code OrderResource}.
  * <p>
- * Flow: honeypot check → rate-limit check → resolve recipient → async send → 202.
+ * Flow: honeypot check → resolve recipient → async send → 202.
  * <p>
  * Status codes:
  * <ul>
  *   <li>{@code 202} — accepted (delivery is async; also returned for honeypot traps)</li>
  *   <li>{@code 422} — validation failure (well-formed body, invalid content)</li>
- *   <li>{@code 429} — rate-limited</li>
  *   <li>{@code 503} — no recipient configured</li>
  * </ul>
  * Provider errors are never leaked to the client.
@@ -45,9 +43,6 @@ public class ContactEnquiryResource {
 
     @Inject
     ContactEnquiryMailer contactEnquiryMailer;
-
-    @Inject
-    RateLimiterService rateLimiterService;
 
     @Inject
     Validator validator;
@@ -76,13 +71,7 @@ public class ContactEnquiryResource {
             return Response.status(Response.Status.ACCEPTED).build();
         }
 
-        // 3. Rate-limit check
-        Response limited = rateLimiterService.enforce("enquiry", clientIp, 5, 3600);
-        if (limited != null) {
-            return limited;
-        }
-
-        // 4. Resolve recipient + send (async fire-and-log)
+        // 3. Resolve recipient + send (async fire-and-log)
         try {
             contactEnquiryMailer.send(dto);
         } catch (RecipientNotConfiguredException e) {

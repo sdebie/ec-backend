@@ -14,8 +14,6 @@ import org.ecommerce.backend.exception.InvalidPasswordResetCodeException;
 import org.ecommerce.backend.exception.PasswordResetLockedException;
 import org.ecommerce.backend.security.ForcedPasswordResetIdentityAugmentor;
 import org.ecommerce.backend.service.AdminAuthService;
-import org.ecommerce.backend.service.RateLimitDecision;
-import org.ecommerce.backend.service.RateLimiterService;
 import org.ecommerce.backend.service.StaffPasswordResetService;
 import org.ecommerce.backend.service.StaffService;
 import org.ecommerce.backend.utils.ClientIpUtils;
@@ -55,9 +53,6 @@ public class StaffResource
     StaffPasswordResetService staffPasswordResetService;
 
     @Inject
-    RateLimiterService rateLimiterService;
-
-    @Inject
     JsonWebToken jwt;
 
     @Inject
@@ -65,33 +60,12 @@ public class StaffResource
 
     @POST
     @Path("/login")
-    public Response login(
-            @Valid LoginRequestDto loginDto,
-            @HeaderParam("CF-Connecting-IP") String cfConnectingIp,
-            @HeaderParam("X-Forwarded-For") String xForwardedFor,
-            @HeaderParam("X-Real-IP") String xRealIp)
+    public Response login(@Valid LoginRequestDto loginDto)
     {
         log.debug("Login Request received");
 
-        // Body-shape validation (400) stays ahead of the limiter — @Valid ensures email/password non-blank.
+        // Body-shape validation (400) — @Valid ensures email/password non-blank.
         // If we reach here, loginDto.email() is guaranteed non-null.
-
-        // Chained-check semantics: IP limiter first; if denied, return 429 immediately
-        // (email counter NOT incremented).
-        String clientIp = ClientIpUtils.resolveClientIp(cfConnectingIp, xForwardedFor, xRealIp);
-        Response ipLimited = rateLimiterService.enforce("admin-login", clientIp, 10, 900);
-        if (ipLimited != null) {
-            return ipLimited;
-        }
-
-        // IP passed — now consult the per-email limiter.
-        String emailKey = loginDto.email().toLowerCase().trim();
-        Response emailLimited = rateLimiterService.enforce("admin-login-email", emailKey, 5, 900);
-        if (emailLimited != null) {
-            return emailLimited;
-        }
-
-        // Rate limits passed — evaluate credentials.
         String token = authService.authenticate(loginDto);
 
         if (token != null) {
@@ -167,27 +141,10 @@ public class StaffResource
     @POST
     @Path("/password-reset/initiate")
     @PermitAll
-    public Response initiatePasswordReset(
-            InitiatePasswordResetRequest req,
-            @HeaderParam("CF-Connecting-IP") String cfConnectingIp,
-            @HeaderParam("X-Forwarded-For") String xForwardedFor,
-            @HeaderParam("X-Real-IP") String xRealIp)
+    public Response initiatePasswordReset(InitiatePasswordResetRequest req)
     {
         if (req == null || req.email() == null || req.email().isBlank()) {
             return Response.status(Response.Status.BAD_REQUEST).entity("email is required").build();
-        }
-
-        String clientIp = ClientIpUtils.resolveClientIp(cfConnectingIp, xForwardedFor, xRealIp);
-
-        RateLimitDecision ipDecision = rateLimiterService.check("staff-password-reset-initiate", clientIp, 5, 3600);
-        if (!ipDecision.allowed()) {
-            return Response.status(Response.Status.ACCEPTED).build();
-        }
-
-        String emailKey = req.email().toLowerCase().trim();
-        RateLimitDecision emailDecision = rateLimiterService.check("staff-password-reset-initiate-email", emailKey, 3, 3600);
-        if (!emailDecision.allowed()) {
-            return Response.status(Response.Status.ACCEPTED).build();
         }
 
         staffPasswordResetService.initiateReset(req.email());
@@ -214,17 +171,6 @@ public class StaffResource
         }
 
         String clientIp = ClientIpUtils.resolveClientIp(cfConnectingIp, xForwardedFor, xRealIp);
-
-        RateLimitDecision ipDecision = rateLimiterService.check("staff-password-reset-complete", clientIp, 10, 3600);
-        if (!ipDecision.allowed()) {
-            return Response.status(Response.Status.TOO_MANY_REQUESTS).entity("Too many attempts. Try again later.").build();
-        }
-
-        String emailKey = req.email().toLowerCase().trim();
-        RateLimitDecision emailDecision = rateLimiterService.check("staff-password-reset-complete-email", emailKey, 5, 3600);
-        if (!emailDecision.allowed()) {
-            return Response.status(Response.Status.TOO_MANY_REQUESTS).entity("Too many attempts. Try again later.").build();
-        }
 
         try {
             staffPasswordResetService.completeReset(req.email(), req.code(), req.newPassword(), clientIp);

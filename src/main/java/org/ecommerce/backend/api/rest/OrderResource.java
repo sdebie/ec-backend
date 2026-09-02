@@ -12,10 +12,8 @@ import org.ecommerce.backend.exception.IdempotencyConflictException;
 import org.ecommerce.backend.exception.UnavailableVariantsException;
 import org.ecommerce.backend.service.OrderNotificationService;
 import org.ecommerce.backend.service.OrderService;
-import org.ecommerce.backend.service.RateLimiterService;
 import org.ecommerce.backend.service.StatusTransition;
 import org.ecommerce.backend.service.TransitionOutcome;
-import org.ecommerce.backend.utils.ClientIpUtils;
 import org.ecommerce.common.dto.OrderCheckoutResponseDto;
 import org.ecommerce.common.dto.OrderCreationRequestDto;
 import org.ecommerce.common.entity.CustomerEntity;
@@ -49,9 +47,6 @@ public class OrderResource {
     OrderOwnershipGuard ownershipGuard;
 
     @Inject
-    RateLimiterService rateLimiterService;
-
-    @Inject
     JsonWebToken jwt;
 
     @Inject
@@ -62,18 +57,6 @@ public class OrderResource {
 
     @Inject
     CustomerRepository customerRepository;
-
-    /**
-     * Maximum checkouts one caller may start per window.
-     * <p>
-     * Deliberately generous. Carrier-grade NAT puts many genuine shoppers behind a
-     * single address, and this is the money path, so a tight limit costs real sales
-     * — while any finite limit is enough to stop a caller reserving a store's stock
-     * faster than {@link org.ecommerce.backend.scheduler.StockRecoveryJob} can
-     * reclaim it. Overridable without a rebuild via {@code ratelimit.checkout.max}.
-     */
-    private static final int CHECKOUT_MAX_PER_WINDOW = 20;
-    private static final long CHECKOUT_WINDOW_SECONDS = 3600;
 
     /**
      * Not {@code @Transactional} (design §3.3, checkout-idempotency
@@ -88,10 +71,7 @@ public class OrderResource {
     @POST
     public Response createOrder(
             OrderCreationRequestDto request,
-            @HeaderParam("Idempotency-Key") String idempotencyKeyHeader,
-            @HeaderParam("CF-Connecting-IP") String cfConnectingIp,
-            @HeaderParam("X-Forwarded-For") String xForwardedFor,
-            @HeaderParam("X-Real-IP") String xRealIp
+            @HeaderParam("Idempotency-Key") String idempotencyKeyHeader
     ) {
         // Requirement 2.3: the header is validated before any other work —
         // before the rate-limit check, before cart validation, before any
@@ -117,17 +97,6 @@ public class OrderResource {
         // only over a null field within one line.
         if (request == null || request.getItems() == null) {
             return Response.status(Response.Status.BAD_REQUEST).entity("Request body is required").build();
-        }
-
-        // Checked before any work: an accepted order reserves stock immediately, and
-        // nothing returns it until the abandoned-order sweep runs. A replay counts
-        // against the same bucket as the original submission, deliberately — see
-        // design §3.3.
-        String clientIp = ClientIpUtils.resolveClientIp(cfConnectingIp, xForwardedFor, xRealIp);
-        Response limited = rateLimiterService.enforce(
-                "checkout", clientIp, CHECKOUT_MAX_PER_WINDOW, CHECKOUT_WINDOW_SECONDS);
-        if (limited != null) {
-            return limited;
         }
 
         String fingerprint = OrderService.fingerprint(request.getItems());

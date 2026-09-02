@@ -9,7 +9,6 @@ import jakarta.ws.rs.core.Response;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.ecommerce.backend.service.OrderNotificationService;
 import org.ecommerce.backend.service.OrderService;
-import org.ecommerce.backend.service.RateLimiterService;
 import org.ecommerce.backend.service.StatusTransition;
 import org.ecommerce.backend.service.TransitionOutcome;
 import org.ecommerce.backend.service.payfast.HtmlFormField;
@@ -35,16 +34,6 @@ public class PayFastResource
     private static final Logger LOG = Logger.getLogger(PayFastResource.class);
     private static final BigDecimal AMOUNT_TOLERANCE = new BigDecimal("0.01");
 
-    /**
-     * guest-order-authorization Requirement 7.2 — payment initiation had no ceiling of
-     * any kind before this spec (the {@code checkout} limiter on {@code POST /api/orders}
-     * covers order *creation*, not this). Mirrors {@code CHECKOUT_MAX_PER_WINDOW}'s own
-     * reasoning: generous, because carrier-grade NAT and a shopper retrying a declined
-     * card both cost real attempts from one address.
-     */
-    private static final int PAYMENT_CHECKOUT_MAX_PER_WINDOW = 20;
-    private static final long PAYMENT_CHECKOUT_WINDOW_SECONDS = 3600;
-
     @Inject
     PayFastService payFastService;
 
@@ -58,9 +47,6 @@ public class PayFastResource
     OrderOwnershipGuard ownershipGuard;
 
     @Inject
-    RateLimiterService rateLimiterService;
-
-    @Inject
     PaymentLogRepository paymentLogRepository;
 
     @ConfigProperty(name = "payfast.gateway.url")
@@ -71,19 +57,9 @@ public class PayFastResource
     @Consumes(MediaType.APPLICATION_FORM_URLENCODED)
     @Transactional
     public Response checkout(MultivaluedMap<String, String> formParams,
-                              @HeaderParam("X-Order-Token") String orderToken,
-                              @HeaderParam("CF-Connecting-IP") String cfConnectingIp,
-                              @HeaderParam("X-Forwarded-For") String xForwardedFor,
-                              @HeaderParam("X-Real-IP") String xRealIp)
+                              @HeaderParam("X-Order-Token") String orderToken)
     {
         LOG.debug("Checkout received: " + formParams);
-
-        String clientIp = ClientIpUtils.resolveClientIp(cfConnectingIp, xForwardedFor, xRealIp);
-        Response limited = rateLimiterService.enforce(
-                "payment-checkout", clientIp, PAYMENT_CHECKOUT_MAX_PER_WINDOW, PAYMENT_CHECKOUT_WINDOW_SECONDS);
-        if (limited != null) {
-            return limited;
-        }
 
         String orderIdParam = formParams.getFirst("id");
         if (orderIdParam == null || orderIdParam.isBlank()) {

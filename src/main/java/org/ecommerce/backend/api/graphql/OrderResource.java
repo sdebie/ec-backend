@@ -7,13 +7,9 @@ import jakarta.inject.Inject;
 import org.eclipse.microprofile.graphql.*;
 import org.eclipse.microprofile.jwt.JsonWebToken;
 import org.ecommerce.backend.api.rest.OrderOwnershipGuard;
-import org.ecommerce.backend.exception.RateLimitExceededException;
 import org.ecommerce.backend.mapper.OrderMapper;
 import org.ecommerce.backend.service.OrderService;
 import org.ecommerce.backend.service.OrderTracking;
-import org.ecommerce.backend.service.RateLimitDecision;
-import org.ecommerce.backend.service.RateLimiterService;
-import org.ecommerce.backend.utils.CurrentRequestClientIp;
 import org.ecommerce.backend.utils.CurrentRequestOrderToken;
 import org.ecommerce.common.dto.OrderDetailRespDto;
 import org.ecommerce.common.dto.OrderResponseDto;
@@ -35,18 +31,6 @@ public class OrderResource
 {
     private static final Logger LOG = Logger.getLogger(OrderResource.class);
 
-    /**
-     * Guest-order-authorization Requirement 7.2a — sized off the real polling rate, not
-     * off the write-surface limiters above: {@code usePollOrderStatus} polls this endpoint
-     * repeatedly over the life of a guest checkout, so one ordinary checkout already
-     * accounts for a meaningful share of the window before counting {@code getOrderDetail}
-     * account-page traffic or a second concurrent checkout attempt. This is the one limit
-     * in the spec a legitimate shopper can plausibly reach, so it is sized generously
-     * above that baseline.
-     */
-    private static final int ORDER_READ_MAX_PER_WINDOW = 150;
-    private static final long ORDER_READ_WINDOW_SECONDS = 3600;
-
     @Inject
     OrderService orderService;
 
@@ -63,38 +47,10 @@ public class OrderResource
     CurrentRequestOrderToken currentRequestOrderToken;
 
     @Inject
-    CurrentRequestClientIp currentRequestClientIp;
-
-    @Inject
-    RateLimiterService rateLimiterService;
-
-    @Inject
     OrderMapper orderMapper;
 
     @Inject
     CustomerRepository customerRepository;
-
-    /**
-     * Shared by {@link #orderStatus} and {@link #getOrderDetail} — GraphQL resolvers
-     * have no {@code @HeaderParam}, so the IP is resolved the same way
-     * {@link org.ecommerce.backend.utils.ClientIpUtils}-based REST endpoints do, via
-     * the {@link CurrentRequestClientIp} bean (design.md §3.2's established pattern),
-     * never a second mechanism.
-     * <p>
-     * Requirement 7.2a. GraphQL has no REST-style raw status code to hand back per
-     * query, so a denial throws a distinct GraphQL error — the shape every other
-     * refusal on this resolver already takes — rather than a literal HTTP 429, which
-     * would mean forcing a non-standard transport-level response through a framework
-     * built around the 200-plus-errors envelope everywhere else in this class.
-     */
-    private void enforceOrderReadRateLimit()
-    {
-        RateLimitDecision decision = rateLimiterService.check(
-                "order-read", currentRequestClientIp.resolve(), ORDER_READ_MAX_PER_WINDOW, ORDER_READ_WINDOW_SECONDS);
-        if (!decision.allowed()) {
-            throw new RateLimitExceededException();
-        }
-    }
 
     // NOTE: there is deliberately no createOrder mutation here.
     // Order creation is REST-only (`POST /api/orders` → OrderService.createOrderFromCart),
@@ -158,8 +114,6 @@ public class OrderResource
     @Description("Poll one order's status by id — the guest checkout success page")
     public OrderStatusRespDto orderStatus(@Name("orderId") String orderId) throws GraphQLException
     {
-        enforceOrderReadRateLimit();
-
         UUID id;
         try {
             id = UUID.fromString(orderId);
@@ -204,8 +158,6 @@ public class OrderResource
     @Description("Get order detail by order id")
     public OrderDetailRespDto getOrderDetail(@Name("id") String orderId) throws GraphQLException
     {
-        enforceOrderReadRateLimit();
-
         UUID id;
         try {
             id = UUID.fromString(orderId);
