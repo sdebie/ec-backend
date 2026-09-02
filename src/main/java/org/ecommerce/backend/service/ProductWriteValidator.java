@@ -145,7 +145,7 @@ public class ProductWriteValidator
     private void validateOwnership(UUID productId, List<ProductVariantDto> variants)
     {
         // Load existing variant ids for this product
-        List<ProductVariantEntity> existingVariants = productVariantRepository.findByVariantsForProductId(productId);
+        List<ProductVariantEntity> existingVariants = productVariantRepository.findVariantsForProductId(productId);
         Set<UUID> ownedVariantIds = new HashSet<>();
         for (ProductVariantEntity v : existingVariants) {
             ownedVariantIds.add(v.getId());

@@ -92,7 +92,7 @@ public class ProductService
         int effectivePageSize = Math.clamp(pageSize, 1, 100);
         int effectivePageIndex = Math.max(pageIndex, 0);
 
-        long totalElements = productRepository.countAdminProducts(status, categoryId, brandId, search);
+        long totalElements = productRepository.countForAdmin(status, categoryId, brandId, search);
         int totalPages = (int) Math.ceil((double) totalElements / effectivePageSize);
         // A deletion or filter change can make a previously valid client page fall
         // outside the result set between requests. Return the final available page
@@ -106,7 +106,7 @@ public class ProductService
         pageRequest.setPageIndex(effectivePageIndex);
         pageRequest.setPageSize(effectivePageSize);
 
-        List<ProductEntity> products = productRepository.findAdminProducts(pageRequest, status, categoryId, brandId, search);
+        List<ProductEntity> products = productRepository.findForAdmin(pageRequest, status, categoryId, brandId, search);
         List<AdminProductListItemDto> content = productListItemAssembler.buildAdminListItems(products, now);
 
         return new PageResponse<>(content, totalElements, totalPages, effectivePageIndex, effectivePageSize);
@@ -372,7 +372,7 @@ public class ProductService
         }
 
         // 1. Determine the owner variant: active variant with the lowest UUID (string sort)
-        List<ProductVariantEntity> allVariants = productVariantRepository.findByVariantsForProductId(productId);
+        List<ProductVariantEntity> allVariants = productVariantRepository.findVariantsForProductId(productId);
         ProductVariantEntity ownerVariant = allVariants.stream()
                 .filter(v -> v.getStatus() == ProductStatusEn.ACTIVE)
                 .min(Comparator.comparing(a -> a.getId().toString()))
@@ -484,7 +484,7 @@ public class ProductService
         }
 
         // Load existing variants BEFORE upserting so we can detect removals
-        List<ProductVariantEntity> existingVariants = productVariantRepository.findByVariantsForProductId(productId);
+        List<ProductVariantEntity> existingVariants = productVariantRepository.findVariantsForProductId(productId);
 
         // Persist (create or upsert) each variant and its prices via the shared helper
         persistVariantsWithPrices(product, newVariants);
@@ -540,7 +540,7 @@ public class ProductService
     private void persistVariantsWithPrices(ProductEntity product, List<ProductVariantDto> variantDtos)
     {
         // Load existing variants for SKU-based matching on create
-        List<ProductVariantEntity> existingVariants = productVariantRepository.findByVariantsForProductId(product.getId());
+        List<ProductVariantEntity> existingVariants = productVariantRepository.findVariantsForProductId(product.getId());
 
         for (ProductVariantDto variantDto : variantDtos) {
             ProductVariantEntity variant = null;
@@ -688,7 +688,7 @@ public class ProductService
         }
 
         // Load all child variants (including DISABLED) for reference check
-        List<ProductVariantEntity> allVariants = productVariantRepository.findByVariantsForProductId(pid);
+        List<ProductVariantEntity> allVariants = productVariantRepository.findVariantsForProductId(pid);
 
         // Check if ANY variant is referenced by orders
         boolean anyOrderReferenced = allVariants

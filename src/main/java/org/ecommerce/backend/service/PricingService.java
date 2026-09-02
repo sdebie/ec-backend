@@ -2,14 +2,12 @@ package org.ecommerce.backend.service;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
-import org.ecommerce.backend.utils.PriceUtils;
 import org.ecommerce.common.entity.VariantPricesEntity;
 import org.ecommerce.common.enums.CustomerTypeEn;
 import org.ecommerce.common.enums.PriceTypeEn;
 import org.ecommerce.common.repository.VariantPricesRepository;
 
 import java.math.BigDecimal;
-import java.util.List;
 import java.util.UUID;
 
 @ApplicationScoped
@@ -41,14 +39,12 @@ public class PricingService
             basePriceType = PriceTypeEn.RETAIL_PRICE;
         }
 
-        List<VariantPricesEntity> prices = variantPricesRepository.findByVariantId(variantId);
-
-        BigDecimal salePrice = PriceUtils.currentPrice(prices, salePriceType);
-        if (salePrice != null && salePrice.compareTo(BigDecimal.ZERO) > 0) {
-            return salePrice;
+        VariantPricesEntity salePrice = variantPricesRepository.findActiveByVariantAndType(variantId, salePriceType);
+        if (salePrice != null && salePrice.getPrice() != null && salePrice.getPrice().compareTo(BigDecimal.ZERO) > 0) {
+            return salePrice.getPrice();
         }
 
-        BigDecimal basePrice = PriceUtils.currentPrice(prices, basePriceType);
-        return basePrice != null ? basePrice : BigDecimal.ZERO;
+        VariantPricesEntity basePrice = variantPricesRepository.findActiveByVariantAndType(variantId, basePriceType);
+        return basePrice != null && basePrice.getPrice() != null ? basePrice.getPrice() : BigDecimal.ZERO;
     }
 }
