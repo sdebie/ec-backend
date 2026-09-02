@@ -16,14 +16,24 @@ import static org.ecommerce.common.util.CsvImportUtils.isBlank;
 
 /**
  * Validates product import staged rows against business rules and detects
- * changes (diff) relative to existing data. Parsing and orchestration live in
- * {@code ProductImportService}; this class handles validation only.
+ * changes (diff) relative to existing data.
+ * <p>
+ * Extracted from {@code ProductImportService} to separate validation concerns
+ * from parsing and orchestration.
  */
 @ApplicationScoped
-public class ProductImportValidator
-{
-
+public class ProductImportValidator {
     private static final Logger LOG = Logger.getLogger(ProductImportValidator.class);
+
+    // Error messages
+    private static final String CATEGORY_REQUIRED = "category is required";
+    private static final String BRAND_REQUIRED = "brand is required";
+    private static final String SKU_REQUIRED = "sku is required";
+    private static final String UNKNOWN_CATEGORY = "Unknown category: ";
+    private static final String UNKNOWN_BRAND = "Unknown brand: ";
+    private static final String SKU_EXISTS_SAME_PRODUCT = "SKU %s already exists for product %s";
+    private static final String SKU_EXISTS_OTHER_PRODUCT = "SKU %s already belongs to another product";
+    private static final String IMAGE_NOT_FOUND = "Image not found: ";
 
     @ConfigProperty(name = "storage.path")
     String storagePath;
@@ -64,8 +74,8 @@ public class ProductImportValidator
             String brandSlug,
             String imagesValue,
             String attributesJson
-    )
-    {
+    ) {
+        // Resolve references and build validation flags
         List<String> categorySlugs = splitCategorySlugs(staged.getCategorySlug());
         List<CategoryEntity> categories = findExistingCategories(categorySlugs, validationErrors);
         BrandEntity brand = findExistingBrand(brandSlug, validationErrors);
@@ -74,23 +84,13 @@ public class ProductImportValidator
 
         staged.setIsValidCategory(!categorySlugs.isEmpty() && categories.size() == categorySlugs.size());
         staged.setIsValidBrand(brand != null);
-
         staged.setIsNewProduct(existingProduct == null);
         staged.setIsNewVariant(existingVariant == null);
 
-        //Variant Exist
-        if (!staged.getIsNewVariant()) {
-            //New Product
-            if (staged.getIsNewProduct()) {
-                validationErrors.add("SKU " + staged.getSku() + " already exists for product " + safeProductName(existingVariant));
-            } else {
-                assert existingVariant != null;
-                if (existingVariant.getProduct() != null && !Objects.equals(existingVariant.getProduct().getId(), existingProduct.getId())) {
-                    validationErrors.add("SKU " + staged.getSku() + " already belongs to another product");
-                }
-            }
-        }
+        // Validate SKU conflicts
+        validateSkuConflicts(staged, existingProduct, existingVariant, validationErrors);
 
+        // Detect changes
         staged.setHasChanges(determineHasChanges(
                 staged,
                 existingProduct,
@@ -100,21 +100,8 @@ public class ProductImportValidator
                 attributesJson
         ));
 
-        // Capture current (live) values for comparison display
-        if (existingVariant != null) {
-            staged.setCurrentStock(existingVariant.getStockQuantity());
-            staged.setCurrentAttributes(existingVariant.getAttributesJson());
-            List<String> existingImageNames = productImageRepository.findByVariantId(existingVariant.getId()).stream()
-                    .map(img -> extractFileName(img.getImageUrl()))
-                    .filter(name -> !isBlank(name))
-                    .toList();
-            staged.setCurrentImages(existingImageNames.isEmpty() ? null : String.join(",", existingImageNames));
-        }
-        if (existingProduct != null) {
-            staged.setCurrentName(existingProduct.getName());
-            staged.setCurrentDescription(existingProduct.getDescription());
-            staged.setCurrentShortDescription(existingProduct.getShortDescription()); // note: typo in ProductEntity field name
-        }
+        // Capture current values for comparison display
+        captureCurrentValues(staged, existingProduct, existingVariant);
     }
 
     /**
@@ -142,7 +129,7 @@ public class ProductImportValidator
 
         if (!missing.isEmpty()) {
             staged.setImageErrors("Missing Images: " + String.join(", ", missing));
-            validationErrors.add("Image not found: " + String.join(", ", missing));
+            validationErrors.add(IMAGE_NOT_FOUND + String.join(", ", missing));
         }
     }
 
@@ -153,18 +140,64 @@ public class ProductImportValidator
      * @param staged           the staged entity to update
      * @param validationErrors the list of accumulated validation errors
      */
-    public void applyValidationResults(ProductImportStagedEntity staged, List<String> validationErrors)
-    {
+    public void applyValidationResults(ProductImportStagedEntity staged, List<String> validationErrors) {
         staged.setValidationStatus(validationErrors.isEmpty() ? ProductImportValidationStatusEn.VALID : ProductImportValidationStatusEn.INVALID);
         staged.setValidationErrors(validationErrors.isEmpty() ? null : String.join("; ", validationErrors));
     }
 
+    // --- Extracted validation methods ---
+
+    /**
+     * Validates SKU conflicts: checks if SKU already exists and if so,
+     * whether it belongs to the same product or a different one.
+     */
+    private void validateSkuConflicts(
+            ProductImportStagedEntity staged,
+            ProductEntity existingProduct,
+            ProductVariantEntity existingVariant,
+            List<String> validationErrors
+    ) {
+        if (staged.getIsNewVariant()) {
+            return; // No existing variant, no conflict
+        }
+
+        if (staged.getIsNewProduct()) {
+            validationErrors.add(String.format(SKU_EXISTS_SAME_PRODUCT, staged.getSku(), safeProductName(existingVariant)));
+        } else if (existingVariant.getProduct() != null && !Objects.equals(existingVariant.getProduct().getId(), existingProduct.getId())) {
+            validationErrors.add(String.format(SKU_EXISTS_OTHER_PRODUCT, staged.getSku()));
+        }
+    }
+
+    /**
+     * Captures current (live) values from existing product and variant for comparison display.
+     */
+    private void captureCurrentValues(
+            ProductImportStagedEntity staged,
+            ProductEntity existingProduct,
+            ProductVariantEntity existingVariant
+    ) {
+        if (existingVariant != null) {
+            staged.setCurrentStock(existingVariant.getStockQuantity());
+            staged.setCurrentAttributes(existingVariant.getAttributesJson());
+            List<String> existingImageNames = productImageRepository.findByVariantId(existingVariant.getId()).stream()
+                    .map(img -> extractFileName(img.getImageUrl()))
+                    .filter(name -> !isBlank(name))
+                    .toList();
+            staged.setCurrentImages(existingImageNames.isEmpty() ? null : String.join(",", existingImageNames));
+        }
+
+        if (existingProduct != null) {
+            staged.setCurrentName(existingProduct.getName());
+            staged.setCurrentDescription(existingProduct.getDescription());
+            staged.setCurrentShortDescription(existingProduct.getShortDescription());
+        }
+    }
+
     // --- Private helper methods ---
 
-    private List<CategoryEntity> findExistingCategories(List<String> categorySlugs, List<String> validationErrors)
-    {
+    private List<CategoryEntity> findExistingCategories(List<String> categorySlugs, List<String> validationErrors) {
         if (categorySlugs.isEmpty()) {
-            validationErrors.add("category is required");
+            validationErrors.add(CATEGORY_REQUIRED);
             return List.of();
         }
 
@@ -172,7 +205,7 @@ public class ProductImportValidator
         for (String categorySlug : categorySlugs) {
             CategoryEntity category = categoryRepository.findBySlugIgnoreCase(categorySlug);
             if (category == null) {
-                validationErrors.add("Unknown category: " + categorySlug);
+                validationErrors.add(UNKNOWN_CATEGORY + categorySlug);
                 continue;
             }
             categories.add(category);
@@ -180,31 +213,31 @@ public class ProductImportValidator
         return categories;
     }
 
-    private BrandEntity findExistingBrand(String brandSlug, List<String> validationErrors)
-    {
+    private BrandEntity findExistingBrand(String brandSlug, List<String> validationErrors) {
         if (isBlank(brandSlug)) {
-            validationErrors.add("brand is required");
+            validationErrors.add(BRAND_REQUIRED);
             return null;
         }
 
         BrandEntity brand = brandRepository.findBySlugIgnoreCase(brandSlug);
         if (brand == null) {
-            validationErrors.add("Unknown brand: " + brandSlug.trim());
+            validationErrors.add(UNKNOWN_BRAND + brandSlug.trim());
             return null;
         }
         return brand;
     }
 
-    private ProductEntity findExistingProduct(String productSlug, String productName)
-    {
+    private ProductEntity findExistingProduct(String productSlug, String productName) {
+        // Try finding by slug first
         String normalizedSlug = normalizeSlug(productSlug);
         if (normalizedSlug != null) {
-            ProductEntity slugMatch = productRepository.findBySlugIgnoreCase(normalizedSlug);
-            if (slugMatch != null) {
-                return slugMatch;
+            ProductEntity bySlug = productRepository.findBySlugIgnoreCase(normalizedSlug);
+            if (bySlug != null) {
+                return bySlug;
             }
         }
 
+        // Fall back to finding by name
         if (isBlank(productName)) {
             return null;
         }
@@ -212,10 +245,9 @@ public class ProductImportValidator
         return productRepository.findByNameIgnoreCase(productName);
     }
 
-    private ProductVariantEntity findExistingVariant(String sku, List<String> validationErrors)
-    {
+    private ProductVariantEntity findExistingVariant(String sku, List<String> validationErrors) {
         if (isBlank(sku)) {
-            validationErrors.add("sku is required");
+            validationErrors.add(SKU_REQUIRED);
             return null;
         }
 
@@ -229,25 +261,53 @@ public class ProductImportValidator
             Integer stock,
             String imagesValue,
             String attributesJson
-    )
-    {
+    ) {
+        // New products/variants always have changes
         if (existingProduct == null || existingVariant == null) {
             return true;
         }
 
-        boolean nameChanged = !Objects.equals(trimToNull(staged.getName()), trimToNull(existingProduct.getName()));
-        boolean productSlugChanged = !Objects.equals(normalizeSlug(staged.getProductSlug()), normalizeSlug(existingProduct.getSlug()));
-        boolean categoryChanged = !categorySlugSet(staged.getCategorySlug()).equals(categorySlugSet(existingProduct));
-        boolean brandChanged = !Objects.equals(trimToNull(staged.getBrandSlug()), trimToNull(existingProduct.getBrand() != null ? existingProduct.getBrand().getSlug() : null));
-        boolean stockChanged = !Objects.equals(stock, existingVariant.getStockQuantity());
-        boolean attributesChanged = !Objects.equals(trimToNull(attributesJson), trimToNull(existingVariant.getAttributesJson()));
-        boolean imagesChanged = !sameImageNames(imagesValue, existingVariant);
-
-        return nameChanged || productSlugChanged || categoryChanged || brandChanged || stockChanged || attributesChanged || imagesChanged;
+        // Check each field for changes
+        return nameChanged(staged, existingProduct)
+                || productSlugChanged(staged, existingProduct)
+                || categoryChanged(staged, existingProduct)
+                || brandChanged(staged, existingProduct)
+                || stockChanged(stock, existingVariant)
+                || attributesChanged(attributesJson, existingVariant)
+                || imagesChanged(imagesValue, existingVariant);
     }
 
-    private boolean sameImageNames(String stagedImages, ProductVariantEntity variant)
-    {
+    private boolean nameChanged(ProductImportStagedEntity staged, ProductEntity existing) {
+        return !Objects.equals(trimToNull(staged.getName()), trimToNull(existing.getName()));
+    }
+
+    private boolean productSlugChanged(ProductImportStagedEntity staged, ProductEntity existing) {
+        return !Objects.equals(normalizeSlug(staged.getProductSlug()), normalizeSlug(existing.getSlug()));
+    }
+
+    private boolean categoryChanged(ProductImportStagedEntity staged, ProductEntity existing) {
+        return !categorySlugSet(staged.getCategorySlug()).equals(categorySlugSet(existing));
+    }
+
+    private boolean brandChanged(ProductImportStagedEntity staged, ProductEntity existing) {
+        String stagedBrand = trimToNull(staged.getBrandSlug());
+        String existingBrand = existing.getBrand() != null ? trimToNull(existing.getBrand().getSlug()) : null;
+        return !Objects.equals(stagedBrand, existingBrand);
+    }
+
+    private boolean stockChanged(Integer stagedStock, ProductVariantEntity existing) {
+        return !Objects.equals(stagedStock, existing.getStockQuantity());
+    }
+
+    private boolean attributesChanged(String stagedAttributes, ProductVariantEntity existing) {
+        return !Objects.equals(trimToNull(stagedAttributes), trimToNull(existing.getAttributesJson()));
+    }
+
+    private boolean imagesChanged(String stagedImages, ProductVariantEntity variant) {
+        return !sameImageNames(stagedImages, variant);
+    }
+
+    private boolean sameImageNames(String stagedImages, ProductVariantEntity variant) {
         if (variant == null || variant.getId() == null) {
             return false;
         }
@@ -261,8 +321,7 @@ public class ProductImportValidator
         return existing.equals(proposed);
     }
 
-    private List<String> splitImageNames(String imagesValue)
-    {
+    private List<String> splitImageNames(String imagesValue) {
         if (isBlank(imagesValue)) {
             return List.of();
         }
@@ -272,8 +331,7 @@ public class ProductImportValidator
                 .toList();
     }
 
-    private String extractFileName(String imageUrl)
-    {
+    private String extractFileName(String imageUrl) {
         String normalized = trimToNull(imageUrl);
         if (normalized == null) {
             return null;
@@ -282,27 +340,23 @@ public class ProductImportValidator
         return slashIndex >= 0 ? normalized.substring(slashIndex + 1) : normalized;
     }
 
-    private String safeProductName(ProductVariantEntity variant)
-    {
+    private String safeProductName(ProductVariantEntity variant) {
         if (variant == null || variant.getProduct() == null || isBlank(variant.getProduct().getName())) {
             return "<unknown>";
         }
         return variant.getProduct().getName();
     }
 
-    private String trimToNull(String value)
-    {
+    private String trimToNull(String value) {
         return isBlank(value) ? null : value.trim();
     }
 
-    private String normalizeSlug(String value)
-    {
+    private String normalizeSlug(String value) {
         String normalized = trimToNull(value);
         return normalized == null ? null : normalized.toLowerCase(Locale.ROOT);
     }
 
-    private List<String> splitCategorySlugs(String categorySlugs)
-    {
+    private List<String> splitCategorySlugs(String categorySlugs) {
         if (isBlank(categorySlugs)) {
             return List.of();
         }
@@ -314,13 +368,11 @@ public class ProductImportValidator
                 .toList();
     }
 
-    private Set<String> categorySlugSet(String categorySlugs)
-    {
+    private Set<String> categorySlugSet(String categorySlugs) {
         return new LinkedHashSet<>(splitCategorySlugs(categorySlugs));
     }
 
-    private Set<String> categorySlugSet(ProductEntity product)
-    {
+    private Set<String> categorySlugSet(ProductEntity product) {
         if (product == null || product.getCategories() == null || product.getCategories().isEmpty()) {
             return Set.of();
         }
