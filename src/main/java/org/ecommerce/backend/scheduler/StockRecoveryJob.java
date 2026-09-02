@@ -4,13 +4,13 @@ import io.quarkus.narayana.jta.QuarkusTransaction;
 import io.quarkus.scheduler.Scheduled;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
-import jakarta.persistence.EntityManager;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.ecommerce.backend.service.OrderService;
 import org.ecommerce.backend.service.StatusTransition;
 import org.ecommerce.backend.service.TransitionOutcome;
 import org.ecommerce.common.entity.OrderEntity;
 import org.ecommerce.common.enums.OrderStatusEn;
+import org.ecommerce.common.repository.OrderRepository;
 import org.jboss.logging.Logger;
 
 import java.time.LocalDateTime;
@@ -57,7 +57,7 @@ public class StockRecoveryJob
     OrderService orderService;
 
     @Inject
-    EntityManager em;
+    OrderRepository orderRepository;
 
     /**
      * SKIP rather than PROCEED: overlap is never a correctness problem (the atomic
@@ -73,7 +73,8 @@ public class StockRecoveryJob
     private void sweep()
     {
         LocalDateTime cutoff = LocalDateTime.now().minusMinutes(holdMinutes);
-        List<UUID> candidateIds = QuarkusTransaction.requiringNew().call(() -> findAbandonedIds(cutoff));
+        List<UUID> candidateIds = QuarkusTransaction.requiringNew()
+                .call(() -> orderRepository.findAbandonedIds(RECLAIMABLE, cutoff, batchSize));
 
         if (candidateIds.isEmpty()) {
             return;
@@ -120,26 +121,10 @@ public class StockRecoveryJob
             .filter(OrderStatusEn::isReclaimableByStockRecovery)
             .toList();
 
-    /**
-     * Oldest first, so a backlog drains in the order it accumulated and a run
-     * cannot starve the orders that have been waiting longest.
-     */
-    private List<UUID> findAbandonedIds(LocalDateTime cutoff)
-    {
-        return em.createQuery(
-                        "select o.id from OrderEntity o where o.status in :statuses and o.createdAt < :cutoff "
-                                + "order by o.createdAt",
-                        UUID.class)
-                .setParameter("statuses", RECLAIMABLE)
-                .setParameter("cutoff", cutoff)
-                .setMaxResults(batchSize)
-                .getResultList();
-    }
-
     /** @return whether this call is the one that released the order */
     private boolean releaseOrder(UUID orderId)
     {
-        OrderEntity order = loadWithLines(orderId);
+        OrderEntity order = orderRepository.findWithItemsAndVariant(orderId);
         if (order == null) {
             LOG.warnf("Order %s vanished between being listed and being released", orderId);
             return false;
@@ -168,24 +153,5 @@ public class StockRecoveryJob
 
         LOG.debugf("Released abandoned order %s (created %s), stock recovered", orderId, order.getCreatedAt());
         return true;
-    }
-
-    /**
-     * Both {@code items} and its {@code variant} are LAZY, and the variant ids are
-     * exactly what the stock update needs — so fetch them with the order rather than
-     * paying a query per line. Safe to fetch a collection here because this loads a
-     * single order; the paging happens in {@link #findAbandonedIds}, over ids only.
-     */
-    private OrderEntity loadWithLines(UUID orderId)
-    {
-        List<OrderEntity> found = em.createQuery(
-                        "select distinct o from OrderEntity o "
-                                + "left join fetch o.items i "
-                                + "left join fetch i.variant "
-                                + "where o.id = :id", OrderEntity.class)
-                .setParameter("id", orderId)
-                .getResultList();
-
-        return found.isEmpty() ? null : found.get(0);
     }
 }

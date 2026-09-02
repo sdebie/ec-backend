@@ -17,6 +17,7 @@ import org.ecommerce.common.entity.QuoteRequestItemEntity;
 import org.ecommerce.common.entity.StaffUserEntity;
 import org.ecommerce.common.enums.QuoteRequestStatusEn;
 import org.ecommerce.common.repository.ProductVariantRepository;
+import org.ecommerce.common.repository.QuoteRequestRepository;
 import org.jboss.logging.Logger;
 
 import java.math.BigDecimal;
@@ -45,6 +46,9 @@ public class QuoteRequestService
 
     @Inject
     ProductVariantRepository productVariantRepository;
+
+    @Inject
+    QuoteRequestRepository quoteRequestRepository;
 
     /**
      * Submits a new quote request: resolves each variant (unknown → exception for 422),
@@ -80,7 +84,7 @@ public class QuoteRequestService
         }
 
         request.setItems(items);
-        QuoteRequestEntity.persist(request);
+        quoteRequestRepository.persist(request);
 
         LOG.infof("[QuoteRequest] submitted id=%s, items=%d", request.getId(), items.size());
 
@@ -243,7 +247,7 @@ public class QuoteRequestService
         if (id == null) {
             throw new IllegalArgumentException("id is required");
         }
-        QuoteRequestEntity request = QuoteRequestEntity.findById(id);
+        QuoteRequestEntity request = quoteRequestRepository.findById(id);
         if (request == null) {
             throw new IllegalArgumentException("Quote request not found: " + id);
         }

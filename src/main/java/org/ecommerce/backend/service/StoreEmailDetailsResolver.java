@@ -5,7 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import org.ecommerce.common.entity.StoreSettingsEntity;
-import org.ecommerce.common.repository.SettingsRepository;
+import org.ecommerce.common.repository.StoreSettingsRepository;
 import org.jboss.logging.Logger;
 
 import java.util.Currency;
@@ -41,7 +41,7 @@ public class StoreEmailDetailsResolver
     private static final String BRANDING_KEY = "storefront.branding";
 
     @Inject
-    SettingsRepository settingsRepository;
+    StoreSettingsRepository storeSettingsRepository;
 
     @Inject
     ObjectMapper objectMapper;
@@ -79,7 +79,7 @@ public class StoreEmailDetailsResolver
 
     private JsonNode read(String key)
     {
-        StoreSettingsEntity setting = settingsRepository.findById(key);
+        StoreSettingsEntity setting = storeSettingsRepository.findById(key);
         if (setting == null || setting.getValue() == null || setting.getValue().isBlank()) {
             LOG.debugf("%s is not configured; customer emails will omit the details it carries", key);
             return null;

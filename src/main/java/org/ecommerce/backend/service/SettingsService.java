@@ -10,7 +10,7 @@ import org.ecommerce.common.dto.StoreSettingsDto;
 import org.ecommerce.common.entity.ShippingMethodEntity;
 import org.ecommerce.common.entity.StoreSettingsEntity;
 import org.ecommerce.common.repository.CountrySettingsRepository;
-import org.ecommerce.common.repository.SettingsRepository;
+import org.ecommerce.common.repository.StoreSettingsRepository;
 import org.ecommerce.common.repository.ShippingMethodRepository;
 
 import java.util.List;
@@ -21,7 +21,7 @@ public class SettingsService
 {
 
     @Inject
-    SettingsRepository settingsRepository;
+    StoreSettingsRepository storeSettingsRepository;
 
     @Inject
     ShippingMethodRepository shippingMethodRepository;
@@ -43,7 +43,7 @@ public class SettingsService
 
     public List<StoreSettingsDto> getAllSettings()
     {
-        return settingsMapper.mapStoreSettingsEntityToDtoList(settingsRepository.getAllStoreSettings());
+        return settingsMapper.mapStoreSettingsEntityToDtoList(storeSettingsRepository.getAllStoreSettings());
     }
 
     public List<ShippingMethodDto> getShippingMethods()
@@ -65,7 +65,7 @@ public class SettingsService
                 entity.setKey(dto.getKey());
             }
             settingsMapper.mapStoreSettingsDtoToEntity(dto, entity);
-            settingsRepository.saveStoreSettings(entity);
+            storeSettingsRepository.saveStoreSettings(entity);
             return settingsMapper.mapStoreSettingsEntityToDto(entity);
         }).collect(Collectors.toList());
     }

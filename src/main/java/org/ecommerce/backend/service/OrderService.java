@@ -97,8 +97,7 @@ public class OrderService
 
     @Transactional
     public OrderCheckoutResponseDto createOrderFromCart(OrderCreationRequestDto request, CustomerTypeEn customerTier,
-                                                        CustomerEntity customer, UUID idempotencyKey, String cartFingerprint)
-    {
+                                                        CustomerEntity customer, UUID idempotencyKey, String cartFingerprint) {
         if (request == null || request.getItems() == null || request.getItems().isEmpty()) {
             throw new IllegalArgumentException("Order request must contain at least one item");
         }
@@ -269,8 +268,7 @@ public class OrderService
      * unwrapping the cause chain. Matched on constraint name so an unrelated
      * fault on {@code orders} is never mistaken for a lost race.
      */
-    static boolean isUniqueViolationOf(Throwable e, String constraintName)
-    {
+    static boolean isUniqueViolationOf(Throwable e, String constraintName) {
         Throwable cause = e;
         while (cause != null) {
             if (cause instanceof ConstraintViolationException cve) {
@@ -299,8 +297,7 @@ public class OrderService
      * raw-body hash would turn the network retry this feature protects into a
      * hard checkout failure.
      */
-    public static String fingerprint(List<OrderCreationItemDto> items)
-    {
+    public static String fingerprint(List<OrderCreationItemDto> items) {
         Map<String, Integer> quantityByVariantId = new HashMap<>();
         if (items != null) {
             for (OrderCreationItemDto item : items) {
@@ -341,8 +338,7 @@ public class OrderService
      * order already consumed the stock — so this is safe under concurrent
      * checkouts with no application-level locking.
      */
-    private void reserveStock(List<ProductVariantEntity> validVariants, List<OrderCreationItemDto> validItems)
-    {
+    private void reserveStock(List<ProductVariantEntity> validVariants, List<OrderCreationItemDto> validItems) {
         Map<UUID, Integer> requestedByVariantId = new LinkedHashMap<>();
         for (int i = 0; i < validVariants.size(); i++) {
             requestedByVariantId.merge(validVariants.get(i).getId(), validItems.get(i).getQuantity(), Integer::sum);
@@ -392,8 +388,7 @@ public class OrderService
      *                                  Whitelisted in {@code show-runtime-exception-message},
      *                                  so the message reaches the admin UI intact.
      */
-    public TransitionOutcome applyTransition(OrderEntity order, StatusTransition transition)
-    {
+    public TransitionOutcome applyTransition(OrderEntity order, StatusTransition transition) {
         OrderStatusEn from = order.getStatus();
         OrderStatusEn to = transition.to();
 
@@ -446,8 +441,7 @@ public class OrderService
      * staff move the transition itself. Stock movement is not spelled out — it follows
      * from the target status alone, so saying so would be noise on every row.
      */
-    private String transitionComment(OrderStatusEn from, StatusTransition transition)
-    {
+    private String transitionComment(OrderStatusEn from, StatusTransition transition) {
         return transition.comment() != null
                 ? transition.comment()
                 : from + " → " + transition.to();
@@ -466,8 +460,7 @@ public class OrderService
      * an oversell. {@link #applyTransition} is now the only thing that can reach
      * this, and it always claims first.
      */
-    private void restoreStock(OrderEntity order)
-    {
+    private void restoreStock(OrderEntity order) {
         if (order == null || order.getItems() == null) {
             return;
         }
@@ -489,8 +482,7 @@ public class OrderService
      * A null method means "not chosen yet" and falls back to the default
      * estimate, preserving what creation did before a method exists.
      */
-    public OrderTotals computeTotals(BigDecimal subtotal, ShippingMethodEntity shippingMethod)
-    {
+    public OrderTotals computeTotals(BigDecimal subtotal, ShippingMethodEntity shippingMethod) {
         BigDecimal base = subtotal != null ? subtotal : BigDecimal.ZERO;
         BigDecimal vatAmount = taxService.calculateVat(base);
         BigDecimal shippingEstimate = shippingMethod != null && shippingMethod.getBaseFee() != null
@@ -520,8 +512,7 @@ public class OrderService
      * Caller must be inside a transaction: the entity is managed, so the new
      * total flushes on commit.
      */
-    public OrderTotals repriceOrder(OrderEntity order)
-    {
+    public OrderTotals repriceOrder(OrderEntity order) {
         OrderTotals totals = computeTotals(subtotalOf(order), order.getShippingMethod());
         order.setTotalAmount(totals.grandTotal());
         order.setVatAmount(totals.vatAmount());
@@ -541,8 +532,7 @@ public class OrderService
      * alone the breakdown is a best-effort reconstruction against current settings; there
      * is no historical record to recover it from.
      */
-    public OrderTotals totalsForAdminDetail(OrderEntity order)
-    {
+    public OrderTotals totalsForAdminDetail(OrderEntity order) {
         BigDecimal subtotal = subtotalOf(order);
         if (order.getVatAmount() != null && order.getShippingCost() != null) {
             return new OrderTotals(subtotal, order.getVatAmount(), order.getShippingCost(), order.getTotalAmount());
@@ -557,8 +547,7 @@ public class OrderService
      * an order's subtotal is, shared by repricing and by the admin detail
      * breakdown so the two can never derive it differently.
      */
-    public BigDecimal subtotalOf(OrderEntity order)
-    {
+    public BigDecimal subtotalOf(OrderEntity order) {
         BigDecimal subtotal = BigDecimal.ZERO;
         if (order.getItems() == null) {
             return subtotal;
@@ -597,8 +586,7 @@ public class OrderService
      * replay at hour 20 of the 24-hour idempotency window still returns a token
      * usable for a full 60 minutes from that moment, never one already expired.
      */
-    public OrderCheckoutResponseDto replayOrder(OrderEntity order)
-    {
+    public OrderCheckoutResponseDto replayOrder(OrderEntity order) {
         BigDecimal subtotal = subtotalOf(order);
         OrderTotals totals = computeTotals(subtotal, order.getShippingMethod());
 
@@ -636,8 +624,7 @@ public class OrderService
      * A domain rule with a config value behind it, so it lives here rather
      * than inline in the resource.
      */
-    public boolean isWithinReplayWindow(OrderEntity order)
-    {
+    public boolean isWithinReplayWindow(OrderEntity order) {
         if (order.getCreatedAt() == null) {
             return false;
         }
@@ -649,15 +636,13 @@ public class OrderService
      */
     @Transactional
     public OrderResponseDto updateOrderStatus(UUID orderId, String newStatus, String changedBy)
-            throws GraphQLException
-    {
+            throws GraphQLException {
         return updateOrderStatus(orderId, newStatus, changedBy, null);
     }
 
     @Transactional
     public OrderResponseDto updateOrderStatus(UUID orderId, String newStatus, String changedBy,
-                                              OrderTracking tracking) throws GraphQLException
-    {
+                                              OrderTracking tracking) throws GraphQLException {
         if (orderId == null) {
             throw new GraphQLException("orderId is required");
         }
@@ -696,8 +681,7 @@ public class OrderService
         return orderMapper.toResponseDto(order);
     }
 
-    public List<OrderResponseDto> getAllOrders(PageRequest pageRequest, FilterRequest filterRequest)
-    {
+    public List<OrderResponseDto> getAllOrders(PageRequest pageRequest, FilterRequest filterRequest) {
         List<OrderEntity> orderEntities = orderRepository.findAllOrderInfo(pageRequest, filterRequest);
         List<OrderResponseDto> orders = new ArrayList<>(orderEntities.size());
         for (OrderEntity orderEntity : orderEntities) {
@@ -706,8 +690,7 @@ public class OrderService
         return orders;
     }
 
-    public OrderDetailRespDto getOrderDetail(UUID orderId)
-    {
+    public OrderDetailRespDto getOrderDetail(UUID orderId) {
         if (orderId == null) {
             return null;
         }
@@ -725,8 +708,7 @@ public class OrderService
         return orderMapper.toDetailDto(order, history);
     }
 
-    public List<OrderSummaryDto> getMyOrders(UUID customerId)
-    {
+    public List<OrderSummaryDto> getMyOrders(UUID customerId) {
         List<OrderEntity> orders = OrderEntity
                 .find("customerEntity.id = ?1 order by createdAt desc", customerId)
                 .list();
@@ -736,4 +718,10 @@ public class OrderService
                 .collect(Collectors.toList());
     }
 
+    public OrderEntity findById(UUID orderUuid) {
+        if (orderUuid == null) {
+            return null;
+        }
+        return orderRepository.findById(orderUuid);
+    }
 }
