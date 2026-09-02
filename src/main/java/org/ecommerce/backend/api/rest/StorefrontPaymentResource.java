@@ -7,8 +7,7 @@ import jakarta.ws.rs.GET;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
-import org.ecommerce.common.entity.StoreSettingsEntity;
-import org.ecommerce.common.repository.StoreSettingsRepository;
+import org.ecommerce.backend.service.SettingsService;
 import org.jboss.logging.Logger;
 
 import java.util.List;
@@ -28,17 +27,16 @@ public class StorefrontPaymentResource
     ObjectMapper objectMapper;
 
     @Inject
-    StoreSettingsRepository storeSettingsRepository;
+    SettingsService settingsService;
 
     @GET
-    public List<String> getAllowedPaymentMethods()
-    {
-        StoreSettingsEntity setting = storeSettingsRepository.findById("payment_methods_allowed");
-        if (setting == null) {
+    public List<String> getAllowedPaymentMethods() {
+        String rawValue = settingsService.getStoreSettingValue("payment_methods_allowed");
+        if (rawValue == null) {
             return List.of();
         }
         try {
-            return objectMapper.readValue(setting.getValue(), new TypeReference<List<String>>()
+            return objectMapper.readValue(rawValue, new TypeReference<List<String>>()
             {
             });
         } catch (Exception e) {

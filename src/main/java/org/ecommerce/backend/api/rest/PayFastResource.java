@@ -16,7 +16,6 @@ import org.ecommerce.backend.service.payfast.PayFastService;
 import org.ecommerce.backend.utils.ClientIpUtils;
 import org.ecommerce.common.entity.OrderEntity;
 import org.ecommerce.common.enums.OrderStatusEn;
-import org.ecommerce.common.repository.PaymentLogRepository;
 import org.jboss.logging.Logger;
 
 import java.math.BigDecimal;
@@ -45,9 +44,6 @@ public class PayFastResource
 
     @Inject
     OrderOwnershipGuard ownershipGuard;
-
-    @Inject
-    PaymentLogRepository paymentLogRepository;
 
     @ConfigProperty(name = "payfast.gateway.url")
     String gatewayUrl;
@@ -213,7 +209,7 @@ public class PayFastResource
 
         try {
             // 3. Generic Logging
-            paymentLogRepository.record(
+            orderService.recordPaymentLog(
                     resolveOrderForLog(params.get("m_payment_id")),
                     "PAYFAST",
                     params.get("m_payment_id"),

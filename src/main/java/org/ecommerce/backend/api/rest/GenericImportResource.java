@@ -10,8 +10,8 @@ import org.ecommerce.backend.service.import_engine.GenericImportAsyncService;
 import org.ecommerce.backend.service.import_engine.ProductImportOrchestrator;
 import org.ecommerce.backend.service.import_engine.ProductPriceImportOrchestrator;
 import org.ecommerce.common.dto.ProductUploadFormDto;
+import org.ecommerce.backend.service.StaffService;
 import org.ecommerce.common.entity.StaffUserEntity;
-import org.ecommerce.common.repository.StaffRepository;
 import org.jboss.logging.Logger;
 
 import java.io.InputStream;
@@ -41,7 +41,7 @@ public class GenericImportResource {
     ProductPriceImportOrchestrator priceOrchestrator;
 
     @Inject
-    StaffRepository staffRepository;
+    StaffService staffService;
 
     /**
      * Upload a file for import.
@@ -52,7 +52,7 @@ public class GenericImportResource {
     @RolesAllowed({"SUPER_ADMIN", "CATALOG_MANAGER"})
     public Response uploadImportFile(@PathParam("importType") String importType, ProductUploadFormDto form) {
         try {
-            StaffUserEntity admin = staffRepository.findByEmail(jwt.getName());
+            StaffUserEntity admin = staffService.findByEmail(jwt.getName());
             if (admin == null) {
                 return Response.status(Response.Status.UNAUTHORIZED).build();
             }
@@ -94,7 +94,7 @@ public class GenericImportResource {
     @RolesAllowed({"SUPER_ADMIN", "CATALOG_MANAGER"})
     public Response startProcessing(@PathParam("importType") String importType, @PathParam("batchId") UUID batchId) {
         try {
-            StaffUserEntity approver = staffRepository.findByEmail(jwt.getName());
+            StaffUserEntity approver = staffService.findByEmail(jwt.getName());
             if (approver == null) {
                 return Response.status(Response.Status.UNAUTHORIZED).build();
             }
@@ -160,7 +160,7 @@ public class GenericImportResource {
     @RolesAllowed({"SUPER_ADMIN", "CATALOG_MANAGER"})
     public Response triggerSageImport() {
         try {
-            StaffUserEntity admin = staffRepository.findByEmail(jwt.getName());
+            StaffUserEntity admin = staffService.findByEmail(jwt.getName());
             if (admin == null) {
                 return Response.status(Response.Status.UNAUTHORIZED).build();
             }
@@ -193,7 +193,7 @@ public class GenericImportResource {
     @RolesAllowed({"SUPER_ADMIN", "CATALOG_MANAGER"})
     public Response triggerSageItemImport() {
         try {
-            StaffUserEntity admin = staffRepository.findByEmail(jwt.getName());
+            StaffUserEntity admin = staffService.findByEmail(jwt.getName());
             if (admin == null) {
                 return Response.status(Response.Status.UNAUTHORIZED).build();
             }

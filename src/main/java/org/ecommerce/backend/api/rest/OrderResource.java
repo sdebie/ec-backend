@@ -10,6 +10,7 @@ import jakarta.ws.rs.core.Response;
 import org.eclipse.microprofile.jwt.JsonWebToken;
 import org.ecommerce.backend.exception.IdempotencyConflictException;
 import org.ecommerce.backend.exception.UnavailableVariantsException;
+import org.ecommerce.backend.service.CustomerAuthService;
 import org.ecommerce.backend.service.OrderNotificationService;
 import org.ecommerce.backend.service.OrderService;
 import org.ecommerce.backend.service.StatusTransition;
@@ -22,8 +23,6 @@ import org.ecommerce.common.entity.ShippingMethodEntity;
 import org.ecommerce.common.enums.CustomerTypeEn;
 import org.ecommerce.common.enums.OrderStatusEn;
 import org.ecommerce.common.enums.StockEffect;
-import org.ecommerce.common.repository.CustomerRepository;
-import org.ecommerce.common.repository.OrderRepository;
 import org.jboss.logging.Logger;
 
 import java.util.Map;
@@ -53,10 +52,7 @@ public class OrderResource {
     SecurityIdentity securityIdentity;
 
     @Inject
-    OrderRepository orderRepository;
-
-    @Inject
-    CustomerRepository customerRepository;
+    CustomerAuthService customerAuthService;
 
     /**
      * Not {@code @Transactional} (design §3.3, checkout-idempotency
@@ -108,7 +104,7 @@ public class OrderResource {
         // against the winner either way. This exists to avoid the wasted work of
         // that revalidate → reserve → roll-back cycle on the common case (a
         // sequential retry), not to make it correct.
-        OrderEntity existing = orderRepository.findByIdempotencyKey(idempotencyKey);
+        OrderEntity existing = orderService.findByIdempotencyKey(idempotencyKey);
         if (existing != null) {
             return resolveExisting(existing, fingerprint);
         }
@@ -125,7 +121,7 @@ public class OrderResource {
             // won. Our transaction has rolled back, releasing the stock it
             // reserved; the winner's has committed and is visible to this fresh
             // read.
-            OrderEntity winner = orderRepository.findByIdempotencyKey(idempotencyKey);
+            OrderEntity winner = orderService.findByIdempotencyKey(idempotencyKey);
             if (winner == null) {
                 LOG.errorf("Idempotency claim on %s was lost but no winning order is visible", idempotencyKey);
                 return Response.status(500).entity(Map.of("error", "Unexpected error")).build();
@@ -137,7 +133,7 @@ public class OrderResource {
             // last-unit race that neither the lookup above nor the claim inside
             // createOrderFromCart can catch, because this exit is reached before
             // persist() is ever attempted.
-            OrderEntity winner = orderRepository.findByIdempotencyKey(idempotencyKey);
+            OrderEntity winner = orderService.findByIdempotencyKey(idempotencyKey);
             if (winner != null) {
                 return resolveExisting(winner, fingerprint);
             }
@@ -231,7 +227,7 @@ public class OrderResource {
     @Transactional
     public Response confirmInStorePayment(@PathParam("orderId") UUID orderId,
                                            @HeaderParam("X-Order-Token") String orderToken) {
-        OrderEntity order = orderRepository.findOrderInfoById(orderId);
+        OrderEntity order = orderService.findOrderInfoById(orderId);
         if (order == null || !ownershipGuard.mayAct(order, orderToken)) {
             return Response.status(Response.Status.NOT_FOUND)
                     .entity(Map.of("error", "Order not found"))
@@ -308,7 +304,7 @@ public class OrderResource {
             return null;
         }
         String email = jwt.getSubject();
-        CustomerEntity customer = customerRepository.findByEmail(email);
+        CustomerEntity customer = customerAuthService.findCustomerByEmail(email);
         if (customer == null) {
             LOG.warnf("createOrder: customer role present but no matching CustomerEntity for email: %s", email);
             throw new WebApplicationException(

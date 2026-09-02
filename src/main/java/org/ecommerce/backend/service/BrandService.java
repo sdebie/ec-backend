@@ -51,6 +51,11 @@ public class BrandService
         return brandMapper.mapEntityToDto(brandEntity);
     }
 
+    public boolean brandExists(UUID id)
+    {
+        return id != null && brandRepository.findById(id) != null;
+    }
+
     @Transactional
     public void createBrand(BrandDto brandDto)
     {

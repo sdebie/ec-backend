@@ -21,8 +21,8 @@ import org.ecommerce.common.query.Filter;
 import org.ecommerce.common.query.FilterRequest;
 import org.ecommerce.common.query.PageRequest;
 import org.ecommerce.common.query.enums.FilterOperator;
-import org.ecommerce.common.repository.BrandRepository;
-import org.ecommerce.common.repository.CategoryRepository;
+import org.ecommerce.backend.service.BrandService;
+import org.ecommerce.backend.service.CategoryService;
 
 import java.util.*;
 
@@ -39,10 +39,10 @@ public class ProductResource
     FeaturedProductService featuredProductService;
 
     @Inject
-    CategoryRepository categoryRepository;
+    CategoryService categoryService;
 
     @Inject
-    BrandRepository brandRepository;
+    BrandService brandService;
 
     @Inject
     SecurityIdentity securityIdentity;
@@ -74,7 +74,7 @@ public class ProductResource
                 throw new IllegalArgumentException("categoryId must be a valid UUID", e);
             }
 
-            if (categoryRepository.findById(parsedCategoryId) == null) {
+            if (!categoryService.categoryExists(parsedCategoryId)) {
                 throw new IllegalArgumentException("Category not found for id: " + categoryId);
             }
 
@@ -118,10 +118,10 @@ public class ProductResource
                     continue;
                 }
 
-                List<org.ecommerce.common.entity.CategoryEntity> children = categoryRepository.list("parent.id", currentId);
-                for (org.ecommerce.common.entity.CategoryEntity child : children) {
-                    if (child != null && child.getId() != null && !collectedIds.contains(child.getId())) {
-                        nextFrontier.add(child.getId());
+                List<UUID> childIds = categoryService.findChildCategoryIds(currentId);
+                for (UUID childId : childIds) {
+                    if (!collectedIds.contains(childId)) {
+                        nextFrontier.add(childId);
                     }
                 }
             }
@@ -177,7 +177,7 @@ public class ProductResource
                 throw new IllegalArgumentException("categoryId must be a valid UUID", e);
             }
 
-            if (categoryRepository.findById(parsedCategoryId) == null) {
+            if (!categoryService.categoryExists(parsedCategoryId)) {
                 throw new IllegalArgumentException("Category not found for id: " + categoryId);
             }
 
@@ -200,7 +200,7 @@ public class ProductResource
                 throw new IllegalArgumentException("brandId must be a valid UUID", e);
             }
 
-            if (brandRepository.findById(parsedBrandId) == null) {
+            if (!brandService.brandExists(parsedBrandId)) {
                 throw new IllegalArgumentException("Brand not found for id: " + brandId);
             }
 

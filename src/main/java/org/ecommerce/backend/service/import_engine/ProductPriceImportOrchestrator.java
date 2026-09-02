@@ -136,6 +136,14 @@ public class ProductPriceImportOrchestrator extends BaseImportOrchestrator {
                 .collect(Collectors.toList());
     }
 
+    public List<ProductPriceImportBatchEntity> listBatchesOrderedByCreatedAtDesc() {
+        return batchRepository.listAllOrderByCreatedAtDesc();
+    }
+
+    public List<ProductPriceImportStagedEntity> getStagedRows(UUID batchId) {
+        return stagedRepository.findByBatchId(batchId);
+    }
+
     private void applyPriceRow(ProductPriceImportStagedEntity staged) {
         ProductVariantEntity variant = variantRepository.findBySku(staged.getSku());
         if (variant == null) {

@@ -10,8 +10,8 @@ import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import org.eclipse.microprofile.jwt.JsonWebToken;
 import org.ecommerce.backend.security.ForcedPasswordResetIdentityAugmentor;
+import org.ecommerce.backend.service.StaffService;
 import org.ecommerce.common.entity.StaffUserEntity;
-import org.ecommerce.common.repository.StaffRepository;
 import org.jboss.logging.Logger;
 
 import java.util.List;
@@ -31,7 +31,7 @@ public class AdminMeResource {
     SecurityIdentity securityIdentity;
 
     @Inject
-    StaffRepository staffRepository;
+    StaffService staffService;
 
     @GET
     @Path("/me")
@@ -50,7 +50,7 @@ public class AdminMeResource {
         // Defaults to true so an unresolvable user cannot be admitted to the portal:
         // the client treats "must reset" as the locked state, so this fails closed.
         boolean resetPassword = true;
-        StaffUserEntity user = staffRepository.findByEmail(email);
+        StaffUserEntity user = staffService.findByEmail(email);
         if (user != null) {
             id = user.getId();
             resetPassword = user.isResetPassword();

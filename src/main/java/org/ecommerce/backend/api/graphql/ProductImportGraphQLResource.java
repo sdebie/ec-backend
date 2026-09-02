@@ -7,13 +7,11 @@ import org.eclipse.microprofile.graphql.*;
 import org.ecommerce.backend.mapper.ImportBatchDtoMapper;
 import org.ecommerce.backend.mapper.ProductComparisonMapper;
 import org.ecommerce.backend.mapper.ProductPriceComparisonMapper;
+import org.ecommerce.backend.service.import_engine.ProductImportOrchestrator;
+import org.ecommerce.backend.service.import_engine.ProductPriceImportOrchestrator;
 import org.ecommerce.common.dto.ProductComparisonDto;
 import org.ecommerce.common.dto.ProductPriceComparisonDto;
 import org.ecommerce.common.dto.ProductImportBatchDto;
-import org.ecommerce.common.repository.ProductImportBatchRepository;
-import org.ecommerce.common.repository.ProductImportStagedRepository;
-import org.ecommerce.common.repository.ProductPriceImportBatchRepository;
-import org.ecommerce.common.repository.ProductPriceImportStagedRepository;
 
 import jakarta.transaction.Transactional;
 import jakarta.transaction.Transactional.TxType;
@@ -27,16 +25,10 @@ import java.util.stream.Collectors;
 public class ProductImportGraphQLResource {
 
     @Inject
-    ProductImportBatchRepository productImportBatchRepository;
+    ProductImportOrchestrator productOrchestrator;
 
     @Inject
-    ProductImportStagedRepository productImportStagedRepository;
-
-    @Inject
-    ProductPriceImportBatchRepository productPriceImportBatchRepository;
-
-    @Inject
-    ProductPriceImportStagedRepository productPriceImportStagedRepository;
+    ProductPriceImportOrchestrator priceOrchestrator;
 
     @Inject
     ProductComparisonMapper productComparisonMapper;
@@ -52,7 +44,7 @@ public class ProductImportGraphQLResource {
     @Transactional(value = TxType.SUPPORTS)
     @RolesAllowed({"SUPER_ADMIN", "CATALOG_MANAGER"})
     public List<ProductComparisonDto> getImportRows(@Name("batchId") UUID batchId) {
-        return productComparisonMapper.toDtos(productImportStagedRepository.findByBatchId(batchId));
+        return productComparisonMapper.toDtos(productOrchestrator.getStagedRows(batchId));
     }
 
     @Query("productImportBatches")
@@ -60,7 +52,7 @@ public class ProductImportGraphQLResource {
     @Transactional(value = TxType.SUPPORTS)
     @RolesAllowed({"SUPER_ADMIN", "CATALOG_MANAGER"})
     public List<ProductImportBatchDto> getProductImportBatches() {
-        return productImportBatchRepository.listAllOrderByCreatedAtDesc()
+        return productOrchestrator.listBatchesOrderedByCreatedAtDesc()
                 .stream()
                 .map(importBatchDtoMapper::fromProductBatch)
                 .collect(Collectors.toList());
@@ -71,7 +63,7 @@ public class ProductImportGraphQLResource {
     @Transactional(value = TxType.SUPPORTS)
     @RolesAllowed({"SUPER_ADMIN", "CATALOG_MANAGER"})
     public List<ProductPriceComparisonDto> getPriceImportRows(@Name("batchId") UUID batchId) {
-        return productPriceComparisonMapper.toDtos(productPriceImportStagedRepository.findByBatchId(batchId));
+        return productPriceComparisonMapper.toDtos(priceOrchestrator.getStagedRows(batchId));
     }
 
     @Query("productPriceImportBatches")
@@ -79,7 +71,7 @@ public class ProductImportGraphQLResource {
     @Transactional(value = TxType.SUPPORTS)
     @RolesAllowed({"SUPER_ADMIN", "CATALOG_MANAGER"})
     public List<ProductImportBatchDto> getProductPriceImportBatches() {
-        return productPriceImportBatchRepository.listAllOrderByCreatedAtDesc()
+        return priceOrchestrator.listBatchesOrderedByCreatedAtDesc()
                 .stream()
                 .map(importBatchDtoMapper::fromProductPriceBatch)
                 .collect(Collectors.toList());
