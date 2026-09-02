@@ -3,6 +3,9 @@ package org.ecommerce.backend.service;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
+import org.ecommerce.backend.service.import_engine.ProductImportOrchestrator;
+import org.ecommerce.backend.service.import_engine.ProductPriceImportOrchestrator;
+import org.ecommerce.backend.service.import_engine.GenericImportAsyncService;
 import org.ecommerce.common.entity.ProductPriceImportBatchEntity;
 import org.ecommerce.common.entity.ProductPriceImportStagedEntity;
 import org.ecommerce.common.entity.ProductImportBatchEntity;
@@ -28,12 +31,11 @@ import static org.junit.jupiter.api.Assertions.*;
 /**
  * Real-path integration tests for both import types (product and price).
  * <p>
- * Drives each service's public path:
- * CSV upload → staged → processed, asserting batch counter/state transitions.
- * Tests exercise the SERVICES, NOT the ChunkedImportStateMachine class alone.
+ * Drives each orchestrator's public path:
+ * CSV staging → staged → processing, asserting batch counter/state transitions.
  * <p>
  * Note: these tests use {@code QuarkusTransaction.requiringNew()} internally via
- * the services, so {@code @TestTransaction} would NOT roll back the inner
+ * the async service, so {@code @TestTransaction} would NOT roll back the inner
  * transactions. Instead, tests create unique batches and clean up after themselves.
  * <p>
  */
@@ -42,10 +44,13 @@ import static org.junit.jupiter.api.Assertions.*;
 class ProductImportRealPathIT
 {
     @Inject
-    ProductImportService productImportService;
+    ProductImportOrchestrator productImportOrchestrator;
 
     @Inject
-    ProductPriceImportService productPriceImportService;
+    ProductPriceImportOrchestrator productPriceImportOrchestrator;
+
+    @Inject
+    GenericImportAsyncService asyncService;
 
     @Inject
     ProductImportBatchRepository productImportBatchRepository;
@@ -91,7 +96,7 @@ class ProductImportRealPathIT
 
             try {
                 // WHEN: staging the CSV
-                productImportService.handleCsvUploadForBatch(is, batchId);
+                asyncService.stageRowsAsync("product-csv", is, batchId);
 
                 // THEN: batch transitions to PENDING
                 ProductImportBatchEntity batch = loadProductBatch(batchId);
@@ -130,16 +135,16 @@ class ProductImportRealPathIT
 
             try {
                 // Stage the CSV first
-                productImportService.handleCsvUploadForBatch(is, batchId);
+                asyncService.stageRowsAsync("product-csv", is, batchId);
 
                 // Mark as PROCESSING (simulates the async service workflow)
-                productImportService.markProductImportBatchAsProcessing(batchId);
+                productImportOrchestrator.markAsProcessing(batchId);
 
                 ProductImportBatchEntity batchBeforeProcessing = loadProductBatch(batchId);
                 assertEquals(ProductUploadStatusEn.PROCESSING, batchBeforeProcessing.getProductUploadStatusEn(), "Batch should be PROCESSING after markAsProcessing");
 
                 // WHEN: processing the staged rows
-                productImportService.processProductStagedRowsForBatch(batchId);
+                asyncService.processRowsAsync("product-csv", batchId);
 
                 // THEN: counters are updated
                 ProductImportBatchEntity batchAfter = loadProductBatch(batchId);
@@ -180,20 +185,20 @@ class ProductImportRealPathIT
 
             try {
                 // Phase 1: Upload → PENDING
-                productImportService.handleCsvUploadForBatch(is, batchId);
+                asyncService.stageRowsAsync("product-csv", is, batchId);
                 ProductImportBatchEntity afterStaging = loadProductBatch(batchId);
                 assertEquals(ProductUploadStatusEn.PENDING, afterStaging.getProductUploadStatusEn());
                 assertEquals(3, afterStaging.getTotalRows());
 
                 // Phase 2: Mark PROCESSING
-                productImportService.markProductImportBatchAsProcessing(batchId);
+                productImportOrchestrator.markAsProcessing(batchId);
                 ProductImportBatchEntity afterMarking = loadProductBatch(batchId);
                 assertEquals(ProductUploadStatusEn.PROCESSING, afterMarking.getProductUploadStatusEn());
                 assertEquals(0, afterMarking.getProcessedRows());
                 assertEquals(0, afterMarking.getSkippedRows());
 
                 // Phase 3: Process
-                productImportService.processProductStagedRowsForBatch(batchId);
+                asyncService.processRowsAsync("product-csv", batchId);
                 ProductImportBatchEntity afterProcessing = loadProductBatch(batchId);
 
                 // After synchronizeBatchProgress, counters must be consistent
@@ -240,7 +245,7 @@ class ProductImportRealPathIT
 
             try {
                 // WHEN: staging the CSV
-                productPriceImportService.handleProductPriceCsvUploadForBatch(is, batchId);
+                asyncService.stageRowsAsync("price-csv", is, batchId);
 
                 // THEN: batch transitions to PENDING
                 ProductPriceImportBatchEntity batch = loadPriceBatch(batchId);
@@ -278,16 +283,16 @@ class ProductImportRealPathIT
 
             try {
                 // Stage first
-                productPriceImportService.handleProductPriceCsvUploadForBatch(is, batchId);
+                asyncService.stageRowsAsync("price-csv", is, batchId);
 
                 // Mark PROCESSING
-                productPriceImportService.markProductPriceImportBatchAsProcessing(batchId, null);
+                productPriceImportOrchestrator.markAsProcessing(batchId, null);
 
                 ProductPriceImportBatchEntity batchBeforeProcessing = loadPriceBatch(batchId);
                 assertEquals(ProductUploadStatusEn.PROCESSING, batchBeforeProcessing.getProductUploadStatusEn());
 
                 // WHEN: processing
-                productPriceImportService.processProductPriceStagedRowsForBatch(batchId);
+                asyncService.processRowsAsync("price-csv", batchId);
 
                 // THEN: counters are updated
                 ProductPriceImportBatchEntity batchAfter = loadPriceBatch(batchId);
@@ -328,20 +333,20 @@ class ProductImportRealPathIT
 
             try {
                 // Phase 1: Upload → PENDING
-                productPriceImportService.handleProductPriceCsvUploadForBatch(is, batchId);
+                asyncService.stageRowsAsync("price-csv", is, batchId);
                 ProductPriceImportBatchEntity afterStaging = loadPriceBatch(batchId);
                 assertEquals(ProductUploadStatusEn.PENDING, afterStaging.getProductUploadStatusEn());
                 assertEquals(3, afterStaging.getTotalRows());
 
                 // Phase 2: Mark PROCESSING
-                productPriceImportService.markProductPriceImportBatchAsProcessing(batchId, null);
+                productPriceImportOrchestrator.markAsProcessing(batchId, null);
                 ProductPriceImportBatchEntity afterMarking = loadPriceBatch(batchId);
                 assertEquals(ProductUploadStatusEn.PROCESSING, afterMarking.getProductUploadStatusEn());
                 assertEquals(0, afterMarking.getProcessedRows());
                 assertEquals(0, afterMarking.getSkippedRows());
 
                 // Phase 3: Process
-                productPriceImportService.processProductPriceStagedRowsForBatch(batchId);
+                asyncService.processRowsAsync("price-csv", batchId);
                 ProductPriceImportBatchEntity afterProcessing = loadPriceBatch(batchId);
 
                 // After synchronizeBatchProgress, counters must be consistent

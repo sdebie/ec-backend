@@ -3,6 +3,8 @@ package org.ecommerce.backend.service;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
+import org.ecommerce.backend.service.import_engine.ProductPriceImportOrchestrator;
+import org.ecommerce.backend.service.import_engine.GenericImportAsyncService;
 import org.ecommerce.common.dto.ProductPriceComparisonDto;
 import org.ecommerce.common.entity.ProductPriceImportBatchEntity;
 import org.ecommerce.common.entity.ProductPriceImportStagedEntity;
@@ -32,16 +34,15 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.when;
 
 /**
- * Characterization tests for {@link ProductPriceImportService}.
+ * Characterization tests for {@link ProductPriceImportOrchestrator}.
  * <p>
- * Pins the current behaviour of the CSV upload → staging → comparison pipeline:
+ * Pins the current behaviour of the CSV staging → comparison pipeline:
  * - All-valid price file: rows staged as VALID, correct proposed/current prices, hasChanges flags
  * - Invalid rows: missing/unknown SKUs produce specific validation errors
  * - Malformed data: non-numeric prices produce specific error messages
  * - Empty file: zero rows staged, batch marked PENDING with zero counts
  * <p>
- * These baselines guard against behavioural regression during the upcoming
- * decomposition into parser/validator/orchestrator (tasks 8.2–8.4).
+ * These baselines guard against behavioural regression during the import pipeline.
  * <p>
  * Requirements: 4.2, 4.4
  */
@@ -49,7 +50,10 @@ import static org.mockito.Mockito.when;
 class ProductPriceImportCharacterizationTest
 {
     @Inject
-    ProductPriceImportService productPriceImportService;
+    ProductPriceImportOrchestrator productPriceImportOrchestrator;
+
+    @Inject
+    GenericImportAsyncService asyncService;
 
     @InjectMock
     ProductPriceImportBatchRepository productPriceImportBatchRepository;
@@ -121,7 +125,7 @@ class ProductPriceImportCharacterizationTest
 
         // Act
         InputStream is = new ByteArrayInputStream(csv.getBytes(StandardCharsets.UTF_8));
-        productPriceImportService.handleProductPriceCsvUploadForBatch(is, batchId);
+        asyncService.stageRowsAsync("price-csv", is, batchId);
 
         // Assert: two staged rows captured
         assertEquals(2, capturedStagedRows.size());
@@ -171,7 +175,7 @@ class ProductPriceImportCharacterizationTest
                 """;
 
         InputStream is = new ByteArrayInputStream(csv.getBytes(StandardCharsets.UTF_8));
-        productPriceImportService.handleProductPriceCsvUploadForBatch(is, batchId);
+        asyncService.stageRowsAsync("price-csv",is, batchId);
 
         assertEquals(1, capturedStagedRows.size());
         ProductPriceImportStagedEntity row = capturedStagedRows.get(0);
@@ -201,7 +205,7 @@ class ProductPriceImportCharacterizationTest
                 """;
 
         InputStream is = new ByteArrayInputStream(csv.getBytes(StandardCharsets.UTF_8));
-        productPriceImportService.handleProductPriceCsvUploadForBatch(is, batchId);
+        asyncService.stageRowsAsync("price-csv",is, batchId);
 
         assertEquals(2, capturedStagedRows.size());
 
@@ -237,7 +241,7 @@ class ProductPriceImportCharacterizationTest
         when(productVariantRepository.findBySku("")).thenReturn(null);
 
         InputStream is = new ByteArrayInputStream(csv.getBytes(StandardCharsets.UTF_8));
-        productPriceImportService.handleProductPriceCsvUploadForBatch(is, batchId);
+        asyncService.stageRowsAsync("price-csv",is, batchId);
 
         assertEquals(1, capturedStagedRows.size());
         ProductPriceImportStagedEntity row = capturedStagedRows.get(0);
@@ -263,7 +267,7 @@ class ProductPriceImportCharacterizationTest
                 """;
 
         InputStream is = new ByteArrayInputStream(csv.getBytes(StandardCharsets.UTF_8));
-        productPriceImportService.handleProductPriceCsvUploadForBatch(is, batchId);
+        asyncService.stageRowsAsync("price-csv",is, batchId);
 
         assertEquals(1, capturedStagedRows.size());
         ProductPriceImportStagedEntity row = capturedStagedRows.get(0);
@@ -293,7 +297,7 @@ class ProductPriceImportCharacterizationTest
                 """;
 
         InputStream is = new ByteArrayInputStream(csv.getBytes(StandardCharsets.UTF_8));
-        productPriceImportService.handleProductPriceCsvUploadForBatch(is, batchId);
+        asyncService.stageRowsAsync("price-csv",is, batchId);
 
         assertEquals(1, capturedStagedRows.size());
         ProductPriceImportStagedEntity row = capturedStagedRows.get(0);
@@ -318,7 +322,7 @@ class ProductPriceImportCharacterizationTest
                 """;
 
         InputStream is = new ByteArrayInputStream(csv.getBytes(StandardCharsets.UTF_8));
-        productPriceImportService.handleProductPriceCsvUploadForBatch(is, batchId);
+        asyncService.stageRowsAsync("price-csv",is, batchId);
 
         // No rows staged
         assertTrue(capturedStagedRows.isEmpty());
@@ -335,7 +339,7 @@ class ProductPriceImportCharacterizationTest
         String csv = "";
 
         InputStream is = new ByteArrayInputStream(csv.getBytes(StandardCharsets.UTF_8));
-        productPriceImportService.handleProductPriceCsvUploadForBatch(is, batchId);
+        asyncService.stageRowsAsync("price-csv",is, batchId);
 
         assertTrue(capturedStagedRows.isEmpty());
         assertEquals(ProductUploadStatusEn.PENDING, batch.getProductUploadStatusEn());
@@ -374,7 +378,7 @@ class ProductPriceImportCharacterizationTest
         when(productPriceImportStagedRepository.findByBatchId(batchId)).thenReturn(List.of(staged1, staged2));
 
         // Act
-        List<ProductPriceComparisonDto> result = productPriceImportService.getProductPriceImportRows(batchId);
+        List<ProductPriceComparisonDto> result = productPriceImportOrchestrator.getImportRows(batchId);
 
         // Assert: pins the DTO construction
         assertEquals(2, result.size());
@@ -424,7 +428,7 @@ class ProductPriceImportCharacterizationTest
                 """;
 
         InputStream is = new ByteArrayInputStream(csv.getBytes(StandardCharsets.UTF_8));
-        productPriceImportService.handleProductPriceCsvUploadForBatch(is, batchId);
+        asyncService.stageRowsAsync("price-csv",is, batchId);
 
         assertEquals(4, capturedStagedRows.size());
 
@@ -471,7 +475,7 @@ class ProductPriceImportCharacterizationTest
                 """;
 
         InputStream is = new ByteArrayInputStream(csv.getBytes(StandardCharsets.UTF_8));
-        productPriceImportService.handleProductPriceCsvUploadForBatch(is, batchId);
+        asyncService.stageRowsAsync("price-csv",is, batchId);
 
         assertEquals(1, capturedStagedRows.size());
         ProductPriceImportStagedEntity row = capturedStagedRows.get(0);
