@@ -53,9 +53,7 @@ public class QuoteRequestAdminResource
             if (pageRequest == null) {
                 pageRequest = new PageRequest();
             }
-            return quoteRequestRepository.findAll(pageRequest, filterRequest).stream()
-                    .map(quoteRequestMapper::mapEntityToListItemDto)
-                    .toList();
+            return quoteRequestService.allQuoteRequests(pageRequest, filterRequest);
         } catch (RuntimeException ex) {
             throw toGraphQlException(ex);
         }
@@ -66,7 +64,7 @@ public class QuoteRequestAdminResource
     public long quoteRequestCount(@Name("filterRequest") FilterRequest filterRequest)
     {
         try {
-            return quoteRequestRepository.count(filterRequest);
+            return quoteRequestService.quoteRequestCount(filterRequest);
         } catch (RuntimeException ex) {
             throw toGraphQlException(ex);
         }

@@ -36,7 +36,7 @@ public class StorefrontConfigResource
     @GET
     public Response getConfig()
     {
-        List<StoreSettingsEntity> rows = storeSettingsRepository.getAllStoreSettings();
+        List<StoreSettingsEntity> rows = storeSettingsRepository.listAll();
 
         Map<String, String> rawSettings = rows
                 .stream()

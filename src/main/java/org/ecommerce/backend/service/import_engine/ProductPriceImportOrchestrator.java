@@ -4,9 +4,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import jakarta.ws.rs.NotFoundException;
-import org.ecommerce.backend.mapper.ImportBatchDtoMapper;
 import org.ecommerce.common.dto.ProductPriceComparisonDto;
-import org.ecommerce.common.dto.ProductImportBatchDto;
 import org.ecommerce.common.dto.ImportBatchProcessStatusDto;
 import org.ecommerce.common.entity.*;
 import org.ecommerce.common.enums.PriceTypeEn;
@@ -41,9 +39,6 @@ public class ProductPriceImportOrchestrator extends BaseImportOrchestrator {
 
     @Inject
     VariantPricesRepository pricesRepository;
-
-    @Inject
-    ImportBatchDtoMapper dtoMapper;
 
     @Override
     protected Logger logger() {
@@ -138,13 +133,6 @@ public class ProductPriceImportOrchestrator extends BaseImportOrchestrator {
         List<ProductPriceImportStagedEntity> staged = stagedRepository.findByBatchId(batchId);
         return staged.stream()
                 .map(this::toComparisonDto)
-                .collect(Collectors.toList());
-    }
-
-    public List<ProductImportBatchDto> listBatches() {
-        return batchRepository.listAll()
-                .stream()
-                .map(dtoMapper::fromProductPriceBatch)
                 .collect(Collectors.toList());
     }
 

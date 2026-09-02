@@ -43,7 +43,7 @@ public class SettingsService
 
     public List<StoreSettingsDto> getAllSettings()
     {
-        return settingsMapper.mapStoreSettingsEntityToDtoList(storeSettingsRepository.getAllStoreSettings());
+        return settingsMapper.mapStoreSettingsEntityToDtoList(storeSettingsRepository.listAll());
     }
 
     public List<ShippingMethodDto> getShippingMethods()
@@ -59,31 +59,38 @@ public class SettingsService
     public List<StoreSettingsDto> saveStoreSettings(List<StoreSettingsDto> settings)
     {
         return settings.stream().map(dto -> {
-            StoreSettingsEntity entity = StoreSettingsEntity.findById(dto.getKey());
-            if (entity == null) {
+            StoreSettingsEntity entity = storeSettingsRepository.findById(dto.getKey());
+            boolean isNew = entity == null;
+            if (isNew) {
                 entity = new StoreSettingsEntity();
                 entity.setKey(dto.getKey());
             }
             settingsMapper.mapStoreSettingsDtoToEntity(dto, entity);
-            storeSettingsRepository.saveStoreSettings(entity);
+            if (isNew) {
+                // An already-managed row (found above) is updated by dirty checking on commit;
+                // only a genuinely new row needs an explicit insert.
+                storeSettingsRepository.persist(entity);
+            }
             return settingsMapper.mapStoreSettingsEntityToDto(entity);
         }).collect(Collectors.toList());
     }
 
     public ShippingMethodDto saveShippingMethod(ShippingMethodDto methodDto)
     {
-        ShippingMethodEntity entity;
-        if (methodDto.getId() == null) {
-            entity = settingsMapper.mapShippingMethodDtoToEntity(methodDto, new ShippingMethodEntity());
-        } else {
-            entity = shippingMethodRepository.findById(methodDto.getId());
-            if (entity == null) {
-                entity = new ShippingMethodEntity();
+        ShippingMethodEntity entity = methodDto.getId() == null ? null : shippingMethodRepository.findById(methodDto.getId());
+        boolean isNew = entity == null;
+        if (isNew) {
+            entity = new ShippingMethodEntity();
+            if (methodDto.getId() != null) {
                 entity.setId(methodDto.getId());
             }
-            settingsMapper.mapShippingMethodDtoToEntity(methodDto, entity);
         }
-        entity = shippingMethodRepository.save(entity);
+        settingsMapper.mapShippingMethodDtoToEntity(methodDto, entity);
+        if (isNew) {
+            // An already-managed row (found above) is updated by dirty checking on commit;
+            // only a genuinely new row needs an explicit insert.
+            shippingMethodRepository.persist(entity);
+        }
         return settingsMapper.mapShippingMethodEntityToDto(entity);
     }
 }

@@ -170,8 +170,17 @@ public class ProductService
     @Transactional(value = TxType.SUPPORTS)
     public List<ProductShoppingListItemDto> getTopBestSellers()
     {
+        int target = 10;
+        List<ProductEntity> bestSellers = productRepository.findTopBestSellerEntities(target);
+
+        List<ProductEntity> products = new ArrayList<>(bestSellers);
+        if (products.size() < target) {
+            List<UUID> bestSellerIds = bestSellers.stream().map(ProductEntity::getId).collect(Collectors.toList());
+            products.addAll(productRepository.findRandomProductEntitiesExcluding(target - products.size(), bestSellerIds));
+        }
+
         LocalDateTime now = LocalDateTime.now();
-        return productListItemAssembler.buildShoppingListItems(productRepository.findTopBestSellerEntities(), now, true);
+        return productListItemAssembler.buildShoppingListItems(products, now, true);
     }
 
     @Transactional(value = TxType.SUPPORTS)

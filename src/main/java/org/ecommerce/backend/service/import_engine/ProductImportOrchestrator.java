@@ -6,8 +6,6 @@ import jakarta.transaction.Transactional;
 import jakarta.ws.rs.NotFoundException;
 import org.ecommerce.backend.csv.ProductImportParser;
 import org.ecommerce.backend.csv.ProductImportValidator;
-import org.ecommerce.backend.mapper.ImportBatchDtoMapper;
-import org.ecommerce.common.dto.ProductImportBatchDto;
 import org.ecommerce.common.dto.ImportBatchProcessStatusDto;
 import org.ecommerce.common.entity.*;
 import org.ecommerce.common.enums.ProductImportValidationStatusEn;
@@ -19,7 +17,6 @@ import org.jboss.logging.Logger;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 /**
  * Orchestrates product imports. Implements both batch operations and legacy service interface.
@@ -39,9 +36,6 @@ public class ProductImportOrchestrator extends BaseImportOrchestrator {
 
     @Inject
     ProductImportValidator validator;
-
-    @Inject
-    ImportBatchDtoMapper dtoMapper;
 
     @Override
     protected Logger logger() {
@@ -131,13 +125,6 @@ public class ProductImportOrchestrator extends BaseImportOrchestrator {
         status.setValidationErrorCount(batch.getValidationErrorCount() != null ? batch.getValidationErrorCount() : 0);
         status.setCompleted(batch.getProductUploadStatusEn() != org.ecommerce.common.enums.ProductUploadStatusEn.PROCESSING);
         return status;
-    }
-
-    public List<ProductImportBatchDto> listBatches() {
-        return batchRepository.listAll()
-                .stream()
-                .map(dtoMapper::fromProductBatch)
-                .collect(Collectors.toList());
     }
 
     private void applyProductRow(ProductImportStagedEntity staged) {
