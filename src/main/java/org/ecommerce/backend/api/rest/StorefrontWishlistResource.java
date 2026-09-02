@@ -47,7 +47,8 @@ public class StorefrontWishlistResource
     {
         UUID customerId = resolveCustomerId();
         if (customerId == null) {
-            return Response.status(Response.Status.NOT_FOUND)
+            return Response
+                    .status(Response.Status.NOT_FOUND)
                     .entity(Map.of("error", "Customer not found"))
                     .build();
         }
@@ -64,15 +65,22 @@ public class StorefrontWishlistResource
     public Response hydrateWishlist(WishlistHydrationRequestDto request)
     {
         if (request == null || request.getVariantIds() == null || request.getVariantIds().isEmpty()) {
-            return Response.ok(new WishlistHydrationResponseDto(List.of())).build();
+            return Response
+                    .ok(new WishlistHydrationResponseDto(List.of()))
+                    .build();
         }
+
         if (request.getVariantIds().size() > 50) {
-            return Response.status(Response.Status.BAD_REQUEST)
+            return Response
+                    .status(Response.Status.BAD_REQUEST)
                     .entity(Map.of("error", "Maximum 50 variant IDs per request"))
                     .build();
         }
+
         List<WishlistHydratedItemDto> items = wishlistHydrationService.hydrate(request.getVariantIds());
-        return Response.ok(new WishlistHydrationResponseDto(items)).build();
+        return Response
+                .ok(new WishlistHydrationResponseDto(items))
+                .build();
     }
 
     @POST
@@ -85,14 +93,16 @@ public class StorefrontWishlistResource
             parsedVariantId = UUID.fromString(variantId);
         } catch (IllegalArgumentException e) {
             LOG.warn("Invalid variant ID format: " + variantId);
-            return Response.status(Response.Status.BAD_REQUEST)
+            return Response
+                    .status(Response.Status.BAD_REQUEST)
                     .entity(Map.of("error", "Invalid variant ID"))
                     .build();
         }
 
         UUID customerId = resolveCustomerId();
         if (customerId == null) {
-            return Response.status(Response.Status.NOT_FOUND)
+            return Response
+                    .status(Response.Status.NOT_FOUND)
                     .entity(Map.of("error", "Customer not found"))
                     .build();
         }
@@ -102,9 +112,7 @@ public class StorefrontWishlistResource
         return switch (result) {
             case CREATED -> Response.status(201).build();
             case ALREADY_EXISTS -> Response.ok().build();
-            case VARIANT_NOT_FOUND -> Response.status(404)
-                    .entity(Map.of("error", "Variant not found"))
-                    .build();
+            case VARIANT_NOT_FOUND -> Response.status(404).entity(Map.of("error", "Variant not found")).build();
         };
     }
 
@@ -118,14 +126,16 @@ public class StorefrontWishlistResource
             parsedVariantId = UUID.fromString(variantId);
         } catch (IllegalArgumentException e) {
             LOG.warn("Invalid variant ID format: " + variantId);
-            return Response.status(Response.Status.BAD_REQUEST)
+            return Response
+                    .status(Response.Status.BAD_REQUEST)
                     .entity(Map.of("error", "Invalid variant ID"))
                     .build();
         }
 
         UUID customerId = resolveCustomerId();
         if (customerId == null) {
-            return Response.status(Response.Status.NOT_FOUND)
+            return Response
+                    .status(Response.Status.NOT_FOUND)
                     .entity(Map.of("error", "Customer not found"))
                     .build();
         }

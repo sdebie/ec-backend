@@ -13,6 +13,8 @@ import org.ecommerce.common.enums.CustomerStatusEn;
 import org.ecommerce.common.query.FilterRequest;
 import org.ecommerce.common.query.PageRequest;
 import org.ecommerce.common.repository.CustomerRepository;
+import org.ecommerce.common.repository.OrderRepository;
+import org.ecommerce.common.repository.WholesaleApplicationRepository;
 import org.jboss.logging.Logger;
 
 import java.util.List;
@@ -30,45 +32,42 @@ public class CustomerAdminService
     @Inject
     CustomerRepository customerRepository;
 
-    public List<AdminCustomerListItemDto> allCustomers(PageRequest pageRequest, FilterRequest filterRequest)
-    {
+    @Inject
+    OrderRepository orderRepository;
+
+    @Inject
+    WholesaleApplicationRepository wholesaleApplicationRepository;
+
+    public List<AdminCustomerListItemDto> allCustomers(PageRequest pageRequest, FilterRequest filterRequest) {
         return customerRepository.findForAdmin(filterRequest, pageRequest)
                 .stream()
                 .map(c -> customerAdminMapper.toListItemDto(c, wholesaleApplicationFor(c)))
                 .toList();
     }
 
-    public long customerCount(FilterRequest filterRequest)
-    {
+    public long customerCount(FilterRequest filterRequest) {
         return customerRepository.countForAdmin(filterRequest);
     }
 
-    public AdminCustomerDetailDto adminCustomer(UUID id)
-    {
+    public AdminCustomerDetailDto adminCustomer(UUID id) {
         if (id == null) {
             throw new IllegalArgumentException("id is required");
         }
 
-        CustomerEntity customer = CustomerEntity.findById(id);
+        CustomerEntity customer = customerRepository.findById(id);
         if (customer == null) {
             throw new IllegalArgumentException("customer not found: " + id);
         }
 
-        WholesaleApplicationEntity app = WholesaleApplicationEntity
-                .find("customer.id = ?1", id)
-                .firstResult();
+        WholesaleApplicationEntity app = wholesaleApplicationRepository.find("customer.id = ?1", id).firstResult();
 
-        List<OrderEntity> orders = OrderEntity
-                .find("customerEntity.id = ?1 order by createdAt desc", id)
-                .page(0, 10)
-                .list();
+        List<OrderEntity> orders = orderRepository.find("customerEntity.id = ?1 order by createdAt desc", id).page(0, 10).list();
 
         return customerAdminMapper.toDetailDto(customer, app, orders);
     }
 
     @Transactional
-    public AdminCustomerListItemDto updateCustomerStatus(UUID id, String status)
-    {
+    public AdminCustomerListItemDto updateCustomerStatus(UUID id, String status) {
         if (id == null) {
             throw new IllegalArgumentException("id is required");
         }
@@ -83,7 +82,7 @@ public class CustomerAdminService
             throw new IllegalArgumentException("invalid status: " + status);
         }
 
-        CustomerEntity customer = CustomerEntity.findById(id);
+        CustomerEntity customer = customerRepository.findById(id);
         if (customer == null) {
             throw new IllegalArgumentException("customer not found: " + id);
         }
@@ -96,8 +95,7 @@ public class CustomerAdminService
         return customerAdminMapper.toListItemDto(customer, wholesaleApplicationFor(customer));
     }
 
-    private void validateStatusTransition(CustomerStatusEn current, CustomerStatusEn next)
-    {
+    private void validateStatusTransition(CustomerStatusEn current, CustomerStatusEn next) {
         boolean valid = switch (current) {
             case PENDING, DISABLED -> next == CustomerStatusEn.ACTIVE;
             case ACTIVE -> next == CustomerStatusEn.DISABLED;
@@ -108,15 +106,8 @@ public class CustomerAdminService
         }
     }
 
-    /**
-     * Loaded here rather than inside the mapper: mappers do not open queries.
-     * <p>
-     * ⚠️ Called per row by {@link #allCustomers}, so a page of N customers costs N queries.
-     * Left as-is to keep this change behaviour-preserving — the previous mapper did exactly
-     * the same thing per row — but it is a genuine N+1 worth batching.
-     */
-    private WholesaleApplicationEntity wholesaleApplicationFor(CustomerEntity customer)
-    {
-        return WholesaleApplicationEntity.find("customer.id = ?1", customer.getId()).firstResult();
+    private WholesaleApplicationEntity wholesaleApplicationFor(CustomerEntity customer) {
+        return wholesaleApplicationRepository.find("customer.id = ?1", customer.getId())
+                .firstResult();
     }
 }

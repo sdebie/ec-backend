@@ -13,6 +13,7 @@ import org.ecommerce.common.entity.SageSettingsEntity;
 import org.ecommerce.common.enums.ProductImportValidationStatusEn;
 import org.ecommerce.common.repository.ProductPriceImportBatchRepository;
 import org.ecommerce.common.repository.ProductPriceImportStagedRepository;
+import org.ecommerce.common.repository.SageSettingsRepository;
 import org.jboss.logging.Logger;
 
 import java.io.InputStream;
@@ -41,6 +42,9 @@ public class SagePriceImportStrategyImpl implements ImportStrategy {
 
     @Inject
     ProductPriceImportStagedRepository stagedRepository;
+
+    @Inject
+    SageSettingsRepository sageSettingsRepository;
 
     @Override
     public ImportStageResult stageRowsFromSource(InputStream source, UUID batchId) throws Exception {
@@ -82,7 +86,7 @@ public class SagePriceImportStrategyImpl implements ImportStrategy {
         LOG.infof("Fetching prices from Sage API for batch %s", batch.getId());
 
         // Get Sage settings for price list ID mapping
-        SageSettingsEntity settings = SageSettingsEntity.findAll().firstResult();
+        SageSettingsEntity settings = sageSettingsRepository.findAll().firstResult();
         if (settings == null) {
             throw new IllegalStateException("Sage settings not configured");
         }

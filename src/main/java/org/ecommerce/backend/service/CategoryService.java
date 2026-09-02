@@ -161,7 +161,7 @@ public class CategoryService
             if (validateFields(categoryDto)) {
                 categoryDto.setId(id);
 
-                CategoryEntity categoryEntity = CategoryEntity.findById(id);
+                CategoryEntity categoryEntity = categoryRepository.findById(id);
                 if (categoryEntity == null) {
                     throw new CategoryNotFoundException("Category with id " + categoryDto.getId() + " not found");
                 }
@@ -192,7 +192,7 @@ public class CategoryService
                 throw new IllegalArgumentException("Category id is null");
             }
 
-            CategoryEntity categoryEntity = CategoryEntity.findById(id);
+            CategoryEntity categoryEntity = categoryRepository.findById(id);
             if (categoryEntity == null) {
                 throw new CategoryNotFoundException("Category with id " + id + " not found");
             }

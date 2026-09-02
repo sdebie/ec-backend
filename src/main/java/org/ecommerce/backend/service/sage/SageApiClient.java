@@ -1,8 +1,10 @@
 package org.ecommerce.backend.service.sage;
 
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
 import jakarta.ws.rs.core.MediaType;
 import org.ecommerce.common.entity.SageSettingsEntity;
+import org.ecommerce.common.repository.SageSettingsRepository;
 
 import java.net.URI;
 import java.net.URLEncoder;
@@ -24,13 +26,16 @@ import java.util.Map;
 @ApplicationScoped
 public class SageApiClient
 {
+    @Inject
+    SageSettingsRepository sageSettingsRepository;
+
     private final HttpClient httpClient = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(10))
             .build();
 
     public String call(String type, Map<String, String> extraParams)
     {
-        SageSettingsEntity settings = SageSettingsEntity.findAll().firstResult();
+        SageSettingsEntity settings = sageSettingsRepository.findAll().firstResult();
         if (settings == null || isBlank(settings.getKey()) || isBlank(settings.getCompanyId()) || isBlank(settings.getApiUrl())
                 || isBlank(settings.getUsername()) || isBlank(settings.getPassword())) {
             throw new IllegalStateException("Sage API is not configured (sage_settings.key / company_id / api_url / username / password missing)");

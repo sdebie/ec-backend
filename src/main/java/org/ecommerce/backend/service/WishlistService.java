@@ -6,6 +6,8 @@ import jakarta.transaction.Transactional;
 import org.ecommerce.common.entity.CustomerEntity;
 import org.ecommerce.common.entity.ProductVariantEntity;
 import org.ecommerce.common.entity.WishlistItemEntity;
+import org.ecommerce.common.repository.CustomerRepository;
+import org.ecommerce.common.repository.ProductVariantRepository;
 import org.ecommerce.common.repository.WishlistItemRepository;
 import org.jboss.logging.Logger;
 
@@ -20,6 +22,12 @@ public class WishlistService
 
     @Inject
     WishlistItemRepository wishlistItemRepository;
+
+    @Inject
+    ProductVariantRepository productVariantRepository;
+
+    @Inject
+    CustomerRepository customerRepository;
 
     public enum AddResult
     {
@@ -41,7 +49,7 @@ public class WishlistService
     public AddResult addToWishlist(UUID customerId, UUID variantId)
     {
         // Check variant existence
-        ProductVariantEntity variant = ProductVariantEntity.findById(variantId);
+        ProductVariantEntity variant = productVariantRepository.findById(variantId);
         if (variant == null) {
             LOG.warn("Attempt to add non-existent variant to wishlist: variantId=" + variantId);
             return AddResult.VARIANT_NOT_FOUND;
@@ -54,11 +62,11 @@ public class WishlistService
         }
 
         // Persist new entry
-        CustomerEntity customer = CustomerEntity.findById(customerId);
+        CustomerEntity customer = customerRepository.findById(customerId);
         WishlistItemEntity newItem = new WishlistItemEntity();
         newItem.setCustomer(customer);
         newItem.setVariant(variant);
-        newItem.persist();
+        wishlistItemRepository.persist(newItem);
 
         return AddResult.CREATED;
     }

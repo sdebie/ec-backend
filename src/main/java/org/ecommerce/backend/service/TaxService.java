@@ -1,7 +1,9 @@
 package org.ecommerce.backend.service;
 
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
 import org.ecommerce.common.entity.StoreSettingsEntity;
+import org.ecommerce.common.repository.StoreSettingsRepository;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -9,6 +11,9 @@ import java.math.RoundingMode;
 @ApplicationScoped
 public class TaxService
 {
+    @Inject
+    StoreSettingsRepository storeSettingsRepository;
+
     private static final BigDecimal DEFAULT_VAT_RATE = new BigDecimal("0.15");
     private static final String VAT_RATE_KEY = "vat_rate_percent";
 
@@ -28,7 +33,7 @@ public class TaxService
 
     private BigDecimal loadVatRate()
     {
-        StoreSettingsEntity setting = StoreSettingsEntity.findById(VAT_RATE_KEY);
+        StoreSettingsEntity setting = storeSettingsRepository.findById(VAT_RATE_KEY);
         if (setting == null || setting.getValue() == null || setting.getValue().isBlank()) {
             return DEFAULT_VAT_RATE;
         }

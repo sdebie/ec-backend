@@ -6,7 +6,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import org.ecommerce.backend.exception.RecipientNotConfiguredException;
 import org.ecommerce.common.entity.StoreSettingsEntity;
-import org.ecommerce.common.repository.SettingsRepository;
+import org.ecommerce.common.repository.StoreSettingsRepository;
 import org.jboss.logging.Logger;
 
 import java.util.Optional;
@@ -32,7 +32,7 @@ public class EnquiryRecipientResolver
     private static final String CONTACT_SETTING_KEY = "storefront.contact";
 
     @Inject
-    SettingsRepository settingsRepository;
+    StoreSettingsRepository storeSettingsRepository;
 
     @Inject
     ObjectMapper objectMapper;
@@ -46,7 +46,7 @@ public class EnquiryRecipientResolver
      */
     public String require()
     {
-        StoreSettingsEntity setting = settingsRepository.findById(CONTACT_SETTING_KEY);
+        StoreSettingsEntity setting = storeSettingsRepository.findById(CONTACT_SETTING_KEY);
         if (setting == null || setting.getValue() == null || setting.getValue().isBlank()) {
             throw new RecipientNotConfiguredException(
                     "storefront.contact setting row is missing or empty");

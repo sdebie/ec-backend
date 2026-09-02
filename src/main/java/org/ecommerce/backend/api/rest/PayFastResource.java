@@ -57,14 +57,15 @@ public class PayFastResource
     @Consumes(MediaType.APPLICATION_FORM_URLENCODED)
     @Transactional
     public Response checkout(MultivaluedMap<String, String> formParams,
-                              @HeaderParam("X-Order-Token") String orderToken)
-    {
+                             @HeaderParam("X-Order-Token") String orderToken) {
         LOG.debug("Checkout received: " + formParams);
 
         String orderIdParam = formParams.getFirst("id");
         if (orderIdParam == null || orderIdParam.isBlank()) {
-            return Response.status(Response.Status.BAD_REQUEST)
-                    .entity(Map.of("error", "Order ID is required")).build();
+            return Response
+                    .status(Response.Status.BAD_REQUEST)
+                    .entity(Map.of("error", "Order ID is required"))
+                    .build();
         }
 
         UUID orderUuid;
@@ -74,23 +75,30 @@ public class PayFastResource
             // Previously uncaught, surfacing as an unmapped 500 (tasks.md 6.3) — nothing
             // to log beyond "malformed", since Requirement 5.6 forbids logging the raw
             // request string and there is no parsed id yet to log instead.
-            return Response.status(Response.Status.BAD_REQUEST)
-                    .entity(Map.of("error", "Order ID is not a valid identifier")).build();
+            return Response
+                    .status(Response.Status.BAD_REQUEST)
+                    .entity(Map.of("error", "Order ID is not a valid identifier"))
+                    .build();
         }
 
-        OrderEntity quote = OrderEntity.findById(orderUuid);
+        OrderEntity quote = orderService.findById(orderUuid);
+
         if (quote == null) {
             LOG.debugf("checkout: order not found: %s", orderUuid);
-            return Response.status(Response.Status.NOT_FOUND)
-                    .entity(Map.of("error", "Order not found")).build();
+            return Response
+                    .status(Response.Status.NOT_FOUND)
+                    .entity(Map.of("error", "Order not found"))
+                    .build();
         }
 
         // guest-order-authorization Requirement 1: S4 had no ownership check of any
         // kind before this — not a bypassed check, an absent one.
         if (!ownershipGuard.mayAct(quote, orderToken)) {
             LOG.warnf("checkout: refused for order %s", orderUuid);
-            return Response.status(Response.Status.NOT_FOUND)
-                    .entity(Map.of("error", "Order not found")).build();
+            return Response
+                    .status(Response.Status.NOT_FOUND)
+                    .entity(Map.of("error", "Order not found"))
+                    .build();
         }
 
         // Requirement 8: the payer email comes from the order — see resolveEmail's own
@@ -98,8 +106,10 @@ public class PayFastResource
         String email = resolveEmail(quote);
 
         if (email == null || email.isBlank()) {
-            return Response.status(Response.Status.BAD_REQUEST)
-                    .entity(Map.of("error", "Email is required")).build();
+            return Response
+                    .status(Response.Status.BAD_REQUEST)
+                    .entity(Map.of("error", "Email is required"))
+                    .build();
         }
 
         LOG.debug("Got Order from DB with ID: " + quote.getId());
@@ -120,22 +130,26 @@ public class PayFastResource
             // reach that throw from a REST method with nothing to catch it.
             if (!from.canSystemTransitionTo(OrderStatusEn.PENDING_PAYMENT)) {
                 LOG.warnf("Refused payment start for order %s: %s cannot move to PENDING_PAYMENT", orderUuid, from);
-                return Response.status(Response.Status.CONFLICT)
-                        .entity(Map.of("error", "Order can no longer be paid")).build();
+                return Response
+                        .status(Response.Status.CONFLICT)
+                        .entity(Map.of("error", "Order can no longer be paid"))
+                        .build();
             }
 
-            TransitionOutcome outcome = orderService.applyTransition(quote,
-                    StatusTransition.system(from, OrderStatusEn.PENDING_PAYMENT, "Payment started"));
+            TransitionOutcome outcome = orderService.applyTransition(quote, StatusTransition.system(from, OrderStatusEn.PENDING_PAYMENT, "Payment started"));
             if (!outcome.claimed()) {
                 LOG.warnf("Could not start payment for order %s: it is %s", orderUuid, quote.getStatus());
-                return Response.status(Response.Status.CONFLICT)
-                        .entity(Map.of("error", "Order can no longer be paid")).build();
+                return Response
+                        .status(Response.Status.CONFLICT)
+                        .entity(Map.of("error", "Order can no longer be paid"))
+                        .build();
             }
         }
 
         List<HtmlFormField> hiddenHTMLFormFields = payFastService.generateHiddenHTMLForm(quote, email);
 
-        return Response.accepted()
+        return Response
+                .accepted()
                 .entity(Map.of("gatewayUrl", gatewayUrl, "fields", hiddenHTMLFormFields))
                 .build();
     }
@@ -148,8 +162,7 @@ public class PayFastResource
      * this without one. Never a caller-supplied parameter: that used to override both
      * and let anyone redirect the PayFast receipt to an address of their choosing.
      */
-    private String resolveEmail(OrderEntity order)
-    {
+    private String resolveEmail(OrderEntity order) {
         if (order.getContactEmail() != null && !order.getContactEmail().isBlank()) {
             return order.getContactEmail();
         }
@@ -168,18 +181,15 @@ public class PayFastResource
     @Path("/itn")
     @Consumes(MediaType.APPLICATION_FORM_URLENCODED)
     @Transactional
-    public Response handleITN(
-            String rawBody,
-            @HeaderParam("CF-Connecting-IP") String cfConnectingIp,
-            @HeaderParam("X-Forwarded-For") String xForwardedFor,
-            @HeaderParam("X-Real-IP") String xRealIp)
-    {
+    public Response handleITN(String rawBody, @HeaderParam("CF-Connecting-IP") String cfConnectingIp, @HeaderParam("X-Forwarded-For") String xForwardedFor, @HeaderParam("X-Real-IP") String xRealIp) {
         LOG.debug("ITN callback received");
 
         // 1. Signature check
         if (!payFastService.verifyItnSignature(rawBody)) {
             LOG.warn("ITN callback rejected: signature verification failed");
-            return Response.status(Response.Status.UNAUTHORIZED).build();
+            return Response
+                    .status(Response.Status.UNAUTHORIZED)
+                    .build();
         }
 
         // 2. Source check — a leaked passphrase is enough to forge a valid signature
@@ -187,7 +197,9 @@ public class PayFastResource
         String clientIp = ClientIpUtils.resolveClientIp(cfConnectingIp, xForwardedFor, xRealIp);
         if (!payFastService.isTrustedSource(clientIp)) {
             LOG.warn("ITN callback rejected: untrusted source IP " + clientIp);
-            return Response.status(Response.Status.UNAUTHORIZED).build();
+            return Response
+                    .status(Response.Status.UNAUTHORIZED)
+                    .build();
         }
 
         Map<String, String> params = parseFormBody(rawBody);
@@ -209,6 +221,7 @@ public class PayFastResource
                     amountGross,
                     params.get("payment_status"),
                     params.toString()); // raw params for auditing
+
         } catch (Exception e) {
             LOG.error("Error logging payment: " + e.getMessage());
         }
@@ -218,16 +231,14 @@ public class PayFastResource
             String orderIdStr = params.get("m_payment_id");
             try {
                 UUID orderId = UUID.fromString(orderIdStr);
-                OrderEntity order = OrderEntity.findById(orderId);
+                OrderEntity order = orderService.findById(orderId);
                 if (order != null) {
                     if (order.getStatus() == OrderStatusEn.PAID) {
                         // PayFast retries ITNs it doesn't get a definitive ack for;
                         // a replay of an already-processed payment is not an error.
                         LOG.debug("Order " + orderId + " already PAID; ignoring duplicate ITN");
-                    } else if (amountGross == null
-                            || amountGross.subtract(order.getTotalAmount()).abs().compareTo(AMOUNT_TOLERANCE) > 0) {
-                        LOG.warn("ITN rejected: amount_gross " + amountGross + " does not match order total "
-                                + order.getTotalAmount() + " for order " + orderId);
+                    } else if (amountGross == null || amountGross.subtract(order.getTotalAmount()).abs().compareTo(AMOUNT_TOLERANCE) > 0) {
+                        LOG.warn("ITN rejected: amount_gross " + amountGross + " does not match order total " + order.getTotalAmount() + " for order " + orderId);
                         return Response.status(Response.Status.UNAUTHORIZED).build();
                     } else if (!payFastService.confirmWithPayFast(rawBody)) {
                         LOG.warn("ITN rejected: PayFast server confirmation failed for order " + orderId);
@@ -238,9 +249,7 @@ public class PayFastResource
                         // Naming PENDING_PAYMENT as the expected status makes that a lost
                         // claim rather than an exception, and the claim itself is atomic —
                         // so a payment can never overwrite a decision another writer made.
-                        TransitionOutcome outcome = orderService.applyTransition(order,
-                                StatusTransition.system(OrderStatusEn.PENDING_PAYMENT, OrderStatusEn.PAID,
-                                        "Payment confirmed by PayFast"));
+                        TransitionOutcome outcome = orderService.applyTransition(order, StatusTransition.system(OrderStatusEn.PENDING_PAYMENT, OrderStatusEn.PAID, "Payment confirmed by PayFast"));
 
                         if (outcome.claimed()) {
                             // The receipt is sent by applyTransition, from the status itself.
@@ -274,8 +283,7 @@ public class PayFastResource
      * anomaly worth alerting on: no money changed hands, so the worst case is a stale
      * notification for an order somebody already cancelled.
      */
-    private void recordFailedPayment(String orderIdStr)
-    {
+    private void recordFailedPayment(String orderIdStr) {
         UUID orderId;
         try {
             orderId = UUID.fromString(orderIdStr);
@@ -284,15 +292,13 @@ public class PayFastResource
             return;
         }
 
-        OrderEntity order = OrderEntity.findById(orderId);
+        OrderEntity order = orderService.findById(orderId);
         if (order == null) {
             LOG.warn("Order not found for failed-payment ITN m_payment_id=" + orderId);
             return;
         }
 
-        TransitionOutcome outcome = orderService.applyTransition(order,
-                StatusTransition.system(OrderStatusEn.PENDING_PAYMENT, OrderStatusEn.PAYMENT_FAILED,
-                        "Payment declined by PayFast"));
+        TransitionOutcome outcome = orderService.applyTransition(order, StatusTransition.system(OrderStatusEn.PENDING_PAYMENT, OrderStatusEn.PAYMENT_FAILED, "Payment declined by PayFast"));
 
         if (outcome.claimed()) {
             LOG.debug("Order " + orderId + " marked PAYMENT_FAILED; its stock stays reserved for a retry");
@@ -311,9 +317,8 @@ public class PayFastResource
      * arrived). The second case is money received against stock that may no longer
      * be reserved for it — that needs a human to reconcile, not a silent drop.
      */
-    private void handlePaidButNoLongerPending(UUID orderId, OrderEntity staleOrder, BigDecimal amountGross)
-    {
-        OrderEntity current = OrderEntity.findById(orderId);
+    private void handlePaidButNoLongerPending(UUID orderId, OrderEntity staleOrder, BigDecimal amountGross) {
+        OrderEntity current = orderService.findById(orderId);
         OrderStatusEn currentStatus = current != null ? current.getStatus() : null;
 
         if (currentStatus == OrderStatusEn.PAID) {
@@ -321,8 +326,7 @@ public class PayFastResource
             return;
         }
 
-        LOG.errorf("PayFast confirmed payment for order %s but it is no longer CREATED (current status: %s) — "
-                + "payment received, stock may not be reserved. Manual review required.", orderId, currentStatus);
+        LOG.errorf("PayFast confirmed payment for order %s but it is no longer CREATED (current status: %s) — payment received, stock may not be reserved. Manual review required.", orderId, currentStatus);
         orderNotificationService.sendPaymentAnomalyAlert(current != null ? current : staleOrder, amountGross);
     }
 
@@ -332,13 +336,12 @@ public class PayFastResource
      * m_payment_id leaves the log unlinked rather than failing the ITN, since the
      * log write itself is already best-effort (guarded by its own try/catch above).
      */
-    private OrderEntity resolveOrderForLog(String orderIdStr)
-    {
+    private OrderEntity resolveOrderForLog(String orderIdStr) {
         if (orderIdStr == null) {
             return null;
         }
         try {
-            return OrderEntity.findById(UUID.fromString(orderIdStr));
+            return orderService.findById(UUID.fromString(orderIdStr));
         } catch (IllegalArgumentException e) {
             return null;
         }
@@ -347,8 +350,7 @@ public class PayFastResource
     /**
      * Parses a form-urlencoded body into a map, keeping the first value per key.
      */
-    private static Map<String, String> parseFormBody(String rawBody)
-    {
+    private static Map<String, String> parseFormBody(String rawBody) {
         Map<String, String> params = new LinkedHashMap<>();
         for (String pair : rawBody.split("&")) {
             if (pair.isBlank()) {
