@@ -90,7 +90,7 @@ public class CustomerAdminService
         validateStatusTransition(customer.getStatus(), newStatus);
 
         customer.setStatus(newStatus);
-        customer.persist();
+        customerRepository.persist(customer);
 
         return customerAdminMapper.toListItemDto(customer, wholesaleApplicationFor(customer));
     }

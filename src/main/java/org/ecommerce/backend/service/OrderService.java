@@ -230,8 +230,8 @@ public class OrderService
         // forces the constraint now, inside this method's own catch, rather than
         // at commit where it would surface as an opaque transaction failure.
         try {
-            OrderEntity.persist(order);
-            OrderEntity.flush();
+            orderRepository.persist(order);
+            orderRepository.flush();
         } catch (PersistenceException e) {
             if (!isUniqueViolationOf(e, "ux_orders_idempotency_key")) {
                 throw e;
@@ -346,7 +346,7 @@ public class OrderService
 
         List<String> unavailableVariantIds = new ArrayList<>();
         for (Map.Entry<UUID, Integer> entry : requestedByVariantId.entrySet()) {
-            long updated = ProductVariantEntity.update(
+            long updated = productVariantRepository.update(
                     "stockQuantity = stockQuantity - ?1 where id = ?2 and stockQuantity >= ?1",
                     entry.getValue(), entry.getKey());
             if (updated == 0) {
@@ -410,7 +410,7 @@ public class OrderService
             throw new IllegalArgumentException("Cannot move an order from " + from + " to " + to);
         }
 
-        long claimed = OrderEntity.update("status = ?1 where id = ?2 and status = ?3", to, order.getId(), from);
+        long claimed = orderRepository.update("status = ?1 where id = ?2 and status = ?3", to, order.getId(), from);
         if (claimed == 0) {
             LOG.debugf("Lost the status claim on order %s: it is no longer %s", order.getId(), from);
             return TransitionOutcome.lost(from, to);
@@ -469,7 +469,7 @@ public class OrderService
             if (item.getVariant() == null || item.getQuantity() == null) {
                 continue;
             }
-            ProductVariantEntity.update("stockQuantity = stockQuantity + ?1 where id = ?2",
+            productVariantRepository.update("stockQuantity = stockQuantity + ?1 where id = ?2",
                     item.getQuantity(), item.getVariant().getId());
         }
     }
@@ -701,7 +701,7 @@ public class OrderService
         }
 
         // Loaded here rather than inside the mapper: mappers do not open queries.
-        List<OrderStatusHistoryEntity> history = OrderStatusHistoryEntity
+        List<OrderStatusHistoryEntity> history = orderStatusHistoryRepository
                 .find("select h from OrderStatusHistoryEntity h where h.order.id = ?1 order by h.createdAt desc", orderId)
                 .list();
 
@@ -709,7 +709,7 @@ public class OrderService
     }
 
     public List<OrderSummaryDto> getMyOrders(UUID customerId) {
-        List<OrderEntity> orders = OrderEntity
+        List<OrderEntity> orders = orderRepository
                 .find("customerEntity.id = ?1 order by createdAt desc", customerId)
                 .list();
 
