@@ -701,9 +701,7 @@ public class OrderService
         }
 
         // Loaded here rather than inside the mapper: mappers do not open queries.
-        List<OrderStatusHistoryEntity> history = orderStatusHistoryRepository
-                .find("select h from OrderStatusHistoryEntity h where h.order.id = ?1 order by h.createdAt desc", orderId)
-                .list();
+        List<OrderStatusHistoryEntity> history = orderStatusHistoryRepository.findByOrderId(orderId);
 
         return orderMapper.toDetailDto(order, history);
     }

@@ -14,6 +14,8 @@ import org.ecommerce.common.query.PageRequest;
 import org.ecommerce.common.query.SortRequest;
 import org.ecommerce.common.query.enums.SortDirection;
 import org.ecommerce.common.repository.OrderRepository;
+import org.ecommerce.common.repository.OrderStatusHistoryRepository;
+import org.ecommerce.common.repository.PaymentLogRepository;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -46,6 +48,12 @@ public class OrderAdminService
 
     @Inject
     OrderService orderService;
+
+    @Inject
+    OrderStatusHistoryRepository orderStatusHistoryRepository;
+
+    @Inject
+    PaymentLogRepository paymentLogRepository;
 
     /**
      * One order carries one status, but staff filter on two separate questions of it — has
@@ -116,13 +124,8 @@ public class OrderAdminService
         // could silently drift from the grand total once settings change.
         OrderTotals totals = orderService.totalsForAdminDetail(order);
 
-        List<OrderStatusHistoryEntity> history = OrderStatusHistoryEntity
-                .find("select h from OrderStatusHistoryEntity h where h.order.id = ?1 order by h.createdAt desc", id)
-                .list();
-
-        PaymentLogEntity latestPayment = PaymentLogEntity
-                .find("select l from PaymentLogEntity l where l.orderEntity.id = ?1 order by l.createdAt desc", id)
-                .firstResult();
+        List<OrderStatusHistoryEntity> history = orderStatusHistoryRepository.findByOrderId(id);
+        PaymentLogEntity latestPayment = paymentLogRepository.findLatestByOrderId(id);
 
         return orderAdminMapper.toDetailDto(order, totals, history, latestPayment);
     }
