@@ -60,7 +60,7 @@ public class FeaturedProductService
             product.setFeatured(false);
         }
 
-        product.persist();
+        productRepository.persist(product);
 
         FeaturedProductResultDto result = new FeaturedProductResultDto();
         result.setProductId(productId.toString());
