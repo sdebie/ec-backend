@@ -84,11 +84,6 @@
             <groupId>io.quarkus</groupId>
             <artifactId>quarkus-redis-client</artifactId>
         </dependency>
-        <dependency>
-            <groupId>io.quarkus</groupId>
-            <artifactId>quarkus-smallrye-health</artifactId>
-        </dependency>
-
         <!-- Test dependencies -->
         <dependency>
             <groupId>io.quarkus</groupId>
