@@ -117,9 +117,9 @@ public class ProductService
     {
         AdminProductStatsDto stats = new AdminProductStatsDto();
         stats.setTotal(productRepository.count());
-        stats.setActive(productRepository.count("status", ProductStatusEn.ACTIVE));
-        stats.setPending(productRepository.count("status", ProductStatusEn.PENDING));
-        stats.setDisabled(productRepository.count("status", ProductStatusEn.DISABLED));
+        stats.setActive(productRepository.countByStatus(ProductStatusEn.ACTIVE));
+        stats.setPending(productRepository.countByStatus(ProductStatusEn.PENDING));
+        stats.setDisabled(productRepository.countByStatus(ProductStatusEn.DISABLED));
         return stats;
     }
 

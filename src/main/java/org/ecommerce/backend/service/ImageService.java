@@ -2,14 +2,17 @@ package org.ecommerce.backend.service;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
-import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 import lombok.extern.slf4j.Slf4j;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.ecommerce.common.entity.ProductImageEntity;
 import org.ecommerce.common.entity.ProductVariantEntity;
 import org.ecommerce.common.enums.ImageTypeEn;
+import org.ecommerce.common.repository.BrandRepository;
+import org.ecommerce.common.repository.CategoryRepository;
+import org.ecommerce.common.repository.PageContentRepository;
 import org.ecommerce.common.repository.ProductVariantRepository;
+import org.ecommerce.common.repository.StoreSettingsRepository;
 import org.jboss.resteasy.reactive.multipart.FileUpload;
 
 import java.io.File;
@@ -46,13 +49,22 @@ public class ImageService
     String storagePath;
 
     @Inject
-    EntityManager entityManager;
-
-    @Inject
     ProductVariantRepository productVariantRepository;
 
     @Inject
     org.ecommerce.common.repository.ProductImageRepository productImageRepository;
+
+    @Inject
+    BrandRepository brandRepository;
+
+    @Inject
+    CategoryRepository categoryRepository;
+
+    @Inject
+    StoreSettingsRepository storeSettingsRepository;
+
+    @Inject
+    PageContentRepository pageContentRepository;
 
     /**
      * Generic upload method that saves the file to root storage.
@@ -358,25 +370,17 @@ public class ImageService
      */
     private void createProductImageIfAbsent(String imageUrl, UUID productVariantId)
     {
-        ProductVariantEntity productVariant = entityManager.find(ProductVariantEntity.class, productVariantId);
+        ProductVariantEntity productVariant = productVariantRepository.findById(productVariantId);
         if (productVariant == null) {
             throw new IllegalArgumentException("Product variant not found with id: " + productVariantId);
         }
 
-        Long existingCount = entityManager
-                .createQuery("SELECT COUNT(pi) FROM ProductImageEntity pi WHERE pi.productVariant.id = :productVariantId AND pi.imageUrl = :imageUrl", Long.class)
-                .setParameter("productVariantId", productVariantId)
-                .setParameter("imageUrl", imageUrl)
-                .getSingleResult();
-        if (existingCount != null && existingCount > 0) {
+        if (productImageRepository.existsForVariantAndUrl(productVariantId, imageUrl)) {
             return;
         }
 
         // Keep ordering within a variant-specific image list.
-        Integer maxSortOrder = entityManager
-                .createQuery("SELECT COALESCE(MAX(pi.sortOrder), 0) FROM ProductImageEntity pi WHERE pi.productVariant.id = :productVariantId", Integer.class)
-                .setParameter("productVariantId", productVariantId)
-                .getSingleResult();
+        int maxSortOrder = productImageRepository.findMaxSortOrderForVariant(productVariantId);
 
         ProductImageEntity productImage = new ProductImageEntity();
         productImage.setProductVariant(productVariant);
@@ -395,7 +399,7 @@ public class ImageService
             // setFeaturedImage is a bulk UPDATE, which JPA does not guarantee synchronises
             // with the persist() above in this same transaction — flush explicitly so it
             // always sees this row.
-            productImageRepository.getEntityManager().flush();
+            productImageRepository.flush();
             productImageRepository.setFeaturedImage(ownerProductId, productImage.getId());
         }
     }
@@ -478,42 +482,27 @@ public class ImageService
     {
         List<String> usages = new ArrayList<>();
 
-        long productImageCount = entityManager
-                .createQuery("SELECT COUNT(pi) FROM ProductImageEntity pi WHERE pi.imageUrl = :path", Long.class)
-                .setParameter("path", safePath)
-                .getSingleResult();
+        long productImageCount = productImageRepository.countByImageUrl(safePath);
         if (productImageCount > 0) {
             usages.add(productImageCount + (productImageCount == 1 ? " product" : " products"));
         }
 
-        long brandCount = entityManager
-                .createQuery("SELECT COUNT(b) FROM BrandEntity b WHERE b.logoUrl = :path", Long.class)
-                .setParameter("path", safePath)
-                .getSingleResult();
+        long brandCount = brandRepository.countByLogoUrl(safePath);
         if (brandCount > 0) {
             usages.add(brandCount + (brandCount == 1 ? " brand" : " brands"));
         }
 
-        long categoryCount = entityManager
-                .createQuery("SELECT COUNT(c) FROM CategoryEntity c WHERE c.imageUrl = :path", Long.class)
-                .setParameter("path", safePath)
-                .getSingleResult();
+        long categoryCount = categoryRepository.countByImageUrl(safePath);
         if (categoryCount > 0) {
             usages.add(categoryCount + (categoryCount == 1 ? " category" : " categories"));
         }
 
-        long storeSettingsCount = entityManager
-                .createQuery("SELECT COUNT(s) FROM StoreSettingsEntity s WHERE s.value LIKE CONCAT('%', :path, '%')", Long.class)
-                .setParameter("path", safePath)
-                .getSingleResult();
+        long storeSettingsCount = storeSettingsRepository.countByValueContaining(safePath);
         if (storeSettingsCount > 0) {
             usages.add(storeSettingsCount + (storeSettingsCount == 1 ? " store setting" : " store settings"));
         }
 
-        long pageContentCount = entityManager
-                .createQuery("SELECT COUNT(p) FROM PageContentEntity p WHERE p.draftContent LIKE CONCAT('%', :path, '%') OR p.publishedContent LIKE CONCAT('%', :path, '%')", Long.class)
-                .setParameter("path", safePath)
-                .getSingleResult();
+        long pageContentCount = pageContentRepository.countByContentContaining(safePath);
         if (pageContentCount > 0) {
             usages.add(pageContentCount + (pageContentCount == 1 ? " page" : " pages"));
         }

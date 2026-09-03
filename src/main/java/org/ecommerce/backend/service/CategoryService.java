@@ -85,7 +85,7 @@ public class CategoryService
     /** Direct children of {@code parentId} — one level, not the full descendant tree. */
     public List<UUID> findChildCategoryIds(UUID parentId)
     {
-        return categoryRepository.list("parent.id", parentId)
+        return categoryRepository.findByParentId(parentId)
                 .stream()
                 .map(CategoryEntity::getId)
                 .filter(id -> id != null)
@@ -215,7 +215,7 @@ public class CategoryService
             // parent_id has no ON DELETE action, so deleting a category with children would fail
             // with a raw FK violation rendered as "System error"; reject it with a clear message
             // instead (IllegalArgumentException is on the GraphQL message whitelist).
-            if (categoryRepository.count("parent.id = ?1", id) > 0) {
+            if (categoryRepository.countByParentId(id) > 0) {
                 throw new IllegalArgumentException("Cannot delete a category that has subcategories; delete or move its subcategories first");
             }
 
@@ -236,7 +236,7 @@ public class CategoryService
     public long fixCategoryNamesAmpersand()
     {
         try {
-            List<CategoryEntity> categoriesToFix = categoryRepository.list("name like ?1", "%&amp;%");
+            List<CategoryEntity> categoriesToFix = categoryRepository.findWithAmpersandEntityInName();
             long count = 0;
 
             for (CategoryEntity category : categoriesToFix) {
