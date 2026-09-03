@@ -54,7 +54,7 @@ public class OrderContactResource
     )
     {
         // 1. Find order by ID → 404 if missing
-        OrderEntity order = orderService.findOrderInfoById(orderId);
+        OrderEntity order = orderService.findByIdWithCustomerAndItems(orderId);
         if (order == null) {
             LOG.debugf("Order not found: %s", orderId);
             return Response.status(Response.Status.NOT_FOUND)
