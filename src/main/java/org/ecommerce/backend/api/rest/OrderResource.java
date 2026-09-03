@@ -227,7 +227,7 @@ public class OrderResource {
     @Transactional
     public Response confirmInStorePayment(@PathParam("orderId") UUID orderId,
                                            @HeaderParam("X-Order-Token") String orderToken) {
-        OrderEntity order = orderService.findOrderInfoById(orderId);
+        OrderEntity order = orderService.findByIdWithCustomerAndItems(orderId);
         if (order == null || !ownershipGuard.mayAct(order, orderToken)) {
             return Response.status(Response.Status.NOT_FOUND)
                     .entity(Map.of("error", "Order not found"))

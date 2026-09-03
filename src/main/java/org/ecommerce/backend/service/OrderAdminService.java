@@ -120,7 +120,7 @@ public class OrderAdminService
             throw new IllegalArgumentException("id is required");
         }
 
-        OrderEntity order = orderRepository.findOrderInfoById(id);
+        OrderEntity order = orderRepository.findByIdWithCustomerAndItems(id);
         if (order == null) {
             return null;
         }

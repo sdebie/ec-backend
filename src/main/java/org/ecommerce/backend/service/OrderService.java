@@ -658,7 +658,7 @@ public class OrderService
             throw new GraphQLException("status is required");
         }
         LOG.debugf("Updating order status for orderId=%s to status=%s", orderId, newStatus);
-        OrderEntity order = orderRepository.findOrderInfoById(orderId);
+        OrderEntity order = orderRepository.findByIdWithCustomerAndItems(orderId);
         if (order == null) {
             throw new GraphQLException("Order not found");
         }
@@ -691,7 +691,7 @@ public class OrderService
     }
 
     public List<OrderResponseDto> getAllOrders(PageRequest pageRequest, FilterRequest filterRequest) {
-        List<OrderEntity> orderEntities = orderRepository.findAllOrderInfo(pageRequest, filterRequest);
+        List<OrderEntity> orderEntities = orderRepository.findAllWithCustomerAndItems(pageRequest, filterRequest);
 
         // One batched lookup for the whole page rather than one per order — see
         // ProductImageRepository#findGroupedByVariantIds for why this never touches
@@ -710,7 +710,7 @@ public class OrderService
             return null;
         }
 
-        OrderEntity order = orderRepository.findOrderInfoById(orderId);
+        OrderEntity order = orderRepository.findByIdWithCustomerAndItems(orderId);
         if (order == null) {
             return null;
         }
@@ -755,12 +755,12 @@ public class OrderService
         return orderRepository.findById(orderUuid);
     }
 
-    /** The fully hydrated order (customer, items, variants) — for a caller that needs to read or mutate its lines, not just its id-level fields. */
-    public OrderEntity findOrderInfoById(UUID orderUuid) {
+    /** Loads the order with its customer and items — for a caller that needs to read or mutate its lines, not just its id-level fields. */
+    public OrderEntity findByIdWithCustomerAndItems(UUID orderUuid) {
         if (orderUuid == null) {
             return null;
         }
-        return orderRepository.findOrderInfoById(orderUuid);
+        return orderRepository.findByIdWithCustomerAndItems(orderUuid);
     }
 
     public OrderEntity findByIdempotencyKey(UUID key) {
