@@ -739,9 +739,7 @@ public class OrderService
     }
 
     public List<OrderSummaryDto> getMyOrders(UUID customerId) {
-        List<OrderEntity> orders = orderRepository
-                .find("customerEntity.id = ?1 order by createdAt desc", customerId)
-                .list();
+        List<OrderEntity> orders = orderRepository.findByCustomerId(customerId);
 
         return orders.stream()
                 .map(orderMapper::toSummaryDto)

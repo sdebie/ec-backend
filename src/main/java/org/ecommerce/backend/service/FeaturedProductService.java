@@ -11,7 +11,6 @@ import org.ecommerce.common.dto.FeaturedProductResultDto;
 import org.ecommerce.common.dto.ProductShoppingListItemDto;
 import org.ecommerce.common.entity.CategoryEntity;
 import org.ecommerce.common.entity.ProductEntity;
-import org.ecommerce.common.enums.ProductStatusEn;
 import org.ecommerce.common.repository.CategoryRepository;
 import org.ecommerce.common.repository.ProductRepository;
 import org.jboss.logging.Logger;
@@ -51,7 +50,7 @@ public class FeaturedProductService
         }
 
         if (featured) {
-            long currentCount = productRepository.count("isFeatured", true);
+            long currentCount = productRepository.countFeatured();
             if (currentCount >= FEATURED_CAP) {
                 throw new FeaturedCapExceededException();
             }
@@ -75,7 +74,7 @@ public class FeaturedProductService
     @Transactional(value = TxType.SUPPORTS)
     public List<AdminProductListItemDto> getFeaturedProductsForAdmin()
     {
-        List<ProductEntity> featuredProducts = productRepository.find("select distinct p from ProductEntity p left join fetch p.categories where p.isFeatured = true order by p.name asc").list();
+        List<ProductEntity> featuredProducts = productRepository.findFeaturedForAdmin();
 
         LocalDateTime now = LocalDateTime.now();
         return productListItemAssembler.buildAdminListItems(featuredProducts, now);
@@ -98,9 +97,9 @@ public class FeaturedProductService
                 return List.of();
             }
 
-            products = productRepository.find("isFeatured = true AND status = ?1 AND ?2 MEMBER OF categories ORDER BY name ASC", ProductStatusEn.ACTIVE, category).page(0, effectiveLimit).list();
+            products = productRepository.findFeaturedActive(category, effectiveLimit);
         } else {
-            products = productRepository.find("isFeatured = true AND status = ?1 ORDER BY name ASC", ProductStatusEn.ACTIVE).page(0, effectiveLimit).list();
+            products = productRepository.findFeaturedActive(null, effectiveLimit);
         }
 
         LocalDateTime now = LocalDateTime.now();

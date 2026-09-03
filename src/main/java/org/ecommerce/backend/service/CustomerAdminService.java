@@ -59,9 +59,9 @@ public class CustomerAdminService
             throw new IllegalArgumentException("customer not found: " + id);
         }
 
-        WholesaleApplicationEntity app = wholesaleApplicationRepository.find("customer.id = ?1", id).firstResult();
+        WholesaleApplicationEntity app = wholesaleApplicationRepository.findByCustomerId(id);
 
-        List<OrderEntity> orders = orderRepository.find("customerEntity.id = ?1 order by createdAt desc", id).page(0, 10).list();
+        List<OrderEntity> orders = orderRepository.findRecentByCustomerId(id, 10);
 
         return customerAdminMapper.toDetailDto(customer, app, orders);
     }
@@ -107,7 +107,6 @@ public class CustomerAdminService
     }
 
     private WholesaleApplicationEntity wholesaleApplicationFor(CustomerEntity customer) {
-        return wholesaleApplicationRepository.find("customer.id = ?1", customer.getId())
-                .firstResult();
+        return wholesaleApplicationRepository.findByCustomerId(customer.getId());
     }
 }

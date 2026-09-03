@@ -119,11 +119,8 @@ public class WholesaleCustomerService
 
         // account_email is now optional
         String accountEmail = normalizeEmail(customerDto.getEmail());
-        if (accountEmail != null) {
-            WholesaleApplicationEntity existing = wholesaleApplicationRepository.find("lower(accountEmail) = lower(?1)", accountEmail).firstResult();
-            if (existing != null) {
-                throw new IllegalArgumentException("wholesale application already exists with email: " + accountEmail);
-            }
+        if (accountEmail != null && wholesaleApplicationRepository.existsByAccountEmail(accountEmail)) {
+            throw new IllegalArgumentException("wholesale application already exists with email: " + accountEmail);
         }
         application.setAccountEmail(accountEmail);
 
