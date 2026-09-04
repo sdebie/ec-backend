@@ -231,16 +231,16 @@ public class ProductResource
     @Description("Fetch a product with all variants, categories, and images for a given product id. Products can belong to multiple categories which are returned in the response.")
     @RolesAllowed({"SUPER_ADMIN", "CATALOG_MANAGER", "ORDER_MANAGER", "VIEWER"})
     @Transactional(value = TxType.SUPPORTS)
-    public ProductInformationDto getProductInformation(@Name("productId") String productId)
+    public ProductDto getProductInformation(@Name("productId") String productId)
     {
-        return productService.getProductInformationDto(productId);
+        return productService.getProduct(productId);
     }
 
     @Mutation("addProductInformation")
     @Description("Create a new product with variants, images, and multiple categories. Products can be assigned to one or more categories.")
     @RolesAllowed({"SUPER_ADMIN", "CATALOG_MANAGER"})
     @Transactional(value = TxType.REQUIRED)
-    public ProductInformationDto addProductInformation(@Name("input") ProductInformationDto input)
+    public ProductDto addProductInformation(@Name("input") ProductDto input)
     {
         return productService.addProductInformation(input);
     }
@@ -249,9 +249,9 @@ public class ProductResource
     @Description("Update an existing product with variants, images, and multiple categories. When updating categories, all previous category assignments are replaced with the new ones provided.")
     @RolesAllowed({"SUPER_ADMIN", "CATALOG_MANAGER"})
     @Transactional(value = TxType.REQUIRED)
-    public ProductInformationDto updateProductInformation(
+    public ProductDto updateProductInformation(
             @Name("productId") String productId,
-            @Name("input") ProductInformationDto input)
+            @Name("input") ProductDto input)
     {
         return productService.updateProductInformation(productId, input);
     }
@@ -259,9 +259,9 @@ public class ProductResource
     @Query("getProductInformationBySlug")
     @Description("Fetch a product with all variants by slug.")
     @Transactional(value = TxType.SUPPORTS)
-    public ProductInformationDto getProductInformationBySlug(@Name("slug") String slug)
+    public ProductDto getProductInformationBySlug(@Name("slug") String slug)
     {
-        return productService.getProductInformationBySlug(slug);
+        return productService.getBySlug(slug);
     }
 
     @Query("adminProductList")

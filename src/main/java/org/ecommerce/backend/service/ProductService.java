@@ -195,7 +195,7 @@ public class ProductService
     }
 
     @Transactional(value = TxType.SUPPORTS)
-    public ProductInformationDto getProductInformationDto(String productId)
+    public ProductDto getProduct(String productId)
     {
         UUID pid = UUID.fromString(productId);
         ProductEntity product = productRepository.findByIdWithCategoryAndBrand(pid);
@@ -205,22 +205,22 @@ public class ProductService
 
         // Admin-edit read: excludes only DISABLED (soft-deleted) variants — a PENDING
         // variant the admin is still staging remains visible.
-        return productMapper.mapToProductInformationDto(product, productVariantRepository.findNonDisabledVariantsForProductId(pid));
+        return productMapper.mapToProductDto(product, productVariantRepository.findNonDisabledVariantsForProductId(pid));
     }
 
     @Transactional(value = TxType.REQUIRED)
-    public ProductInformationDto addProductInformation(ProductInformationDto input)
+    public ProductDto addProductInformation(ProductDto input)
     {
         // Validate the complete aggregate before any persistence
         productWriteValidator.validateForCreate(input);
 
         // Create new product entity
         ProductEntity product = new ProductEntity();
-        productMapper.applyCreatableFields(input.getProduct(), product);
+        productMapper.applyCreatableFields(input, product);
 
         // Link categories if provided
-        if (input.getProduct().getCategories() != null && !input.getProduct().getCategories().isEmpty()) {
-            for (CategoryDto categoryDto : input.getProduct().getCategories()) {
+        if (input.getCategories() != null && !input.getCategories().isEmpty()) {
+            for (CategoryDto categoryDto : input.getCategories()) {
                 if (categoryDto.getId() != null) {
                     UUID categoryId = categoryDto.getId();
                     CategoryEntity category = categoryRepository.findById(categoryId);
@@ -232,9 +232,9 @@ public class ProductService
                     }
                 }
             }
-        } else if (input.getProduct().getCategory() != null && input.getProduct().getCategory().getId() != null) {
+        } else if (input.getCategory() != null && input.getCategory().getId() != null) {
             // Backward compatibility: handle single category
-            UUID categoryId = input.getProduct().getCategory().getId();
+            UUID categoryId = input.getCategory().getId();
             CategoryEntity category = categoryRepository.findById(categoryId);
             if (category != null) {
                 product.getCategories().add(category);
@@ -245,8 +245,8 @@ public class ProductService
         }
 
         // Link brand if provided
-        if (input.getProduct().getBrand() != null && input.getProduct().getBrand().getId() != null) {
-            UUID brandId = input.getProduct().getBrand().getId();
+        if (input.getBrand() != null && input.getBrand().getId() != null) {
+            UUID brandId = input.getBrand().getId();
             product.setBrand(brandRepository.findById(brandId));
             if (product.getBrand() != null) {
                 log.info("Linked brand with ID: {}", brandId);
@@ -269,11 +269,11 @@ public class ProductService
         updateProductImages(product.getId(), imageManifest);
 
         // Return the full aggregate via the admin-edit read path (excludes DISABLED only)
-        return productMapper.mapToProductInformationDto(product, productVariantRepository.findNonDisabledVariantsForProductId(product.getId()));
+        return productMapper.mapToProductDto(product, productVariantRepository.findNonDisabledVariantsForProductId(product.getId()));
     }
 
     @Transactional(value = TxType.REQUIRED)
-    public ProductInformationDto updateProductInformation(String productId, ProductInformationDto input)
+    public ProductDto updateProductInformation(String productId, ProductDto input)
     {
         UUID pid = UUID.fromString(productId);
 
@@ -288,12 +288,12 @@ public class ProductService
         }
 
         // Update product information (patch: only non-blank scalar fields)
-        productMapper.applyEditableFields(input.getProduct(), product);
+        productMapper.applyEditableFields(input, product);
 
         // Update categories if provided
-        if (input.getProduct().getCategories() != null && !input.getProduct().getCategories().isEmpty()) {
+        if (input.getCategories() != null && !input.getCategories().isEmpty()) {
             product.getCategories().clear();
-            for (CategoryDto categoryDto : input.getProduct().getCategories()) {
+            for (CategoryDto categoryDto : input.getCategories()) {
                 if (categoryDto.getId() != null) {
                     UUID categoryId = categoryDto.getId();
                     CategoryEntity category = categoryRepository.findById(categoryId);
@@ -305,10 +305,10 @@ public class ProductService
                     }
                 }
             }
-        } else if (input.getProduct().getCategory() != null && input.getProduct().getCategory().getId() != null) {
+        } else if (input.getCategory() != null && input.getCategory().getId() != null) {
             // Backward compatibility: handle single category
             product.getCategories().clear();
-            UUID categoryId = input.getProduct().getCategory().getId();
+            UUID categoryId = input.getCategory().getId();
             CategoryEntity category = categoryRepository.findById(categoryId);
             if (category != null) {
                 product.getCategories().add(category);
@@ -319,8 +319,8 @@ public class ProductService
         }
 
         // Update brand if provided
-        if (input.getProduct().getBrand() != null && input.getProduct().getBrand().getId() != null) {
-            UUID brandId = input.getProduct().getBrand().getId();
+        if (input.getBrand() != null && input.getBrand().getId() != null) {
+            UUID brandId = input.getBrand().getId();
             product.setBrand(brandRepository.findById(brandId));
             if (product.getBrand() != null) {
                 log.info("Linked brand with ID: {}", brandId);
@@ -343,7 +343,7 @@ public class ProductService
         updateProductImages(pid, imageManifest);
 
         // Admin-edit read: excludes only DISABLED variants from the returned aggregate
-        return productMapper.mapToProductInformationDto(product, productVariantRepository.findNonDisabledVariantsForProductId(pid));
+        return productMapper.mapToProductDto(product, productVariantRepository.findNonDisabledVariantsForProductId(pid));
     }
 
     /**
@@ -351,7 +351,7 @@ public class ProductService
      * By convention, the frontend carries the manifest on variant index 0's images[].
      * This is a transport convention only — it does NOT define persistence ownership.
      */
-    private List<ProductImageDto> extractImageManifest(ProductInformationDto input)
+    private List<ProductImageDto> extractImageManifest(ProductDto input)
     {
         if (input.getVariants() == null || input.getVariants().isEmpty()) {
             return List.of();
@@ -731,7 +731,7 @@ public class ProductService
         }
     }
 
-    public ProductInformationDto getProductInformationBySlug(String slug)
+    public ProductDto getBySlug(String slug)
     {
         ProductEntity product = productRepository.findBySlugIgnoreCase(slug);
         if (product == null || product.getStatus() != ProductStatusEn.ACTIVE) {
@@ -745,6 +745,6 @@ public class ProductService
         }
         // Public storefront read: ACTIVE-only — a PENDING (unpublished) or DISABLED
         // (soft-deleted) variant must never be customer-visible
-        return productMapper.mapToProductInformationDto(product, productVariantRepository.findActiveVariantsForProductId(pid));
+        return productMapper.mapToProductDto(product, productVariantRepository.findActiveVariantsForProductId(pid));
     }
 }

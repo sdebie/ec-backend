@@ -90,7 +90,7 @@ public interface ProductMapper
         }
     }
 
-    default ProductInformationDto mapToProductInformationDto(ProductEntity product, List<ProductVariantEntity> variants)
+    default ProductDto mapToProductDto(ProductEntity product, List<ProductVariantEntity> variants)
     {
         if (product == null) return null;
 
@@ -109,7 +109,8 @@ public interface ProductMapper
             return dto;
         }).toList() : Collections.emptyList();
 
-        return new ProductInformationDto(productDto, variantDtos);
+        productDto.setVariants(variantDtos);
+        return productDto;
     }
 
     default Long calculateSaleDaysRemaining(VariantPricesEntity variantPricesEntity)

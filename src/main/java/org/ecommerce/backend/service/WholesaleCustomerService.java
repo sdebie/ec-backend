@@ -8,7 +8,7 @@ import org.ecommerce.backend.mapper.WholesaleMapper;
 import org.ecommerce.common.dto.AddressDto;
 import org.ecommerce.common.dto.WholesaleApplicationDetailsDto;
 import org.ecommerce.common.dto.WholesaleApplicationListItemDto;
-import org.ecommerce.common.dto.WholesaleCustomerDto;
+import org.ecommerce.common.dto.WholesaleApplicationFormDto;
 import org.ecommerce.common.entity.CustomerEntity;
 import org.ecommerce.common.entity.UserEntity;
 import org.ecommerce.common.entity.WholesaleApplicationEntity;
@@ -104,7 +104,7 @@ public class WholesaleCustomerService
     }
 
     @Transactional
-    public WholesaleCustomerDto createWholesaleApplication(WholesaleCustomerDto customerDto)
+    public WholesaleApplicationFormDto createWholesaleApplication(WholesaleApplicationFormDto customerDto)
     {
         if (customerDto == null) {
             throw new IllegalArgumentException("customer is required");
@@ -166,7 +166,7 @@ public class WholesaleCustomerService
 
         wholesaleApplicationRepository.persist(application);
 
-        WholesaleCustomerDto result = wholesaleMapper.toDto(application);
+        WholesaleApplicationFormDto result = wholesaleMapper.toDto(application);
 
         // Observed AFTER_SUCCESS: the notification emails only go out if the submission commits
         submittedEvent.fire(new WholesaleApplicationSubmittedEvent(application.getId(), result));
@@ -175,7 +175,7 @@ public class WholesaleCustomerService
     }
 
     @Transactional
-    public WholesaleCustomerDto updateWholesaleCustomer(UUID id, WholesaleCustomerDto customerDto)
+    public WholesaleApplicationFormDto updateWholesaleCustomer(UUID id, WholesaleApplicationFormDto customerDto)
     {
         if (id == null) {
             throw new IllegalArgumentException("id is required");
@@ -441,7 +441,7 @@ public class WholesaleCustomerService
         return day == null ? null : day.plusDays(1).atStartOfDay(ZoneOffset.UTC).toOffsetDateTime();
     }
 
-    private void applyProfileFields(CustomerEntity customerEntity, WholesaleCustomerDto dto)
+    private void applyProfileFields(CustomerEntity customerEntity, WholesaleApplicationFormDto dto)
     {
         if (dto.getFirstName() != null) {
             customerEntity.setFirstName(dto.getFirstName());
@@ -454,7 +454,7 @@ public class WholesaleCustomerService
         }
     }
 
-    private void applyAddresses(CustomerEntity ce, WholesaleCustomerDto dto)
+    private void applyAddresses(CustomerEntity ce, WholesaleApplicationFormDto dto)
     {
         customerAddressService.upsertAddress(ce, AddressTypeEn.PHYSICAL, dto.getPhysicalAddress());
         customerAddressService.upsertAddress(ce, AddressTypeEn.POSTAL, dto.getPostalAddress());

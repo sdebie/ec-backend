@@ -3,7 +3,7 @@ package org.ecommerce.backend.mapper;
 import org.ecommerce.common.dto.AddressDto;
 import org.ecommerce.common.dto.WholesaleApplicationDetailsDto;
 import org.ecommerce.common.dto.WholesaleApplicationListItemDto;
-import org.ecommerce.common.dto.WholesaleCustomerDto;
+import org.ecommerce.common.dto.WholesaleApplicationFormDto;
 import org.ecommerce.common.entity.CustomerEntity;
 import org.ecommerce.common.entity.WholesaleApplicationEntity;
 import org.ecommerce.common.enums.CustomerStatusEn;
@@ -43,7 +43,7 @@ public interface WholesaleMapper
     @Mapping(target = "financeContactEmail", ignore = true)
     @Mapping(target = "financeContactPhone", ignore = true)
     @Mapping(target = "purchaseOrderRequired", ignore = true)
-    WholesaleCustomerDto toDto(WholesaleApplicationEntity application);
+    WholesaleApplicationFormDto toDto(WholesaleApplicationEntity application);
 
     @Mapping(source = "user.email", target = "email")
     @Mapping(source = "wholesaleProfile.companyName", target = "companyName")
@@ -58,7 +58,7 @@ public interface WholesaleMapper
     @Mapping(target = "financeContactPhone", ignore = true)
     @Mapping(target = "purchaseOrderRequired", ignore = true)
     @Mapping(target = "notes", ignore = true) // staff notes live on the application, not the customer
-    WholesaleCustomerDto toDto(CustomerEntity customer);
+    WholesaleApplicationFormDto toDto(CustomerEntity customer);
 
     @Mapping(source = "accountEmail", target = "email")
     WholesaleApplicationListItemDto toListItemDto(WholesaleApplicationEntity application);

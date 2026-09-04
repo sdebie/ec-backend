@@ -9,7 +9,7 @@ import org.eclipse.microprofile.graphql.Query;
 import org.ecommerce.backend.service.WholesaleCustomerService;
 import org.ecommerce.common.dto.WholesaleApplicationDetailsDto;
 import org.ecommerce.common.dto.WholesaleApplicationListItemDto;
-import org.ecommerce.common.dto.WholesaleCustomerDto;
+import org.ecommerce.common.dto.WholesaleApplicationFormDto;
 import org.ecommerce.common.query.FilterRequest;
 import org.ecommerce.common.query.PageRequest;
 
@@ -62,7 +62,7 @@ public class WholesaleCustomerResource {
     }
 
     @Mutation("createWholesaleApplication")
-    public WholesaleCustomerDto createWholesaleApplication(@Name("customer") WholesaleCustomerDto customerDto) {
+    public WholesaleApplicationFormDto createWholesaleApplication(@Name("customer") WholesaleApplicationFormDto customerDto) {
         try {
             return wholesaleCustomerService.createWholesaleApplication(customerDto);
         } catch (RuntimeException ex) {
@@ -72,9 +72,9 @@ public class WholesaleCustomerResource {
 
     @Mutation("updateWholesaleCustomer")
     @RolesAllowed("SUPER_ADMIN")
-    public WholesaleCustomerDto updateWholesaleCustomer(
+    public WholesaleApplicationFormDto updateWholesaleCustomer(
             @Name("id") UUID id,
-            @Name("customer") WholesaleCustomerDto customerDto
+            @Name("customer") WholesaleApplicationFormDto customerDto
     ) {
         try {
             return wholesaleCustomerService.updateWholesaleCustomer(id, customerDto);

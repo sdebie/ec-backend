@@ -9,7 +9,7 @@ import org.ecommerce.backend.mapper.CustomerAddressMapper;
 import org.ecommerce.backend.utils.CustomerPasswordHashUtil;
 import org.ecommerce.backend.utils.PasswordStrengthValidator;
 import org.ecommerce.common.dto.AddressDto;
-import org.ecommerce.common.dto.StorefrontCustomerPortalDto;
+import org.ecommerce.common.dto.CustomerProfileDto;
 import org.ecommerce.common.entity.CustomerEntity;
 import org.ecommerce.common.entity.UserEntity;
 import org.ecommerce.common.enums.AddressTypeEn;
@@ -37,13 +37,15 @@ public class CustomerPortalService
     private static final Logger LOG = Logger.getLogger(CustomerPortalService.class);
 
     /**
-     * Resolves the customer by email and maps to a StorefrontCustomerPortalDto.
+     * Resolves the customer by email and maps to a CustomerProfileDto — the same shape
+     * {@code CustomerResource}'s {@code /profile} endpoint returns. {@code additionalInfo}
+     * is left unset here, matching {@code /profile}'s own behaviour: nothing populates it yet.
      *
      * @param email the customer's email (from JWT subject)
      * @return the fully mapped portal profile DTO
      * @throws WebApplicationException 404 if customer not found
      */
-    public StorefrontCustomerPortalDto getPortalProfile(String email)
+    public CustomerProfileDto getPortalProfile(String email)
     {
         CustomerEntity customer = customerRepository.findByEmail(email);
         if (customer == null) {
@@ -54,7 +56,7 @@ public class CustomerPortalService
                             .build());
         }
 
-        StorefrontCustomerPortalDto dto = new StorefrontCustomerPortalDto();
+        CustomerProfileDto dto = new CustomerProfileDto();
         dto.setEmail(customer.getUser() != null ? customer.getUser().getEmail() : null);
         dto.setFirstName(customer.getFirstName());
         dto.setLastName(customer.getLastName());
@@ -62,6 +64,7 @@ public class CustomerPortalService
 
         // Map shopper type
         dto.setShopperType(customer.getShopperType() != null ? customer.getShopperType().name() : "GUEST");
+        dto.setStatus(customer.getStatus() != null ? customer.getStatus().name() : null);
 
         // Map addresses
         dto.setPhysicalAddress(mapAddress(customer, AddressTypeEn.PHYSICAL));

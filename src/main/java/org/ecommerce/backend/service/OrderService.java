@@ -643,14 +643,14 @@ public class OrderService
      * Most transitions carry no courier details; this is the same move without them.
      */
     @Transactional
-    public OrderResponseDto updateOrderStatus(UUID orderId, String newStatus, String changedBy)
+    public OrderDetailDto updateOrderStatus(UUID orderId, String newStatus, String changedBy)
             throws GraphQLException {
         return updateOrderStatus(orderId, newStatus, changedBy, null);
     }
 
     @Transactional
-    public OrderResponseDto updateOrderStatus(UUID orderId, String newStatus, String changedBy,
-                                              OrderTracking tracking) throws GraphQLException {
+    public OrderDetailDto updateOrderStatus(UUID orderId, String newStatus, String changedBy,
+                                            OrderTracking tracking) throws GraphQLException {
         if (orderId == null) {
             throw new GraphQLException("orderId is required");
         }
@@ -687,10 +687,10 @@ public class OrderService
         }
 
         Map<UUID, List<ProductImageEntity>> imagesByVariantId = productImageRepository.findGroupedByVariantIds(variantIdsOf(List.of(order)));
-        return orderMapper.toResponseDto(order, imagesByVariantId);
+        return orderMapper.toOrderDto(order, imagesByVariantId);
     }
 
-    public List<OrderResponseDto> getAllOrders(PageRequest pageRequest, FilterRequest filterRequest) {
+    public List<OrderDetailDto> getAllOrders(PageRequest pageRequest, FilterRequest filterRequest) {
         List<OrderEntity> orderEntities = orderRepository.findAllWithCustomerAndItems(pageRequest, filterRequest);
 
         // One batched lookup for the whole page rather than one per order — see
@@ -698,14 +698,14 @@ public class OrderService
         // ProductVariantEntity's own managed images collection.
         Map<UUID, List<ProductImageEntity>> imagesByVariantId = productImageRepository.findGroupedByVariantIds(variantIdsOf(orderEntities));
 
-        List<OrderResponseDto> orders = new ArrayList<>(orderEntities.size());
+        List<OrderDetailDto> orders = new ArrayList<>(orderEntities.size());
         for (OrderEntity orderEntity : orderEntities) {
-            orders.add(orderMapper.toResponseDto(orderEntity, imagesByVariantId));
+            orders.add(orderMapper.toOrderDto(orderEntity, imagesByVariantId));
         }
         return orders;
     }
 
-    public OrderDetailRespDto getOrderDetail(UUID orderId) {
+    public OrderDetailDto getOrderDetail(UUID orderId) {
         if (orderId == null) {
             return null;
         }
