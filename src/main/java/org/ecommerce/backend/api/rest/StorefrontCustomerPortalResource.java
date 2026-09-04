@@ -10,7 +10,7 @@ import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import org.eclipse.microprofile.jwt.JsonWebToken;
 import org.ecommerce.backend.service.CustomerPortalService;
-import org.ecommerce.common.dto.StorefrontCustomerPortalDto;
+import org.ecommerce.common.dto.CustomerProfileDto;
 
 /**
  * REST endpoint for the authenticated Customer Portal profile.
@@ -31,7 +31,7 @@ public class StorefrontCustomerPortalResource {
     @RolesAllowed("customer")
     public Response getCustomerPortal() {
         String email = jwt.getSubject();
-        StorefrontCustomerPortalDto profile = customerPortalService.getPortalProfile(email);
+        CustomerProfileDto profile = customerPortalService.getPortalProfile(email);
         return Response.ok(profile).build();
     }
 }

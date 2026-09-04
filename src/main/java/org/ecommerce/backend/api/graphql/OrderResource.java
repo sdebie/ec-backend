@@ -12,9 +12,7 @@ import org.ecommerce.backend.service.CustomerAuthService;
 import org.ecommerce.backend.service.OrderService;
 import org.ecommerce.backend.service.OrderTracking;
 import org.ecommerce.backend.utils.CurrentRequestOrderToken;
-import org.ecommerce.common.dto.OrderDetailRespDto;
-import org.ecommerce.common.dto.OrderResponseDto;
-import org.ecommerce.common.dto.OrderStatusRespDto;
+import org.ecommerce.common.dto.OrderDetailDto;
 import org.ecommerce.common.dto.OrderSummaryDto;
 import org.ecommerce.common.entity.CustomerEntity;
 import org.ecommerce.common.entity.OrderEntity;
@@ -70,7 +68,7 @@ public class OrderResource
     @Mutation("updateOrderStatus")
     @Description("Move one order to a new status. Staff JWT required.")
     @RolesAllowed({"SUPER_ADMIN", "ORDER_MANAGER"})
-    public OrderResponseDto updateOrderStatus(@Name("orderId") String orderId, @Name("status") String status,
+    public OrderDetailDto updateOrderStatus(@Name("orderId") String orderId, @Name("status") String status,
                                               @Name("trackingNumber") String trackingNumber,
                                               @Name("trackingCarrier") String trackingCarrier)
             throws GraphQLException
@@ -112,7 +110,7 @@ public class OrderResource
      */
     @Query("orderStatus")
     @Description("Poll one order's status by id — the guest checkout success page")
-    public OrderStatusRespDto orderStatus(@Name("orderId") String orderId) throws GraphQLException
+    public OrderDetailDto orderStatus(@Name("orderId") String orderId) throws GraphQLException
     {
         UUID id;
         try {
@@ -132,13 +130,13 @@ public class OrderResource
             throw new GraphQLException("Order not found");
         }
 
-        return orderMapper.toStatusRespDto(order);
+        return orderMapper.toStatusDto(order);
     }
 
     @Query("allOrders")
     @Description("Get all orders with paging, newest created orders first by default")
     @RolesAllowed({"SUPER_ADMIN", "ORDER_MANAGER", "VIEWER"})
-    public List<OrderResponseDto> getAllOrders(@Name("pageRequest") PageRequest pageRequest, @Name("filterRequest") FilterRequest filterRequest)
+    public List<OrderDetailDto> getAllOrders(@Name("pageRequest") PageRequest pageRequest, @Name("filterRequest") FilterRequest filterRequest)
     {
         return orderService.getAllOrders(pageRequest, filterRequest);
     }
@@ -156,7 +154,7 @@ public class OrderResource
      */
     @Query("getOrderDetail")
     @Description("Get order detail by order id")
-    public OrderDetailRespDto getOrderDetail(@Name("id") String orderId) throws GraphQLException
+    public OrderDetailDto getOrderDetail(@Name("id") String orderId) throws GraphQLException
     {
         UUID id;
         try {

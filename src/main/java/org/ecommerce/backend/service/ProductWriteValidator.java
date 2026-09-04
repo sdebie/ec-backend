@@ -3,7 +3,7 @@ package org.ecommerce.backend.service;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import lombok.extern.slf4j.Slf4j;
-import org.ecommerce.common.dto.ProductInformationDto;
+import org.ecommerce.common.dto.ProductDto;
 import org.ecommerce.common.dto.ProductVariantDto;
 import org.ecommerce.common.dto.VariantPriceDto;
 import org.ecommerce.common.entity.ProductImageEntity;
@@ -43,7 +43,7 @@ public class ProductWriteValidator
      * - Exactly one strictly-positive RETAIL_PRICE per variant
      * - SKUs not owned by another product
      */
-    public void validateForCreate(ProductInformationDto input)
+    public void validateForCreate(ProductDto input)
     {
         validateCommon(input);
         validateSkusNotOwnedByAnotherProduct(input.getVariants(), null);
@@ -56,20 +56,17 @@ public class ProductWriteValidator
      * - Every supplied image id belongs to a variant of the target product
      * - SKUs not owned by another product (excluding this product's own variants)
      */
-    public void validateForUpdate(UUID productId, ProductInformationDto input)
+    public void validateForUpdate(UUID productId, ProductDto input)
     {
         validateCommon(input);
         validateOwnership(productId, input.getVariants());
         validateSkusNotOwnedByAnotherProduct(input.getVariants(), productId);
     }
 
-    private void validateCommon(ProductInformationDto input)
+    private void validateCommon(ProductDto input)
     {
         if (input == null) {
             throw new IllegalArgumentException("Product information cannot be null");
-        }
-        if (input.getProduct() == null) {
-            throw new IllegalArgumentException("Product data is required");
         }
         if (input.getVariants() == null || input.getVariants().isEmpty()) {
             throw new IllegalArgumentException("At least one variant is required");
