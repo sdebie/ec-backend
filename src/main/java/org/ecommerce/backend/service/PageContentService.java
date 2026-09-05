@@ -103,7 +103,6 @@ public class PageContentService
 
         String sanitisedContent = htmlSanitizer.sanitize(content);
         entity.setDraftContent(sanitisedContent);
-        entity.setUpdatedAt(Instant.now());
 
         pageContentRepository.persist(entity);
         log.info("Draft saved for page '{}' (id={})", entity.getTitle(), entity.getId());
@@ -133,7 +132,6 @@ public class PageContentService
 
         entity.setPublishedContent(entity.getDraftContent());
         entity.setPublishedAt(Instant.now());
-        entity.setUpdatedAt(Instant.now());
 
         pageContentRepository.persist(entity);
         log.info("Page '{}' (id={}) published", entity.getTitle(), entity.getId());

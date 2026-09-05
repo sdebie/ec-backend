@@ -11,7 +11,6 @@ import org.ecommerce.common.entity.TestimonialEntity;
 import org.ecommerce.common.repository.TestimonialRepository;
 import org.jboss.logging.Logger;
 
-import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
@@ -86,7 +85,6 @@ public class TestimonialService
         entity.setAuthorTitle(request.authorTitle());
         entity.setPublished(request.published());
         entity.setSortOrder(request.sortOrder());
-        entity.setUpdatedAt(Instant.now());
 
         testimonialRepository.persist(entity);
         LOG.infof("Testimonial updated (id=%s)", entity.getId());
