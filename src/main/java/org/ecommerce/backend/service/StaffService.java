@@ -14,7 +14,6 @@ import org.ecommerce.common.query.FilterRequest;
 import org.ecommerce.common.query.PageRequest;
 import org.ecommerce.common.repository.StaffRepository;
 
-import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
@@ -117,7 +116,6 @@ public class StaffService
                     staffEntity.setPasswordHash(BcryptUtil.bcryptHash(staffDto.getTemporaryPassword()));
                     staffEntity.setResetPassword(true);
                 }
-                staffEntity.setUpdatedAt(Instant.now());
 
                 staffRepository.persist(staffEntity);
             }
