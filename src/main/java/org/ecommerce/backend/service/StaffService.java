@@ -81,7 +81,6 @@ public class StaffService
                 StaffUserEntity staffEntity = staffMapper.mapDtoToEntity(staffDto, new StaffUserEntity());
                 staffEntity.setPasswordHash(BcryptUtil.bcryptHash(staffDto.getTemporaryPassword()));
                 staffEntity.setResetPassword(true);
-                staffEntity.setCreatedAt(Instant.now());
                 staffRepository.persist(staffEntity);
             }
         } catch (StaffNotFoundException | StaffAlreadyExistsException e) {
@@ -110,11 +109,7 @@ public class StaffService
                 }
 
                 // Preserve immutable audit data before DTO mapping.
-                var createdAt = staffEntity.getCreatedAt();
                 staffMapper.mapDtoToEntity(staffDto, staffEntity);
-
-                // Never allow update payloads to overwrite the original create timestamp.
-                staffEntity.setCreatedAt(createdAt);
 
                 staffEntity.setResetPassword(staffDto.isResetPassword());
 
@@ -122,6 +117,7 @@ public class StaffService
                     staffEntity.setPasswordHash(BcryptUtil.bcryptHash(staffDto.getTemporaryPassword()));
                     staffEntity.setResetPassword(true);
                 }
+                staffEntity.setUpdatedAt(Instant.now());
 
                 staffRepository.persist(staffEntity);
             }

@@ -96,7 +96,6 @@ public class QuoteRequestService
         request.setCompany(dto.company());
         request.setMessage(dto.message());
         request.setStatus(QuoteRequestStatusEn.NEW);
-        request.setCreatedAt(Instant.now());
 
         List<QuoteRequestItemEntity> items = new ArrayList<>();
         for (QuoteRequestLineDto line : dto.items()) {
