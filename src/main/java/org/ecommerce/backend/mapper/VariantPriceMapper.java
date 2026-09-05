@@ -7,12 +7,12 @@ import org.mapstruct.Context;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 import static org.mapstruct.NullValueCheckStrategy.ALWAYS;
-import static org.mapstruct.ReportingPolicy.ERROR;
 import static org.mapstruct.NullValueMappingStrategy.RETURN_NULL;
 import static org.mapstruct.NullValuePropertyMappingStrategy.SET_TO_NULL;
+import static org.mapstruct.ReportingPolicy.ERROR;
 
 /**
  * Single owner of the entity → {@link VariantPriceDto} mapping.
@@ -38,5 +38,5 @@ public interface VariantPriceMapper
 {
     @Mapping(target = "isActive", constant = "true")
     @Mapping(target = "saleDaysRemaining", expression = "java(PriceUtils.saleDaysRemaining(price.getPriceType(), price.getPriceEndDate(), now))")
-    VariantPriceDto toDto(VariantPricesEntity price, @Context LocalDateTime now);
+    VariantPriceDto toDto(VariantPricesEntity price, @Context Instant now);
 }

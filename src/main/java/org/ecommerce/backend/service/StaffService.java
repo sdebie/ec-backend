@@ -14,7 +14,7 @@ import org.ecommerce.common.query.FilterRequest;
 import org.ecommerce.common.query.PageRequest;
 import org.ecommerce.common.repository.StaffRepository;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
@@ -81,7 +81,7 @@ public class StaffService
                 StaffUserEntity staffEntity = staffMapper.mapDtoToEntity(staffDto, new StaffUserEntity());
                 staffEntity.setPasswordHash(BcryptUtil.bcryptHash(staffDto.getTemporaryPassword()));
                 staffEntity.setResetPassword(true);
-                staffEntity.setCreatedAt(LocalDateTime.now());
+                staffEntity.setCreatedAt(Instant.now());
                 staffRepository.persist(staffEntity);
             }
         } catch (StaffNotFoundException | StaffAlreadyExistsException e) {

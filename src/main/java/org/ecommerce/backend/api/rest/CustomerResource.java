@@ -15,7 +15,10 @@ import org.eclipse.microprofile.jwt.JsonWebToken;
 import org.ecommerce.backend.exception.InvalidPasswordResetCodeException;
 import org.ecommerce.backend.exception.PasswordResetLockedException;
 import org.ecommerce.backend.mapper.CustomerAddressMapper;
-import org.ecommerce.backend.service.*;
+import org.ecommerce.backend.service.CustomerAddressService;
+import org.ecommerce.backend.service.CustomerAuthService;
+import org.ecommerce.backend.service.CustomerPasswordResetService;
+import org.ecommerce.backend.service.CustomerPortalService;
 import org.ecommerce.backend.utils.ClientIpUtils;
 import org.ecommerce.backend.utils.CustomerPasswordHashUtil;
 import org.ecommerce.backend.utils.PasswordStrengthValidator;
@@ -30,7 +33,7 @@ import org.ecommerce.common.enums.CustomerStatusEn;
 import org.ecommerce.common.enums.CustomerTypeEn;
 import org.jboss.logging.Logger;
 
-import java.time.OffsetDateTime;
+import java.time.Instant;
 
 // Minimal REST API to support checkout UX (lookup, login, register, profile)
 @Path("/api/customers")
@@ -215,7 +218,7 @@ public class CustomerResource
             user.setPasswordHash(CustomerPasswordHashUtil.hash(req.password));
         }
 
-        user.setLastLogin(OffsetDateTime.now());
+        user.setLastLogin(Instant.now());
         customerAuthService.persistUser(user);
         return Response.ok(toLoginResponseDto(ce)).build();
     }
@@ -282,7 +285,7 @@ public class CustomerResource
                 customerAuthService.persistCustomer(ce);
             }
 
-            user.setLastLogin(OffsetDateTime.now());
+            user.setLastLogin(Instant.now());
             customerAuthService.persistUser(user);
 
             return Response.ok(toLoginResponseDto(ce)).build();

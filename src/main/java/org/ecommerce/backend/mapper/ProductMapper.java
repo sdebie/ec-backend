@@ -8,14 +8,14 @@ import org.ecommerce.common.enums.ProductTypeEn;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.Collections;
 import java.util.List;
 
 import static org.mapstruct.NullValueCheckStrategy.ALWAYS;
-import static org.mapstruct.ReportingPolicy.ERROR;
 import static org.mapstruct.NullValueMappingStrategy.RETURN_NULL;
 import static org.mapstruct.NullValuePropertyMappingStrategy.SET_TO_NULL;
+import static org.mapstruct.ReportingPolicy.ERROR;
 
 @Mapper(componentModel = "jakarta-cdi", unmappedTargetPolicy = ERROR, uses = TimestampMapper.class,
         nullValueMappingStrategy = RETURN_NULL,
@@ -118,8 +118,7 @@ public interface ProductMapper
         if (variantPricesEntity == null) {
             return null;
         }
-        return PriceUtils.saleDaysRemaining(variantPricesEntity.getPriceType(),
-                variantPricesEntity.getPriceEndDate(), LocalDateTime.now());
+        return PriceUtils.saleDaysRemaining(variantPricesEntity.getPriceType(), variantPricesEntity.getPriceEndDate(), Instant.now());
     }
 
     default CategoryDto mapPrimaryCategory(ProductEntity productEntity)

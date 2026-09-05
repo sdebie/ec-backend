@@ -4,15 +4,14 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import lombok.extern.slf4j.Slf4j;
+import org.ecommerce.backend.mapper.PageContentMapper;
 import org.ecommerce.common.dto.PageContentDto;
 import org.ecommerce.common.dto.PageContentSummaryDto;
-import org.ecommerce.backend.mapper.PageContentMapper;
 import org.ecommerce.common.entity.PageContentEntity;
 import org.ecommerce.common.repository.PageContentRepository;
 
-import java.time.OffsetDateTime;
+import java.time.Instant;
 import java.util.List;
-import java.util.Objects;
 import java.util.UUID;
 
 @Slf4j
@@ -104,7 +103,7 @@ public class PageContentService
 
         String sanitisedContent = htmlSanitizer.sanitize(content);
         entity.setDraftContent(sanitisedContent);
-        entity.setUpdatedAt(OffsetDateTime.now());
+        entity.setUpdatedAt(Instant.now());
 
         pageContentRepository.persist(entity);
         log.info("Draft saved for page '{}' (id={})", entity.getTitle(), entity.getId());
@@ -133,8 +132,8 @@ public class PageContentService
         }
 
         entity.setPublishedContent(entity.getDraftContent());
-        entity.setPublishedAt(OffsetDateTime.now());
-        entity.setUpdatedAt(OffsetDateTime.now());
+        entity.setPublishedAt(Instant.now());
+        entity.setUpdatedAt(Instant.now());
 
         pageContentRepository.persist(entity);
         log.info("Page '{}' (id={}) published", entity.getTitle(), entity.getId());

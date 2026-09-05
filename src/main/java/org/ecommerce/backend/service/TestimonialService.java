@@ -3,15 +3,15 @@ package org.ecommerce.backend.service;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
-import org.jboss.logging.Logger;
-import org.ecommerce.common.dto.TestimonialRequest;
+import org.ecommerce.backend.mapper.TestimonialMapper;
 import org.ecommerce.common.dto.TestimonialDto;
 import org.ecommerce.common.dto.TestimonialPublicDto;
-import org.ecommerce.backend.mapper.TestimonialMapper;
+import org.ecommerce.common.dto.TestimonialRequest;
 import org.ecommerce.common.entity.TestimonialEntity;
 import org.ecommerce.common.repository.TestimonialRepository;
+import org.jboss.logging.Logger;
 
-import java.time.OffsetDateTime;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
@@ -63,8 +63,8 @@ public class TestimonialService
         entity.setAuthorTitle(request.authorTitle());
         entity.setPublished(request.published());
         entity.setSortOrder(request.sortOrder());
-        entity.setCreatedAt(OffsetDateTime.now());
-        entity.setUpdatedAt(OffsetDateTime.now());
+        entity.setCreatedAt(Instant.now());
+        entity.setUpdatedAt(Instant.now());
 
         testimonialRepository.persist(entity);
         LOG.infof("Testimonial created (id=%s, author=%s)", entity.getId(), entity.getAuthorName());
@@ -88,7 +88,7 @@ public class TestimonialService
         entity.setAuthorTitle(request.authorTitle());
         entity.setPublished(request.published());
         entity.setSortOrder(request.sortOrder());
-        entity.setUpdatedAt(OffsetDateTime.now());
+        entity.setUpdatedAt(Instant.now());
 
         testimonialRepository.persist(entity);
         LOG.infof("Testimonial updated (id=%s)", entity.getId());

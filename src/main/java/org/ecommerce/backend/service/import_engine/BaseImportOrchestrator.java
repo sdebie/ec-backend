@@ -2,12 +2,11 @@ package org.ecommerce.backend.service.import_engine;
 
 import io.quarkus.narayana.jta.QuarkusTransaction;
 import jakarta.transaction.Transactional;
-import jakarta.ws.rs.NotFoundException;
 import org.ecommerce.common.entity.ImportBatchEntity;
 import org.ecommerce.common.enums.ProductUploadStatusEn;
 import org.jboss.logging.Logger;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.UUID;
 
 /**
@@ -55,7 +54,7 @@ public abstract class BaseImportOrchestrator implements ImportBatchOrchestrator 
     public void markBatchAsProcessed(UUID batchId) {
         ImportBatchEntity batch = getBatchRequired(batchId);
         batch.setProductUploadStatusEn(ProductUploadStatusEn.PROCESSED);
-        batch.setCompletedAt(LocalDateTime.now());
+        batch.setCompletedAt(Instant.now());
     }
 
     @Override
@@ -63,7 +62,7 @@ public abstract class BaseImportOrchestrator implements ImportBatchOrchestrator 
     public void markBatchAsFailed(UUID batchId) {
         ImportBatchEntity batch = getBatchRequired(batchId);
         batch.setProductUploadStatusEn(ProductUploadStatusEn.FAILED);
-        batch.setCompletedAt(LocalDateTime.now());
+        batch.setCompletedAt(Instant.now());
     }
 
     @Override

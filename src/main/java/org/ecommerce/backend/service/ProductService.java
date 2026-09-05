@@ -20,7 +20,7 @@ import org.ecommerce.common.query.PageRequest;
 import org.ecommerce.common.query.enums.FilterOperator;
 import org.ecommerce.common.repository.*;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -61,14 +61,14 @@ public class ProductService
         CatalogueSortEn effectiveSort = sortBy != null ? sortBy : CatalogueSortEn.NAME_ASC;
         PriceBasisEn effectiveBasis = priceBasis != null ? priceBasis : PriceBasisEn.RETAIL;
         FilterRequest effectiveFilterRequest = applyActiveProductStatusFilter(filterRequest);
-        LocalDateTime now = LocalDateTime.now();
+        Instant now = Instant.now();
         return productListItemAssembler.buildShoppingListItems(productRepository.findShoppingProductEntities(pageRequest, effectiveFilterRequest, onSale, effectiveSort, effectiveBasis, inStockOnly), now, false);
     }
 
     @Transactional(value = TxType.SUPPORTS)
     public PageResponse<ProductShoppingListItemDto> getProductsOnSale(PageRequest pageRequest, boolean ignoreStatus)
     {
-        LocalDateTime now = LocalDateTime.now();
+        Instant now = Instant.now();
         List<ProductShoppingListItemDto> content = productListItemAssembler.buildShoppingListItems(productRepository.findOnSaleProductEntities(pageRequest, ignoreStatus), now, ignoreStatus);
 
         long totalElements = productRepository.countOnSaleProducts(ignoreStatus);
@@ -87,7 +87,7 @@ public class ProductService
     @Transactional(value = TxType.SUPPORTS)
     public PageResponse<AdminProductListItemDto> getAdminProductList(int pageIndex, int pageSize, String status, String categoryId, String brandId, String search)
     {
-        LocalDateTime now = LocalDateTime.now();
+        Instant now = Instant.now();
 
         int effectivePageSize = Math.clamp(pageSize, 1, 100);
         int effectivePageIndex = Math.max(pageIndex, 0);
@@ -179,7 +179,7 @@ public class ProductService
             products.addAll(productRepository.findRandomProductEntitiesExcluding(target - products.size(), bestSellerIds));
         }
 
-        LocalDateTime now = LocalDateTime.now();
+        Instant now = Instant.now();
         return productListItemAssembler.buildShoppingListItems(products, now, true);
     }
 

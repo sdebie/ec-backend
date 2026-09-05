@@ -15,7 +15,7 @@ import org.ecommerce.common.repository.CategoryRepository;
 import org.ecommerce.common.repository.ProductRepository;
 import org.jboss.logging.Logger;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
@@ -76,7 +76,7 @@ public class FeaturedProductService
     {
         List<ProductEntity> featuredProducts = productRepository.findFeaturedForAdmin();
 
-        LocalDateTime now = LocalDateTime.now();
+        Instant now = Instant.now();
         return productListItemAssembler.buildAdminListItems(featuredProducts, now);
     }
 
@@ -102,7 +102,7 @@ public class FeaturedProductService
             products = productRepository.findFeaturedActive(null, effectiveLimit);
         }
 
-        LocalDateTime now = LocalDateTime.now();
+        Instant now = Instant.now();
         return productListItemAssembler.buildShoppingListItems(products, now, false);
     }
 

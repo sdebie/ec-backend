@@ -11,7 +11,7 @@ import jakarta.ws.rs.core.Response;
 import org.ecommerce.backend.service.PageContentService;
 import org.ecommerce.common.dto.PageContentDto;
 
-import java.time.OffsetDateTime;
+import java.time.Instant;
 
 /**
  * Public storefront endpoint for retrieving published page content by slug.
@@ -50,6 +50,6 @@ public class StorefrontPageResource {
             String slug,
             String title,
             String content,
-            OffsetDateTime publishedAt
+            Instant publishedAt
     ) {}
 }
