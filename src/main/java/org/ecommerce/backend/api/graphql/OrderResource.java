@@ -98,15 +98,13 @@ public class OrderResource
     }
 
     /**
-     * S2′ (guest-order-authorization Requirement 4) — replaces {@code orderBySessionId}
-     * rather than guarding it: that query was keyed on {@code sessionId}, a second
-     * bearer credential this spec withdraws, and it returned the FULL order (customer
-     * email, line items) for what the success page only ever polls status/total/time
-     * from. Authorized by the same {@link OrderOwnershipGuard#mayAct} as every other
-     * order-scoped surface, and — like {@code getOrderDetail} — status is never an
-     * input to that decision (Requirement 2.8): a token still authorizes reading a
-     * cancelled order's status, which is exactly the case the success page most needs
-     * to show correctly.
+     * Replaces {@code orderBySessionId} rather than guarding it: that query was keyed on
+     * {@code sessionId}, a second bearer credential now withdrawn, and it returned the FULL
+     * order (customer email, line items) for what the success page only ever polls
+     * status/total/time from. Authorized by the same {@link OrderOwnershipGuard#mayAct} as
+     * every other order-scoped surface, and — like {@code getOrderDetail} — status is never
+     * an input to that decision: a token still authorizes reading a cancelled order's
+     * status, which is exactly the case the success page most needs to show correctly.
      */
     @Query("orderStatus")
     @Description("Poll one order's status by id — the guest checkout success page")
@@ -142,11 +140,11 @@ public class OrderResource
     }
 
     /**
-     * Shopper-facing only (Requirement 1.6) — a staff JWT authorizes nothing here.
+     * Shopper-facing only — a staff JWT authorizes nothing here.
      * Staff read order detail through {@code adminOrder}, which is
      * {@code @RolesAllowed}-gated and richer.
      * <p>
-     * Guards before fetching (Requirement 1, design.md task 3.2): the order entity is
+     * Guards before fetching: the order entity is
      * loaded and {@link OrderOwnershipGuard#mayAct} decides before
      * {@code orderService.getOrderDetail} assembles the full response — the previous
      * shape built the whole PII payload first and decided whether the caller could have
@@ -161,7 +159,7 @@ public class OrderResource
             id = UUID.fromString(orderId);
         } catch (IllegalArgumentException | NullPointerException e) {
             // Nothing to log yet — orderId is not a valid identifier, parsed or otherwise,
-            // and Requirement 5.6 forbids logging the raw string.
+            // and the raw string is deliberately not logged here.
             throw new GraphQLException("Order not found");
         }
 

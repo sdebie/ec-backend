@@ -83,7 +83,7 @@ public class OrderService
      * The four refusal codes an idempotency-key request can receive in a
      * {@code 409} body's {@code code} field — the only field a caller may
      * branch on; {@code error} is a human message and may change wording
-     * freely (design §6). Defined once here, read by the endpoint, the
+     * freely. Defined once here, read by the endpoint, the
      * backend tests and the storefront client.
      */
     public static final String CODE_IDEMPOTENCY_KEY_EXPIRED = "IDEMPOTENCY_KEY_EXPIRED";
@@ -233,7 +233,7 @@ public class OrderService
             order.getItems().add(orderItem);
         }
 
-        // The claim is a race, not a check (design §3.2): insert optimistically
+        // The claim is a race, not a check: insert optimistically
         // and let the unique index on idempotency_key decide who won. flush()
         // forces the constraint now, inside this method's own catch, rather than
         // at commit where it would surface as an opaque transaction failure.
@@ -266,7 +266,7 @@ public class OrderService
     /**
      * Whether a persistence failure is a unique-constraint violation on the
      * named constraint — the signal that a concurrent delivery of the same
-     * idempotency key won the race, not a genuine fault (design §3.2).
+     * idempotency key won the race, not a genuine fault.
      * <p>
      * {@code em.flush()} wraps the real failure in
      * {@code jakarta.persistence.PersistenceException}; the underlying
@@ -289,7 +289,7 @@ public class OrderService
 
     /**
      * A stable identity for one checkout request's cart, used to detect an
-     * {@code Idempotency-Key} reused against a changed cart (Requirement 3).
+     * {@code Idempotency-Key} reused against a changed cart.
      * <p>
      * Computed from the submitted lines alone — before validation, without
      * touching the database — because the fast-path idempotency lookup needs it
@@ -572,7 +572,7 @@ public class OrderService
 
     /**
      * Rebuilds a checkout response from an already-persisted order, for a
-     * request replaying an {@code Idempotency-Key} (design §4).
+     * request replaying an {@code Idempotency-Key}.
      * <p>
      * <b>A read.</b> Must never call {@link #reserveStock}, must never call
      * {@link OrderStatusHistoryEntity#record}, must never notify, and must
@@ -585,14 +585,14 @@ public class OrderService
      * The response can legitimately differ from the original if the shopper
      * has since chosen a delivery method — {@code shippingEstimate} and
      * {@code grandTotal} follow the order's current state, deliberately not
-     * pinned by Requirement 1.5, which equates only the priced facts
-     * (orderId, sessionId, lines' variantId/quantity/unitPrice/lineTotal,
-     * subtotal) that cannot drift.
+     * pinned. A replay is only required to keep the priced facts (orderId,
+     * sessionId, lines' variantId/quantity/unitPrice/lineTotal, subtotal)
+     * identical, since those cannot drift.
      * <p>
-     * {@code orderToken} is minted fresh on every call (guest-order-authorization
-     * Requirement 3.2) — there is no stored token to return (design.md §2), so a
-     * replay at hour 20 of the 24-hour idempotency window still returns a token
-     * usable for a full 60 minutes from that moment, never one already expired.
+     * {@code orderToken} is minted fresh on every call — there is no stored token
+     * to return, so a replay at hour 20 of the 24-hour idempotency window still
+     * returns a token usable for a full 60 minutes from that moment, never one
+     * already expired.
      */
     public OrderCheckoutResponseDto replayOrder(OrderEntity order) {
         BigDecimal subtotal = subtotalOf(order);
@@ -625,9 +625,9 @@ public class OrderService
 
     /**
      * Whether a matched order is still within its replay window, measured
-     * from {@code created_at} (Requirement 5). Compared in
-     * {@code LocalDateTime}, the basis the column was written with — do not
-     * mix in {@code Instant}/{@code OffsetDateTime}.
+     * from {@code created_at}. Compared in {@code LocalDateTime}, the basis
+     * the column was written with — do not mix in
+     * {@code Instant}/{@code OffsetDateTime}.
      * <p>
      * A domain rule with a config value behind it, so it lives here rather
      * than inline in the resource.

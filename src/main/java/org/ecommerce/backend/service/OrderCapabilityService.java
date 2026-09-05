@@ -12,13 +12,13 @@ import java.time.Duration;
 import java.util.UUID;
 
 /**
- * Mints and verifies the order capability token (design.md §3) — a short-lived token
+ * Mints and verifies the order capability token — a short-lived token
  * bound to exactly one order id, carrying no {@code groups} claim so it grants no role
  * or identity to Quarkus's own JWT auth mechanism if ever presented as a login
- * credential (§3.1). Signed with the same key and issuer {@link CustomerAuthService}
+ * credential. Signed with the same key and issuer {@link CustomerAuthService}
  * and {@link AdminAuthService} already use; verified directly against
  * {@link JWTParser} rather than through {@code SecurityIdentity}, so its presence
- * cannot affect any existing {@code hasRole} check in the codebase (§3.2).
+ * cannot affect any existing {@code hasRole} check in the codebase.
  */
 @ApplicationScoped
 public class OrderCapabilityService

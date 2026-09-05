@@ -99,7 +99,7 @@ public class PasswordResetCodePolicy
     }
 
     /**
-     * The single TTL shared by both the customer and staff flows (Requirement 7.3) —
+     * The single TTL shared by both the customer and staff flows —
      * changing it is one edit affecting both.
      */
     public int ttlMinutes()

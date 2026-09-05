@@ -7,8 +7,7 @@ import jakarta.inject.Inject;
 /**
  * Request-scoped helper that resolves the {@code X-Order-Token} header from the current
  * HTTP request. Designed for use in GraphQL resolvers where {@code @HeaderParam} is
- * unavailable — mirrors {@link CurrentRequestClientIp} exactly (guest-order-authorization
- * design.md §3.2).
+ * unavailable — mirrors {@link CurrentRequestClientIp} exactly.
  */
 @RequestScoped
 public class CurrentRequestOrderToken

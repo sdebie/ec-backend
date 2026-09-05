@@ -54,7 +54,7 @@ public class ContactEnquiryResource {
             @HeaderParam("X-Forwarded-For") String xForwardedFor,
             @HeaderParam("X-Real-IP") String xRealIp
     ) {
-        // 1. Validation — 422 for a well-formed but invalid body (Req 2.5, 3.1)
+        // 1. Validation — 422 for a well-formed but invalid body
         if (dto == null) {
             return Response.status(422).build();
         }
