@@ -44,7 +44,7 @@ public class ProductImportGraphQLResource {
     @Transactional(value = TxType.SUPPORTS)
     @RolesAllowed({"SUPER_ADMIN", "CATALOG_MANAGER"})
     public List<ProductComparisonDto> getImportRows(@Name("batchId") UUID batchId) {
-        return productComparisonMapper.toDtos(productOrchestrator.getStagedRows(batchId));
+        return productComparisonMapper.toDtos(productOrchestrator.findByBatchId(batchId));
     }
 
     @Query("productImportBatches")
@@ -52,7 +52,7 @@ public class ProductImportGraphQLResource {
     @Transactional(value = TxType.SUPPORTS)
     @RolesAllowed({"SUPER_ADMIN", "CATALOG_MANAGER"})
     public List<ProductImportBatchDto> getProductImportBatches() {
-        return productOrchestrator.listBatchesOrderedByCreatedAtDesc()
+        return productOrchestrator.listAllOrderByCreatedAtDesc()
                 .stream()
                 .map(importBatchDtoMapper::fromProductBatch)
                 .collect(Collectors.toList());
