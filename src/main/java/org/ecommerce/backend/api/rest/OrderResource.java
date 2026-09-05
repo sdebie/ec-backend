@@ -55,8 +55,7 @@ public class OrderResource {
     CustomerAuthService customerAuthService;
 
     /**
-     * Not {@code @Transactional} (design §3.3, checkout-idempotency
-     * Requirement 1.4). The lookup/claim/replay dance below needs to see a
+     * Not {@code @Transactional}. The lookup/claim/replay dance below needs to see a
      * failed create attempt's rollback before building its response — with
      * this method transactional, {@code createOrderFromCart} would run
      * inside it, and a constraint violation would mark it rollback-only
@@ -69,7 +68,7 @@ public class OrderResource {
             OrderCreationRequestDto request,
             @HeaderParam("Idempotency-Key") String idempotencyKeyHeader
     ) {
-        // Requirement 2.3: the header is validated before any other work —
+        // The header is validated before any other work —
         // before the rate-limit check, before cart validation, before any
         // database write. Taken as a String and parsed here (not
         // @HeaderParam UUID) so a missing header and a malformed one can each
@@ -88,7 +87,7 @@ public class OrderResource {
         }
 
         // The endpoint's pre-existing null-body guard. It has to sit after
-        // header validation (Requirement 2.3) and before the fingerprint
+        // header validation and before the fingerprint
         // call below, which is not total over a wholly-absent items list —
         // only over a null field within one line.
         if (request == null || request.getItems() == null) {
@@ -97,10 +96,10 @@ public class OrderResource {
 
         String fingerprint = OrderService.fingerprint(request.getItems());
 
-        // The fast path (design §3.1): resolved against the key BEFORE any cart
+        // The fast path: resolved against the key BEFORE any cart
         // validation. Not load-bearing for correctness — createOrderFromCart's
-        // claim (§3.2) rolls back its whole transaction on a lost race, including
-        // any stock it decremented, and the 422 re-check below (§3.5) re-resolves
+        // claim rolls back its whole transaction on a lost race, including
+        // any stock it decremented, and the 422 re-check below re-resolves
         // against the winner either way. This exists to avoid the wasted work of
         // that revalidate → reserve → roll-back cycle on the common case (a
         // sequential retry), not to make it correct.
@@ -117,7 +116,7 @@ public class OrderResource {
                     request, customerTier, customer, idempotencyKey, fingerprint);
             return Response.status(201).entity(response).build();
         } catch (IdempotencyConflictException e) {
-            // Lost the claim (design §3.2): another delivery of this same intent
+            // Lost the claim: another delivery of this same intent
             // won. Our transaction has rolled back, releasing the stock it
             // reserved; the winner's has committed and is visible to this fresh
             // read.
@@ -128,7 +127,7 @@ public class OrderResource {
             }
             return resolveExisting(winner, fingerprint);
         } catch (UnavailableVariantsException e) {
-            // Design §3.5: the cart may be unavailable because our own earlier
+            // The cart may be unavailable because our own earlier
             // delivery of this same key already took the stock — the concurrent
             // last-unit race that neither the lookup above nor the claim inside
             // createOrderFromCart can catch, because this exit is reached before
@@ -146,11 +145,11 @@ public class OrderResource {
     }
 
     /**
-     * The single place all four outcomes for a matched order are decided
-     * (design §6), called from all three sites that can locate an existing
+     * The single place all four outcomes for a matched order are decided,
+     * called from all three sites that can locate an existing
      * order by key: the fast-path lookup above, the lost-race catch, and the
      * {@code 422} re-check. Evaluated in this order because the refusals are
-     * not mutually exclusive (Requirement 1.6):
+     * not mutually exclusive:
      * <ol>
      *   <li>ownership — the only refusal the client must not retry past;</li>
      *   <li>voided — not itself time-bound, so it must be checked
@@ -163,8 +162,8 @@ public class OrderResource {
      */
     private Response resolveExisting(OrderEntity order, String fingerprint) {
         if (order == null) {
-            // The re-read after a lost claim cannot come back empty (design
-            // §3.3) — Postgres blocks the second inserter until the winner's
+            // The re-read after a lost claim cannot come back empty —
+            // Postgres blocks the second inserter until the winner's
             // transaction resolves. A null here is a server fault, never the
             // caller's — mayReplay(null) is false, and answering that as a
             // 409 would tell an impossible caller "this is not your order".
@@ -197,7 +196,7 @@ public class OrderResource {
      * The {@code 409} body shape every idempotency-key refusal shares:
      * {@code error} is a human message a caller must never branch on;
      * {@code code} is the only field the storefront (or a test) may key
-     * behaviour off (design §6).
+     * behaviour off.
      */
     private Response idempotencyConflict(String message, String code) {
         return Response.status(Response.Status.CONFLICT).entity(Map.of("error", message, "code", code)).build();

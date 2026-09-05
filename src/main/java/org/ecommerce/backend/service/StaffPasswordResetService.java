@@ -54,7 +54,7 @@ public class StaffPasswordResetService
         if (!policy.isExpired(user.getPasswordResetCodeExpiry(), now)) {
             // An unexpired code already exists — the cooldown silently suppresses a
             // resend rather than answering "already sent", so it cannot be used to
-            // confirm the account exists (Requirement 2.2).
+            // confirm the account exists.
             return;
         }
 

@@ -63,7 +63,7 @@ public class OrderContactResource
         }
 
         // 1a. Ownership gate: a valid capability token for this order, or the order's
-        // own customer's JWT — nothing else (guest-order-authorization Requirement 1).
+        // own customer's JWT — nothing else.
         if (!ownershipGuard.mayAct(order, orderToken)) {
             LOG.warnf("Rejected contact update for order %s: caller does not own it", orderId);
             return Response.status(Response.Status.NOT_FOUND)
@@ -215,7 +215,7 @@ public class OrderContactResource
             summary.put("postalCode", order.getPostalCode());
         }
 
-        // The email itself is deliberately not logged (Requirement 5.4) — a guest's
+        // The email itself is deliberately not logged — a guest's
         // address in the logs, on the ordinary success path, at INFO.
         LOG.infof("Updated contact for order %s", orderId);
 

@@ -68,9 +68,9 @@ public class PayFastResource
         try {
             orderUuid = UUID.fromString(orderIdParam);
         } catch (IllegalArgumentException e) {
-            // Previously uncaught, surfacing as an unmapped 500 (tasks.md 6.3) — nothing
-            // to log beyond "malformed", since Requirement 5.6 forbids logging the raw
-            // request string and there is no parsed id yet to log instead.
+            // Previously uncaught, surfacing as an unmapped 500 — nothing to log beyond
+            // "malformed", since the raw request string is deliberately not logged here
+            // and there is no parsed id yet to log instead.
             return Response
                     .status(Response.Status.BAD_REQUEST)
                     .entity(Map.of("error", "Order ID is not a valid identifier"))
@@ -87,8 +87,8 @@ public class PayFastResource
                     .build();
         }
 
-        // guest-order-authorization Requirement 1: S4 had no ownership check of any
-        // kind before this — not a bypassed check, an absent one.
+        // This endpoint had no ownership check of any kind before this — not a
+        // bypassed check, an absent one.
         if (!ownershipGuard.mayAct(quote, orderToken)) {
             LOG.warnf("checkout: refused for order %s", orderUuid);
             return Response
@@ -97,8 +97,8 @@ public class PayFastResource
                     .build();
         }
 
-        // Requirement 8: the payer email comes from the order — see resolveEmail's own
-        // Javadoc for why it is never a caller-supplied parameter.
+        // The payer email comes from the order — see resolveEmail's own Javadoc for
+        // why it is never a caller-supplied parameter.
         String email = resolveEmail(quote);
 
         if (email == null || email.isBlank()) {
@@ -121,8 +121,7 @@ public class PayFastResource
             // its own live status as expectedFrom, so the mismatch check inside
             // applyTransition can never disagree with itself and canSystemTransitionTo
             // is the only thing left to say no — and it throws rather than reporting a
-            // lost claim (BACKLOG.md payfast-checkout-terminal-order-500). A terminal
-            // order (DELIVERED, SYSTEM_CANCELED, REFUNDED, COLLECTED, ...) must never
+            // lost claim. A terminal order (DELIVERED, SYSTEM_CANCELED, REFUNDED, COLLECTED, ...) must never
             // reach that throw from a REST method with nothing to catch it.
             if (!from.canSystemTransitionTo(OrderStatusEn.PENDING_PAYMENT)) {
                 LOG.warnf("Refused payment start for order %s: %s cannot move to PENDING_PAYMENT", orderUuid, from);
@@ -151,12 +150,12 @@ public class PayFastResource
     }
 
     /**
-     * Resolves the payer email from the order itself (guest-order-authorization
-     * Requirement 8) — {@code contactEmail} (set by the checkout contact step, S3,
-     * which {@code useCheckoutSubmit} always calls before this), falling back to the
-     * linked customer's account email for the rare case a signed-in customer reaches
-     * this without one. Never a caller-supplied parameter: that used to override both
-     * and let anyone redirect the PayFast receipt to an address of their choosing.
+     * Resolves the payer email from the order itself — {@code contactEmail} (set by
+     * the checkout contact step, which {@code useCheckoutSubmit} always calls before
+     * this), falling back to the linked customer's account email for the rare case a
+     * signed-in customer reaches this without one. Never a caller-supplied parameter:
+     * that used to override both and let anyone redirect the PayFast receipt to an
+     * address of their choosing.
      */
     private String resolveEmail(OrderEntity order) {
         if (order.getContactEmail() != null && !order.getContactEmail().isBlank()) {
@@ -327,10 +326,9 @@ public class PayFastResource
     }
 
     /**
-     * Resolves the order a log row belongs to, purely for linking (BACKLOG.md
-     * payment-logs-never-linked-to-their-order) — an unparseable or unmatched
-     * m_payment_id leaves the log unlinked rather than failing the ITN, since the
-     * log write itself is already best-effort (guarded by its own try/catch above).
+     * Resolves the order a log row belongs to, purely for linking — an unparseable or
+     * unmatched m_payment_id leaves the log unlinked rather than failing the ITN, since
+     * the log write itself is already best-effort (guarded by its own try/catch above).
      */
     private OrderEntity resolveOrderForLog(String orderIdStr) {
         if (orderIdStr == null) {

@@ -421,9 +421,9 @@ public class WholesaleCustomerService
 
     /**
      * Day boundaries are anchored to UTC, not the JVM's default zone — a server-local zone
-     * would make the window depend on which machine runs the query (see
-     * {@code .kiro/specs/temporal-type-correctness}, which exists because exactly this kind
-     * of implicit-zone comparison has already produced a live defect elsewhere).
+     * would make the window depend on which machine runs the query. This kind of
+     * implicit-zone comparison has already produced a live defect elsewhere in this
+     * codebase, so it is worth being deliberate about UTC here too.
      */
     private OffsetDateTime toInclusiveStart(String date)
     {

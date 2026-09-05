@@ -100,7 +100,7 @@ public interface OrderMapper
     OrderSummaryDto toSummaryDto(OrderEntity order);
 
     /**
-     * S2′ — the guest checkout success-page poll (guest-order-authorization Requirement 4.3).
+     * The guest checkout success-page poll.
      * Populates only what the page renders: id, status, total, creation time. Every other field
      * on the shared {@link OrderDetailDto} shape — sessionId very much included — is ignored,
      * not merely left to chance.
