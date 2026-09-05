@@ -137,11 +137,11 @@ public class ProductPriceImportOrchestrator extends BaseImportOrchestrator {
                 .collect(Collectors.toList());
     }
 
-    public List<ProductPriceImportBatchEntity> listBatchesOrderedByCreatedAtDesc() {
+    public List<ProductPriceImportBatchEntity> listAllOrderByCreatedAtDesc() {
         return batchRepository.listAllOrderByCreatedAtDesc();
     }
 
-    public List<ProductPriceImportStagedEntity> getStagedRows(UUID batchId) {
+    public List<ProductPriceImportStagedEntity> findByBatchId(UUID batchId) {
         return stagedRepository.findByBatchId(batchId);
     }
 
