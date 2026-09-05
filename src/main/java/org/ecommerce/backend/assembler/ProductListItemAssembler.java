@@ -14,7 +14,7 @@ import org.ecommerce.common.repository.ProductImageRepository;
 import org.ecommerce.common.repository.ProductVariantRepository;
 import org.ecommerce.common.repository.VariantPricesRepository;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -44,7 +44,7 @@ public class ProductListItemAssembler
     @Inject
     VariantPriceMapper variantPriceMapper;
 
-    public AdminProductListItemDto buildAdminListItem(ProductEntity product, LocalDateTime now)
+    public AdminProductListItemDto buildAdminListItem(ProductEntity product, Instant now)
     {
         return buildAdminListItems(List.of(product), now).getFirst();
     }
@@ -53,7 +53,7 @@ public class ProductListItemAssembler
      * Builds an admin product page using three bounded preload queries (variants,
      * primary-variant images, and retail prices), rather than querying per row.
      */
-    public List<AdminProductListItemDto> buildAdminListItems(List<ProductEntity> products, LocalDateTime now)
+    public List<AdminProductListItemDto> buildAdminListItems(List<ProductEntity> products, Instant now)
     {
         if (products == null || products.isEmpty()) {
             return List.of();
@@ -112,7 +112,7 @@ public class ProductListItemAssembler
         return dto;
     }
 
-    public ProductShoppingListItemDto buildShoppingListItem(ProductEntity product, LocalDateTime now, boolean ignoreStatus)
+    public ProductShoppingListItemDto buildShoppingListItem(ProductEntity product, Instant now, boolean ignoreStatus)
     {
         return buildShoppingListItems(List.of(product), now, ignoreStatus).getFirst();
     }
@@ -122,8 +122,7 @@ public class ProductListItemAssembler
      * images, and active price candidates. This is deliberately page-scoped so
      * query count is constant as the page size grows.
      */
-    public List<ProductShoppingListItemDto> buildShoppingListItems(
-            List<ProductEntity> products, LocalDateTime now, boolean ignoreStatus)
+    public List<ProductShoppingListItemDto> buildShoppingListItems(List<ProductEntity> products, Instant now, boolean ignoreStatus)
     {
         if (products == null || products.isEmpty()) {
             return List.of();
@@ -143,7 +142,7 @@ public class ProductListItemAssembler
                 .toList();
     }
 
-    private ProductShoppingListItemDto buildShoppingListItem(ProductEntity product, List<ProductVariantEntity> variants, List<ProductImageEntity> images, Map<PriceTypeEn, VariantPricesEntity> prices, LocalDateTime now)
+    private ProductShoppingListItemDto buildShoppingListItem(ProductEntity product, List<ProductVariantEntity> variants, List<ProductImageEntity> images, Map<PriceTypeEn, VariantPricesEntity> prices, Instant now)
     {
         ProductShoppingListItemDto dto = new ProductShoppingListItemDto();
         dto.setId(product.getId() == null ? null : product.getId().toString());
@@ -163,10 +162,10 @@ public class ProductListItemAssembler
                 .stream()
                 .map(productMapper::mapImageEntityToDto)
                 .toList());
-        dto.setRetailPrice(variantPriceMapper.toDto(prices.get(PriceTypeEn.RETAIL_PRICE), now));
-        dto.setWholesalePrice(variantPriceMapper.toDto(prices.get(PriceTypeEn.WHOLESALE_PRICE), now));
-        dto.setRetailSalePrice(variantPriceMapper.toDto(prices.get(PriceTypeEn.RETAIL_SALE_PRICE), now));
-        dto.setWholesaleSalePrice(variantPriceMapper.toDto(prices.get(PriceTypeEn.WHOLESALE_SALE_PRICE), now));
+        dto.setRetailPrice(variantPriceMapper.toDto(prices.get(PriceTypeEn.RETAIL_PRICE), Instant.now()));
+        dto.setWholesalePrice(variantPriceMapper.toDto(prices.get(PriceTypeEn.WHOLESALE_PRICE), Instant.now()));
+        dto.setRetailSalePrice(variantPriceMapper.toDto(prices.get(PriceTypeEn.RETAIL_SALE_PRICE), Instant.now()));
+        dto.setWholesaleSalePrice(variantPriceMapper.toDto(prices.get(PriceTypeEn.WHOLESALE_SALE_PRICE), Instant.now()));
         return dto;
     }
 
@@ -178,7 +177,7 @@ public class ProductListItemAssembler
     }
 
     private Map<UUID, Map<PriceTypeEn, VariantPricesEntity>> pricesByProduct(
-            List<ProductEntity> products, List<PriceTypeEn> priceTypes, LocalDateTime now, boolean ignoreStatus)
+            List<ProductEntity> products, List<PriceTypeEn> priceTypes, Instant now, boolean ignoreStatus)
     {
         Comparator<VariantPricesEntity> priceOrder = Comparator
                 .comparing(VariantPricesEntity::getPrice)

@@ -17,11 +17,7 @@ import org.ecommerce.common.enums.ProductStatusEn;
 import org.ecommerce.common.enums.StockEffect;
 import org.ecommerce.common.query.FilterRequest;
 import org.ecommerce.common.query.PageRequest;
-import org.ecommerce.common.repository.OrderRepository;
-import org.ecommerce.common.repository.OrderStatusHistoryRepository;
-import org.ecommerce.common.repository.PaymentLogRepository;
-import org.ecommerce.common.repository.ProductImageRepository;
-import org.ecommerce.common.repository.ProductVariantRepository;
+import org.ecommerce.common.repository.*;
 import org.hibernate.exception.ConstraintViolationException;
 import org.jboss.logging.Logger;
 
@@ -29,7 +25,7 @@ import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -625,9 +621,7 @@ public class OrderService
 
     /**
      * Whether a matched order is still within its replay window, measured
-     * from {@code created_at}. Compared in {@code LocalDateTime}, the basis
-     * the column was written with — do not mix in
-     * {@code Instant}/{@code OffsetDateTime}.
+     * from {@code created_at} as {@link Instant}.
      * <p>
      * A domain rule with a config value behind it, so it lives here rather
      * than inline in the resource.
@@ -636,7 +630,7 @@ public class OrderService
         if (order.getCreatedAt() == null) {
             return false;
         }
-        return order.getCreatedAt().isAfter(LocalDateTime.now().minusHours(replayWindowHours));
+        return order.getCreatedAt().isAfter(Instant.now().minusSeconds(replayWindowHours * 3600L));
     }
 
     /**

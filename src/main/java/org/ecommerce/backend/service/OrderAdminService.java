@@ -3,6 +3,7 @@ package org.ecommerce.backend.service;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import org.ecommerce.backend.mapper.OrderAdminMapper;
+import org.ecommerce.backend.utils.StoreZone;
 import org.ecommerce.common.dto.AdminOrderDetailDto;
 import org.ecommerce.common.dto.AdminOrderListItemDto;
 import org.ecommerce.common.dto.PageResponse;
@@ -10,7 +11,9 @@ import org.ecommerce.common.entity.OrderEntity;
 import org.ecommerce.common.entity.OrderStatusHistoryEntity;
 import org.ecommerce.common.entity.PaymentLogEntity;
 import org.ecommerce.common.entity.ProductImageEntity;
+import org.ecommerce.common.enums.FulfilmentState;
 import org.ecommerce.common.enums.OrderStatusEn;
+import org.ecommerce.common.enums.PaymentState;
 import org.ecommerce.common.query.PageRequest;
 import org.ecommerce.common.query.SortRequest;
 import org.ecommerce.common.query.enums.SortDirection;
@@ -19,17 +22,9 @@ import org.ecommerce.common.repository.OrderStatusHistoryRepository;
 import org.ecommerce.common.repository.PaymentLogRepository;
 import org.ecommerce.common.repository.ProductImageRepository;
 
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.format.DateTimeParseException;
-import java.util.List;
-import java.util.Map;
-import org.ecommerce.common.enums.FulfilmentState;
-import org.ecommerce.common.enums.PaymentState;
+import java.time.Instant;
+import java.util.*;
 import java.util.function.Function;
-import java.util.EnumSet;
-import java.util.Set;
-import java.util.UUID;
 
 /**
  * The staff view of orders — the list staff work from and the detail they
@@ -82,13 +77,11 @@ public class OrderAdminService
     {
         Set<OrderStatusEn> statusFilter = resolveStatuses(paymentState, fulfilmentState);
 
-        LocalDate fromDay = parseDate(fromDate, "fromDate");
-        LocalDateTime from = fromDay == null ? null : fromDay.atStartOfDay();
+        Instant from = StoreZone.startOfDay(fromDate, "fromDate");
 
-        // The UI sends whole days, so an inclusive "to" is every instant before
-        // the following midnight — a plain <= would drop everything after 00:00.
-        LocalDate toDay = parseDate(toDate, "toDate");
-        LocalDateTime toExclusive = toDay == null ? null : toDay.plusDays(1).atStartOfDay();
+        // The UI sends whole days in the store zone, so an inclusive "to" is every
+        // instant before the following Johannesburg midnight.
+        Instant toExclusive = StoreZone.exclusiveEndOfDay(toDate, "toDate");
 
         SortRequest sort = toSortRequest(sortBy, sortDir);
 
@@ -176,18 +169,6 @@ public class OrderAdminService
             return statusesFor.apply(Enum.valueOf(type, value));
         } catch (IllegalArgumentException e) {
             throw new IllegalArgumentException("invalid " + type.getSimpleName() + ": " + value);
-        }
-    }
-
-    private LocalDate parseDate(String value, String fieldName)
-    {
-        if (value == null || value.isBlank()) {
-            return null;
-        }
-        try {
-            return LocalDate.parse(value);
-        } catch (DateTimeParseException e) {
-            throw new IllegalArgumentException("invalid " + fieldName + ": " + value + " (expected yyyy-MM-dd)");
         }
     }
 

@@ -8,7 +8,7 @@ import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
-import java.time.OffsetDateTime;
+import java.time.Instant;
 
 /**
  * Shared, entity-agnostic OTP mechanics for both {@link CustomerPasswordResetService}
@@ -83,12 +83,12 @@ public class PasswordResetCodePolicy
                 stored.getBytes(StandardCharsets.UTF_8));
     }
 
-    public boolean isExpired(OffsetDateTime expiry, OffsetDateTime now)
+    public boolean isExpired(Instant expiry, Instant now)
     {
         return expiry == null || expiry.isBefore(now);
     }
 
-    public boolean isLocked(OffsetDateTime lockedUntil, OffsetDateTime now)
+    public boolean isLocked(Instant lockedUntil, Instant now)
     {
         return lockedUntil != null && lockedUntil.isAfter(now);
     }

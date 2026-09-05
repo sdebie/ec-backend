@@ -11,7 +11,7 @@ import org.ecommerce.backend.utils.PasswordStrengthValidator;
 import org.ecommerce.common.entity.StaffUserEntity;
 import org.ecommerce.common.repository.StaffRepository;
 
-import java.time.OffsetDateTime;
+import java.time.Instant;
 
 /**
  * Self-service, email-OTP password reset for staff accounts — the flow a staff member
@@ -50,7 +50,7 @@ public class StaffPasswordResetService
             return;
         }
 
-        OffsetDateTime now = OffsetDateTime.now();
+        Instant now = Instant.now();
         if (!policy.isExpired(user.getPasswordResetCodeExpiry(), now)) {
             // An unexpired code already exists — the cooldown silently suppresses a
             // resend rather than answering "already sent", so it cannot be used to
@@ -60,7 +60,7 @@ public class StaffPasswordResetService
 
         String rawCode = policy.generateCode();
         user.setPasswordResetCodeHash(policy.fingerprint(rawCode));
-        user.setPasswordResetCodeExpiry(now.plusMinutes(policy.ttlMinutes()));
+        user.setPasswordResetCodeExpiry(now.plusMillis((long) policy.ttlMinutes() * 60 * 1000));
         user.setPasswordResetCodeAttempts(0);
         user.setPasswordResetCodeLockedUntil(null);
 
@@ -90,7 +90,7 @@ public class StaffPasswordResetService
             throw new InvalidPasswordResetCodeException();
         }
 
-        OffsetDateTime now = OffsetDateTime.now();
+        Instant now = Instant.now();
         if (policy.isLocked(user.getPasswordResetCodeLockedUntil(), now)) {
             throw new PasswordResetLockedException(user.getPasswordResetCodeLockedUntil());
         }
@@ -102,7 +102,7 @@ public class StaffPasswordResetService
             int attempts = user.getPasswordResetCodeAttempts() + 1;
             user.setPasswordResetCodeAttempts(attempts);
             if (policy.shouldLock(attempts)) {
-                user.setPasswordResetCodeLockedUntil(now.plusMinutes(LOCKOUT_MINUTES));
+                user.setPasswordResetCodeLockedUntil(now.plusMillis(LOCKOUT_MINUTES * 60 * 1000));
                 user.setPasswordResetCodeAttempts(0);
             }
             log.warn("Staff password reset failed: invalid or expired code, email={}, ip={}",

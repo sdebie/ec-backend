@@ -4,22 +4,23 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import jakarta.ws.rs.NotFoundException;
-import org.ecommerce.common.dto.ProductPriceComparisonDto;
 import org.ecommerce.common.dto.ImportBatchProcessStatusDto;
+import org.ecommerce.common.dto.ProductPriceComparisonDto;
 import org.ecommerce.common.entity.*;
 import org.ecommerce.common.enums.PriceTypeEn;
 import org.ecommerce.common.enums.ProductImportValidationStatusEn;
 import org.ecommerce.common.enums.ProductUploadStatusEn;
-import org.ecommerce.common.repository.*;
+import org.ecommerce.common.repository.ProductPriceImportBatchRepository;
+import org.ecommerce.common.repository.ProductPriceImportStagedRepository;
+import org.ecommerce.common.repository.ProductVariantRepository;
+import org.ecommerce.common.repository.VariantPricesRepository;
 import org.jboss.logging.Logger;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
-
-import static java.time.LocalDateTime.now;
 
 /**
  * Orchestrates product price imports. Implements both batch operations and legacy service interface.
@@ -162,7 +163,7 @@ public class ProductPriceImportOrchestrator extends BaseImportOrchestrator {
 
         VariantPricesEntity price = pricesRepository.findLatestByVariantAndType(variant.getId(), priceType);
         if (price != null) {
-            price.setPriceEndDate(now());
+            price.setPriceEndDate(Instant.now());
             pricesRepository.persist(price);
         }
 
@@ -170,8 +171,8 @@ public class ProductPriceImportOrchestrator extends BaseImportOrchestrator {
         price.setVariant(variant);
         price.setPriceType(priceType);
         price.setPrice(priceValue);
-        price.setPriceEndDate(LocalDateTime.of(2099, 1, 1, 0, 0, 0));
-        price.setPriceStartDate(now());
+        price.setPriceEndDate(Instant.parse("2099-01-01T00:00:00Z"));
+        price.setPriceStartDate(Instant.now());
         pricesRepository.persist(price);
     }
 

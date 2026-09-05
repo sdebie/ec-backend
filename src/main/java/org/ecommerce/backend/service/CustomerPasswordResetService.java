@@ -14,7 +14,7 @@ import org.ecommerce.common.enums.CustomerStatusEn;
 import org.ecommerce.common.enums.CustomerTypeEn;
 import org.ecommerce.common.repository.UserRepository;
 
-import java.time.OffsetDateTime;
+import java.time.Instant;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -38,7 +38,7 @@ public class CustomerPasswordResetService
     private static class IpAttemptState
     {
         int failedAttempts;
-        OffsetDateTime lockedUntil;
+        Instant lockedUntil;
     }
 
     @Transactional
@@ -55,11 +55,11 @@ public class CustomerPasswordResetService
         }
 
         String rawCode = policy.generateCode();
-        OffsetDateTime now = OffsetDateTime.now();
+        Instant now = Instant.now();
 
         log.debug("Password Reset {}", rawCode);
         user.setPasswordResetCodeHash(policy.fingerprint(rawCode));
-        user.setPasswordResetCodeExpiry(now.plusMinutes(policy.ttlMinutes()));
+        user.setPasswordResetCodeExpiry(now.plusSeconds(policy.ttlMinutes() * 60L));
         user.setPasswordResetCodeAttempts(0);
         user.setPasswordResetCodeLockedUntil(null);
 
@@ -89,7 +89,7 @@ public class CustomerPasswordResetService
 
         UserEntity user = verifyCodeInternal(email, code, clientIp);
         user.setPasswordHash(CustomerPasswordHashUtil.hash(newPassword));
-        user.setLastLogin(OffsetDateTime.now());
+        user.setLastLogin(Instant.now());
 
         activateCustomerProfile(user.getCustomer());
 
@@ -120,7 +120,7 @@ public class CustomerPasswordResetService
     private UserEntity verifyCodeInternal(String email, String code, String clientIp)
     {
         String normalizedIp = normalizeIp(clientIp);
-        OffsetDateTime now = OffsetDateTime.now();
+        Instant now = Instant.now();
 
         ensureIpNotLocked(normalizedIp, now);
 
@@ -147,9 +147,9 @@ public class CustomerPasswordResetService
         return user;
     }
 
-    private void ensureAccountNotLocked(UserEntity user, OffsetDateTime now)
+    private void ensureAccountNotLocked(UserEntity user, Instant now)
     {
-        OffsetDateTime lockedUntil = user.getPasswordResetCodeLockedUntil();
+        Instant lockedUntil = user.getPasswordResetCodeLockedUntil();
         if (lockedUntil == null) {
             return;
         }
@@ -160,7 +160,7 @@ public class CustomerPasswordResetService
         user.setPasswordResetCodeAttempts(0);
     }
 
-    private void ensureIpNotLocked(String ip, OffsetDateTime now)
+    private void ensureIpNotLocked(String ip, Instant now)
     {
         IpAttemptState state = ipAttemptStateMap.get(ip);
         if (state == null) {
@@ -174,12 +174,12 @@ public class CustomerPasswordResetService
         }
     }
 
-    private void registerFailure(UserEntity user, String ip, OffsetDateTime now)
+    private void registerFailure(UserEntity user, String ip, Instant now)
     {
         int attempts = user.getPasswordResetCodeAttempts() + 1;
         user.setPasswordResetCodeAttempts(attempts);
         if (policy.shouldLock(attempts)) {
-            OffsetDateTime lockedUntil = now.plusMinutes(LOCKOUT_MINUTES);
+            Instant lockedUntil = now.plusMillis(LOCKOUT_MINUTES * 60 * 1000);
             user.setPasswordResetCodeLockedUntil(lockedUntil);
             user.setPasswordResetCodeAttempts(0);
         }
@@ -191,12 +191,12 @@ public class CustomerPasswordResetService
         }
     }
 
-    private void registerIpFailure(String ip, OffsetDateTime now)
+    private void registerIpFailure(String ip, Instant now)
     {
         IpAttemptState state = ipAttemptStateMap.computeIfAbsent(ip, ignored -> new IpAttemptState());
         state.failedAttempts = state.failedAttempts + 1;
         if (policy.shouldLock(state.failedAttempts)) {
-            state.lockedUntil = now.plusMinutes(LOCKOUT_MINUTES);
+            state.lockedUntil = now.plusMillis(LOCKOUT_MINUTES * 60 * 1000);
             state.failedAttempts = 0;
             throw new PasswordResetLockedException(state.lockedUntil);
         }

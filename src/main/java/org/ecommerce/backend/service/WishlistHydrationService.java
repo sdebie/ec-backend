@@ -14,7 +14,7 @@ import org.ecommerce.common.repository.ProductVariantRepository;
 import org.ecommerce.common.repository.VariantPricesRepository;
 import org.jboss.logging.Logger;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -59,7 +59,7 @@ public class WishlistHydrationService
             return List.of();
         }
 
-        LocalDateTime now = LocalDateTime.now();
+        Instant now = Instant.now();
 
         // 1. Fetch all requested variants with their products (status-agnostic; flags derived below)
         List<ProductVariantEntity> resolvedVariants = productVariantRepository.findByIdsWithProduct(variantIds);
@@ -98,13 +98,13 @@ public class WishlistHydrationService
                 .toList();
     }
 
-    private Map<UUID, Map<PriceTypeEn, VariantPricesEntity>> buildPricesByVariant(List<UUID> variantIds, List<PriceTypeEn> priceTypes, LocalDateTime now)
+    private Map<UUID, Map<PriceTypeEn, VariantPricesEntity>> buildPricesByVariant(List<UUID> variantIds, List<PriceTypeEn> priceTypes, Instant now)
     {
 
         Comparator<VariantPricesEntity> priceOrder = Comparator
-                .comparing((VariantPricesEntity price) -> price.getPrice())
-                .thenComparing(price -> price.getPriceStartDate(), Comparator.nullsFirst(Comparator.naturalOrder()))
-                .thenComparing(price -> price.getCreatedAt(), Comparator.nullsFirst(Comparator.naturalOrder()));
+                .comparing(VariantPricesEntity::getPrice)
+                .thenComparing(VariantPricesEntity::getPriceStartDate, Comparator.nullsFirst(Comparator.naturalOrder()))
+                .thenComparing(VariantPricesEntity::getCreatedAt, Comparator.nullsFirst(Comparator.naturalOrder()));
 
         Map<UUID, Map<PriceTypeEn, VariantPricesEntity>> result = new java.util.HashMap<>();
 
@@ -117,7 +117,7 @@ public class WishlistHydrationService
         return result;
     }
 
-    private WishlistHydratedItemDto assembleItem(ProductVariantEntity variant, Map<UUID, Map<PriceTypeEn, VariantPricesEntity>> pricesByVariant, Map<UUID, ProductImageEntity> thumbnailByVariant, LocalDateTime now)
+    private WishlistHydratedItemDto assembleItem(ProductVariantEntity variant, Map<UUID, Map<PriceTypeEn, VariantPricesEntity>> pricesByVariant, Map<UUID, ProductImageEntity> thumbnailByVariant, Instant now)
     {
 
         WishlistHydratedItemDto dto = new WishlistHydratedItemDto();

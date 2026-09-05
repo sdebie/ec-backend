@@ -13,7 +13,7 @@ import org.ecommerce.common.enums.OrderStatusEn;
 import org.ecommerce.common.repository.OrderRepository;
 import org.jboss.logging.Logger;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
@@ -72,7 +72,7 @@ public class StockRecoveryJob
 
     private void sweep()
     {
-        LocalDateTime cutoff = LocalDateTime.now().minusMinutes(holdMinutes);
+        Instant cutoff = Instant.now().minusSeconds(holdMinutes * 60L);
         List<UUID> candidateIds = QuarkusTransaction.requiringNew()
                 .call(() -> orderRepository.findAbandonedIds(RECLAIMABLE, cutoff, batchSize));
 

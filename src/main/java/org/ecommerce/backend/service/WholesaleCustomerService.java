@@ -5,6 +5,7 @@ import jakarta.enterprise.event.Event;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import org.ecommerce.backend.mapper.WholesaleMapper;
+import org.ecommerce.backend.utils.StoreZone;
 import org.ecommerce.common.dto.AddressDto;
 import org.ecommerce.common.dto.WholesaleApplicationDetailsDto;
 import org.ecommerce.common.dto.WholesaleApplicationListItemDto;
@@ -24,10 +25,7 @@ import org.ecommerce.common.repository.WholesaleApplicationRepository;
 import org.ecommerce.common.repository.WholesaleProfileRepository;
 import org.jboss.logging.Logger;
 
-import java.time.LocalDate;
-import java.time.OffsetDateTime;
-import java.time.ZoneOffset;
-import java.time.format.DateTimeParseException;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
@@ -68,8 +66,8 @@ public class WholesaleCustomerService
     {
         WholesaleApplicationStatusEn status = extractStatusFilter(filterRequest);
         SortRequest sort = extractSort(filterRequest);
-        OffsetDateTime from = toInclusiveStart(fromDate);
-        OffsetDateTime toExclusive = toExclusiveEnd(toDate);
+        Instant from = StoreZone.startOfDay(fromDate, "fromDate");
+        Instant toExclusive = StoreZone.exclusiveEndOfDay(toDate, "toDate");
 
         return wholesaleApplicationRepository.findForAdmin(status, from, toExclusive, sort, pageRequest)
                 .stream()
@@ -83,8 +81,8 @@ public class WholesaleCustomerService
     public long wholesaleApplicationCount(FilterRequest filterRequest, String fromDate, String toDate)
     {
         WholesaleApplicationStatusEn status = extractStatusFilter(filterRequest);
-        OffsetDateTime from = toInclusiveStart(fromDate);
-        OffsetDateTime toExclusive = toExclusiveEnd(toDate);
+        Instant from = StoreZone.startOfDay(fromDate, "fromDate");
+        Instant toExclusive = StoreZone.exclusiveEndOfDay(toDate, "toDate");
 
         return wholesaleApplicationRepository.countForAdmin(status, from, toExclusive);
     }
@@ -261,7 +259,7 @@ public class WholesaleCustomerService
 
         // ── Mark application approved ─────────────────────────────────────
         application.setStatus(WholesaleApplicationStatusEn.APPROVED);
-        application.setProcessedAt(OffsetDateTime.now());
+        application.setProcessedAt(Instant.now());
         wholesaleApplicationRepository.persist(application);
 
         decisionEvent.fire(buildDecisionEvent(application, null, newAccountCreated));
@@ -362,7 +360,7 @@ public class WholesaleCustomerService
         }
 
         application.setStatus(WholesaleApplicationStatusEn.REJECTED);
-        application.setProcessedAt(OffsetDateTime.now());
+        application.setProcessedAt(Instant.now());
         application.setRejectionReason(reason.trim());
         wholesaleApplicationRepository.persist(application);
 
@@ -405,40 +403,6 @@ public class WholesaleCustomerService
             return null;
         }
         return filterRequest.getSort().getFirst();
-    }
-
-    private LocalDate parseDate(String value, String fieldName)
-    {
-        if (value == null || value.isBlank()) {
-            return null;
-        }
-        try {
-            return LocalDate.parse(value);
-        } catch (DateTimeParseException e) {
-            throw new IllegalArgumentException("invalid " + fieldName + ": " + value + " (expected yyyy-MM-dd)");
-        }
-    }
-
-    /**
-     * Day boundaries are anchored to UTC, not the JVM's default zone — a server-local zone
-     * would make the window depend on which machine runs the query. This kind of
-     * implicit-zone comparison has already produced a live defect elsewhere in this
-     * codebase, so it is worth being deliberate about UTC here too.
-     */
-    private OffsetDateTime toInclusiveStart(String date)
-    {
-        LocalDate day = parseDate(date, "fromDate");
-        return day == null ? null : day.atStartOfDay(ZoneOffset.UTC).toOffsetDateTime();
-    }
-
-    /**
-     * The UI sends whole days, so an inclusive "to" is every instant before the following
-     * midnight — a plain {@code <=} would drop everything after 00:00 on the "to" day.
-     */
-    private OffsetDateTime toExclusiveEnd(String date)
-    {
-        LocalDate day = parseDate(date, "toDate");
-        return day == null ? null : day.plusDays(1).atStartOfDay(ZoneOffset.UTC).toOffsetDateTime();
     }
 
     private void applyProfileFields(CustomerEntity customerEntity, WholesaleApplicationFormDto dto)

@@ -4,7 +4,7 @@ import org.ecommerce.common.entity.VariantPricesEntity;
 import org.ecommerce.common.enums.PriceTypeEn;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Comparator;
 import java.util.List;
@@ -15,11 +15,11 @@ public class PriceUtils
 
     private static final Comparator<VariantPricesEntity> PRICE_RECENCY_COMPARATOR =
             Comparator.comparing(VariantPricesEntity::getPriceStartDate,
-                            Comparator.nullsFirst(LocalDateTime::compareTo))
+                            Comparator.nullsFirst(Instant::compareTo))
                     .thenComparing(VariantPricesEntity::getUpdatedAt,
-                            Comparator.nullsFirst(LocalDateTime::compareTo))
+                            Comparator.nullsFirst(Instant::compareTo))
                     .thenComparing(VariantPricesEntity::getCreatedAt,
-                            Comparator.nullsFirst(LocalDateTime::compareTo))
+                            Comparator.nullsFirst(Instant::compareTo))
                     .thenComparing(VariantPricesEntity::getId,
                             Comparator.nullsFirst(UUID::compareTo));
 
@@ -31,13 +31,12 @@ public class PriceUtils
      * Returns {@link BigDecimal#ZERO} when no row is active, which callers render as
      * "no price set" rather than as free.
      */
-    public static BigDecimal currentPrice(List<VariantPricesEntity> prices, PriceTypeEn priceType)
-    {
+    public static BigDecimal currentPrice(List<VariantPricesEntity> prices, PriceTypeEn priceType) {
         if (prices == null || priceType == null) {
             return BigDecimal.ZERO;
         }
 
-        LocalDateTime now = LocalDateTime.now();
+        Instant now = Instant.now();
 
         return prices.stream()
                 .filter(price -> price != null
@@ -63,20 +62,18 @@ public class PriceUtils
      * @param now       the clock the countdown is measured against
      * @return days remaining, or {@code null} when no countdown applies
      */
-    public static Long saleDaysRemaining(PriceTypeEn priceType, LocalDateTime endDate, LocalDateTime now)
-    {
+    public static Long saleDaysRemaining(PriceTypeEn priceType, Instant endDate, Instant now) {
         if (priceType == null || endDate == null) {
             return null;
         }
         if (priceType != PriceTypeEn.RETAIL_SALE_PRICE && priceType != PriceTypeEn.WHOLESALE_SALE_PRICE) {
             return null;
         }
-        long daysRemaining = ChronoUnit.DAYS.between(now.toLocalDate(), endDate.toLocalDate());
+        long daysRemaining = ChronoUnit.DAYS.between(now, endDate);
         return Math.max(daysRemaining, 0L);
     }
 
-    private static boolean isWithinActiveWindow(VariantPricesEntity price, LocalDateTime now)
-    {
+    private static boolean isWithinActiveWindow(VariantPricesEntity price, Instant now) {
         if (price.getPriceStartDate() != null && now.isBefore(price.getPriceStartDate())) {
             return false;
         }
