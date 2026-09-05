@@ -4,7 +4,6 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import jakarta.ws.rs.NotFoundException;
-import org.ecommerce.backend.csv.ProductImportParser;
 import org.ecommerce.backend.csv.ProductImportValidator;
 import org.ecommerce.common.dto.ImportBatchProcessStatusDto;
 import org.ecommerce.common.entity.*;
@@ -126,11 +125,11 @@ public class ProductImportOrchestrator extends BaseImportOrchestrator {
         return status;
     }
 
-    public List<ProductImportBatchEntity> listBatchesOrderedByCreatedAtDesc() {
+    public List<ProductImportBatchEntity> listAllOrderByCreatedAtDesc() {
         return batchRepository.listAllOrderByCreatedAtDesc();
     }
 
-    public List<ProductImportStagedEntity> getStagedRows(UUID batchId) {
+    public List<ProductImportStagedEntity> findByBatchId(UUID batchId) {
         return stagedRepository.findByBatchId(batchId);
     }
 
