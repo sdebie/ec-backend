@@ -7,6 +7,8 @@ import com.google.api.client.json.gson.GsonFactory;
 import jakarta.annotation.security.RolesAllowed;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
+import jakarta.validation.ConstraintViolation;
+import jakarta.validation.Validator;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
@@ -34,6 +36,7 @@ import org.ecommerce.common.enums.CustomerTypeEn;
 import org.jboss.logging.Logger;
 
 import java.time.Instant;
+import java.util.Set;
 
 // Minimal REST API to support checkout UX (lookup, login, register, profile)
 @Path("/api/customers")
@@ -61,6 +64,9 @@ public class CustomerResource
 
     @Inject
     JsonWebToken jwt;
+
+    @Inject
+    Validator validator;
 
     @ConfigProperty(name = "google.client.id", defaultValue = "5598643375-sooimltbseub586f1pucut2fut95dnbl.apps.googleusercontent.com")
     String googleClientId;
@@ -427,6 +433,14 @@ public class CustomerResource
     @Consumes(MediaType.APPLICATION_JSON)
     public Response changePassword(PasswordChangeRequestDto request)
     {
+        if (request == null) {
+            return Response.status(422).build();
+        }
+        Set<ConstraintViolation<PasswordChangeRequestDto>> violations = validator.validate(request);
+        if (!violations.isEmpty()) {
+            return Response.status(422).build();
+        }
+
         String email = jwt.getSubject();
         customerPortalService.changePassword(email, request.getCurrentPassword(), request.getNewPassword());
         return Response.ok().build();

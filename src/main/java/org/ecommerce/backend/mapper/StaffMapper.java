@@ -28,5 +28,6 @@ public interface StaffMapper
     @Mapping(target = "passwordResetCodeExpiry", ignore = true)
     @Mapping(target = "passwordResetCodeAttempts", ignore = true)
     @Mapping(target = "passwordResetCodeLockedUntil", ignore = true)
+    @Mapping(target = "updatedAt", ignore = true) // Hibernate-managed (@UpdateTimestamp); never set from a DTO
     StaffUserEntity mapDtoToEntity(StaffDto staffDto, @MappingTarget StaffUserEntity staffUserEntity);
 }
