@@ -63,7 +63,7 @@ public class ProductImportGraphQLResource {
     @Transactional(value = TxType.SUPPORTS)
     @RolesAllowed({"SUPER_ADMIN", "CATALOG_MANAGER"})
     public List<ProductPriceComparisonDto> getPriceImportRows(@Name("batchId") UUID batchId) {
-        return productPriceComparisonMapper.toDtos(priceOrchestrator.getStagedRows(batchId));
+        return productPriceComparisonMapper.toDtos(priceOrchestrator.findByBatchId(batchId));
     }
 
     @Query("productPriceImportBatches")
@@ -71,7 +71,7 @@ public class ProductImportGraphQLResource {
     @Transactional(value = TxType.SUPPORTS)
     @RolesAllowed({"SUPER_ADMIN", "CATALOG_MANAGER"})
     public List<ProductImportBatchDto> getProductPriceImportBatches() {
-        return priceOrchestrator.listBatchesOrderedByCreatedAtDesc()
+        return priceOrchestrator.listAllOrderByCreatedAtDesc()
                 .stream()
                 .map(importBatchDtoMapper::fromProductPriceBatch)
                 .collect(Collectors.toList());
