@@ -63,8 +63,6 @@ public class TestimonialService
         entity.setAuthorTitle(request.authorTitle());
         entity.setPublished(request.published());
         entity.setSortOrder(request.sortOrder());
-        entity.setCreatedAt(Instant.now());
-        entity.setUpdatedAt(Instant.now());
 
         testimonialRepository.persist(entity);
         LOG.infof("Testimonial created (id=%s, author=%s)", entity.getId(), entity.getAuthorName());
