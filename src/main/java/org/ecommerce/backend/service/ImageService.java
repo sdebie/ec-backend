@@ -30,8 +30,13 @@ public class ImageService
 {
     private static final int DEFAULT_PAGE_SIZE = 30;
     private static final int MAX_PAGE_SIZE = 200;
+    private static final int MAX_EXISTING_FILENAME_LOOKUP = 2000;
 
     public record PaginatedImagesResponse(List<String> images, int totalCount, int page, int pageSize)
+    {
+    }
+
+    public record BulkLandResult(List<String> acceptedNames, List<String> acceptedRelativePaths, List<String> skippedNames)
     {
     }
 
@@ -187,6 +192,122 @@ public class ImageService
         }
 
         return Map.of("uploaded", uploadedCount, "skipped", skippedCount);
+    }
+
+    /**
+     * Writes original filenames into the destination directory. Does not create
+     * thumbnails or SKU links — that is {@link #processLandedBulkImage(String)}.
+     */
+    public BulkLandResult landBulkImages(List<FileUpload> uploads, String destinationDirectory)
+    {
+        if (uploads == null || uploads.isEmpty()) {
+            return new BulkLandResult(List.of(), List.of(), List.of());
+        }
+
+        String normalizedDirectory = normalizeDestinationDirectory(destinationDirectory);
+        Path destinationRoot = resolveStorageDirectory(normalizedDirectory);
+
+        try {
+            Files.createDirectories(destinationRoot);
+        } catch (IOException e) {
+            throw new RuntimeException("Unable to create storage directory", e);
+        }
+
+        List<String> acceptedNames = new ArrayList<>();
+        List<String> acceptedRelativePaths = new ArrayList<>();
+        List<String> skippedNames = new ArrayList<>();
+
+        for (FileUpload file : uploads) {
+            try {
+                Path fullPath = Paths.get(file.fileName());
+                String justTheFileName = fullPath.getFileName().toString();
+                Path targetPath = destinationRoot.resolve(justTheFileName).normalize();
+                if (!targetPath.startsWith(destinationRoot)) {
+                    continue;
+                }
+                String relativeFilePath = normalizedDirectory.isBlank()
+                        ? justTheFileName
+                        : normalizedDirectory + "/" + justTheFileName;
+
+                if (Files.notExists(targetPath)) {
+                    Files.copy(file.filePath(), targetPath);
+                    acceptedNames.add(justTheFileName);
+                    acceptedRelativePaths.add(relativeFilePath);
+                } else {
+                    skippedNames.add(justTheFileName);
+                }
+            } catch (Exception e) {
+                log.error("Error saving file: {}", file.fileName());
+            }
+        }
+
+        return new BulkLandResult(List.copyOf(acceptedNames), List.copyOf(acceptedRelativePaths), List.copyOf(skippedNames));
+    }
+
+    /**
+     * Thumbnail + SKU link for a file already on disk under storage. Safe to run
+     * off the ingest request thread.
+     */
+    public void processLandedBulkImage(String relativeFilePath) throws IOException
+    {
+        if (relativeFilePath == null || relativeFilePath.isBlank()) {
+            throw new IllegalArgumentException("File path must not be blank");
+        }
+
+        Path storageRoot = Paths.get(storagePath).toAbsolutePath().normalize();
+        Path sourcePath = storageRoot.resolve(relativeFilePath).normalize();
+        if (!sourcePath.startsWith(storageRoot) || !Files.isRegularFile(sourcePath)) {
+            throw new IllegalArgumentException("Image is not in storage: " + relativeFilePath);
+        }
+
+        createThumbnail(sourcePath, relativeFilePath);
+        String sku = stripExtension(sourcePath.getFileName().toString());
+        tryLinkBulkImageToVariant(relativeFilePath, sku);
+    }
+
+    /**
+     * Names already present as original files in {@code destinationDirectory}
+     * (storage root when blank). Does not create directories, does not walk the
+     * tree, and does not treat a thumbnail as a hit. Callers must chunk to
+     * {@link #MAX_EXISTING_FILENAME_LOOKUP}.
+     */
+    public List<String> findExistingFilenames(String destinationDirectory, List<String> filenames)
+    {
+        if (filenames == null || filenames.isEmpty()) {
+            return List.of();
+        }
+        if (filenames.size() > MAX_EXISTING_FILENAME_LOOKUP) {
+            throw new IllegalArgumentException(
+                    "At most " + MAX_EXISTING_FILENAME_LOOKUP + " filenames can be checked per request");
+        }
+
+        String normalizedDirectory = normalizeDestinationDirectory(destinationDirectory);
+        Path destinationRoot = resolveStorageDirectory(normalizedDirectory);
+
+        if (Files.notExists(destinationRoot) || !Files.isDirectory(destinationRoot)) {
+            return List.of();
+        }
+
+        LinkedHashSet<String> existing = new LinkedHashSet<>();
+        for (String filename : filenames) {
+            if (filename == null || filename.isBlank()) {
+                continue;
+            }
+            Path requested = Paths.get(filename);
+            Path nameOnly = requested.getFileName();
+            if (nameOnly == null) {
+                continue;
+            }
+            String justTheFileName = nameOnly.toString();
+            Path targetPath = destinationRoot.resolve(justTheFileName).normalize();
+            if (!targetPath.startsWith(destinationRoot)) {
+                continue;
+            }
+            if (Files.isRegularFile(targetPath)) {
+                existing.add(justTheFileName);
+            }
+        }
+        return List.copyOf(existing);
     }
 
     private void createThumbnail(Path sourcePath, String fileName) throws IOException

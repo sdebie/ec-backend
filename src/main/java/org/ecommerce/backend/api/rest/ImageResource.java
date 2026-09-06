@@ -2,6 +2,7 @@ package org.ecommerce.backend.api.rest;
 
 import org.ecommerce.common.enums.ImageTypeEn;
 import org.ecommerce.common.dto.ImageResponseDto;
+import org.ecommerce.backend.service.ImageBulkIngestService;
 import org.ecommerce.backend.service.ImageService;
 import org.jboss.resteasy.reactive.RestForm;
 import org.jboss.resteasy.reactive.multipart.FileUpload;
@@ -21,6 +22,9 @@ public class ImageResource
 {
     @Inject
     ImageService imageService;
+
+    @Inject
+    ImageBulkIngestService imageBulkIngestService;
 
     /**
      * Generic upload endpoint - saves a file without creating database records.
@@ -158,6 +162,55 @@ public class ImageResource
             return Response.status(Response.Status.BAD_REQUEST)
                     .entity(Map.of("message", e.getMessage()))
                     .build();
+        }
+    }
+
+    /**
+     * Lands original filenames without thumbnails or SKU links on this thread.
+     * Returns 202 and a job id; a worker finishes processing.
+     */
+    @POST
+    @Path("/bulk-ingest")
+    @RolesAllowed({"SUPER_ADMIN", "CATALOG_MANAGER"})
+    @Consumes(MediaType.MULTIPART_FORM_DATA)
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response bulkIngest(
+            @RestForm("images") List<FileUpload> uploads,
+            @RestForm("destinationDirectory") String destinationDirectory)
+    {
+        try {
+            var result = imageBulkIngestService.ingestFiles(uploads, destinationDirectory);
+            imageBulkIngestService.enqueue(result.jobId());
+            return Response.accepted(result).build();
+        } catch (IllegalArgumentException e) {
+            return Response.status(Response.Status.BAD_REQUEST)
+                    .entity(Map.of("message", e.getMessage()))
+                    .build();
+        }
+    }
+
+    /**
+     * Accepts one zip to staging and returns 202. Unpack + thumbnails run on the worker.
+     */
+    @POST
+    @Path("/bulk-ingest-zip")
+    @RolesAllowed({"SUPER_ADMIN", "CATALOG_MANAGER"})
+    @Consumes(MediaType.MULTIPART_FORM_DATA)
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response bulkIngestZip(
+            @RestForm("zip") FileUpload zip,
+            @RestForm("destinationDirectory") String destinationDirectory)
+    {
+        try {
+            var result = imageBulkIngestService.ingestZip(zip, destinationDirectory);
+            imageBulkIngestService.enqueue(result.jobId());
+            return Response.accepted(result).build();
+        } catch (IllegalArgumentException e) {
+            return Response.status(Response.Status.BAD_REQUEST)
+                    .entity(Map.of("message", e.getMessage()))
+                    .build();
+        } catch (IOException e) {
+            return Response.serverError().entity(Map.of("message", "Failed to stage zip")).build();
         }
     }
 
