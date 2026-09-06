@@ -148,23 +148,6 @@ public class ImageResource
         }
     }
 
-    @POST
-    @Path("/bulk-upload")
-    @RolesAllowed({"SUPER_ADMIN", "CATALOG_MANAGER"})
-    @Consumes(MediaType.MULTIPART_FORM_DATA)
-    @Produces(MediaType.APPLICATION_JSON)
-    public Response bulkUpload(
-            @RestForm("images") List<FileUpload> uploads,
-            @RestForm("destinationDirectory") String destinationDirectory) {
-        try {
-            return Response.ok(imageService.bulkUploadImages(uploads, destinationDirectory)).build();
-        } catch (IllegalArgumentException e) {
-            return Response.status(Response.Status.BAD_REQUEST)
-                    .entity(Map.of("message", e.getMessage()))
-                    .build();
-        }
-    }
-
     /**
      * Lands original filenames without thumbnails or SKU links on this thread.
      * Returns 202 and a job id; a worker finishes processing.

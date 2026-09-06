@@ -144,56 +144,6 @@ public class ImageService
         return newFileName;
     }
 
-    public Map<String, Integer> bulkUploadImages(List<FileUpload> uploads)
-    {
-        return bulkUploadImages(uploads, null);
-    }
-
-    public Map<String, Integer> bulkUploadImages(List<FileUpload> uploads, String destinationDirectory)
-    {
-        int uploadedCount = 0;
-        int skippedCount = 0;
-
-        if (uploads == null || uploads.isEmpty()) {
-            return Map.of("uploaded", 0, "skipped", 0);
-        }
-
-        String normalizedDirectory = normalizeDestinationDirectory(destinationDirectory);
-        Path destinationRoot = resolveStorageDirectory(normalizedDirectory);
-
-        try {
-            Files.createDirectories(destinationRoot);
-        } catch (IOException e) {
-            throw new RuntimeException("Unable to create storage directory", e);
-        }
-
-        for (FileUpload file : uploads) {
-            try {
-                Path fullPath = Paths.get(file.fileName());
-                String justTheFileName = fullPath.getFileName().toString();
-                Path targetPath = destinationRoot.resolve(justTheFileName);
-                String relativeFilePath = normalizedDirectory.isBlank() ? justTheFileName : normalizedDirectory + "/" + justTheFileName;
-
-                // 2. ONLY save if it doesn't exist
-                if (Files.notExists(targetPath)) {
-                    Files.copy(file.filePath(), targetPath);
-                    createThumbnail(targetPath, relativeFilePath);
-                    uploadedCount++;
-                    // Link to product variant when filename matches a known SKU
-                    String sku = stripExtension(justTheFileName);
-                    tryLinkBulkImageToVariant(relativeFilePath, sku);
-                } else {
-                    skippedCount++;
-                }
-            } catch (Exception e) {
-                // Log error for specific file but continue the loop
-                log.error("Error saving file: {}", file.fileName());
-            }
-        }
-
-        return Map.of("uploaded", uploadedCount, "skipped", skippedCount);
-    }
-
     /**
      * Writes original filenames into the destination directory. Does not create
      * thumbnails or SKU links — that is {@link #processLandedBulkImage(String)}.
