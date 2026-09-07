@@ -6,6 +6,7 @@ import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import jakarta.ws.rs.NotFoundException;
 import org.ecommerce.common.dto.ImportBatchProcessStatusDto;
+import org.ecommerce.common.dto.ProductImportBatchDto;
 import org.ecommerce.common.dto.ProductPriceComparisonDto;
 import org.ecommerce.common.entity.*;
 import org.ecommerce.common.enums.ImportSourceTypeEn;
@@ -100,6 +101,33 @@ public class ProductPriceImportOrchestrator extends BaseImportOrchestrator
         batch.setProcessedRows(nullToZero(batch.getProcessedRows()) + processed);
         batch.setSkippedRows(nullToZero(batch.getSkippedRows()) + skipped);
         return chunk.size();
+    }
+
+    public void overlayMissingProgress(ProductPriceImportBatchEntity batch, ProductImportBatchDto dto) {
+        if (!shouldOverlayMissingProgress(batch.getProductUploadStatusEn())) {
+            return;
+        }
+        if (nullToZero(dto.getProcessedRows()) > 0 || nullToZero(dto.getSkippedRows()) > 0) {
+            return;
+        }
+        dto.setProcessedRows((int) stagedRepository.count(
+                "batch.id = ?1 and processed = true and validationStatus = ?2",
+                batch.getId(),
+                ProductImportValidationStatusEn.VALID));
+        dto.setSkippedRows((int) stagedRepository.count(
+                "batch.id = ?1 and processed = true and validationStatus = ?2",
+                batch.getId(),
+                ProductImportValidationStatusEn.INVALID));
+    }
+
+    private static boolean shouldOverlayMissingProgress(ProductUploadStatusEn status) {
+        if (status == null) {
+            return false;
+        }
+        return switch (status) {
+            case PROCESSED, FAILED -> true;
+            case IMPORTING, PENDING, PROCESSING -> false;
+        };
     }
 
     private static int nullToZero(Integer value) {

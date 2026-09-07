@@ -77,7 +77,11 @@ public class ProductImportGraphQLResource {
     public List<ProductImportBatchDto> getProductPriceImportBatches() {
         return priceOrchestrator.listAllOrderByCreatedAtDesc()
                 .stream()
-                .map(importBatchDtoMapper::fromProductPriceBatch)
+                .map(batch -> {
+                    ProductImportBatchDto dto = importBatchDtoMapper.fromProductPriceBatch(batch);
+                    priceOrchestrator.overlayMissingProgress(batch, dto);
+                    return dto;
+                })
                 .collect(Collectors.toList());
     }
 
