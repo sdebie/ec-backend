@@ -13,6 +13,7 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 import static org.ecommerce.common.util.CsvImportUtils.isBlank;
+import static org.ecommerce.common.util.CsvImportUtils.splitImageNames;
 
 /**
  * Validates product import staged rows against business rules and detects
@@ -319,16 +320,6 @@ public class ProductImportValidator {
 
         List<String> proposed = splitImageNames(stagedImages);
         return existing.equals(proposed);
-    }
-
-    private List<String> splitImageNames(String imagesValue) {
-        if (isBlank(imagesValue)) {
-            return List.of();
-        }
-        return Arrays.stream(imagesValue.split(","))
-                .map(this::trimToNull)
-                .filter(Objects::nonNull)
-                .toList();
     }
 
     private String extractFileName(String imageUrl) {
