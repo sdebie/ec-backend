@@ -12,6 +12,7 @@ import org.ecommerce.backend.service.import_engine.ProductPriceImportOrchestrato
 import org.ecommerce.common.dto.ProductUploadFormDto;
 import org.ecommerce.backend.service.StaffService;
 import org.ecommerce.common.entity.StaffUserEntity;
+import org.ecommerce.common.enums.ImportSourceTypeEn;
 import org.jboss.logging.Logger;
 
 import java.io.InputStream;
@@ -166,7 +167,7 @@ public class GenericImportResource {
             }
 
             // Create a batch for this Sage import
-            var batch = priceOrchestrator.createPendingBatch("Sage Price Import", admin);
+            var batch = priceOrchestrator.createPendingBatch("Sage Price Import", admin, ImportSourceTypeEn.SAGE);
 
             // Kick off async Sage fetch (pass null inputstream since Sage fetches from API)
             asyncService.stageRowsAsync("sage", null, batch.getId());
@@ -199,7 +200,7 @@ public class GenericImportResource {
             }
 
             // Create a batch for this Sage item import
-            var batch = productOrchestrator.createPendingBatch("Sage Item Import", admin);
+            var batch = productOrchestrator.createPendingBatch("Sage Item Import", admin, ImportSourceTypeEn.SAGE);
 
             // Kick off async Sage item fetch (pass null inputstream since Sage fetches from API)
             asyncService.stageRowsAsync("sage-items", null, batch.getId());

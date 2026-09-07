@@ -8,6 +8,7 @@ import jakarta.ws.rs.NotFoundException;
 import org.ecommerce.common.dto.ImportBatchProcessStatusDto;
 import org.ecommerce.common.dto.ProductPriceComparisonDto;
 import org.ecommerce.common.entity.*;
+import org.ecommerce.common.enums.ImportSourceTypeEn;
 import org.ecommerce.common.enums.PriceTypeEn;
 import org.ecommerce.common.enums.ProductImportValidationStatusEn;
 import org.ecommerce.common.enums.ProductUploadStatusEn;
@@ -27,7 +28,8 @@ import java.util.stream.Collectors;
  * Orchestrates product price imports. Implements both batch operations and legacy service interface.
  */
 @ApplicationScoped
-public class ProductPriceImportOrchestrator extends BaseImportOrchestrator {
+public class ProductPriceImportOrchestrator extends BaseImportOrchestrator
+{
     private static final Logger LOG = Logger.getLogger(ProductPriceImportOrchestrator.class);
 
     @Inject
@@ -93,8 +95,14 @@ public class ProductPriceImportOrchestrator extends BaseImportOrchestrator {
 
     @Transactional
     public ProductPriceImportBatchEntity createPendingBatch(String filename, StaffUserEntity admin) {
+        return createPendingBatch(filename, admin, ImportSourceTypeEn.FILE);
+    }
+
+    @Transactional
+    public ProductPriceImportBatchEntity createPendingBatch(String filename, StaffUserEntity admin, ImportSourceTypeEn sourceType) {
         ProductPriceImportBatchEntity batch = new ProductPriceImportBatchEntity();
         batch.setFilename(filename);
+        batch.setImportSourceTypeEn(sourceType);
         batch.setProductUploadStatusEn(ProductUploadStatusEn.IMPORTING);
         batch.setUploadedBy(admin);
         batch.setTotalRows(0);

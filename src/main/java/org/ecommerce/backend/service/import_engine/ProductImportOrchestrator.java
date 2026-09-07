@@ -8,6 +8,7 @@ import jakarta.ws.rs.NotFoundException;
 import org.ecommerce.backend.csv.ProductImportValidator;
 import org.ecommerce.common.dto.ImportBatchProcessStatusDto;
 import org.ecommerce.common.entity.*;
+import org.ecommerce.common.enums.ImportSourceTypeEn;
 import org.ecommerce.common.enums.ProductImportValidationStatusEn;
 import org.ecommerce.common.repository.ProductImportBatchRepository;
 import org.ecommerce.common.repository.ProductImportStagedRepository;
@@ -21,7 +22,8 @@ import java.util.UUID;
  * Orchestrates product imports. Implements both batch operations and legacy service interface.
  */
 @ApplicationScoped
-public class ProductImportOrchestrator extends BaseImportOrchestrator {
+public class ProductImportOrchestrator extends BaseImportOrchestrator
+{
     private static final Logger LOG = Logger.getLogger(ProductImportOrchestrator.class);
 
     @Inject
@@ -89,8 +91,14 @@ public class ProductImportOrchestrator extends BaseImportOrchestrator {
 
     @Transactional
     public ProductImportBatchEntity createPendingBatch(String filename, StaffUserEntity admin) {
+        return createPendingBatch(filename, admin, ImportSourceTypeEn.FILE);
+    }
+
+    @Transactional
+    public ProductImportBatchEntity createPendingBatch(String filename, StaffUserEntity admin, ImportSourceTypeEn sourceType) {
         ProductImportBatchEntity batch = new ProductImportBatchEntity();
         batch.setFilename(filename);
+        batch.setImportSourceTypeEn(sourceType);
         batch.setProductUploadStatusEn(org.ecommerce.common.enums.ProductUploadStatusEn.IMPORTING);
         batch.setUploadedBy(admin);
         batch.setTotalRows(0);
