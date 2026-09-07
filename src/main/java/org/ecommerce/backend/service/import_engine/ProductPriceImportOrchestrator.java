@@ -1,5 +1,6 @@
 package org.ecommerce.backend.service.import_engine;
 
+import io.quarkus.narayana.jta.QuarkusTransaction;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
@@ -61,16 +62,26 @@ public class ProductPriceImportOrchestrator extends BaseImportOrchestrator {
 
         int limit = 1000;
         while (true) {
-            List<ProductPriceImportStagedEntity> chunk = stagedRepository.findNextUnprocessedByBatchId(batchId, limit);
-            if (chunk.isEmpty()) {
-                break;
+            int processed;
+            try {
+                processed = QuarkusTransaction.requiringNew().call(() -> {
+                    List<ProductPriceImportStagedEntity> chunk = stagedRepository.findNextUnprocessedByBatchId(batchId, limit);
+                    if (chunk.isEmpty()) {
+                        return 0;
+                    }
+                    for (ProductPriceImportStagedEntity staged : chunk) {
+                        if (staged.getValidationStatus() == ProductImportValidationStatusEn.VALID) {
+                            applyPriceRow(staged);
+                        }
+                        staged.setProcessed(true);
+                    }
+                    return chunk.size();
+                });
+            } catch (Exception ex) {
+                throw new RuntimeException("Failed to process price import chunk for batch " + batchId, ex);
             }
-
-            for (ProductPriceImportStagedEntity staged : chunk) {
-                if (staged.getValidationStatus() == ProductImportValidationStatusEn.VALID) {
-                    applyPriceRow(staged);
-                }
-                staged.setProcessed(true);
+            if (processed == 0) {
+                break;
             }
         }
     }
