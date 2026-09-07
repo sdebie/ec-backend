@@ -7,9 +7,11 @@ import jakarta.transaction.Transactional;
 import jakarta.ws.rs.NotFoundException;
 import org.ecommerce.backend.csv.ProductImportValidator;
 import org.ecommerce.common.dto.ImportBatchProcessStatusDto;
+import org.ecommerce.common.dto.ProductImportBatchDto;
 import org.ecommerce.common.entity.*;
 import org.ecommerce.common.enums.ImportSourceTypeEn;
 import org.ecommerce.common.enums.ProductImportValidationStatusEn;
+import org.ecommerce.common.enums.ProductUploadStatusEn;
 import org.ecommerce.common.repository.ProductImportBatchRepository;
 import org.ecommerce.common.repository.ProductImportStagedRepository;
 import org.ecommerce.common.repository.ProductVariantRepository;
@@ -62,19 +64,7 @@ public class ProductImportOrchestrator extends BaseImportOrchestrator
         while (true) {
             int processed;
             try {
-                processed = QuarkusTransaction.requiringNew().call(() -> {
-                    List<ProductImportStagedEntity> chunk = stagedRepository.findNextUnprocessedByBatchId(batchId, limit);
-                    if (chunk.isEmpty()) {
-                        return 0;
-                    }
-                    for (ProductImportStagedEntity staged : chunk) {
-                        if (staged.getValidationStatus() == ProductImportValidationStatusEn.VALID) {
-                            applyProductRow(staged);
-                        }
-                        staged.setProcessed(true);
-                    }
-                    return chunk.size();
-                });
+                processed = QuarkusTransaction.requiringNew().call(() -> processNextChunk(batchId, limit));
             } catch (Exception ex) {
                 throw new RuntimeException("Failed to process product import chunk for batch " + batchId, ex);
             }
@@ -82,6 +72,63 @@ public class ProductImportOrchestrator extends BaseImportOrchestrator
                 break;
             }
         }
+    }
+
+    int processNextChunk(UUID batchId, int limit) {
+        List<ProductImportStagedEntity> chunk = stagedRepository.findNextUnprocessedByBatchId(batchId, limit);
+        if (chunk.isEmpty()) {
+            return 0;
+        }
+        ProductImportBatchEntity batch = batchRepository.findById(batchId);
+        if (batch == null) {
+            throw new NotFoundException("Product batch not found: " + batchId);
+        }
+
+        int processed = 0;
+        int skipped = 0;
+        for (ProductImportStagedEntity staged : chunk) {
+            if (staged.getValidationStatus() == ProductImportValidationStatusEn.VALID) {
+                applyProductRow(staged);
+                processed++;
+            } else {
+                skipped++;
+            }
+            staged.setProcessed(true);
+        }
+        batch.setProcessedRows(nullToZero(batch.getProcessedRows()) + processed);
+        batch.setSkippedRows(nullToZero(batch.getSkippedRows()) + skipped);
+        return chunk.size();
+    }
+
+    public void overlayMissingProgress(ProductImportBatchEntity batch, ProductImportBatchDto dto) {
+        if (!shouldOverlayMissingProgress(batch.getProductUploadStatusEn())) {
+            return;
+        }
+        if (nullToZero(dto.getProcessedRows()) > 0 || nullToZero(dto.getSkippedRows()) > 0) {
+            return;
+        }
+        dto.setProcessedRows((int) stagedRepository.count(
+                "batch.id = ?1 and processed = true and validationStatus = ?2",
+                batch.getId(),
+                ProductImportValidationStatusEn.VALID));
+        dto.setSkippedRows((int) stagedRepository.count(
+                "batch.id = ?1 and processed = true and validationStatus = ?2",
+                batch.getId(),
+                ProductImportValidationStatusEn.INVALID));
+    }
+
+    private static boolean shouldOverlayMissingProgress(ProductUploadStatusEn status) {
+        if (status == null) {
+            return false;
+        }
+        return switch (status) {
+            case PROCESSED, FAILED -> true;
+            case IMPORTING, PENDING, PROCESSING -> false;
+        };
+    }
+
+    private static int nullToZero(Integer value) {
+        return value != null ? value : 0;
     }
 
     @Override
