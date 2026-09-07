@@ -54,7 +54,11 @@ public class ProductImportGraphQLResource {
     public List<ProductImportBatchDto> getProductImportBatches() {
         return productOrchestrator.listAllOrderByCreatedAtDesc()
                 .stream()
-                .map(importBatchDtoMapper::fromProductBatch)
+                .map(batch -> {
+                    ProductImportBatchDto dto = importBatchDtoMapper.fromProductBatch(batch);
+                    productOrchestrator.overlayMissingProgress(batch, dto);
+                    return dto;
+                })
                 .collect(Collectors.toList());
     }
 

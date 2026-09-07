@@ -66,19 +66,7 @@ public class ProductPriceImportOrchestrator extends BaseImportOrchestrator
         while (true) {
             int processed;
             try {
-                processed = QuarkusTransaction.requiringNew().call(() -> {
-                    List<ProductPriceImportStagedEntity> chunk = stagedRepository.findNextUnprocessedByBatchId(batchId, limit);
-                    if (chunk.isEmpty()) {
-                        return 0;
-                    }
-                    for (ProductPriceImportStagedEntity staged : chunk) {
-                        if (staged.getValidationStatus() == ProductImportValidationStatusEn.VALID) {
-                            applyPriceRow(staged);
-                        }
-                        staged.setProcessed(true);
-                    }
-                    return chunk.size();
-                });
+                processed = QuarkusTransaction.requiringNew().call(() -> processNextChunk(batchId, limit));
             } catch (Exception ex) {
                 throw new RuntimeException("Failed to process price import chunk for batch " + batchId, ex);
             }
@@ -86,6 +74,36 @@ public class ProductPriceImportOrchestrator extends BaseImportOrchestrator
                 break;
             }
         }
+    }
+
+    int processNextChunk(UUID batchId, int limit) {
+        List<ProductPriceImportStagedEntity> chunk = stagedRepository.findNextUnprocessedByBatchId(batchId, limit);
+        if (chunk.isEmpty()) {
+            return 0;
+        }
+        ProductPriceImportBatchEntity batch = batchRepository.findById(batchId);
+        if (batch == null) {
+            throw new NotFoundException("Price batch not found: " + batchId);
+        }
+
+        int processed = 0;
+        int skipped = 0;
+        for (ProductPriceImportStagedEntity staged : chunk) {
+            if (staged.getValidationStatus() == ProductImportValidationStatusEn.VALID) {
+                applyPriceRow(staged);
+                processed++;
+            } else {
+                skipped++;
+            }
+            staged.setProcessed(true);
+        }
+        batch.setProcessedRows(nullToZero(batch.getProcessedRows()) + processed);
+        batch.setSkippedRows(nullToZero(batch.getSkippedRows()) + skipped);
+        return chunk.size();
+    }
+
+    private static int nullToZero(Integer value) {
+        return value != null ? value : 0;
     }
 
     @Override
