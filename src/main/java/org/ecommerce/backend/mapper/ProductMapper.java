@@ -113,7 +113,7 @@ public interface ProductMapper
         return productDto;
     }
 
-    default Long calculateSaleDaysRemaining(VariantPricesEntity variantPricesEntity)
+    default Integer calculateSaleDaysRemaining(VariantPricesEntity variantPricesEntity)
     {
         if (variantPricesEntity == null) {
             return null;

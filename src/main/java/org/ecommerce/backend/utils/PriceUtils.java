@@ -55,14 +55,14 @@ public class PriceUtils
      * {@code null} so the client renders no countdown at all rather than a zero.
      * <p>
      * Single owner of the rule — catalogue list items, product detail, and wishlist
-     * hydration all resolve the countdown here, so no surface can drift from another.
+     * items all resolve the countdown here, so no surface can drift from another.
      *
      * @param priceType the tier the price belongs to
      * @param endDate   when the sale ends, {@code null} for open-ended
      * @param now       the clock the countdown is measured against
      * @return days remaining, or {@code null} when no countdown applies
      */
-    public static Long saleDaysRemaining(PriceTypeEn priceType, Instant endDate, Instant now) {
+    public static Integer saleDaysRemaining(PriceTypeEn priceType, Instant endDate, Instant now) {
         if (priceType == null || endDate == null) {
             return null;
         }
@@ -70,7 +70,13 @@ public class PriceUtils
             return null;
         }
         long daysRemaining = ChronoUnit.DAYS.between(now, endDate);
-        return Math.max(daysRemaining, 0L);
+        if (daysRemaining <= 0L) {
+            return 0;
+        }
+        if (daysRemaining > Integer.MAX_VALUE) {
+            return Integer.MAX_VALUE;
+        }
+        return (int) daysRemaining;
     }
 
     private static boolean isWithinActiveWindow(VariantPricesEntity price, Instant now) {

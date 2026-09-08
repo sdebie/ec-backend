@@ -18,7 +18,7 @@ import static org.mapstruct.ReportingPolicy.ERROR;
  * Single owner of the entity → {@link VariantPriceDto} mapping.
  * <p>
  * Every surface that renders a price tier maps through here — catalogue list items and
- * wishlist hydration alike — so a change cannot reach one surface and miss the other.
+ * wishlist items alike — so a change cannot reach one surface and miss the other.
  * The sale-countdown rule itself lives in {@link PriceUtils}, shared with
  * {@link ProductMapper}, because that mapper derives it from its own clock.
  * <p>
