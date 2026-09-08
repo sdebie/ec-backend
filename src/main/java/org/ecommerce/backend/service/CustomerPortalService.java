@@ -5,14 +5,12 @@ import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.core.Response;
-import org.ecommerce.backend.mapper.CustomerAddressMapper;
+import org.ecommerce.backend.mapper.CustomerProfileMapper;
 import org.ecommerce.backend.utils.CustomerPasswordHashUtil;
 import org.ecommerce.backend.utils.PasswordStrengthValidator;
-import org.ecommerce.common.dto.AddressDto;
 import org.ecommerce.common.dto.CustomerProfileDto;
 import org.ecommerce.common.entity.CustomerEntity;
 import org.ecommerce.common.entity.UserEntity;
-import org.ecommerce.common.enums.AddressTypeEn;
 import org.ecommerce.common.repository.CustomerRepository;
 import org.ecommerce.common.repository.UserRepository;
 import org.jboss.logging.Logger;
@@ -26,7 +24,7 @@ import java.util.Map;
 public class CustomerPortalService
 {
     @Inject
-    CustomerAddressMapper customerAddressMapper;
+    CustomerProfileMapper customerProfileMapper;
 
     @Inject
     CustomerRepository customerRepository;
@@ -37,9 +35,9 @@ public class CustomerPortalService
     private static final Logger LOG = Logger.getLogger(CustomerPortalService.class);
 
     /**
-     * Resolves the customer by email and maps to a CustomerProfileDto — the same shape
-     * {@code CustomerResource}'s {@code /profile} endpoint returns. {@code additionalInfo}
-     * is left unset here, matching {@code /profile}'s own behaviour: nothing populates it yet.
+     * Resolves the customer by email and maps through {@link CustomerProfileMapper}.
+     * Portal GET and PATCH {@code /profile} both return this so the shopper never sees
+     * two shapes of the same record.
      *
      * @param email the customer's email (from JWT subject)
      * @return the fully mapped portal profile DTO
@@ -56,26 +54,7 @@ public class CustomerPortalService
                             .build());
         }
 
-        CustomerProfileDto dto = new CustomerProfileDto();
-        dto.setEmail(customer.getUser() != null ? customer.getUser().getEmail() : null);
-        dto.setFirstName(customer.getFirstName());
-        dto.setLastName(customer.getLastName());
-        dto.setPhone(customer.getPhone());
-
-        // Map shopper type
-        dto.setShopperType(customer.getShopperType() != null ? customer.getShopperType().name() : "GUEST");
-        dto.setStatus(customer.getStatus() != null ? customer.getStatus().name() : null);
-
-        // Map addresses
-        dto.setPhysicalAddress(mapAddress(customer, AddressTypeEn.PHYSICAL));
-        dto.setPostalAddress(mapAddress(customer, AddressTypeEn.POSTAL));
-
-        // Determine hasPassword
-        dto.setHasPassword(customer.getUser() != null
-                && customer.getUser().getPasswordHash() != null
-                && !customer.getUser().getPasswordHash().isEmpty());
-
-        return dto;
+        return customerProfileMapper.toProfileDto(customer);
     }
 
     /**
@@ -131,18 +110,6 @@ public class CustomerPortalService
         // Hash and persist
         user.setPasswordHash(CustomerPasswordHashUtil.hash(newPassword));
         userRepository.persist(user);
-    }
-
-    // ── Private helpers ──────────────────────────────────────────────────────
-
-    private AddressDto mapAddress(CustomerEntity customer, AddressTypeEn type)
-    {
-        return customer.getAddresses()
-                .stream()
-                .filter(a -> a.getAddressType() == type)
-                .findFirst()
-                .map(customerAddressMapper::toAddressDto)
-                .orElse(null);
     }
 
 }

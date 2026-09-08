@@ -16,7 +16,6 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.eclipse.microprofile.jwt.JsonWebToken;
 import org.ecommerce.backend.exception.InvalidPasswordResetCodeException;
 import org.ecommerce.backend.exception.PasswordResetLockedException;
-import org.ecommerce.backend.mapper.CustomerAddressMapper;
 import org.ecommerce.backend.service.CustomerAddressService;
 import org.ecommerce.backend.service.CustomerAuthService;
 import org.ecommerce.backend.service.CustomerPasswordResetService;
@@ -26,7 +25,6 @@ import org.ecommerce.backend.utils.CustomerPasswordHashUtil;
 import org.ecommerce.backend.utils.PasswordStrengthValidator;
 import org.ecommerce.common.dto.AddressDto;
 import org.ecommerce.common.dto.CustomerLoginResponseDto;
-import org.ecommerce.common.dto.CustomerProfileDto;
 import org.ecommerce.common.dto.PasswordChangeRequestDto;
 import org.ecommerce.common.entity.CustomerEntity;
 import org.ecommerce.common.entity.UserEntity;
@@ -58,9 +56,6 @@ public class CustomerResource
 
     @Inject
     CustomerAddressService customerAddressService;
-
-    @Inject
-    CustomerAddressMapper customerAddressMapper;
 
     @Inject
     JsonWebToken jwt;
@@ -397,6 +392,7 @@ public class CustomerResource
     /**
      * Authenticated profile update — resolves user from jwt.getSubject().
      * Updates name/phone/addresses only. Ignores any password or email in the body.
+     * The response is the portal read path so GET and PATCH cannot drift.
      */
     @PATCH
     @Path("/profile")
@@ -424,7 +420,7 @@ public class CustomerResource
         customerAddressService.upsertAddress(ce, AddressTypeEn.PHYSICAL, req.physicalAddress);
         customerAddressService.upsertAddress(ce, AddressTypeEn.POSTAL, req.postalAddress);
 
-        return Response.ok(toProfileDto(ce)).build();
+        return Response.ok(customerPortalService.getPortalProfile(email)).build();
     }
 
     @PATCH
@@ -455,25 +451,6 @@ public class CustomerResource
         dto.setLastName(ce.getLastName());
         dto.setShopperType(ce.getShopperType() != null ? ce.getShopperType().name() : null);
         dto.setStatus(ce.getStatus() != null ? ce.getStatus().name() : null);
-        return dto;
-    }
-
-    private CustomerProfileDto toProfileDto(CustomerEntity ce)
-    {
-        CustomerProfileDto dto = new CustomerProfileDto();
-        dto.setEmail(ce.getUser() != null ? ce.getUser().getEmail() : null);
-        dto.setFirstName(ce.getFirstName());
-        dto.setLastName(ce.getLastName());
-        dto.setPhone(ce.getPhone());
-
-        dto.setPhysicalAddress(customerAddressMapper.toAddressDto(ce.getPhysicalAddress()));
-        dto.setPostalAddress(customerAddressMapper.toAddressDto(ce.getPostalAddress()));
-
-        if (ce.getShopperType() != null) dto.setShopperType(ce.getShopperType().name());
-        if (ce.getStatus() != null) dto.setStatus(ce.getStatus().name());
-        dto.setHasPassword(ce.getUser() != null
-                && ce.getUser().getPasswordHash() != null
-                && !ce.getUser().getPasswordHash().isBlank());
         return dto;
     }
 

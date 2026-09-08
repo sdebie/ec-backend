@@ -18,7 +18,7 @@ import static org.mapstruct.NullValuePropertyMappingStrategy.SET_TO_NULL;
 
 /**
  * Maps customers into the admin-facing shapes — the list staff browse and the detail they
- * open. The shopper's own view of themselves is {@code CustomerPortalService}'s job.
+ * open. The shopper's own view of themselves is {@code CustomerProfileMapper}'s job.
  * <p>
  * Pure — no database access. The wholesale application and recent orders are loaded by
  * {@code CustomerAdminService} and passed in as sources; the nested application shape is

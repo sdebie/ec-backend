@@ -13,8 +13,9 @@ import static org.mapstruct.NullValuePropertyMappingStrategy.SET_TO_NULL;
 /**
  * Maps a stored address row to the portal's address shape.
  * <p>
- * Selecting <em>which</em> of a customer's addresses to map is the caller's decision —
- * this only converts the row it is handed.
+ * Selecting <em>which</em> of a customer's addresses to map is the caller's decision
+ * ({@link CustomerProfileMapper} uses the entity's typed getters) — this only converts
+ * the row it is handed.
  */
 @Mapper(componentModel = "jakarta-cdi", unmappedTargetPolicy = ERROR, nullValueMappingStrategy = RETURN_NULL,
         nullValuePropertyMappingStrategy = SET_TO_NULL,
