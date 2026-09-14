@@ -11,14 +11,20 @@ import org.ecommerce.common.dto.ProductImportBatchDto;
 import org.ecommerce.common.entity.*;
 import org.ecommerce.common.enums.ImportSourceTypeEn;
 import org.ecommerce.common.enums.ProductImportValidationStatusEn;
+import org.ecommerce.common.enums.ProductStatusEn;
+import org.ecommerce.common.enums.ProductTypeEn;
 import org.ecommerce.common.enums.ProductUploadStatusEn;
 import org.ecommerce.common.repository.ProductImportBatchRepository;
 import org.ecommerce.common.repository.ProductImportStagedRepository;
+import org.ecommerce.common.repository.ProductRepository;
 import org.ecommerce.common.repository.ProductVariantRepository;
 import org.jboss.logging.Logger;
 
 import java.util.List;
 import java.util.UUID;
+
+import static org.ecommerce.common.util.CsvImportUtils.normalizeSlug;
+import static org.ecommerce.common.util.CsvImportUtils.trimToNull;
 
 /**
  * Orchestrates product imports. Implements both batch operations and legacy service interface.
@@ -39,6 +45,9 @@ public class ProductImportOrchestrator extends BaseImportOrchestrator
 
     @Inject
     ProductImportValidator validator;
+
+    @Inject
+    ProductRepository productRepository;
 
     @Override
     protected Logger logger() {
@@ -199,14 +208,31 @@ public class ProductImportOrchestrator extends BaseImportOrchestrator
         return stagedRepository.findByBatchId(batchId);
     }
 
+    ProductVariantEntity saveProductAndVariant(ProductImportStagedEntity staged) {
+        ProductEntity product = new ProductEntity();
+        product.setSlug(normalizeSlug(staged.getProductSlug()));
+        product.setName(staged.getName());
+        product.setDescription(staged.getDescription());
+        product.setShortDescription(staged.getShortDescription());
+        product.setProductType(ProductTypeEn.VARIABLE);
+        product.setStatus(ProductStatusEn.ACTIVE);
+        productRepository.persist(product);
+
+        ProductVariantEntity variant = new ProductVariantEntity();
+        variant.setProduct(product);
+        variant.setSku(staged.getSku());
+        variant.setStockQuantity(staged.getStock() != null ? staged.getStock() : 0);
+        variant.setAttributesJson(trimToNull(staged.getAttributes()));
+        variant.setStatus(ProductStatusEn.ACTIVE);
+        variantRepository.persist(variant);
+
+        return variant;
+    }
+
     private void applyProductRow(ProductImportStagedEntity staged) {
         ProductVariantEntity variant = variantRepository.findBySku(staged.getSku());
         if (variant == null) {
-            LOG.warnf("Skipped SKU '%s': variant no longer exists", staged.getSku());
-            return;
+            saveProductAndVariant(staged);
         }
-
-        // Apply the product data to the variant
-        // (Implementation depends on what fields ProductImportStagedEntity has)
     }
 }
