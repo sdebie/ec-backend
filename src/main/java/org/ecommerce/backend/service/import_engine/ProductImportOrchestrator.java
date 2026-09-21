@@ -6,19 +6,21 @@ import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import jakarta.ws.rs.NotFoundException;
 import org.ecommerce.backend.csv.ProductImportValidator;
+import org.ecommerce.backend.service.ImageService;
 import org.ecommerce.common.dto.ImportBatchProcessStatusDto;
 import org.ecommerce.common.dto.ProductImportBatchDto;
 import org.ecommerce.common.entity.*;
 import org.ecommerce.common.enums.ImportSourceTypeEn;
 import org.ecommerce.common.enums.ProductImportValidationStatusEn;
 import org.ecommerce.common.enums.ProductUploadStatusEn;
-import org.ecommerce.common.repository.ProductImportBatchRepository;
-import org.ecommerce.common.repository.ProductImportStagedRepository;
-import org.ecommerce.common.repository.ProductVariantRepository;
+import org.ecommerce.common.repository.*;
 import org.jboss.logging.Logger;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+
+import static org.ecommerce.common.util.CsvImportUtils.*;
 
 /**
  * Orchestrates product imports. Implements both batch operations and legacy service interface.
@@ -40,6 +42,21 @@ public class ProductImportOrchestrator extends BaseImportOrchestrator
     @Inject
     ProductImportValidator validator;
 
+    @Inject
+    CategoryRepository categoryRepository;
+
+    @Inject
+    BrandRepository brandRepository;
+
+    @Inject
+    ProductRepository productRepository;
+
+    @Inject
+    ProductImageRepository productImageRepository;
+
+    @Inject
+    ImageService imageService;
+
     @Override
     protected Logger logger() {
         return LOG;
@@ -60,7 +77,7 @@ public class ProductImportOrchestrator extends BaseImportOrchestrator
         // as the strategy is mostly for parsing/staging. This can be extended.
         LOG.debugf("Processing product batch: %s", batchId);
 
-        int limit = 1000;
+        int limit = 100;
         while (true) {
             int processed;
             try {
@@ -97,6 +114,7 @@ public class ProductImportOrchestrator extends BaseImportOrchestrator
         }
         batch.setProcessedRows(nullToZero(batch.getProcessedRows()) + processed);
         batch.setSkippedRows(nullToZero(batch.getSkippedRows()) + skipped);
+        batchRepository.persist(batch);
         return chunk.size();
     }
 
@@ -200,13 +218,98 @@ public class ProductImportOrchestrator extends BaseImportOrchestrator
     }
 
     private void applyProductRow(ProductImportStagedEntity staged) {
+        List<CategoryEntity> categories = new ArrayList<>();
+        BrandEntity brand = null;
+
+        if (!isBlank(staged.getCategorySlug())) {
+            for (String slug : splitCategorySlugs(staged.getCategorySlug())) {
+                CategoryEntity category = categoryRepository.findBySlugIgnoreCase(slug);
+                if (category != null) {
+                    categories.add(category);
+                }
+            }
+        }
+        if (!isBlank(staged.getBrandSlug())) {
+            brand = brandRepository.findBySlugIgnoreCase(staged.getBrandSlug());
+        }
+
         ProductVariantEntity variant = variantRepository.findBySku(staged.getSku());
-        if (variant == null) {
-            LOG.warnf("Skipped SKU '%s': variant no longer exists", staged.getSku());
+        ProductEntity product;
+
+        if (variant != null) {
+            product = variant.getProduct();
+        } else {
+            product = findExistingProduct(staged.getProductSlug(), staged.getName());
+            if (product == null) {
+                product = new ProductEntity();
+                product.setSlug(normalizeSlug(staged.getProductSlug()));
+                product.setName(staged.getName());
+                product.setDescription(staged.getDescription());
+                product.setShortDescription(staged.getShortDescription());
+                product.setProductType(org.ecommerce.common.enums.ProductTypeEn.VARIABLE);
+                product.setStatus(org.ecommerce.common.enums.ProductStatusEn.ACTIVE);
+                productRepository.persist(product);
+            }
+
+            variant = new ProductVariantEntity();
+            variant.setProduct(product);
+            variant.setSku(staged.getSku());
+            variant.setStatus(org.ecommerce.common.enums.ProductStatusEn.ACTIVE);
+            variantRepository.persist(variant);
+        }
+
+        product.setName(staged.getName().trim());
+        product.setDescription(staged.getDescription());
+        product.setShortDescription(staged.getShortDescription());
+
+        if (!categories.isEmpty()) {
+            product.getCategories().clear();
+            product.getCategories().addAll(categories);
+        }
+        if (brand != null) {
+            product.setBrand(brand);
+        }
+
+        int variantCount = variantRepository.countByProductId(product.getId());
+        product.setProductType(variantCount == 1 ? org.ecommerce.common.enums.ProductTypeEn.SIMPLE : org.ecommerce.common.enums.ProductTypeEn.VARIABLE);
+
+        variant.setStockQuantity(staged.getStock() != null ? staged.getStock() : 0);
+        variant.setAttributesJson(trimToNull(staged.getAttributes()));
+
+        upsertVariantImages(variant, staged.getImages());
+    }
+
+    private void upsertVariantImages(ProductVariantEntity variant, String stagedImages) {
+        List<String> imageNames = splitImageNames(stagedImages);
+        if (imageNames.isEmpty()) {
+            imageService.linkExistingBulkImagesForVariant(variant);
             return;
         }
 
-        // Apply the product data to the variant
-        // (Implementation depends on what fields ProductImportStagedEntity has)
+        productImageRepository.deleteByVariantId(variant.getId());
+        for (int i = 0; i < imageNames.size(); i++) {
+            ProductImageEntity image = new ProductImageEntity();
+            image.setProductVariant(variant);
+            image.setImageUrl(imageNames.get(i));
+            image.setSortOrder(i);
+            image.setIsFeatured(i == 0);
+            productImageRepository.persist(image);
+        }
+    }
+
+    private ProductEntity findExistingProduct(String productSlug, String productName) {
+        String normalizedSlug = normalizeSlug(productSlug);
+        if (normalizedSlug != null) {
+            ProductEntity slugMatch = productRepository.findBySlugIgnoreCase(normalizedSlug);
+            if (slugMatch != null) {
+                return slugMatch;
+            }
+        }
+
+        if (isBlank(productName)) {
+            return null;
+        }
+
+        return productRepository.findByNameIgnoreCase(productName);
     }
 }

@@ -63,7 +63,7 @@ public class ProductPriceImportOrchestrator extends BaseImportOrchestrator
     protected void processStagedRowsImpl(UUID batchId, ImportStrategy strategy) {
         LOG.debugf("Processing price batch: %s", batchId);
 
-        int limit = 1000;
+        int limit = 100;
         while (true) {
             int processed;
             try {
@@ -100,6 +100,7 @@ public class ProductPriceImportOrchestrator extends BaseImportOrchestrator
         }
         batch.setProcessedRows(nullToZero(batch.getProcessedRows()) + processed);
         batch.setSkippedRows(nullToZero(batch.getSkippedRows()) + skipped);
+        batchRepository.persist(batch);
         return chunk.size();
     }
 
