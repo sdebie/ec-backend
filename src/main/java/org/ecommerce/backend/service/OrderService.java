@@ -8,6 +8,7 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.eclipse.microprofile.graphql.GraphQLException;
 import org.ecommerce.backend.exception.IdempotencyConflictException;
 import org.ecommerce.backend.exception.UnavailableVariantsException;
+import org.ecommerce.backend.exception.QuoteOnlyItemsException;
 import org.ecommerce.backend.mapper.OrderMapper;
 import org.ecommerce.common.dto.*;
 import org.ecommerce.common.entity.*;
@@ -113,6 +114,7 @@ public class OrderService
         }
 
         List<String> unavailableVariantIds = new ArrayList<>();
+        List<String> quoteOnlyVariantIds = new ArrayList<>();
         List<OrderCreationItemDto> validItems = new ArrayList<>();
         List<ProductVariantEntity> validVariants = new ArrayList<>();
 
@@ -146,6 +148,12 @@ public class OrderService
                 continue;
             }
 
+            BigDecimal activePrice = pricingService.getActivePrice(variant.getId(), customerTier);
+            if (activePrice == null || activePrice.compareTo(BigDecimal.ZERO) <= 0) {
+                quoteOnlyVariantIds.add(item.getVariantId());
+                continue;
+            }
+
             validItems.add(item);
             validVariants.add(variant);
         }
@@ -153,6 +161,10 @@ public class OrderService
         // 2. Bail out if any variants are unavailable
         if (!unavailableVariantIds.isEmpty()) {
             throw new UnavailableVariantsException(unavailableVariantIds);
+        }
+
+        if (!quoteOnlyVariantIds.isEmpty()) {
+            throw new QuoteOnlyItemsException(quoteOnlyVariantIds);
         }
 
         // Nothing above can reach this with an empty list — every line either lands in

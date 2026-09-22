@@ -10,6 +10,7 @@ import jakarta.ws.rs.core.Response;
 import org.eclipse.microprofile.jwt.JsonWebToken;
 import org.ecommerce.backend.exception.IdempotencyConflictException;
 import org.ecommerce.backend.exception.UnavailableVariantsException;
+import org.ecommerce.backend.exception.QuoteOnlyItemsException;
 import org.ecommerce.backend.service.CustomerAuthService;
 import org.ecommerce.backend.service.OrderNotificationService;
 import org.ecommerce.backend.service.OrderService;
@@ -138,6 +139,10 @@ public class OrderResource {
             }
             return Response.status(422)
                     .entity(Map.of("unavailableVariantIds", e.getUnavailableVariantIds()))
+                    .build();
+        } catch (QuoteOnlyItemsException e) {
+            return Response.status(422)
+                    .entity(Map.of("quoteOnlyVariantIds", e.getQuoteOnlyVariantIds()))
                     .build();
         } catch (IllegalArgumentException e) {
             return Response.status(Response.Status.BAD_REQUEST).entity(e.getMessage()).build();
