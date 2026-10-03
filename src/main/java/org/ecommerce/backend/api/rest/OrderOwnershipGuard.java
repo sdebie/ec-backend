@@ -18,7 +18,7 @@ import org.jboss.logging.Logger;
  * if and only if the caller presents a valid capability token bound to the order, or the
  * order belongs to a customer and the caller presents that customer's JWT. Order status is
  * never an input to this decision — reads stay available at any status, and writes are
- * separately bounded by {@code OrderService.applyTransition}.
+ * separately bounded by {@code OrderManagementService.changeOrderStatus}.
  * <p>
  * Callers report a refusal as "not found" rather than "forbidden", so the endpoint cannot be
  * used to work out which order IDs exist.

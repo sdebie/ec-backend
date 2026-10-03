@@ -5,9 +5,9 @@ import io.quarkus.scheduler.Scheduled;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.ecommerce.backend.service.OrderManagementService;
 import org.ecommerce.backend.service.OrderService;
 import org.ecommerce.backend.service.StatusTransition;
-import org.ecommerce.backend.service.TransitionOutcome;
 import org.ecommerce.common.entity.OrderEntity;
 import org.ecommerce.common.enums.OrderStatusEn;
 import org.ecommerce.common.repository.OrderRepository;
@@ -30,7 +30,7 @@ import java.util.UUID;
  * IN_STORE_PAYMENT is excluded too — a shopper who came to the shop hasn't abandoned
  * anything. PAYMENT_FAILED stays reclaimable on purpose, so a retry has something to
  * buy if the retry never comes. Staff cancellation recovers stock the same way, via
- * {@link OrderService#applyTransition}, so a hand-cancelled order never needs this sweep.
+ * {@link OrderManagementService#changeOrderStatus}, so a hand-cancelled order never needs this sweep.
  * <p>
  * Each order commits in its own transaction rather than one sweep-wide transaction,
  * which would let one bad row roll back every release already done that tick, hold a
@@ -54,7 +54,7 @@ public class StockRecoveryJob
     int batchSize;
 
     @Inject
-    OrderService orderService;
+    OrderManagementService orderManagement;
 
     @Inject
     OrderRepository orderRepository;
@@ -142,11 +142,11 @@ public class StockRecoveryJob
             return false;
         }
 
-        TransitionOutcome outcome = orderService.applyTransition(order,
+        boolean changed = orderManagement.changeOrderStatus(order,
                 StatusTransition.system(claimedFrom, OrderStatusEn.SYSTEM_CANCELED,
                         "Automatically cancelled: checkout was not completed within the stock hold window"));
 
-        if (!outcome.claimed()) {
+        if (!changed) {
             LOG.debugf("Skipped releasing order %s: its status changed concurrently", orderId);
             return false;
         }

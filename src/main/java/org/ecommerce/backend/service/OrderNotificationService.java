@@ -16,7 +16,7 @@ import java.math.BigDecimal;
  * Order emails.
  * <p>
  * <b>Nothing here decides whether to send.</b> That is
- * {@link OrderStatusEn#customerNotification()}, and only {@code applyTransition} acts on
+ * {@link OrderStatusEn#customerNotification()}, and only {@code changeOrderStatus} acts on
  * it — a call site that sends its own email instead of going through here bypasses that
  * single source of truth, and a status with nothing wired to it ends up notifying nobody
  * with nothing to catch it.
@@ -81,7 +81,7 @@ public class OrderNotificationService
     /**
      * Sends whatever email this status calls for, or none.
      * <p>
-     * Called only from {@code OrderService.applyTransition}, after the status claim is
+     * Called only from {@code OrderManagementService.changeOrderStatus}, after the status claim is
      * won — so an email is never sent for a transition that lost a race, and every writer
      * gets the same behaviour without asking for it.
      */

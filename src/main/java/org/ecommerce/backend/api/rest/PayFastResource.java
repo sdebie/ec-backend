@@ -7,10 +7,10 @@ import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.MultivaluedMap;
 import jakarta.ws.rs.core.Response;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.ecommerce.backend.service.OrderManagementService;
 import org.ecommerce.backend.service.OrderNotificationService;
 import org.ecommerce.backend.service.OrderService;
 import org.ecommerce.backend.service.StatusTransition;
-import org.ecommerce.backend.service.TransitionOutcome;
 import org.ecommerce.backend.service.payfast.HtmlFormField;
 import org.ecommerce.backend.service.payfast.PayFastService;
 import org.ecommerce.backend.utils.ClientIpUtils;
@@ -41,6 +41,9 @@ public class PayFastResource
 
     @Inject
     OrderService orderService;
+
+    @Inject
+    OrderManagementService orderManagement;
 
     @Inject
     OrderOwnershipGuard ownershipGuard;
@@ -117,9 +120,9 @@ public class PayFastResource
         // back and resubmitted, so it stays put rather than erroring.
         OrderStatusEn from = quote.getStatus();
         if (from != OrderStatusEn.PENDING_PAYMENT) {
-            // Checked before calling applyTransition, not after: this call site names
+            // Checked before calling changeOrderStatus, not after: this call site names
             // its own live status as expectedFrom, so the mismatch check inside
-            // applyTransition can never disagree with itself and canSystemTransitionTo
+            // changeOrderStatus can never disagree with itself and canSystemTransitionTo
             // is the only thing left to say no — and it throws rather than reporting a
             // lost claim. A terminal order (DELIVERED, SYSTEM_CANCELED, REFUNDED, COLLECTED, ...) must never
             // reach that throw from a REST method with nothing to catch it.
@@ -131,8 +134,8 @@ public class PayFastResource
                         .build();
             }
 
-            TransitionOutcome outcome = orderService.applyTransition(quote, StatusTransition.system(from, OrderStatusEn.PENDING_PAYMENT, "Payment started"));
-            if (!outcome.claimed()) {
+            boolean changed = orderManagement.changeOrderStatus(quote, StatusTransition.system(from, OrderStatusEn.PENDING_PAYMENT, "Payment started"));
+            if (!changed) {
                 LOG.warnf("Could not start payment for order %s: it is %s", orderUuid, quote.getStatus());
                 return Response
                         .status(Response.Status.CONFLICT)
@@ -244,10 +247,10 @@ public class PayFastResource
                         // Naming PENDING_PAYMENT as the expected status makes that a lost
                         // claim rather than an exception, and the claim itself is atomic —
                         // so a payment can never overwrite a decision another writer made.
-                        TransitionOutcome outcome = orderService.applyTransition(order, StatusTransition.system(OrderStatusEn.PENDING_PAYMENT, OrderStatusEn.PAID, "Payment confirmed by PayFast"));
+                        boolean changed = orderManagement.changeOrderStatus(order, StatusTransition.system(OrderStatusEn.PENDING_PAYMENT, OrderStatusEn.PAID, "Payment confirmed by PayFast"));
 
-                        if (outcome.claimed()) {
-                            // The receipt is sent by applyTransition, from the status itself.
+                        if (changed) {
+                            // The receipt is sent by changeOrderStatus, from the status itself.
                             LOG.debug("Updated Order " + orderId + " to PAID");
                         } else {
                             handlePaidButNoLongerPending(orderId, order, amountGross);
@@ -293,9 +296,9 @@ public class PayFastResource
             return;
         }
 
-        TransitionOutcome outcome = orderService.applyTransition(order, StatusTransition.system(OrderStatusEn.PENDING_PAYMENT, OrderStatusEn.PAYMENT_FAILED, "Payment declined by PayFast"));
+        boolean changed = orderManagement.changeOrderStatus(order, StatusTransition.system(OrderStatusEn.PENDING_PAYMENT, OrderStatusEn.PAYMENT_FAILED, "Payment declined by PayFast"));
 
-        if (outcome.claimed()) {
+        if (changed) {
             LOG.debug("Order " + orderId + " marked PAYMENT_FAILED; its stock stays reserved for a retry");
         } else {
             LOG.debug("Ignoring failed-payment ITN for order " + orderId + ": it is " + order.getStatus());

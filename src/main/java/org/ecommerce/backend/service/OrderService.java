@@ -5,7 +5,6 @@ import jakarta.inject.Inject;
 import jakarta.persistence.PersistenceException;
 import jakarta.transaction.Transactional;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
-import org.eclipse.microprofile.graphql.GraphQLException;
 import org.ecommerce.backend.exception.IdempotencyConflictException;
 import org.ecommerce.backend.exception.UnavailableVariantsException;
 import org.ecommerce.backend.exception.QuoteOnlyItemsException;
@@ -15,7 +14,6 @@ import org.ecommerce.common.entity.*;
 import org.ecommerce.common.enums.CustomerTypeEn;
 import org.ecommerce.common.enums.OrderStatusEn;
 import org.ecommerce.common.enums.ProductStatusEn;
-import org.ecommerce.common.enums.StockEffect;
 import org.ecommerce.common.query.FilterRequest;
 import org.ecommerce.common.query.PageRequest;
 import org.ecommerce.common.repository.*;
@@ -33,9 +31,6 @@ import java.util.stream.Collectors;
 @ApplicationScoped
 public class OrderService
 {
-    @Inject
-    OrderNotificationService orderNotificationService;
-
     @Inject
     OrderRepository orderRepository;
 
@@ -376,121 +371,6 @@ public class OrderService
     }
 
     /**
-     * Moves one order from the status the caller read to a new one, and applies
-     * everything that transition entails — the stock movement and the timeline
-     * entry — as a single unit.
-     * <p>
-     * <b>This is the only way an order's status changes.</b> Every writer goes
-     * through here: checkout's pay-at-collection confirmation, the PayFast ITN
-     * handler, the abandoned-order sweep and the staff mutation. Before that they
-     * each hardcoded their own from/to pair and decided about stock for themselves,
-     * so the field was guarded atomically while its side effects were coordinated
-     * only by convention — a new writer could claim a status correctly and still
-     * strand an order's goods, with nothing to catch it.
-     * <p>
-     * The status the caller already read is the status claimed. The claim is an
-     * atomic conditional UPDATE, so losing it means another writer moved the order
-     * in between; that is reported as an outcome rather than thrown, because what
-     * to do about it differs per caller.
-     * <p>
-     * Ordering matters: nothing is written until the claim is won. Since every
-     * stock-returning status is terminal, and a conditional UPDATE admits exactly
-     * one winner, the loser of a race touches no stock and the restore happens
-     * exactly once — with no version column and no double-restore guard.
-     * <p>
-     * Caller must be in a transaction.
-     *
-     * @throws IllegalArgumentException if the transition is not one this source may make.
-     *                                  Whitelisted in {@code show-runtime-exception-message},
-     *                                  so the message reaches the admin UI intact.
-     */
-    public TransitionOutcome applyTransition(OrderEntity order, StatusTransition transition) {
-        OrderStatusEn from = order.getStatus();
-        OrderStatusEn to = transition.to();
-
-        // Checked before legality, and reported rather than thrown. A system writer
-        // names the step it acts on, so finding the order elsewhere means another
-        // writer reached it first — the expected outcome of a race, not a bug. The
-        // conditional UPDATE below still does the real work; this only keeps a lost
-        // race from surfacing as an illegal-transition error.
-        if (transition.expectedFrom() != null && from != transition.expectedFrom()) {
-            LOG.debugf("Order %s is %s, not the expected %s; another writer moved it first",
-                    order.getId(), from, transition.expectedFrom());
-            return TransitionOutcome.lost(from, to);
-        }
-
-        boolean permitted = transition.source() == TransitionSource.STAFF
-                ? from != null && from.canTransitionTo(to)
-                : from != null && from.canSystemTransitionTo(to);
-        if (!permitted) {
-            throw new IllegalArgumentException("Cannot move an order from " + from + " to " + to);
-        }
-
-        long claimed = orderRepository.update("status = ?1 where id = ?2 and status = ?3", to, order.getId(), from);
-        if (claimed == 0) {
-            LOG.debugf("Lost the status claim on order %s: it is no longer %s", order.getId(), from);
-            return TransitionOutcome.lost(from, to);
-        }
-        order.setStatus(to);
-
-        // The destination decides, on its own, with no input from the caller. A refund
-        // moves no stock: whether the goods came back is a physical fact the server does
-        // not have, and putting them back on sale is the returns feature.
-        boolean stockReturned = to.stockEffect() == StockEffect.RESTORE;
-        if (stockReturned) {
-            restoreStock(order);
-        }
-
-        orderStatusHistoryRepository.record(order, to,
-                transitionComment(from, transition), transition.changedBy());
-
-        // Last, and only once the claim is won: the shopper is never told about a
-        // transition that lost a race. Which email — or none — is a property of the
-        // destination status, so no writer can forget one or send the wrong one.
-        orderNotificationService.sendStatusNotification(order, to);
-
-        return TransitionOutcome.won(from, to);
-    }
-
-    /**
-     * The timeline entry for a transition: what a system writer supplied, or for a
-     * staff move the transition itself. Stock movement is not spelled out — it follows
-     * from the target status alone, so saying so would be noise on every row.
-     */
-    private String transitionComment(OrderStatusEn from, StatusTransition transition) {
-        return transition.comment() != null
-                ? transition.comment()
-                : from + " → " + transition.to();
-    }
-
-    /**
-     * Returns an order's stock to inventory — the inverse of {@link #reserveStock},
-     * which consumes it the moment an order reaches CREATED, before payment. Every
-     * path that ends an order before its goods are dispatched must give that stock
-     * back, or it is held by an order that will never ship and is lost for good.
-     * <p>
-     * Private on purpose. The exactly-once guarantee rests entirely on the caller
-     * having won an atomic status claim first, and that precondition used to be
-     * enforced by a sentence in a comment on a public method — so any new caller
-     * that skipped the claim would double-restore, inflating stock invisibly until
-     * an oversell. {@link #applyTransition} is now the only thing that can reach
-     * this, and it always claims first.
-     */
-    private void restoreStock(OrderEntity order) {
-        if (order == null || order.getItems() == null) {
-            return;
-        }
-
-        for (OrderItemEntity item : order.getItems()) {
-            if (item.getVariant() == null || item.getQuantity() == null) {
-                continue;
-            }
-            productVariantRepository.update("stockQuantity = stockQuantity + ?1 where id = ?2",
-                    item.getQuantity(), item.getVariant().getId());
-        }
-    }
-
-    /**
      * Assembles the money on an order. The ONLY place subtotal, VAT, delivery and
      * grand total are combined, so order creation and later repricing can never
      * build a total differently.
@@ -643,57 +523,6 @@ public class OrderService
             return false;
         }
         return order.getCreatedAt().isAfter(Instant.now().minusSeconds(replayWindowHours * 3600L));
-    }
-
-    /**
-     * Most transitions carry no courier details; this is the same move without them.
-     */
-    @Transactional
-    public OrderDetailDto updateOrderStatus(UUID orderId, String newStatus, String changedBy)
-            throws GraphQLException {
-        return updateOrderStatus(orderId, newStatus, changedBy, null);
-    }
-
-    @Transactional
-    public OrderDetailDto updateOrderStatus(UUID orderId, String newStatus, String changedBy,
-                                            OrderTracking tracking) throws GraphQLException {
-        if (orderId == null) {
-            throw new GraphQLException("orderId is required");
-        }
-        if (newStatus == null || newStatus.isBlank()) {
-            throw new GraphQLException("status is required");
-        }
-        LOG.debugf("Updating order status for orderId=%s to status=%s", orderId, newStatus);
-        OrderEntity order = orderRepository.findByIdWithCustomerAndItems(orderId);
-        if (order == null) {
-            throw new GraphQLException("Order not found");
-        }
-        OrderStatusEn targetStatus;
-        try {
-            targetStatus = OrderStatusEn.valueOf(newStatus);
-        } catch (IllegalArgumentException e) {
-            throw new GraphQLException("Invalid status: " + newStatus);
-        }
-
-        // Written before the transition so the notification, which is sent from inside it,
-        // carries the reference rather than an email that arrives without one.
-        if (tracking != null && !tracking.isEmpty()) {
-            if (targetStatus != OrderStatusEn.IN_TRANSIT) {
-                throw new IllegalArgumentException(
-                        "Tracking details belong to the move to IN_TRANSIT, not to " + targetStatus);
-            }
-            order.setTrackingNumber(tracking.number());
-            order.setTrackingCarrier(tracking.carrier());
-        }
-
-        TransitionOutcome outcome = applyTransition(order,
-                StatusTransition.staff(targetStatus, changedBy));
-        if (!outcome.claimed()) {
-            throw new GraphQLException("Order status changed concurrently; please refresh and try again");
-        }
-
-        Map<UUID, List<ProductImageEntity>> imagesByVariantId = productImageRepository.findGroupedByVariantIds(variantIdsOf(List.of(order)));
-        return orderMapper.toOrderDto(order, imagesByVariantId);
     }
 
     public List<OrderDetailDto> getAllOrders(PageRequest pageRequest, FilterRequest filterRequest) {

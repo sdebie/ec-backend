@@ -12,10 +12,10 @@ import org.ecommerce.backend.exception.IdempotencyConflictException;
 import org.ecommerce.backend.exception.UnavailableVariantsException;
 import org.ecommerce.backend.exception.QuoteOnlyItemsException;
 import org.ecommerce.backend.service.CustomerAuthService;
+import org.ecommerce.backend.service.OrderManagementService;
 import org.ecommerce.backend.service.OrderNotificationService;
 import org.ecommerce.backend.service.OrderService;
 import org.ecommerce.backend.service.StatusTransition;
-import org.ecommerce.backend.service.TransitionOutcome;
 import org.ecommerce.common.dto.OrderCheckoutResponseDto;
 import org.ecommerce.common.dto.OrderCreationRequestDto;
 import org.ecommerce.common.entity.CustomerEntity;
@@ -41,6 +41,9 @@ public class OrderResource {
     OrderService orderService;
 
     @Inject
+    OrderManagementService orderManagement;
+
+    @Inject
     OrderNotificationService orderNotificationService;
 
     @Inject
@@ -55,26 +58,11 @@ public class OrderResource {
     @Inject
     CustomerAuthService customerAuthService;
 
-    /**
-     * Not {@code @Transactional}. The lookup/claim/replay dance below needs to see a
-     * failed create attempt's rollback before building its response — with
-     * this method transactional, {@code createOrderFromCart} would run
-     * inside it, and a constraint violation would mark it rollback-only
-     * before this method could return a {@code 201} replay, turning every
-     * lost race into a {@code 500}. {@code createOrderFromCart} carries its
-     * own {@code @Transactional} and commits or rolls back on its own.
-     */
     @POST
     public Response createOrder(
             OrderCreationRequestDto request,
             @HeaderParam("Idempotency-Key") String idempotencyKeyHeader
     ) {
-        // The header is validated before any other work —
-        // before the rate-limit check, before cart validation, before any
-        // database write. Taken as a String and parsed here (not
-        // @HeaderParam UUID) so a missing header and a malformed one can each
-        // report which they are, rather than both surfacing as JAX-RS's own
-        // bodyless 400.
         if (idempotencyKeyHeader == null || idempotencyKeyHeader.isBlank()) {
             return Response.status(Response.Status.BAD_REQUEST)
                     .entity("Idempotency-Key header is required").build();
@@ -87,23 +75,12 @@ public class OrderResource {
                     .entity("Idempotency-Key must be a well-formed UUID").build();
         }
 
-        // The endpoint's pre-existing null-body guard. It has to sit after
-        // header validation and before the fingerprint
-        // call below, which is not total over a wholly-absent items list —
-        // only over a null field within one line.
         if (request == null || request.getItems() == null) {
             return Response.status(Response.Status.BAD_REQUEST).entity("Request body is required").build();
         }
 
         String fingerprint = OrderService.fingerprint(request.getItems());
 
-        // The fast path: resolved against the key BEFORE any cart
-        // validation. Not load-bearing for correctness — createOrderFromCart's
-        // claim rolls back its whole transaction on a lost race, including
-        // any stock it decremented, and the 422 re-check below re-resolves
-        // against the winner either way. This exists to avoid the wasted work of
-        // that revalidate → reserve → roll-back cycle on the common case (a
-        // sequential retry), not to make it correct.
         OrderEntity existing = orderService.findByIdempotencyKey(idempotencyKey);
         if (existing != null) {
             return resolveExisting(existing, fingerprint);
@@ -117,10 +94,6 @@ public class OrderResource {
                     request, customerTier, customer, idempotencyKey, fingerprint);
             return Response.status(201).entity(response).build();
         } catch (IdempotencyConflictException e) {
-            // Lost the claim: another delivery of this same intent
-            // won. Our transaction has rolled back, releasing the stock it
-            // reserved; the winner's has committed and is visible to this fresh
-            // read.
             OrderEntity winner = orderService.findByIdempotencyKey(idempotencyKey);
             if (winner == null) {
                 LOG.errorf("Idempotency claim on %s was lost but no winning order is visible", idempotencyKey);
@@ -128,11 +101,6 @@ public class OrderResource {
             }
             return resolveExisting(winner, fingerprint);
         } catch (UnavailableVariantsException e) {
-            // The cart may be unavailable because our own earlier
-            // delivery of this same key already took the stock — the concurrent
-            // last-unit race that neither the lookup above nor the claim inside
-            // createOrderFromCart can catch, because this exit is reached before
-            // persist() is ever attempted.
             OrderEntity winner = orderService.findByIdempotencyKey(idempotencyKey);
             if (winner != null) {
                 return resolveExisting(winner, fingerprint);
@@ -149,29 +117,8 @@ public class OrderResource {
         }
     }
 
-    /**
-     * The single place all four outcomes for a matched order are decided,
-     * called from all three sites that can locate an existing
-     * order by key: the fast-path lookup above, the lost-race catch, and the
-     * {@code 422} re-check. Evaluated in this order because the refusals are
-     * not mutually exclusive:
-     * <ol>
-     *   <li>ownership — the only refusal the client must not retry past;</li>
-     *   <li>voided — not itself time-bound, so it must be checked
-     *       independently of the window rather than relying on the window
-     *       to eventually catch it;</li>
-     *   <li>window;</li>
-     *   <li>fingerprint;</li>
-     *   <li>otherwise, replay.</li>
-     * </ol>
-     */
     private Response resolveExisting(OrderEntity order, String fingerprint) {
         if (order == null) {
-            // The re-read after a lost claim cannot come back empty —
-            // Postgres blocks the second inserter until the winner's
-            // transaction resolves. A null here is a server fault, never the
-            // caller's — mayReplay(null) is false, and answering that as a
-            // 409 would tell an impossible caller "this is not your order".
             LOG.error("resolveExisting called with no order");
             return Response.status(500).entity(Map.of("error", "Unexpected error")).build();
         }
@@ -197,34 +144,10 @@ public class OrderResource {
         return Response.status(201).entity(response).header("Idempotent-Replayed", "true").build();
     }
 
-    /**
-     * The {@code 409} body shape every idempotency-key refusal shares:
-     * {@code error} is a human message a caller must never branch on;
-     * {@code code} is the only field the storefront (or a test) may key
-     * behaviour off.
-     */
     private Response idempotencyConflict(String message, String code) {
         return Response.status(Response.Status.CONFLICT).entity(Map.of("error", message, "code", code)).build();
     }
 
-    /**
-     * Confirms an order the shopper will pay for when they collect it — the
-     * in-store counterpart of handing off to the payment gateway.
-     * <p>
-     * Checkout has to say so explicitly, because nothing else can. An order that
-     * merely sits at CREATED is indistinguishable from an abandoned cart, and
-     * {@code StockRecoveryJob} reclaims those: without this call the shopper's
-     * order is cancelled out from under them once the hold window passes, and
-     * staff never see it waiting. Moving it to IN_STORE_PAYMENT is what marks it
-     * a real commitment.
-     * <p>
-     * Payment is not being taken here. The status means the money is still owed;
-     * staff move the order to PAID at the counter, then COLLECTED when the goods
-     * are handed over.
-     */
-    // Overrides the class-level @Consumes: everything this needs is in the path, so
-    // demanding a JSON content type would reject a bodyless POST with 415 — which is
-    // exactly what the storefront sends.
     @POST
     @Path("/{orderId}/in-store-payment")
     @Consumes(MediaType.WILDCARD)
@@ -238,16 +161,11 @@ public class OrderResource {
                     .build();
         }
 
-        // A resubmitted checkout must not read as a failure to the shopper whose
-        // order was in fact placed.
         if (order.getStatus() == OrderStatusEn.IN_STORE_PAYMENT) {
             return Response.ok(Map.of("orderId", order.getId().toString(),
                     "status", order.getStatus().name())).build();
         }
 
-        // Paying at collection only makes sense if the shopper is collecting.
-        // Fails closed on an order with no method chosen yet, matching the column's
-        // own DEFAULT TRUE: an unclassified method is treated as a delivery.
         ShippingMethodEntity method = order.getShippingMethod();
         if (method == null || method.isRequiresAddress()) {
             LOG.debugf("Rejected in-store payment for order %s: %s is not a collection method",
@@ -257,11 +175,11 @@ public class OrderResource {
                     .build();
         }
 
-        TransitionOutcome outcome = orderService.applyTransition(order,
+        boolean changed = orderManagement.changeOrderStatus(order,
                 StatusTransition.system(OrderStatusEn.CREATED, OrderStatusEn.IN_STORE_PAYMENT,
                         "Shopper chose to pay at collection"));
 
-        if (!outcome.claimed()) {
+        if (!changed) {
             LOG.warnf("Could not confirm in-store payment for order %s: it is %s, not CREATED",
                     orderId, order.getStatus());
             return Response.status(Response.Status.CONFLICT)
@@ -269,19 +187,10 @@ public class OrderResource {
                     .build();
         }
 
-        // The shopper's "reserved for collection" email is sent by applyTransition, from
-        // the status itself — nothing to do here.
         return Response.ok(Map.of("orderId", order.getId().toString(),
                 "status", order.getStatus().name())).build();
     }
 
-    // ── Private helpers ──────────────────────────────────────────────────────
-
-    /**
-     * Resolves the customer tier from the signature-verified JWT.
-     * Quarkus rejects requests carrying an invalid or forged Bearer token before
-     * the endpoint runs, so the claim can be trusted; no token means guest checkout.
-     */
     private CustomerTypeEn resolveCustomerTier() {
         if (jwt == null || jwt.getRawToken() == null) {
             return CustomerTypeEn.GUEST;
@@ -296,13 +205,6 @@ public class OrderResource {
         return "WHOLESALER".equals(shopperType) ? CustomerTypeEn.WHOLESALER : CustomerTypeEn.RETAILER;
     }
 
-    /**
-     * Resolves the signed-in customer so the order can be linked to their account.
-     * Guest checkout (no "customer" role at all) deliberately resolves to null.
-     * A "customer" role with no matching row is not the same thing and must not
-     * collapse into it — mirrors getOrderDetail/myOrders, which both throw
-     * rather than silently falling back to guest.
-     */
     private CustomerEntity resolveCustomer() {
         if (securityIdentity == null || !securityIdentity.hasRole("customer")) {
             return null;

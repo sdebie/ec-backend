@@ -7,8 +7,10 @@ import jakarta.inject.Inject;
 import org.eclipse.microprofile.graphql.*;
 import org.eclipse.microprofile.jwt.JsonWebToken;
 import org.ecommerce.backend.api.rest.OrderOwnershipGuard;
+import org.ecommerce.backend.exception.OrderNotFoundException;
 import org.ecommerce.backend.mapper.OrderMapper;
 import org.ecommerce.backend.service.CustomerAuthService;
+import org.ecommerce.backend.service.OrderManagementService;
 import org.ecommerce.backend.service.OrderService;
 import org.ecommerce.backend.service.OrderTracking;
 import org.ecommerce.backend.utils.CurrentRequestOrderToken;
@@ -33,6 +35,9 @@ public class OrderResource
     OrderService orderService;
 
     @Inject
+    OrderManagementService orderManagement;
+
+    @Inject
     JsonWebToken jwt;
 
     @Inject
@@ -50,44 +55,21 @@ public class OrderResource
     @Inject
     CustomerAuthService customerAuthService;
 
-    // NOTE: there is deliberately no createOrder mutation here.
-    // Order creation is REST-only (`POST /api/orders` → OrderService.createOrderFromCart),
-    // where the request carries {variantId, quantity} and the server prices every
-    // line from the signature-verified shopperType claim. The mutation that used
-    // to live here accepted client-supplied unit prices and totals, so any caller
-    // could persist an order at a price of their choosing. Guest checkout does not
-    // need it — the REST endpoint is deliberately unauthenticated and resolves an
-    // absent token to the GUEST tier. Do not reintroduce a price-carrying mutation;
-    // OrderResourceContractTest guards its absence.
-
-    /**
-     * The mutation carries no stock instruction. What happens to the goods follows from
-     * the destination status alone, so no caller can move stock by asking — a refund
-     * records money coming back and nothing else.
-     */
     @Mutation("updateOrderStatus")
     @Description("Move one order to a new status. Staff JWT required.")
     @RolesAllowed({"SUPER_ADMIN", "ORDER_MANAGER"})
-    public OrderDetailDto updateOrderStatus(@Name("orderId") String orderId, @Name("status") String status,
-                                              @Name("trackingNumber") String trackingNumber,
-                                              @Name("trackingCarrier") String trackingCarrier)
-            throws GraphQLException
+    public OrderDetailDto updateOrderStatus(@Name("orderId") String orderId, @Name("status") String status, @Name("trackingNumber") String trackingNumber, @Name("trackingCarrier") String trackingCarrier)
     {
         LOG.debug("updateOrderStatus for orderId=" + orderId + ", status=" + status);
         UUID id;
         try {
             id = UUID.fromString(orderId);
         } catch (IllegalArgumentException | NullPointerException e) {
-            throw new GraphQLException("Order not found");
+            throw new OrderNotFoundException(null);
         }
-        return orderService.updateOrderStatus(id, status, staffDisplayName(),
-                new OrderTracking(trackingNumber, trackingCarrier));
+        return orderManagement.updateOrderStatus(id, status, staffDisplayName(), new OrderTracking(trackingNumber, trackingCarrier));
     }
 
-    /**
-     * Who to credit on the status timeline. The staff JWT carries a full_name
-     * claim; the subject (their email) identifies them if it is ever absent.
-     */
     private String staffDisplayName()
     {
         if (jwt == null) {
@@ -97,15 +79,6 @@ public class OrderResource
         return fullName != null && !fullName.isBlank() ? fullName : jwt.getSubject();
     }
 
-    /**
-     * Replaces {@code orderBySessionId} rather than guarding it: that query was keyed on
-     * {@code sessionId}, a second bearer credential now withdrawn, and it returned the FULL
-     * order (customer email, line items) for what the success page only ever polls
-     * status/total/time from. Authorized by the same {@link OrderOwnershipGuard#mayAct} as
-     * every other order-scoped surface, and — like {@code getOrderDetail} — status is never
-     * an input to that decision: a token still authorizes reading a cancelled order's
-     * status, which is exactly the case the success page most needs to show correctly.
-     */
     @Query("orderStatus")
     @Description("Poll one order's status by id — the guest checkout success page")
     public OrderDetailDto orderStatus(@Name("orderId") String orderId) throws GraphQLException
@@ -139,17 +112,6 @@ public class OrderResource
         return orderService.getAllOrders(pageRequest, filterRequest);
     }
 
-    /**
-     * Shopper-facing only — a staff JWT authorizes nothing here.
-     * Staff read order detail through {@code adminOrder}, which is
-     * {@code @RolesAllowed}-gated and richer.
-     * <p>
-     * Guards before fetching: the order entity is
-     * loaded and {@link OrderOwnershipGuard#mayAct} decides before
-     * {@code orderService.getOrderDetail} assembles the full response — the previous
-     * shape built the whole PII payload first and decided whether the caller could have
-     * it afterward.
-     */
     @Query("getOrderDetail")
     @Description("Get order detail by order id")
     public OrderDetailDto getOrderDetail(@Name("id") String orderId) throws GraphQLException
@@ -158,8 +120,6 @@ public class OrderResource
         try {
             id = UUID.fromString(orderId);
         } catch (IllegalArgumentException | NullPointerException e) {
-            // Nothing to log yet — orderId is not a valid identifier, parsed or otherwise,
-            // and the raw string is deliberately not logged here.
             throw new GraphQLException("Order not found");
         }
 
